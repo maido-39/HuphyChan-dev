@@ -1,0 +1,33 @@
+# === Isaac Sim install / conda (multi-GB) ===
+sim/
+
+# === Training outputs: checkpoints, videos, tensorboard, measurement npz (large/regenerable) ===
+**/logs/
+
+# === Generated USD (rebuilt from MJCF via convert_asset.py) ===
+**/usd/
+pygmalion_locomotion/outputs/
+
+# === Python cache / backups ===
+**/__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.bak
+
+# === Copyrighted / personal-study figures (paper/press images) — 절대 커밋/공개 금지.
+#     Self-made SVG diagrams + matplotlib plots in docs/assets/ ARE tracked;
+#     only docs/assets/refs/ (external figures) is excluded for copyright safety. ===
+docs/assets/refs/
+
+# === Stray root artifacts (backup zips / model dumps / screenshots) ===
+*.zip
+MJMODEL.TXT
+screenshot.png
+
+# === Private / local / secrets ===
+*.private
+*.private.*
+.claude/
+.vscode/
+.DS_Store

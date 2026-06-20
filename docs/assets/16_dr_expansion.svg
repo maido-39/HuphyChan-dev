@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 640" font-family="sans-serif">
+  <rect width="840" height="640" fill="#fbfbfd"/>
+  <text x="420" y="28" text-anchor="middle" font-size="20" font-weight="bold" fill="#222">DR 확장 — 근거 요약 (자작 개념도)</text>
+
+  <!-- Panel A: friction spectrum -->
+  <text x="30" y="64" font-size="15" font-weight="bold" fill="#333">A. 마찰 μ 스펙트럼 (접촉마찰 = 랜덤화된 발μ, ground 1.0×multiply)</text>
+  <rect x="60" y="78" width="720" height="26" rx="4" fill="url(#fric)"/>
+  <defs>
+    <linearGradient id="fric" x1="0" x2="1">
+      <stop offset="0" stop-color="#3b6fd6"/><stop offset="0.16" stop-color="#5aa0e0"/>
+      <stop offset="0.33" stop-color="#9ecb8f"/><stop offset="1" stop-color="#d8923b"/>
+    </linearGradient>
+  </defs>
+  <!-- ticks 0..1.3 over 720px -> px = 60 + mu/1.3*720 -->
+  <g font-size="11" fill="#333" text-anchor="middle">
+    <line x1="171" y1="74" x2="171" y2="108" stroke="#1b3b8f" stroke-width="2"/><text x="171" y="124">0.20 (미끄러운 바닥/하한)</text>
+    <line x1="287" y1="74" x2="287" y2="108" stroke="#444" stroke-width="1.5" stroke-dasharray="3"/><text x="287" y="124">0.41 (조심보행)</text>
+    <line x1="337" y1="74" x2="337" y2="108" stroke="#444" stroke-width="1"/><text x="337" y="138">0.5 (타일)</text>
+    <line x1="60"  y1="74" x2="60"  y2="108" stroke="#1b3b8f" stroke-width="1"/><text x="70" y="138">~0.1 빙판</text>
+    <line x1="720" y1="74" x2="720" y2="108" stroke="#7a4d12" stroke-width="2"/><text x="718" y="124">1.25 (아스팔트/상한)</text>
+  </g>
+  <text x="60" y="158" font-size="11" fill="#666">생체역학 RCOF 보행 ≈0.207 · &lt;0.41 조심보행 (Gait&amp;Posture/Safety Sci). DR static (0.30,1.25)/dynamic (0.20,1.10), make_consistent=True</text>
+
+  <!-- Panel B: Froude / walk-run -->
+  <text x="30" y="196" font-size="15" font-weight="bold" fill="#333">B. 속도 vs Froude (Fr=v²/gL, L=0.8m) — 보행/달리기 경계</text>
+  <rect x="60" y="210" width="430" height="26" rx="4" fill="#bfe0b6"/>
+  <rect x="490" y="210" width="290" height="26" rx="4" fill="#e8b6b6"/>
+  <text x="270" y="227" text-anchor="middle" font-size="12" fill="#2a5a2a">보행 영역 (Fr&lt;0.5)</text>
+  <text x="635" y="227" text-anchor="middle" font-size="12" fill="#7a2a2a">달리기/flight (Fr&gt;0.5)</text>
+  <g font-size="11" fill="#333" text-anchor="middle">
+    <!-- 0..2.6 m/s over 720px from x=60 -->
+    <line x1="337" y1="206" x2="337" y2="244" stroke="#2a7a2a" stroke-width="2"/><text x="337" y="260">1.0 (stage-1)</text>
+    <line x1="614" y1="206" x2="614" y2="244" stroke="#1b6f1b" stroke-width="3"/><text x="614" y="260" font-weight="bold">2.0 ✅ 목표 (Fr 0.51)</text>
+    <line x1="752" y1="206" x2="752" y2="244" stroke="#c00" stroke-width="2"/><text x="740" y="276" fill="#c00">2.5 ❌ (Fr 0.80, 달리기)</text>
+  </g>
+  <text x="60" y="292" font-size="11" fill="#666">walk-run 전이 Fr≈0.5 (Kram'97). 2.5 m/s=달리기→보행 PPO 불안정+하중 비대표 → 상한 2.0 채택.</text>
+
+  <!-- Panel C: command curriculum -->
+  <text x="30" y="330" font-size="15" font-weight="bold" fill="#333">C. 명령 커리큘럼 (vx 상한 1.0→2.0 점진)</text>
+  <line x1="80" y1="430" x2="400" y2="430" stroke="#888" stroke-width="1.5"/>
+  <line x1="80" y1="430" x2="80" y2="346" stroke="#888" stroke-width="1.5"/>
+  <text x="70" y="350" font-size="10" fill="#666" text-anchor="end">2.0</text>
+  <text x="70" y="430" font-size="10" fill="#666" text-anchor="end">1.0</text>
+  <polyline points="80,410 240,360 400,360" fill="none" stroke="#1b6f1b" stroke-width="3"/>
+  <text x="200" y="448" font-size="10" fill="#666" text-anchor="middle">~15k steps (≈iter 600)</text>
+  <text x="100" y="382" font-size="10" fill="#555">warm-start(stage-1)부터 확장</text>
+  <text x="60" y="476" font-size="11" fill="#666">Isaac Lab 내장 커리큘럼=지형뿐 → 커스텀 term. 직접 넓은 범위=PPO 붕괴 (Margolis RSS'22).</text>
+
+  <!-- Panel D: push impulse -->
+  <text x="450" y="330" font-size="15" font-weight="bold" fill="#333">D. 외란 push 충격량 (51.8kg)</text>
+  <g font-size="11" fill="#333">
+    <rect x="480" y="350" width="120" height="20" fill="#9ecb8f"/><text x="610" y="365">±0.8 = 41 Ns (이전)</text>
+    <rect x="480" y="378" width="180" height="20" fill="#5aa0e0"/><text x="670" y="393">±1.2 = 62 Ns (신규)</text>
+    <line x1="675" y1="344" x2="675" y2="404" stroke="#c00" stroke-width="2" stroke-dasharray="4"/>
+    <text x="678" y="420" font-size="10" fill="#c00">회복가능 한계 ~65 Ns</text>
+  </g>
+  <text x="450" y="448" font-size="11" fill="#666">+간격 6-11s→3-6s, +yaw kick ±0.6 (회전회복). 고빈도가 효과적 (HuB/G1).</text>
+  <text x="450" y="466" font-size="11" fill="#666">Atalante 회복 충격량 ~190 Ns@135kg → 51.8kg 스케일 ~73 Ns(서있기).</text>
+
+  <line x1="30" y1="500" x2="810" y2="500" stroke="#ddd"/>
+  <text x="30" y="524" font-size="12" font-weight="bold" fill="#333">핵심 구현 수정 (안 하면 "미끄러운 바닥"이 실제로 안 미끄러움)</text>
+  <text x="40" y="546" font-size="11" fill="#555">① make_consistent=True → 샘플별 dynamic≤static (IsaacLab 기본 False)</text>
+  <text x="40" y="566" font-size="11" fill="#555">② friction_combine_mode='multiply' + ground μ=1.0 → 접촉μ = 랜덤 발μ (AVERAGE면 0.2→0.35로 압축)</text>
+  <text x="40" y="586" font-size="11" fill="#555">③ velocity-push 사용 (1-step external force는 단일 dt만 적용 → ~50× 과소)</text>
+  <text x="30" y="616" font-size="10" fill="#999">출처: Kram'97 JEB · Margolis RSS'22 · Duburcq(Atalante) · HuB(G1) · IsaacLab events/curriculums · Gait&amp;Posture RCOF. 상세 [[16_dr_expansion]]</text>
+</svg>

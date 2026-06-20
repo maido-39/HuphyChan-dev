@@ -1,0 +1,51 @@
+<svg viewBox="0 0 860 330" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <style>
+    .title{font-size:19px;font-weight:700;fill:#1a1a2e}
+    .h{font-size:14px;font-weight:700}
+    .t{font-size:12px;fill:#333}
+    .lbl{font-size:11px;fill:#666}
+    .bad{fill:#fce8e6;stroke:#ea4335;stroke-width:1.5}
+    .good{fill:#e6f4ea;stroke:#34a853;stroke-width:1.5}
+    .box{fill:#eef;stroke:#4285f4;stroke-width:1.5}
+  </style>
+  <text x="20" y="30" class="title">Blackwell PhysX GPU 폴백 — CUDA 버전 불일치가 원인</text>
+
+  <!-- BEFORE -->
+  <text x="30" y="62" class="h" fill="#ea4335">문제 (driver 580.167 = CUDA 13.0)</text>
+  <rect x="30" y="75" width="180" height="56" class="box" rx="8"/>
+  <text x="42" y="97" class="t" font-weight="700">Isaac Sim 5.0 PhysX</text>
+  <text x="42" y="116" class="t">CUDA <tspan font-weight="700">12.8</tspan> 빌드</text>
+  <rect x="30" y="145" width="180" height="56" class="bad" rx="8"/>
+  <text x="42" y="167" class="t" font-weight="700">드라이버 580.167</text>
+  <text x="42" y="186" class="t">CUDA <tspan font-weight="700">13.0</tspan></text>
+  <path d="M215 130 L255 150" stroke="#ea4335" stroke-width="2" marker-end="url(#r)"/>
+  <path d="M215 175 L255 165" stroke="#ea4335" stroke-width="2" marker-end="url(#r)"/>
+  <rect x="260" y="120" width="180" height="80" class="bad" rx="8"/>
+  <text x="272" y="143" class="t" font-weight="700">cuGetProcAddress</text>
+  <text x="272" y="161" class="t">(cuDeviceGetUuid)</text>
+  <text x="272" y="181" class="t" fill="#ea4335">버전 불일치 → 실패</text>
+  <path d="M445 160 L485 160" stroke="#ea4335" stroke-width="2" marker-end="url(#r)"/>
+  <rect x="490" y="120" width="180" height="80" class="bad" rx="8"/>
+  <text x="502" y="146" class="t" font-weight="700">PhysX GPU 파이프라인</text>
+  <text x="502" y="166" class="t">→ CPU 폴백</text>
+  <text x="502" y="186" class="t" fill="#ea4335">→ env init 행(hang)</text>
+
+  <!-- AFTER -->
+  <text x="30" y="248" class="h" fill="#34a853">해결: driver 570.195.03 (open kernel) = CUDA 12.8</text>
+  <rect x="30" y="262" width="200" height="50" class="good" rx="8"/>
+  <text x="42" y="284" class="t" font-weight="700">드라이버 570.195.03</text>
+  <text x="42" y="302" class="t">CUDA <tspan font-weight="700">12.8</tspan> (Isaac과 일치)</text>
+  <path d="M235 287 L280 287" stroke="#34a853" stroke-width="2" marker-end="url(#g)"/>
+  <rect x="285" y="262" width="220" height="50" class="good" rx="8"/>
+  <text x="297" y="284" class="t" font-weight="700">버전 일치 → 정상</text>
+  <text x="297" y="302" class="t">"Using CUDA device ordinal 0"</text>
+  <path d="M510 287 L555 287" stroke="#34a853" stroke-width="2" marker-end="url(#g)"/>
+  <rect x="560" y="262" width="270" height="50" class="good" rx="8"/>
+  <text x="572" y="284" class="t" font-weight="700">PhysX GPU 작동</text>
+  <text x="572" y="302" class="t">학습 ~66k steps/s (CPU 대비 5배+)</text>
+
+  <defs>
+    <marker id="r" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#ea4335"/></marker>
+    <marker id="g" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#34a853"/></marker>
+  </defs>
+</svg>

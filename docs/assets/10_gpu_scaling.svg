@@ -1,0 +1,48 @@
+<svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <style>
+    .title{font-size:18px;font-weight:700;fill:#1a1a2e}
+    .ax{stroke:#999;stroke-width:1.5}
+    .lbl{font-size:12px;fill:#444}
+    .sm{font-size:11px;fill:#666}
+    .util{fill:#4285f4}
+    .thr{fill:#34a853}
+    .v{font-size:12px;font-weight:700}
+  </style>
+  <text x="20" y="28" class="title">num_envs ↑ → GPU 활용·처리량 (RTX 5060 Ti 16GB)</text>
+  <text x="20" y="48" class="sm">+ CPU 도둑(rygel/tracker) 정리. 파랑=GPU util%, 초록=처리량(k steps/s)</text>
+
+  <!-- axes -->
+  <line x1="70" y1="320" x2="660" y2="320" class="ax"/>
+  <line x1="70" y1="80" x2="70" y2="320" class="ax"/>
+  <text x="30" y="90" class="sm">100</text>
+  <text x="36" y="205" class="sm">50</text>
+  <text x="44" y="322" class="sm">0</text>
+
+  <!-- group 1: 2048 -->
+  <rect x="120" y="176" width="46" height="144" class="util"/>
+  <text x="128" y="170" class="v" fill="#4285f4">60%</text>
+  <rect x="172" y="251" width="46" height="69" class="thr"/>
+  <text x="176" y="245" class="v" fill="#34a853">26k</text>
+  <text x="140" y="340" class="lbl">2048</text>
+
+  <!-- group 2: 8192 -->
+  <rect x="310" y="116" width="46" height="204" class="util"/>
+  <text x="316" y="110" class="v" fill="#4285f4">85%</text>
+  <rect x="362" y="170" width="46" height="150" class="thr"/>
+  <text x="366" y="164" class="v" fill="#34a853">57k</text>
+  <text x="330" y="340" class="lbl">8192</text>
+
+  <!-- group 3: 16384 -->
+  <rect x="500" y="104" width="46" height="216" class="util"/>
+  <text x="500" y="98" class="v" fill="#4285f4">90-96%</text>
+  <rect x="552" y="146" width="46" height="174" class="thr"/>
+  <text x="556" y="140" class="v" fill="#34a853">66k</text>
+  <text x="516" y="340" class="lbl">16384</text>
+
+  <text x="300" y="362" class="sm">num_envs (학습 환경 수)</text>
+  <text x="120" y="362" class="sm" fill="#888">메모리 4→7→11 GB / 16 GB</text>
+
+  <!-- ceiling note -->
+  <line x1="70" y1="92" x2="660" y2="92" stroke="#ea4335" stroke-width="1" stroke-dasharray="5 4"/>
+  <text x="470" y="88" class="sm" fill="#ea4335">실용 상한 ~90-95% (수집↔학습 교대로 100% 불가)</text>
+</svg>

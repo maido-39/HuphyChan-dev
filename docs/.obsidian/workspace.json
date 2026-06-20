@@ -1,0 +1,186 @@
+{
+  "main": {
+    "id": "454230a63922b99f",
+    "type": "split",
+    "children": [
+      {
+        "id": "d886b011eee9aefd",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "aa3eba8d463317ce",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "07_measurement.md",
+                "mode": "source",
+                "source": false
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "d39f5eff276bbe16",
+    "type": "split",
+    "children": [
+      {
+        "id": "19058be848c9b931",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "97b569ee4b549919",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical"
+              }
+            }
+          },
+          {
+            "id": "2f025a7bd04a19c1",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "toe ",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              }
+            }
+          },
+          {
+            "id": "3442df641e818e4d",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {}
+            }
+          }
+        ],
+        "currentTab": 1
+      }
+    ],
+    "direction": "horizontal",
+    "width": 369.5
+  },
+  "right": {
+    "id": "abe2103155c119d0",
+    "type": "split",
+    "children": [
+      {
+        "id": "570ff87123ab24ec",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "2c926da7f3f9635a",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "07_measurement.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "cb509eb58dc39e93",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "07_measurement.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "2d4d015471a729aa",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true
+              }
+            }
+          },
+          {
+            "id": "6657e33ff902bed4",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "07_measurement.md"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false
+    }
+  },
+  "active": "aa3eba8d463317ce",
+  "lastOpenFiles": [
+    "22_energy_toe_reward.md",
+    "experiments/2026-06-21_01-52-57_flat_wide_dr.md",
+    "assets/2026-06-21_01-52-57_flat_wide_dr_reward.png",
+    "21_motor_power_weight.md",
+    "20_fusion360_isaaclab.md",
+    "19_toe_ablation.md",
+    "18_research_roadmap.md",
+    "Paperreview/INDEX.md",
+    "Paperreview/toe-stiffness-optimization.md",
+    "Paperreview/caps-smooth-control.md",
+    "Paperreview/radosavovic-humanoid-transformer.md",
+    "Paperreview/siekmann-periodic-reward.md",
+    "Paperreview/margolis-rapid-locomotion.md",
+    "Paperreview",
+    "assets/v3_premoonwalk_motor_util.json",
+    "assets/v3_premoonwalk_motor_util.md",
+    "assets/v3_premoonwalk_motor_util.png",
+    "assets/v3_corrected_motor_util.json",
+    "assets/v3_corrected_motor_util.md",
+    "assets/v3_corrected_motor_util.png",
+    "Untitled.canvas",
+    "experiments/INDEX.md",
+    "12_toe_stiffness.md",
+    "07_measurement.md",
+    "17_toe_usage_vibration.md",
+    "assets/16_toe_vibration_analysis.png",
+    "16_dr_expansion.md",
+    "assets/16_dr_expansion.svg",
+    "00_overview.md",
+    "README.md",
+    "09_gpu_driver_fix.md",
+    "99_troubleshooting.md",
+    "RESUME.md"
+  ]
+}

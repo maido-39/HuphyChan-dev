@@ -1,0 +1,151 @@
+{
+  "tag": "flat_trained_v1",
+  "joint_torque": {
+    "L_ankle_pitch_joint": {
+      "peak": 60.0,
+      "rms": 27.77619171142578,
+      "motor_peak": 60.0,
+      "util_pct": 100.0
+    },
+    "L_ankle_roll_joint": {
+      "peak": 14.0,
+      "rms": 8.603056907653809,
+      "motor_peak": 14.0,
+      "util_pct": 100.0
+    },
+    "L_hip_pitch_joint": {
+      "peak": 104.8592300415039,
+      "rms": 16.649566650390625,
+      "motor_peak": 120.0,
+      "util_pct": 87.38269170125325
+    },
+    "L_hip_roll_joint": {
+      "peak": 120.0,
+      "rms": 42.12798309326172,
+      "motor_peak": 120.0,
+      "util_pct": 100.0
+    },
+    "L_hip_yaw_joint": {
+      "peak": 41.103759765625,
+      "rms": 8.816816329956055,
+      "motor_peak": 60.0,
+      "util_pct": 68.50626627604167
+    },
+    "L_knee_joint": {
+      "peak": 216.8716583251953,
+      "rms": 27.349599838256836,
+      "motor_peak": 360.0,
+      "util_pct": 60.24212731255425
+    },
+    "L_toe_joint": {
+      "peak": 5.583228588104248,
+      "rms": 1.0941743850708008,
+      "motor_peak": 0.0,
+      "util_pct": NaN
+    },
+    "R_ankle_pitch_joint": {
+      "peak": 60.0,
+      "rms": 26.399782180786133,
+      "motor_peak": 60.0,
+      "util_pct": 100.0
+    },
+    "R_ankle_roll_joint": {
+      "peak": 14.0,
+      "rms": 10.369063377380371,
+      "motor_peak": 14.0,
+      "util_pct": 100.0
+    },
+    "R_hip_pitch_joint": {
+      "peak": 120.0,
+      "rms": 17.419660568237305,
+      "motor_peak": 120.0,
+      "util_pct": 100.0
+    },
+    "R_hip_roll_joint": {
+      "peak": 120.0,
+      "rms": 39.044578552246094,
+      "motor_peak": 120.0,
+      "util_pct": 100.0
+    },
+    "R_hip_yaw_joint": {
+      "peak": 27.18048095703125,
+      "rms": 7.308877468109131,
+      "motor_peak": 60.0,
+      "util_pct": 45.30080159505208
+    },
+    "R_knee_joint": {
+      "peak": 98.5215835571289,
+      "rms": 30.998048782348633,
+      "motor_peak": 360.0,
+      "util_pct": 27.36710654364692
+    },
+    "R_toe_joint": {
+      "peak": 8.426398277282715,
+      "rms": 0.7746793031692505,
+      "motor_peak": 0.0,
+      "util_pct": NaN
+    }
+  },
+  "link_force": {
+    "L_ankle_pitch_link": {
+      "peak": 5246.68701171875,
+      "rms": 389.80218505859375
+    },
+    "L_foot_link": {
+      "peak": 5260.150390625,
+      "rms": 391.04400634765625
+    },
+    "L_hip_pitch_link": {
+      "peak": 3978.440673828125,
+      "rms": 304.4686279296875
+    },
+    "L_hip_roll_link": {
+      "peak": 4092.5732421875,
+      "rms": 311.02679443359375
+    },
+    "L_shin_link": {
+      "peak": 4908.80126953125,
+      "rms": 362.6092224121094
+    },
+    "L_thigh_link": {
+      "peak": 4296.9541015625,
+      "rms": 322.8636779785156
+    },
+    "L_toe_link": {
+      "peak": 369.42437744140625,
+      "rms": 53.00810623168945
+    },
+    "R_ankle_pitch_link": {
+      "peak": 2701.754638671875,
+      "rms": 376.5542297363281
+    },
+    "R_foot_link": {
+      "peak": 2713.052490234375,
+      "rms": 377.653564453125
+    },
+    "R_hip_pitch_link": {
+      "peak": 2005.596923828125,
+      "rms": 301.501220703125
+    },
+    "R_hip_roll_link": {
+      "peak": 2066.072265625,
+      "rms": 307.4874267578125
+    },
+    "R_shin_link": {
+      "peak": 2478.366943359375,
+      "rms": 352.4844055175781
+    },
+    "R_thigh_link": {
+      "peak": 2182.117431640625,
+      "rms": 318.0079345703125
+    },
+    "R_toe_link": {
+      "peak": 321.5389404296875,
+      "rms": 62.058624267578125
+    },
+    "base_link": {
+      "peak": 0.0,
+      "rms": 0.0
+    }
+  }
+}

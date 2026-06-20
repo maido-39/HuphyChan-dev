@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pygmalion_locomotion"
+version = "0.1.0"
+description = "External Isaac Lab workspace: human-like locomotion for the RobStride lower-body biped."
+requires-python = ">=3.11"
+# isaaclab / isaacsim are installed separately (source / pip) — not pinned here so this
+# editable install never tries to pull or modify the Isaac Lab source tree.
+dependencies = [
+    "numpy",
+    "matplotlib",
+]
+
+[tool.setuptools]
+package-dir = { "" = "source" }
+
+[tool.setuptools.packages.find]
+where = ["source"]

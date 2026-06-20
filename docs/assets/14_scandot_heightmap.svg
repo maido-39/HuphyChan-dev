@@ -1,0 +1,66 @@
+<svg viewBox="0 0 880 400" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <style>
+    .title{font-size:19px;font-weight:700;fill:#1a1a2e}
+    .h{font-size:14px;font-weight:700;fill:#333}
+    .lbl{font-size:11px;fill:#555}
+    .dot{fill:#4285f4}
+    .ray{stroke:#90caf9;stroke-width:1}
+  </style>
+  <text x="20" y="28" class="title">heightmap 표현: robot-centric scandot grid (height_scan)</text>
+
+  <!-- LEFT: top-down grid -->
+  <text x="40" y="60" class="h">① 위에서 본 샘플 격자 (body-centric)</text>
+  <rect x="40" y="72" width="330" height="230" rx="8" fill="#f7fbff" stroke="#bbdefb"/>
+  <!-- grid of dots 11 x 7 (illustrative; real 17x11=187) -->
+  <g>
+    <!-- generate dots -->
+    <!-- rows -->
+    <g>
+      <!-- We hand-place an 11x7 grid -->
+      <!-- row spacing 30, col spacing 28, start x=70 y=92 -->
+      <!-- to keep file compact, use <use> via pattern is complex; place explicitly with small radius -->
+    </g>
+  </g>
+  <!-- dots via many circles -->
+  <g fill="#4285f4">
+    <!-- 7 rows, 11 cols -->
+    <!-- row1 y=95 --><circle cx="70" cy="95" r="3"/><circle cx="98" cy="95" r="3"/><circle cx="126" cy="95" r="3"/><circle cx="154" cy="95" r="3"/><circle cx="182" cy="95" r="3"/><circle cx="210" cy="95" r="3"/><circle cx="238" cy="95" r="3"/><circle cx="266" cy="95" r="3"/><circle cx="294" cy="95" r="3"/><circle cx="322" cy="95" r="3"/><circle cx="350" cy="95" r="3"/>
+    <circle cx="70" cy="125" r="3"/><circle cx="98" cy="125" r="3"/><circle cx="126" cy="125" r="3"/><circle cx="154" cy="125" r="3"/><circle cx="182" cy="125" r="3"/><circle cx="210" cy="125" r="3"/><circle cx="238" cy="125" r="3"/><circle cx="266" cy="125" r="3"/><circle cx="294" cy="125" r="3"/><circle cx="322" cy="125" r="3"/><circle cx="350" cy="125" r="3"/>
+    <circle cx="70" cy="155" r="3"/><circle cx="98" cy="155" r="3"/><circle cx="126" cy="155" r="3"/><circle cx="154" cy="155" r="3"/><circle cx="182" cy="155" r="3"/><circle cx="238" cy="155" r="3"/><circle cx="266" cy="155" r="3"/><circle cx="294" cy="155" r="3"/><circle cx="322" cy="155" r="3"/><circle cx="350" cy="155" r="3"/>
+    <circle cx="70" cy="185" r="3"/><circle cx="98" cy="185" r="3"/><circle cx="126" cy="185" r="3"/><circle cx="154" cy="185" r="3"/><circle cx="182" cy="185" r="3"/><circle cx="238" cy="185" r="3"/><circle cx="266" cy="185" r="3"/><circle cx="294" cy="185" r="3"/><circle cx="322" cy="185" r="3"/><circle cx="350" cy="185" r="3"/>
+    <circle cx="70" cy="215" r="3"/><circle cx="98" cy="215" r="3"/><circle cx="126" cy="215" r="3"/><circle cx="154" cy="215" r="3"/><circle cx="182" cy="215" r="3"/><circle cx="210" cy="215" r="3"/><circle cx="238" cy="215" r="3"/><circle cx="266" cy="215" r="3"/><circle cx="294" cy="215" r="3"/><circle cx="322" cy="215" r="3"/><circle cx="350" cy="215" r="3"/>
+    <circle cx="70" cy="245" r="3"/><circle cx="98" cy="245" r="3"/><circle cx="126" cy="245" r="3"/><circle cx="154" cy="245" r="3"/><circle cx="182" cy="245" r="3"/><circle cx="210" cy="245" r="3"/><circle cx="238" cy="245" r="3"/><circle cx="266" cy="245" r="3"/><circle cx="294" cy="245" r="3"/><circle cx="322" cy="245" r="3"/><circle cx="350" cy="245" r="3"/>
+    <circle cx="70" cy="275" r="3"/><circle cx="98" cy="275" r="3"/><circle cx="126" cy="275" r="3"/><circle cx="154" cy="275" r="3"/><circle cx="182" cy="275" r="3"/><circle cx="210" cy="275" r="3"/><circle cx="238" cy="275" r="3"/><circle cx="266" cy="275" r="3"/><circle cx="294" cy="275" r="3"/><circle cx="322" cy="275" r="3"/><circle cx="350" cy="275" r="3"/>
+  </g>
+  <!-- robot body in center -->
+  <rect x="198" y="168" width="44" height="34" rx="5" fill="#37474f"/>
+  <text x="202" y="189" font-size="10" fill="#fff">로봇</text>
+  <path d="M220 168 L220 150" stroke="#fff" stroke-width="2" marker-end="url(#fwd)"/>
+  <text x="226" y="150" class="lbl">전방</text>
+  <text x="55" y="320" class="lbl">예: legged_gym 17×11 = <tspan font-weight="700">187점</tspan>, 1.6 m × 1.0 m, 0.1 m 간격</text>
+
+  <!-- RIGHT: side view raycast -->
+  <text x="430" y="60" class="h">② 각 점 = 아래로 raycast → 지면높이</text>
+  <rect x="430" y="72" width="420" height="230" rx="8" fill="#f7fbff" stroke="#bbdefb"/>
+  <!-- robot -->
+  <rect x="455" y="120" width="34" height="44" rx="5" fill="#37474f"/>
+  <!-- terrain (stairs) -->
+  <path d="M445 270 L545 270 L545 250 L615 250 L615 225 L700 225 L700 200 L835 200" fill="none" stroke="#8d6e63" stroke-width="3"/>
+  <path d="M445 270 L545 270 L545 250 L615 250 L615 225 L700 225 L700 200 L835 200 L835 285 L445 285 Z" fill="#efebe9"/>
+  <!-- rays down -->
+  <g class="ray">
+    <line x1="470" y1="170" x2="470" y2="270"/><line x1="510" y1="170" x2="510" y2="270"/>
+    <line x1="560" y1="170" x2="560" y2="250"/><line x1="610" y1="170" x2="610" y2="250"/>
+    <line x1="660" y1="170" x2="660" y2="225"/><line x1="710" y1="170" x2="710" y2="200"/>
+    <line x1="780" y1="170" x2="780" y2="200"/>
+  </g>
+  <g fill="#ea4335">
+    <circle cx="470" cy="270" r="3"/><circle cx="510" cy="270" r="3"/><circle cx="560" cy="250" r="3"/><circle cx="610" cy="250" r="3"/><circle cx="660" cy="225" r="3"/><circle cx="710" cy="200" r="3"/><circle cx="780" cy="200" r="3"/>
+  </g>
+  <text x="455" y="175" class="lbl" fill="#fff">⊙</text>
+  <text x="445" y="320" class="lbl">측정값 = (각 점 높이 − base 높이). 휴머노이드 sweet-spot 셀 ~5–10 cm.</text>
+  <text x="445" y="338" class="lbl" fill="#ea4335">⚠ sim2real 함정: 0.5 m offset 가정·노이즈·드롭아웃·자기가림(occlusion) 모델 필요</text>
+  <text x="445" y="356" class="lbl">대안 표현: foot-centric 샘플 · depth 이미지 CNN · token/attention(26×16) · VAE latent · belief state</text>
+
+  <defs><marker id="fwd" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 8 L4 0 L8 8 z" fill="#fff"/></marker></defs>
+</svg>

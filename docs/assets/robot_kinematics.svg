@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="1020" viewBox="0 0 860 1020" font-family="sans-serif">
+  <rect width="860" height="1020" fill="#0f1620"/>
+  <text x="430" y="36" fill="#e8eef5" font-size="22" font-weight="bold" text-anchor="middle">RobStride 하반신 이족 — 운동학 체인 (다리당 7관절, 좌우 대칭)</text>
+  <text x="430" y="60" fill="#8aa0b5" font-size="13" text-anchor="middle">freejoint(base) + 14 joint · 16 body · 51.8 kg · 기립 0.87 m</text>
+
+  <!-- legend -->
+  <g font-size="12">
+    <rect x="40" y="78" width="16" height="16" fill="#3b82f6"/><text x="62" y="91" fill="#cdd9e5">RS04 (120 N·m)</text>
+    <rect x="190" y="78" width="16" height="16" fill="#8b5cf6"/><text x="212" y="91" fill="#cdd9e5">RS04+벨트1:3 (360)</text>
+    <rect x="380" y="78" width="16" height="16" fill="#10b981"/><text x="402" y="91" fill="#cdd9e5">RS03 (60)</text>
+    <rect x="500" y="78" width="16" height="16" fill="#f59e0b"/><text x="522" y="91" fill="#cdd9e5">RS00 (14)</text>
+    <rect x="600" y="78" width="16" height="16" fill="#64748b"/><text x="622" y="91" fill="#cdd9e5">passive (모터X)</text>
+  </g>
+
+  <!-- base -->
+  <g>
+    <rect x="300" y="120" width="260" height="62" rx="8" fill="#1f2d3d" stroke="#e8eef5" stroke-width="2"/>
+    <text x="430" y="146" fill="#e8eef5" font-size="16" font-weight="bold" text-anchor="middle">base_link  (몸통 lumped)</text>
+    <text x="430" y="168" fill="#8aa0b5" font-size="12" text-anchor="middle">freejoint(root) · 28.09 kg · 상체 외형이나 관절 없음</text>
+  </g>
+
+  <!-- connector helper via repeated boxes -->
+  <!-- joint boxes: x=300 w=260 ; vertical chain -->
+  <!-- row template positions -->
+  <g font-size="13">
+    <!-- hip pitch -->
+    <line x1="430" y1="182" x2="430" y2="206" stroke="#5b6b7b" stroke-width="2"/>
+    <rect x="300" y="206" width="260" height="56" rx="8" fill="#3b82f6"/>
+    <text x="430" y="229" fill="#fff" font-weight="bold" text-anchor="middle">hip_pitch_joint  · X축</text>
+    <text x="430" y="250" fill="#dbeafe" text-anchor="middle">RS04 120 N·m · −2.18~0.52 rad</text>
+
+    <!-- hip roll -->
+    <line x1="430" y1="262" x2="430" y2="286" stroke="#5b6b7b" stroke-width="2"/>
+    <rect x="300" y="286" width="260" height="56" rx="8" fill="#3b82f6"/>
+    <text x="430" y="309" fill="#fff" font-weight="bold" text-anchor="middle">hip_roll_joint  · 경사축</text>
+    <text x="430" y="330" fill="#dbeafe" text-anchor="middle">RS04 120 N·m · −0.79~0.44 rad</text>
+
+    <!-- hip yaw -->
+    <line x1="430" y1="342" x2="430" y2="366" stroke="#5b6b7b" stroke-width="2"/>
+    <rect x="300" y="366" width="260" height="56" rx="8" fill="#10b981"/>
+    <text x="430" y="389" fill="#fff" font-weight="bold" text-anchor="middle">hip_yaw_joint  · Z축</text>
+    <text x="430" y="410" fill="#d1fae5" text-anchor="middle">RS03 60 N·m · −0.87~0.87 rad</text>
+
+    <!-- knee -->
+    <line x1="430" y1="422" x2="430" y2="446" stroke="#5b6b7b" stroke-width="2"/>
+    <rect x="300" y="446" width="260" height="56" rx="8" fill="#8b5cf6"/>
+    <text x="430" y="469" fill="#fff" font-weight="bold" text-anchor="middle">knee_joint  · X축</text>
+    <text x="430" y="490" fill="#ede9fe" text-anchor="middle">RS04+벨트1:3 360 N·m · −2.44~0.17</text>
+
+    <!-- ankle pitch -->
+    <line x1="430" y1="502" x2="430" y2="526" stroke="#5b6b7b" stroke-width="2"/>
+    <rect x="300" y="526" width="260" height="56" rx="8" fill="#10b981"/>
+    <text x="430" y="549" fill="#fff" font-weight="bold" text-anchor="middle">ankle_pitch_joint  · X축 ★직결</text>
+    <text x="430" y="570" fill="#d1fae5" text-anchor="middle">RS03 60 N·m · −0.87~0.70 rad</text>
+
+    <!-- ankle roll -->
+    <line x1="430" y1="582" x2="430" y2="606" stroke="#5b6b7b" stroke-width="2"/>
+    <rect x="300" y="606" width="260" height="56" rx="8" fill="#f59e0b"/>
+    <text x="430" y="629" fill="#fff" font-weight="bold" text-anchor="middle">ankle_roll_joint  · Y축 ★직결</text>
+    <text x="430" y="650" fill="#fef3c7" text-anchor="middle">RS00 14 N·m · −0.35~0.35 rad</text>
+
+    <!-- toe -->
+    <line x1="430" y1="662" x2="430" y2="686" stroke="#5b6b7b" stroke-width="2"/>
+    <rect x="300" y="686" width="260" height="56" rx="8" fill="#64748b"/>
+    <text x="430" y="709" fill="#fff" font-weight="bold" text-anchor="middle">toe_joint  · X축</text>
+    <text x="430" y="730" fill="#e2e8f0" text-anchor="middle">패시브 스프링(stiffness 20) · 정책 제어 X</text>
+  </g>
+
+  <!-- foot/GRF + sensing annotations on the right -->
+  <g font-size="12">
+    <rect x="600" y="606" width="220" height="56" rx="8" fill="#172033" stroke="#f59e0b" stroke-dasharray="4 3"/>
+    <text x="710" y="628" fill="#fde68a" text-anchor="middle" font-weight="bold">foot_link = GRF/air-time</text>
+    <text x="710" y="648" fill="#94a3b8" text-anchor="middle">접촉센서 net_forces_w</text>
+
+    <path d="M560 234 H 620" stroke="#64748b" stroke-width="1.5" marker-end="url(#a)"/>
+    <text x="700" y="238" fill="#cbd5e1" text-anchor="middle" font-size="11">각 관절: applied_torque (토크)</text>
+    <text x="700" y="256" fill="#cbd5e1" text-anchor="middle" font-size="11">각 링크: 6축 반력 Fx,Fy,Fz,Tx,Ty,Tz</text>
+    <text x="700" y="274" fill="#64748b" text-anchor="middle" font-size="11">(body_incoming_joint_wrench_b)</text>
+  </g>
+
+  <text x="430" y="780" fill="#8aa0b5" font-size="13" text-anchor="middle">정책 제어 = 12관절 (hip×3, knee, ankle×2) ×좌우 · toe×2는 패시브 자동 제외</text>
+
+  <!-- pose images note -->
+  <text x="430" y="812" fill="#64748b" font-size="12" text-anchor="middle">외형 렌더는 02_robot_*.png 참조</text>
+
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="#64748b"/></marker>
+  </defs>
+</svg>

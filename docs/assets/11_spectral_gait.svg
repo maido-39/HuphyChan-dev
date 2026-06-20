@@ -1,0 +1,61 @@
+<svg viewBox="0 0 880 400" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <style>
+    .title{font-size:19px;font-weight:700;fill:#1a1a2e}
+    .h{font-size:14px;font-weight:700;fill:#333}
+    .lbl{font-size:11px;fill:#555}
+    .ax{stroke:#999;stroke-width:1.5}
+    .sig{fill:none;stroke:#4285f4;stroke-width:2.5}
+    .bar{fill:#4285f4}
+    .barR{fill:#34a853}
+  </style>
+  <text x="20" y="28" class="title">아이디어: gait를 주파수영역에서 "최적 gait"와 비교하는 reward</text>
+
+  <!-- panel 1: time-domain gait -->
+  <text x="30" y="62" class="h">① 시간영역 관절각 (주기적)</text>
+  <line x1="30" y1="150" x2="270" y2="150" class="ax"/>
+  <line x1="40" y1="80" x2="40" y2="220" class="ax"/>
+  <path class="sig" d="M40 150 Q70 90 100 150 Q130 210 160 150 Q190 90 220 150 Q250 210 270 150"/>
+  <text x="120" y="238" class="lbl">시간 (주기 T로 normalize)</text>
+
+  <!-- arrow FFT -->
+  <text x="290" y="140" class="h" fill="#f0a500">FFT</text>
+  <path d="M285 150 L330 150" stroke="#f0a500" stroke-width="3" marker-end="url(#a)"/>
+
+  <!-- panel 2: spectrum (robot) -->
+  <text x="345" y="62" class="h">② 주파수 스펙트럼 (로봇)</text>
+  <line x1="350" y1="220" x2="560" y2="220" class="ax"/>
+  <line x1="355" y1="80" x2="355" y2="220" class="ax"/>
+  <rect class="bar" x="380" y="110" width="18" height="110"/>
+  <rect class="bar" x="430" y="160" width="18" height="60"/>
+  <rect class="bar" x="480" y="190" width="18" height="30"/>
+  <text x="378" y="235" class="lbl">f0</text>
+  <text x="428" y="235" class="lbl">2f0</text>
+  <text x="476" y="235" class="lbl">3f0</text>
+  <text x="400" y="252" class="lbl">기본주파수(cadence)+고조파</text>
+
+  <!-- compare -->
+  <text x="585" y="140" class="h" fill="#34a853">비교</text>
+  <path d="M575 150 L620 150" stroke="#34a853" stroke-width="3" marker-end="url(#a2)"/>
+
+  <!-- panel 3: reference spectrum -->
+  <text x="635" y="62" class="h">③ 최적 gait 스펙트럼</text>
+  <text x="635" y="80" class="lbl">(궤적최적화 or 사람 1보)</text>
+  <line x1="640" y1="220" x2="850" y2="220" class="ax"/>
+  <line x1="645" y1="90" x2="645" y2="220" class="ax"/>
+  <rect class="barR" x="670" y="120" width="18" height="100"/>
+  <rect class="barR" x="720" y="170" width="18" height="50"/>
+  <rect class="barR" x="770" y="195" width="18" height="25"/>
+  <text x="660" y="252" class="lbl">‖로봇 − 기준‖ → reward</text>
+
+  <!-- flaw box -->
+  <rect x="30" y="290" width="820" height="92" rx="10" fill="#fff5f5" stroke="#ea4335" stroke-width="1.5"/>
+  <text x="45" y="314" class="h" fill="#ea4335">⚠ 치명적 결함: 크기 스펙트럼은 위상(phase)을 버림</text>
+  <text x="45" y="336" class="lbl">→ 좌우 다리 anti-phase(걷기) vs in-phase(뛰기)가 같은 |FFT| = 동일 점수. 사지 협응(coordination)을 못 잡음.</text>
+  <text x="45" y="356" class="lbl">→ cross-spectral(상호 스펙트럼)·관절간 위상차를 넣어야 함. 또한 윈도우(비-Markov)·낮은 주파수해상도 한계.</text>
+  <text x="45" y="375" class="lbl" fill="#333">장점: 위상이동 불변(시간정렬 불필요)·mocap 없이 1개 템플릿·해석가능(AMP 대비). 자세히는 본문.</text>
+
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#f0a500"/></marker>
+    <marker id="a2" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#34a853"/></marker>
+  </defs>
+</svg>

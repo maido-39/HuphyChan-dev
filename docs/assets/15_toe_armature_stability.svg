@@ -1,0 +1,45 @@
+<svg viewBox="0 0 860 380" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <style>
+    .title{font-size:19px;font-weight:700;fill:#1a1a2e}
+    .h{font-size:14px;font-weight:700}
+    .t{font-size:12px;fill:#333}
+    .lbl{font-size:11px;fill:#666}
+    .bad{fill:#fce8e6;stroke:#ea4335;stroke-width:1.5}
+    .good{fill:#e6f4ea;stroke:#34a853;stroke-width:1.5}
+  </style>
+  <text x="20" y="28" class="title">passive toe 수치안정: armature(로터관성)가 핵심</text>
+  <text x="20" y="48" class="lbl">고유진동수 ω = √(k / (I+armature)). dt=0.005s에서 ω·dt가 크면 PhysX 발산. toe는 I가 매우 작아 armature 필수.</text>
+
+  <!-- toe model -->
+  <text x="40" y="80" class="h">passive toe 모델</text>
+  <rect x="40" y="92" width="120" height="40" rx="5" fill="#37474f"/>
+  <text x="60" y="117" class="t" fill="#fff">발 (shin)</text>
+  <!-- spring -->
+  <path d="M160 100 q8 -7 16 0 q8 7 16 0 q8 -7 16 0" fill="none" stroke="#4285f4" stroke-width="2"/>
+  <text x="168" y="92" class="lbl" fill="#4285f4">k</text>
+  <!-- damper -->
+  <line x1="160" y1="120" x2="208" y2="120" stroke="#f0a500" stroke-width="2"/>
+  <rect x="184" y="114" width="14" height="12" fill="none" stroke="#f0a500"/>
+  <text x="200" y="112" class="lbl" fill="#f0a500">d</text>
+  <rect x="208" y="96" width="80" height="36" rx="5" fill="#90a4ae"/>
+  <text x="222" y="118" class="t" fill="#fff">toe</text>
+  <text x="300" y="118" class="lbl">+ armature = 로터관성 (수치안정용)</text>
+
+  <!-- before -->
+  <rect x="40" y="160" width="380" height="150" class="bad" rx="10"/>
+  <text x="56" y="186" class="h" fill="#ea4335">전 (발산): k=150, armature=0.0005</text>
+  <text x="56" y="210" class="t">armature가 Cassie toe(0.01225)의 <tspan font-weight="700">1/24</tspan></text>
+  <text x="56" y="232" class="t">→ ω·dt 안정한계 초과 → 일부 env 폭발</text>
+  <text x="56" y="254" class="t" fill="#ea4335">→ Mean reward −59만, PhysX 에러</text>
+  <text x="56" y="284" class="lbl">(stiffness도 인간 MTP ~56의 2.7배 과강성)</text>
+
+  <!-- after -->
+  <rect x="440" y="160" width="380" height="150" class="good" rx="10"/>
+  <text x="456" y="186" class="h" fill="#34a853">후 (안정): k=60, armature=0.008</text>
+  <text x="456" y="210" class="t">armature ↑16배 (Cassie급 0.005–0.0125 범위)</text>
+  <text x="456" y="232" class="t">→ ω·dt 안정 영역, 발산 없음</text>
+  <text x="456" y="254" class="t">stiffness 60 = 인간 MTP(~56) 수준</text>
+  <text x="456" y="284" class="t" fill="#34a853">damping 4로 슬랩 억제 유지</text>
+
+  <text x="40" y="335" class="lbl">교훈: 저관성 관절의 스프링을 키울 땐 <tspan font-weight="700">stiffness보다 armature를 먼저</tspan> 확보해야 안정. 출처 §15.</text>
+</svg>

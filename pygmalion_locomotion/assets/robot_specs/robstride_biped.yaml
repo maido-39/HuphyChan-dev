@@ -1,0 +1,111 @@
+# =====================================================================================
+# Robot spec — SINGLE SOURCE OF TRUTH for the RobStride lower-body biped.
+# Edit THIS file to swap the robot / change physics / change joint structure, then run:
+#     python scripts/convert_asset.py --force        # rebuild USD from the source file
+#     python scripts/train.py --task Pygmalion-Velocity-Flat-v0 --headless --num_envs 512
+# Both biped_cfg.py and the env read everything below (no hardcoded constants elsewhere).
+# =====================================================================================
+name: robstride_biped
+
+source:
+  # MJCF (.xml/.mjcf) OR URDF (.urdf). Converter is auto-selected by extension.
+  # USD is rebuilt automatically when this file's bytes OR convert/* params change
+  # (lazy hash cache in usd_dir). Editing only a referenced MESH needs --force.
+  file: assets/biped_lower_body_mjcf/robot.xml
+  usd_dir: usd                       # MUST stay non-empty for caching to work
+  usd_file_name: biped_lower_body.usd
+
+convert:
+  fix_base: false                    # false = floating base for locomotion
+  import_inertia_tensor: true        # use <inertial> mass/inertia from the source
+  self_collision: true               # ★ enable self-collision (PhysX auto-excludes parent-child;
+                                     #   so only left<->right leg / foot-foot collide). prevents scissoring.
+  make_instanceable: true
+
+init:
+  height: 0.92                       # base spawn z (feet settle onto ground)
+  # slight knee/hip flex helps walking learn vs. dead-straight legs
+  joint_pos:
+    ".*_hip_pitch_joint": -0.20
+    ".*_hip_roll_joint": 0.0
+    ".*_hip_yaw_joint": 0.0
+    ".*_knee_joint": -0.40
+    ".*_ankle_pitch_joint": 0.20
+    ".*_ankle_roll_joint": 0.0
+    ".*_toe_joint": 0.0
+
+roles:
+  base: base_link                    # trunk/pelvis body (height scan, fall-contact, push)
+  foot: ".*_foot_link"               # ankle-roll plate (GRF, air-time, slide)
+  undesired_contact: [".*_thigh_link", ".*_shin_link"]
+  target_base_height: 0.85           # reward target for upright walking
+
+# Actuator groups. type: motor (policy-controlled) | passive_spring (excluded from action).
+# effort/velocity become effort_limit_sim / velocity_limit_sim on ImplicitActuatorCfg
+# (the plain effort_limit/velocity_limit are deprecated/ignored for implicit actuators).
+actuators:
+  hip_rs04:                          # RS04 direct
+    type: motor
+    joints: [".*_hip_pitch_joint", ".*_hip_roll_joint"]
+    effort_limit: 120.0
+    velocity_limit_rpm: 200.0
+    stiffness: 200.0
+    damping: 5.0
+    armature: 0.0097
+  hip_yaw_rs03:                      # RS03 direct
+    type: motor
+    joints: [".*_hip_yaw_joint"]
+    effort_limit: 60.0
+    velocity_limit_rpm: 220.0
+    stiffness: 150.0
+    damping: 5.0
+    armature: 0.0049
+  knee_rs04_belt:                    # RS04 + AT3 belt 1:3  -> 360 N*m, speed/3
+    type: motor
+    joints: [".*_knee_joint"]
+    effort_limit: 360.0
+    velocity_limit_rpm: 66.7
+    stiffness: 200.0
+    damping: 5.0
+    armature: 0.0875
+  ankle_pitch_rs03:                  # RS03 DIRECT motor on the joint axis (NOT a rod/linkage)
+    type: motor
+    joints: [".*_ankle_pitch_joint"]
+    effort_limit: 60.0
+    velocity_limit_rpm: 220.0
+    stiffness: 80.0
+    damping: 3.0
+    armature: 0.0049
+  ankle_roll_rs00:                   # RS00 DIRECT motor
+    type: motor
+    joints: [".*_ankle_roll_joint"]
+    effort_limit: 14.0
+    velocity_limit_rpm: 315.0
+    stiffness: 40.0
+    damping: 2.0
+    armature: 0.0015
+  toe_passive:                       # NO motor -> passive spring-damper to default (0)
+    type: passive_spring
+    joints: [".*_toe_joint"]
+    # ★ tuned from the toe-joint research (docs/15): human MTP ~56 N*m/rad; the KEY stability knob
+    #   is ARMATURE (rotor inertia). old armature 0.0005 was ~1/24 of Cassie's toe (0.01225) -> the
+    #   low-inertia toe + high stiffness blew up numerically. Fix: stiffness 150->60 (human-like),
+    #   armature 0.0005->0.008 (Cassie-like), damping 4 (kills slap). effort 60 > peak spring torque.
+    effort_limit: 60.0
+    velocity_limit_rpm: 315.0
+    stiffness: 60.0
+    damping: 4.0
+    armature: 0.008
+
+# Policy-controlled joints. If omitted, derived = union of all type:motor groups
+# (so passive joints are always excluded automatically). Override only if you need a subset.
+action_joints: null
+
+# Deterministic physical-property overrides applied at STARTUP (no MJCF edit / no reconvert).
+# Change these freely to sweep hardware mass distribution; rebuilt from default each run (idempotent).
+physics:
+  mass_scale_all: 1.0                # uniform multiplier on every body mass+inertia
+  overrides: []                      # list of {body: <regex>, mass: <kg> | mass_scale: <x>,
+                                     #          inertia_scale: <x>, com: [dx,dy,dz]}
+                                     # e.g. - {body: base_link, mass: 30.0}
+                                     #      - {body: ".*_shin_link", mass_scale: 1.1}

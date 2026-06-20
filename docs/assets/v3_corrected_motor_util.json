@@ -1,0 +1,137 @@
+{
+  "title": "v3 corrected, flat, 51.79kg (clipped)",
+  "rows": [
+    {
+      "joint": "L_hip_pitch_joint",
+      "peak_clipped": 97.51083374023438,
+      "peak_unclipped": null,
+      "spec_peak": 120.0,
+      "spec_rated": 40.0,
+      "pct_rated_clipped": 243.77708435058594,
+      "pct_peak_clipped": 81.25902811686198,
+      "pct_rated_unclipped": null,
+      "pct_peak_unclipped": null
+    },
+    {
+      "joint": "R_hip_pitch_joint",
+      "peak_clipped": 74.874755859375,
+      "peak_unclipped": null,
+      "spec_peak": 120.0,
+      "spec_rated": 40.0,
+      "pct_rated_clipped": 187.1868896484375,
+      "pct_peak_clipped": 62.3956298828125,
+      "pct_rated_unclipped": null,
+      "pct_peak_unclipped": null
+    },
+    {
+      "joint": "L_hip_roll_joint",
+      "peak_clipped": 97.23629760742188,
+      "peak_unclipped": null,
+      "spec_peak": 120.0,
+      "spec_rated": 40.0,
+      "pct_rated_clipped": 243.0907440185547,
+      "pct_peak_clipped": 81.03024800618489,
+      "pct_rated_unclipped": null,
+      "pct_peak_unclipped": null
+    },
+    {
+      "joint": "R_hip_roll_joint",
+      "peak_clipped": 100.32292938232422,
+      "peak_unclipped": null,
+      "spec_peak": 120.0,
+      "spec_rated": 40.0,
+      "pct_rated_clipped": 250.80732345581055,
+      "pct_peak_clipped": 83.60244115193684,
+      "pct_rated_unclipped": null,
+      "pct_peak_unclipped": null
+    },
+    {
+      "joint": "L_hip_yaw_joint",
+      "peak_clipped": 27.430173873901367,
+      "peak_unclipped": null,
+      "spec_peak": 60.0,
+      "spec_rated": 20.0,
+      "pct_rated_clipped": 137.15086936950684,
+      "pct_peak_clipped": 45.71695645650228,
+      "pct_rated_unclipped": null,
+      "pct_peak_unclipped": null
+    },
+    {
+      "joint": "R_hip_yaw_joint",
+      "peak_clipped": 34.063392639160156,
+      "peak_unclipped": null,
+      "spec_peak": 60.0,
+      "spec_rated": 20.0,
+      "pct_rated_clipped": 170.31696319580078,
+      "pct_peak_clipped": 56.77232106526693,
+      "pct_rated_unclipped": null,
+      "pct_peak_unclipped": null
+    },
+    {
+      "joint": "L_knee_joint",
+      "peak_clipped": 151.55856323242188,
+      "peak_unclipped": null,
+      "spec_peak": 360.0,
+      "spec_rated": 120.0,
+      "pct_rated_clipped": 126.29880269368489,
+      "pct_peak_clipped": 42.099600897894966,
+      "pct_rated_unclipped": null,
+      "pct_peak_unclipped": null
+    },
+    {
+      "joint": "R_knee_joint",
+      "peak_clipped": 196.18319702148438,
+      "peak_unclipped": null,
+      "spec_peak": 360.0,
+      "spec_rated": 120.0,
+      "pct_rated_clipped": 163.48599751790366,
+      "pct_peak_clipped": 54.49533250596788,
+      "pct_rated_unclipped": null,
+      "pct_peak_unclipped": null
+    },
+    {
+      "joint": "L_ankle_pitch_joint",
+      "peak_clipped": 60.0,
+      "peak_unclipped": null,
+      "spec_peak": 60.0,
+      "spec_rated": 20.0,
+      "pct_rated_clipped": 300.0,
+      "pct_peak_clipped": 100.0,
+      "pct_rated_unclipped": null,
+      "pct_peak_unclipped": null
+    },
+    {
+      "joint": "R_ankle_pitch_joint",
+      "peak_clipped": 60.0,
+      "peak_unclipped": null,
+      "spec_peak": 60.0,
+      "spec_rated": 20.0,
+      "pct_rated_clipped": 300.0,
+      "pct_peak_clipped": 100.0,
+      "pct_rated_unclipped": null,
+      "pct_peak_unclipped": null
+    },
+    {
+      "joint": "L_ankle_roll_joint",
+      "peak_clipped": 14.0,
+      "peak_unclipped": null,
+      "spec_peak": 14.0,
+      "spec_rated": 5.0,
+      "pct_rated_clipped": 280.0,
+      "pct_peak_clipped": 100.0,
+      "pct_rated_unclipped": null,
+      "pct_peak_unclipped": null
+    },
+    {
+      "joint": "R_ankle_roll_joint",
+      "peak_clipped": 14.0,
+      "peak_unclipped": null,
+      "spec_peak": 14.0,
+      "spec_rated": 5.0,
+      "pct_rated_clipped": 280.0,
+      "pct_peak_clipped": 100.0,
+      "pct_rated_unclipped": null,
+      "pct_peak_unclipped": null
+    }
+  ]
+}

@@ -1,0 +1,434 @@
+<?xml version="1.0" ?>
+<robot name="USD_Conversion_TEST" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+<xacro:include filename="$(find USD_Conversion_TEST_description)/urdf/materials.xacro" />
+<xacro:include filename="$(find USD_Conversion_TEST_description)/urdf/USD_Conversion_TEST.trans" />
+<xacro:include filename="$(find USD_Conversion_TEST_description)/urdf/USD_Conversion_TEST.gazebo" />
+<link name="base_link">
+  <inertial>
+    <origin xyz="0.0007199836553595151 0.09198720892675087 0.4256749877395593" rpy="0 0 0"/>
+    <mass value="28.089217411901817"/>
+    <inertia ixx="1.27435" iyy="1.622221" izz="0.552463" ixy="-0.000597" iyz="-0.048483" ixz="0.000556"/>
+  </inertial>
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="L_hip_rp_1">
+  <inertial>
+    <origin xyz="-0.033173638461538466 0.00028973012250514685 -0.00555915064011079" rpy="0 0 0"/>
+    <mass value="0.9673966434648286"/>
+    <inertia ixx="0.002306" iyy="0.00136" izz="0.001934" ixy="0.000135" iyz="-8.9e-05" ixz="2.9e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.070875 -0.10393 -0.059371" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_hip_rp_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.070875 -0.10393 -0.059371" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_hip_rp_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="L_hip_ry_1">
+  <inertial>
+    <origin xyz="8.076319906004381e-05 -0.030597708112115263 -0.06073593374195334" rpy="0 0 0"/>
+    <mass value="1.7410948582570684"/>
+    <inertia ixx="0.008848" iyy="0.005345" izz="0.007035" ixy="-5e-05" iyz="-0.002797" ixz="-1.3e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.094751 -0.163543 -0.043397" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_hip_ry_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.094751 -0.163543 -0.043397" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_hip_ry_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="L_bukji_up_1">
+  <inertial>
+    <origin xyz="0.006929231392814886 0.01770034145977334 -0.1311138935310846" rpy="0 0 0"/>
+    <mass value="5.104337325364219"/>
+    <inertia ixx="0.051473" iyy="0.047912" izz="0.016061" ixy="-1.2e-05" iyz="0.005938" ixz="-0.001802"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.094751 -0.100549 0.077799" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_bukji_up_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.094751 -0.100549 0.077799" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_bukji_up_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="L_bukji_down_1">
+  <inertial>
+    <origin xyz="-0.0003632849683444933 0.0095221845686832 -0.14770707910187408" rpy="0 0 0"/>
+    <mass value="2.822603891762685"/>
+    <inertia ixx="0.033062" iyy="0.032472" izz="0.003733" ixy="-8.8e-05" iyz="-0.0003" ixz="-0.000671"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.099911 -0.159248 0.387157" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_bukji_down_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.099911 -0.159248 0.387157" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_bukji_down_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="L_ankle_1">
+  <inertial>
+    <origin xyz="3.067980850479657e-07 0.004003187289080334 2.739717215649584e-06" rpy="0 0 0"/>
+    <mass value="0.10981705742302773"/>
+    <inertia ixx="4.9e-05" iyy="4.5e-05" izz="4.6e-05" ixy="-0.0" iyz="0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.109751 -0.171046 0.786999" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_ankle_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.109751 -0.171046 0.786999" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_ankle_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="L_feet_1">
+  <inertial>
+    <origin xyz="-0.004835605445797711 -0.07104650165326731 -0.04355005522880562" rpy="0 0 0"/>
+    <mass value="0.9735624294471117"/>
+    <inertia ixx="0.003879" iyy="0.000932" izz="0.003979" ixy="-0.000419" iyz="-0.000247" ixz="-3.7e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.109751 -0.174834 0.786996" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_feet_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.109751 -0.174834 0.786996" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_feet_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="L_feet_toe_1">
+  <inertial>
+    <origin xyz="0.0022344964832798353 -0.021292300125526388 -0.009715251299284522" rpy="0 0 0"/>
+    <mass value="0.12914151452162093"/>
+    <inertia ixx="4.8e-05" iyy="7.3e-05" izz="0.000101" ixy="-2e-06" iyz="-1e-06" ixz="-2e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.132128 0.017185 0.836768" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_feet_toe_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.132128 0.017185 0.836768" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/L_feet_toe_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="R_hip_rp__1">
+  <inertial>
+    <origin xyz="0.03317321602970942 0.00028973012250500807 -0.005559150640111088" rpy="0 0 0"/>
+    <mass value="0.967396643464829"/>
+    <inertia ixx="0.002306" iyy="0.00136" izz="0.001934" ixy="-0.000135" iyz="-8.9e-05" ixz="-2.9e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.070931 -0.10393 -0.059371" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_hip_rp__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.070931 -0.10393 -0.059371" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_hip_rp__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="R_hip_ry_1">
+  <inertial>
+    <origin xyz="-8.018563088811603e-05 -0.03059770811211504 -0.060735933741954004" rpy="0 0 0"/>
+    <mass value="1.7410948582570684"/>
+    <inertia ixx="0.008848" iyy="0.005345" izz="0.007035" ixy="5e-05" iyz="-0.002797" ixz="1.3e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.094806 -0.163543 -0.043397" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_hip_ry_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.094806 -0.163543 -0.043397" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_hip_ry_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="R_bukji_up_1">
+  <inertial>
+    <origin xyz="-0.006928653824646025 0.01770034145977921 -0.13111389353108582" rpy="0 0 0"/>
+    <mass value="5.104337325364221"/>
+    <inertia ixx="0.051473" iyy="0.047912" izz="0.016061" ixy="1.2e-05" iyz="0.005938" ixz="0.001802"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.094806 -0.100549 0.077799" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_bukji_up_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.094806 -0.100549 0.077799" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_bukji_up_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="R_bukji_down_1">
+  <inertial>
+    <origin xyz="0.00036386253651643496 0.00952218456868309 -0.1477070791018753" rpy="0 0 0"/>
+    <mass value="2.822603891762685"/>
+    <inertia ixx="0.033062" iyy="0.032472" izz="0.003733" ixy="8.8e-05" iyz="-0.0003" ixz="0.000671"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.099966 -0.159248 0.387157" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_bukji_down_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.099966 -0.159248 0.387157" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_bukji_down_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="R_ankle_1">
+  <inertial>
+    <origin xyz="2.707700869769569e-07 0.004003187289080223 2.739717214428339e-06" rpy="0 0 0"/>
+    <mass value="0.10981705742302782"/>
+    <inertia ixx="4.9e-05" iyy="4.5e-05" izz="4.6e-05" ixy="0.0" iyz="0.0" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.109806 -0.171046 0.786999" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_ankle_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.109806 -0.171046 0.786999" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_ankle_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="R_feet_1">
+  <inertial>
+    <origin xyz="0.0048361830139696665 -0.07104650165326709 -0.043550055228806284" rpy="0 0 0"/>
+    <mass value="0.9735624294471216"/>
+    <inertia ixx="0.003879" iyy="0.000932" izz="0.003979" ixy="0.000419" iyz="-0.000247" ixz="3.7e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.109806 -0.174834 0.786996" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_feet_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.109806 -0.174834 0.786996" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_feet_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="R_feet_toe_1">
+  <inertial>
+    <origin xyz="-0.0022339189151077687 -0.021292300125526596 -0.009715251299284855" rpy="0 0 0"/>
+    <mass value="0.12914151452162095"/>
+    <inertia ixx="4.8e-05" iyy="7.3e-05" izz="0.000101" ixy="2e-06" iyz="-1e-06" ixz="2e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.132183 0.017185 0.836768" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_feet_toe_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.132183 0.017185 0.836768" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://USD_Conversion_TEST_description/meshes/R_feet_toe_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<joint name="Revolute 1" type="revolute">
+  <origin xyz="-0.070875 0.10393 0.059371" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="L_hip_rp_1"/>
+  <axis xyz="1.0 0.0 0.0"/>
+  <limit upper="0.523599" lower="-2.181662" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Revolute 2" type="revolute">
+  <origin xyz="-0.023876 0.059613 -0.015974" rpy="0 0 0"/>
+  <parent link="L_hip_rp_1"/>
+  <child link="L_hip_ry_1"/>
+  <axis xyz="-0.0 -0.965926 0.258819"/>
+  <limit upper="0.436332" lower="-0.785398" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Revolute 3" type="revolute">
+  <origin xyz="0.0 -0.062994 -0.121196" rpy="0 0 0"/>
+  <parent link="L_hip_ry_1"/>
+  <child link="L_bukji_up_1"/>
+  <axis xyz="0.0 0.0 -1.0"/>
+  <limit upper="0.872665" lower="-0.872665" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Revolute 4" type="revolute">
+  <origin xyz="-0.00516 0.058699 -0.309358" rpy="0 0 0"/>
+  <parent link="L_bukji_up_1"/>
+  <child link="L_bukji_down_1"/>
+  <axis xyz="-1.0 -0.0 0.0"/>
+  <limit upper="0.174533" lower="-2.443461" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Revolute 5" type="revolute">
+  <origin xyz="-0.00984 0.011798 -0.399842" rpy="0 0 0"/>
+  <parent link="L_bukji_down_1"/>
+  <child link="L_ankle_1"/>
+  <axis xyz="-1.0 0.0 0.0"/>
+  <limit upper="0.698132" lower="-0.872665" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Revolute 6" type="revolute">
+  <origin xyz="0.0 0.003788 3e-06" rpy="0 0 0"/>
+  <parent link="L_ankle_1"/>
+  <child link="L_feet_1"/>
+  <axis xyz="-0.0 1.0 0.0"/>
+  <limit upper="0.349066" lower="-0.349066" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Revolute 7" type="revolute">
+  <origin xyz="-0.022377 -0.192019 -0.049772" rpy="0 0 0"/>
+  <parent link="L_feet_1"/>
+  <child link="L_feet_toe_1"/>
+  <axis xyz="1.0 -0.0 0.0"/>
+  <limit upper="0.0" lower="-0.872665" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Revolute 8" type="revolute">
+  <origin xyz="0.070931 0.10393 0.059371" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="R_hip_rp__1"/>
+  <axis xyz="1.0 -0.0 -0.0"/>
+  <limit upper="0.523599" lower="-2.181662" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Revolute 9" type="revolute">
+  <origin xyz="0.023875 0.059613 -0.015974" rpy="0 0 0"/>
+  <parent link="R_hip_rp__1"/>
+  <child link="R_hip_ry_1"/>
+  <axis xyz="-0.0 0.965926 -0.258819"/>
+  <limit upper="0.436332" lower="-0.785398" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Revolute 10" type="revolute">
+  <origin xyz="0.0 -0.062994 -0.121196" rpy="0 0 0"/>
+  <parent link="R_hip_ry_1"/>
+  <child link="R_bukji_up_1"/>
+  <axis xyz="-0.0 0.0 -1.0"/>
+  <limit upper="0.698132" lower="-0.698132" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Revolute 11" type="revolute">
+  <origin xyz="0.00516 0.058699 -0.309358" rpy="0 0 0"/>
+  <parent link="R_bukji_up_1"/>
+  <child link="R_bukji_down_1"/>
+  <axis xyz="-1.0 -0.0 -0.0"/>
+  <limit upper="0.174533" lower="-2.181662" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Revolute 12" type="revolute">
+  <origin xyz="0.00984 0.011798 -0.399842" rpy="0 0 0"/>
+  <parent link="R_bukji_down_1"/>
+  <child link="R_ankle_1"/>
+  <axis xyz="-1.0 -0.0 0.0"/>
+  <limit upper="0.698132" lower="-0.872665" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Revolute 13" type="revolute">
+  <origin xyz="0.0 0.003788 3e-06" rpy="0 0 0"/>
+  <parent link="R_ankle_1"/>
+  <child link="R_feet_1"/>
+  <axis xyz="-0.0 -1.0 -0.0"/>
+  <limit upper="0.349066" lower="-0.349066" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Revolute 14" type="revolute">
+  <origin xyz="0.022377 -0.192019 -0.049772" rpy="0 0 0"/>
+  <parent link="R_feet_1"/>
+  <child link="R_feet_toe_1"/>
+  <axis xyz="1.0 0.0 -0.0"/>
+  <limit upper="0.0" lower="-0.785398" effort="100" velocity="100"/>
+</joint>
+
+</robot>

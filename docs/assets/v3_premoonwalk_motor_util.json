@@ -1,0 +1,137 @@
+{
+  "title": "pre-fix moonwalk: clipped vs unclipped",
+  "rows": [
+    {
+      "joint": "L_hip_pitch_joint",
+      "peak_clipped": 83.67315673828125,
+      "peak_unclipped": 78.04136657714844,
+      "spec_peak": 120.0,
+      "spec_rated": 40.0,
+      "pct_rated_clipped": 209.18289184570312,
+      "pct_peak_clipped": 69.72763061523438,
+      "pct_rated_unclipped": 195.1034164428711,
+      "pct_peak_unclipped": 65.0344721476237
+    },
+    {
+      "joint": "R_hip_pitch_joint",
+      "peak_clipped": 94.3114013671875,
+      "peak_unclipped": 92.75274658203125,
+      "spec_peak": 120.0,
+      "spec_rated": 40.0,
+      "pct_rated_clipped": 235.77850341796875,
+      "pct_peak_clipped": 78.59283447265625,
+      "pct_rated_unclipped": 231.88186645507812,
+      "pct_peak_unclipped": 77.29395548502605
+    },
+    {
+      "joint": "L_hip_roll_joint",
+      "peak_clipped": 86.0897445678711,
+      "peak_unclipped": 78.07310485839844,
+      "spec_peak": 120.0,
+      "spec_rated": 40.0,
+      "pct_rated_clipped": 215.22436141967773,
+      "pct_peak_clipped": 71.74145380655925,
+      "pct_rated_unclipped": 195.1827621459961,
+      "pct_peak_unclipped": 65.06092071533203
+    },
+    {
+      "joint": "R_hip_roll_joint",
+      "peak_clipped": 74.46895599365234,
+      "peak_unclipped": 85.41084289550781,
+      "spec_peak": 120.0,
+      "spec_rated": 40.0,
+      "pct_rated_clipped": 186.17238998413086,
+      "pct_peak_clipped": 62.05746332804362,
+      "pct_rated_unclipped": 213.52710723876953,
+      "pct_peak_unclipped": 71.17570241292317
+    },
+    {
+      "joint": "L_hip_yaw_joint",
+      "peak_clipped": 39.58275604248047,
+      "peak_unclipped": 32.464962005615234,
+      "spec_peak": 60.0,
+      "spec_rated": 20.0,
+      "pct_rated_clipped": 197.91378021240234,
+      "pct_peak_clipped": 65.97126007080078,
+      "pct_rated_unclipped": 162.32481002807617,
+      "pct_peak_unclipped": 54.108270009358726
+    },
+    {
+      "joint": "R_hip_yaw_joint",
+      "peak_clipped": 60.0,
+      "peak_unclipped": 50.84433364868164,
+      "spec_peak": 60.0,
+      "spec_rated": 20.0,
+      "pct_rated_clipped": 300.0,
+      "pct_peak_clipped": 100.0,
+      "pct_rated_unclipped": 254.2216682434082,
+      "pct_peak_unclipped": 84.74055608113606
+    },
+    {
+      "joint": "L_knee_joint",
+      "peak_clipped": 111.50738525390625,
+      "peak_unclipped": 103.27493286132812,
+      "spec_peak": 360.0,
+      "spec_rated": 120.0,
+      "pct_rated_clipped": 92.92282104492188,
+      "pct_peak_clipped": 30.974273681640625,
+      "pct_rated_unclipped": 86.06244405110677,
+      "pct_peak_unclipped": 28.687481350368923
+    },
+    {
+      "joint": "R_knee_joint",
+      "peak_clipped": 148.9559783935547,
+      "peak_unclipped": 185.8153076171875,
+      "spec_peak": 360.0,
+      "spec_rated": 120.0,
+      "pct_rated_clipped": 124.1299819946289,
+      "pct_peak_clipped": 41.376660664876304,
+      "pct_rated_unclipped": 154.8460896809896,
+      "pct_peak_unclipped": 51.61536322699653
+    },
+    {
+      "joint": "L_ankle_pitch_joint",
+      "peak_clipped": 60.0,
+      "peak_unclipped": 57.83544921875,
+      "spec_peak": 60.0,
+      "spec_rated": 20.0,
+      "pct_rated_clipped": 300.0,
+      "pct_peak_clipped": 100.0,
+      "pct_rated_unclipped": 289.17724609375,
+      "pct_peak_unclipped": 96.39241536458333
+    },
+    {
+      "joint": "R_ankle_pitch_joint",
+      "peak_clipped": 60.0,
+      "peak_unclipped": 60.0,
+      "spec_peak": 60.0,
+      "spec_rated": 20.0,
+      "pct_rated_clipped": 300.0,
+      "pct_peak_clipped": 100.0,
+      "pct_rated_unclipped": 300.0,
+      "pct_peak_unclipped": 100.0
+    },
+    {
+      "joint": "L_ankle_roll_joint",
+      "peak_clipped": 14.0,
+      "peak_unclipped": 14.0,
+      "spec_peak": 14.0,
+      "spec_rated": 5.0,
+      "pct_rated_clipped": 280.0,
+      "pct_peak_clipped": 100.0,
+      "pct_rated_unclipped": 280.0,
+      "pct_peak_unclipped": 100.0
+    },
+    {
+      "joint": "R_ankle_roll_joint",
+      "peak_clipped": 14.0,
+      "peak_unclipped": 14.0,
+      "spec_peak": 14.0,
+      "spec_rated": 5.0,
+      "pct_rated_clipped": 280.0,
+      "pct_peak_clipped": 100.0,
+      "pct_rated_unclipped": 280.0,
+      "pct_peak_unclipped": 100.0
+    }
+  ]
+}

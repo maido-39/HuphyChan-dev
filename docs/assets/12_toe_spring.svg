@@ -1,0 +1,58 @@
+<svg viewBox="0 0 820 380" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <style>
+    .title{font-size:19px;font-weight:700;fill:#1a1a2e}
+    .h{font-size:15px;font-weight:700}
+    .t{font-size:12px;fill:#333}
+    .lbl{font-size:11px;fill:#666}
+    .foot{fill:#cfd8dc;stroke:#546e7a;stroke-width:2}
+    .toe{stroke:#546e7a;stroke-width:2}
+    .grf{stroke:#ea4335;stroke-width:3}
+  </style>
+  <text x="20" y="30" class="title">passive toe 강성: 너무 낮으면 찰싹임 (slap)</text>
+  <text x="20" y="50" class="lbl">push-off 시 발끝 토크 ≈ GRF(~550N) × 모멘트암(~0.07m) ≈ 40 N·m. 변형을 작게 잡으려면 stiffness↑</text>
+
+  <!-- LEFT: soft 20 -->
+  <rect x="20" y="70" width="380" height="290" rx="10" fill="#fff5f5" stroke="#ea4335" stroke-width="1.5"/>
+  <text x="40" y="98" class="h" fill="#ea4335">현재(전): k=20 N·m/rad, d=0.5</text>
+  <!-- ground -->
+  <line x1="40" y1="250" x2="380" y2="250" stroke="#999" stroke-width="2"/>
+  <!-- foot sole -->
+  <rect x="70" y="232" width="170" height="18" class="foot" rx="3"/>
+  <text x="120" y="226" class="lbl">발바닥</text>
+  <!-- toe drooping/slapping (large deflection) -->
+  <g transform="rotate(38 240 241)">
+    <rect x="240" y="232" width="80" height="16" class="foot" fill="#ef9a9a" rx="3"/>
+  </g>
+  <circle cx="240" cy="241" r="5" fill="#546e7a"/>
+  <text x="248" y="300" class="lbl">발끝이 크게 꺾여</text>
+  <text x="248" y="316" class="lbl">바닥을 때림(찰싹)</text>
+  <!-- spring (loose coil) -->
+  <path d="M232 215 q6 -8 12 0 q6 8 12 0 q6 -8 12 0" fill="none" stroke="#ea4335" stroke-width="2"/>
+  <text x="255" y="205" class="lbl">약한 스프링</text>
+  <!-- slap impact mark -->
+  <text x="300" y="332" font-size="22" fill="#ea4335">💥</text>
+  <text x="50" y="348" class="t" fill="#ea4335">→ 큰 변형 + 낮은 감쇠 → 진동·임팩트(slap)</text>
+
+  <!-- RIGHT: stiff 150 -->
+  <rect x="420" y="70" width="380" height="290" rx="10" fill="#f1f8e9" stroke="#34a853" stroke-width="1.5"/>
+  <text x="440" y="98" class="h" fill="#34a853">반영(후): k=150 N·m/rad, d=4.0</text>
+  <line x1="440" y1="250" x2="780" y2="250" stroke="#999" stroke-width="2"/>
+  <rect x="470" y="232" width="170" height="18" class="foot" rx="3"/>
+  <text x="520" y="226" class="lbl">발바닥</text>
+  <!-- toe small deflection -->
+  <g transform="rotate(10 640 241)">
+    <rect x="640" y="232" width="80" height="16" class="foot" fill="#aed581" rx="3"/>
+  </g>
+  <circle cx="640" cy="241" r="5" fill="#546e7a"/>
+  <!-- GRF arrow up at toe -->
+  <line x1="700" y1="290" x2="700" y2="250" class="grf" marker-end="url(#g)"/>
+  <text x="690" y="306" class="lbl" fill="#ea4335">GRF</text>
+  <!-- spring (tight coil) -->
+  <path d="M632 218 q4 -6 8 0 q4 6 8 0 q4 -6 8 0 q4 6 8 0 q4 -6 8 0" fill="none" stroke="#34a853" stroke-width="2.5"/>
+  <text x="650" y="208" class="lbl">강한 스프링</text>
+  <text x="648" y="300" class="lbl">변형 ~10° (작게)</text>
+  <text x="470" y="332" class="t" fill="#34a853">→ push-off 받쳐주며 컴플라이언스 유지</text>
+  <text x="470" y="350" class="lbl">(인체 MTP ~30–115 N·m/rad의 ~1.5–2배 = 수동 보상)</text>
+
+  <defs><marker id="g" markerWidth="9" markerHeight="9" refX="4.5" refY="2" orient="auto"><path d="M0 9 L4.5 0 L9 9 z" fill="#ea4335"/></marker></defs>
+</svg>

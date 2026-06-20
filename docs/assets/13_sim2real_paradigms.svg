@@ -1,0 +1,67 @@
+<svg viewBox="0 0 920 420" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <style>
+    .title{font-size:20px;font-weight:700;fill:#1a1a2e}
+    .h{font-size:15px;font-weight:700}
+    .t{font-size:12px;fill:#333}
+    .sim{fill:#e8f0fe;stroke:#4285f4;stroke-width:1.5}
+    .real{fill:#fce8e6;stroke:#ea4335;stroke-width:1.5}
+    .priv{fill:#fff3cd;stroke:#f0a500;stroke-width:1.5}
+    .box{rx:8}
+    .lbl{font-size:11px;fill:#555}
+  </style>
+  <text x="20" y="30" class="title">height_scan 없이 실기기 배포 — 3가지 패러다임</text>
+  <text x="20" y="50" class="lbl">파랑=SIM 학습 입력 · 노랑=privileged(sim전용) · 빨강=REAL 실기기 입력</text>
+
+  <!-- 1) Blind -->
+  <rect x="20" y="70" width="280" height="320" rx="10" fill="#fafafa" stroke="#ccc"/>
+  <text x="35" y="98" class="h" fill="#34a853">① Blind (맹목)</text>
+  <rect x="40" y="115" width="240" height="70" class="sim box" rx="8"/>
+  <text x="50" y="138" class="t" font-weight="700">SIM 학습</text>
+  <text x="50" y="158" class="t">proprioception만</text>
+  <text x="50" y="174" class="t">(관절·IMU·접촉·직전액션)</text>
+  <path d="M160 185 L160 220" stroke="#888" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="40" y="225" width="240" height="70" class="real box" rx="8"/>
+  <text x="50" y="248" class="t" font-weight="700">REAL 배포</text>
+  <text x="50" y="268" class="t">동일 — 지형을 접촉·자세로</text>
+  <text x="50" y="284" class="t">"느껴서" 반응 (reactive)</text>
+  <text x="50" y="320" class="lbl">✓ 가장 간단·강건, 직접 배포</text>
+  <text x="50" y="338" class="lbl">✗ 계단 등 미리보기 불가→보수적</text>
+  <text x="50" y="360" class="t" fill="#34a853" font-weight="700">우리 평지정책이 이미 이것</text>
+
+  <!-- 2) Teacher-Student -->
+  <rect x="320" y="70" width="280" height="320" rx="10" fill="#fafafa" stroke="#ccc"/>
+  <text x="335" y="98" class="h" fill="#4285f4">② Teacher–Student (RMA)</text>
+  <rect x="340" y="115" width="240" height="58" class="priv box" rx="8"/>
+  <text x="350" y="135" class="t" font-weight="700">SIM: Teacher</text>
+  <text x="350" y="153" class="t">height_scan+마찰·질량(특권)</text>
+  <text x="350" y="167" class="t">→ 최적 행동 학습</text>
+  <path d="M460 173 L460 195" stroke="#888" stroke-width="2" marker-end="url(#a)"/>
+  <text x="468" y="190" class="lbl">증류(distill)</text>
+  <rect x="340" y="198" width="240" height="58" class="sim box" rx="8"/>
+  <text x="350" y="218" class="t" font-weight="700">SIM: Student</text>
+  <text x="350" y="236" class="t">proprioception + 과거이력</text>
+  <text x="350" y="250" class="t">→ 지형 암묵 추정</text>
+  <path d="M460 256 L460 278" stroke="#888" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="340" y="281" width="240" height="48" class="real box" rx="8"/>
+  <text x="350" y="301" class="t" font-weight="700">REAL: Student 배포</text>
+  <text x="350" y="319" class="t">이력으로 지형 추정, 맵 불필요</text>
+  <text x="350" y="356" class="lbl">✓ 배포가능+성능↑ ✗ 2단계 학습</text>
+
+  <!-- 3) Onboard perceptive -->
+  <rect x="620" y="70" width="280" height="320" rx="10" fill="#fafafa" stroke="#ccc"/>
+  <text x="635" y="98" class="h" fill="#ea4335">③ Onboard 지각</text>
+  <rect x="640" y="115" width="240" height="58" class="sim box" rx="8"/>
+  <text x="650" y="135" class="t" font-weight="700">SIM 학습</text>
+  <text x="650" y="153" class="t">height_scan(노이즈·드롭아웃</text>
+  <text x="650" y="167" class="t">DR 적용)</text>
+  <path d="M760 173 L760 220" stroke="#888" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="640" y="225" width="240" height="86" class="real box" rx="8"/>
+  <text x="650" y="245" class="t" font-weight="700">REAL 배포</text>
+  <text x="650" y="265" class="t">깊이카메라/LiDAR →</text>
+  <text x="650" y="281" class="t">elevation map 재구성 →</text>
+  <text x="650" y="297" class="t">height_scan 추정 입력</text>
+  <text x="650" y="338" class="lbl">✓ 계단·미리보기 ✗ 센서·연산</text>
+  <text x="650" y="356" class="lbl">필요, 맵 오류에 취약</text>
+
+  <defs><marker id="a" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#888"/></marker></defs>
+</svg>
