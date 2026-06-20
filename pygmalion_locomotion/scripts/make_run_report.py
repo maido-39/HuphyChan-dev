@@ -74,7 +74,10 @@ def backup(run):
         src = os.path.join(ROOT, rel)
         if os.path.exists(src):
             dst = os.path.join(repro, os.path.basename(src))
-            shutil.copy2(src, dst)
+            # don't overwrite an existing snapshot: the first report (~launch time) captures the
+            # run's true cfg; re-running after the cfg drifted must NOT corrupt that backup.
+            if not os.path.exists(dst):
+                shutil.copy2(src, dst)
             manifest.append(f"{os.path.basename(src)}  <-  {rel}")
     return repro, manifest
 
@@ -148,10 +151,25 @@ def main():
         md.append(f"- **{k}**: {v:.4f}")
     if rew_png:
         md += ["", f"![reward curve](assets/{os.path.basename(rew_png)})"]
-    if terms:
-        md += ["", "**보상 항목별 기여(최종)**:"]
-        md += [f"  - {k}: {v:+.4f}" for k, v in sorted(terms.items(), key=lambda x: x[1])]
     md.append("")
+
+    # ---- Reward: 무엇을 / 왜 / 이번 run 변경 (rule item 7 — always document rewards) ----
+    md += ["## 2b. Reward (무엇을 · 왜)",
+           "활성 보상 항과 **최종 기여**는 아래. 각 항의 **의미 · 가중치 · 왜**는 → [[04_reward_experiments]] "
+           "(\"현재 활성 Reward 전체\" 표) 참조 (재도출 금지, 링크로 추적)."]
+    if terms:
+        md += ["", "**보상 항목별 기여(최종, 절대값 큰 순)**:"]
+        md += [f"- `{k}`: {v:+.4f}" for k, v in sorted(terms.items(), key=lambda x: abs(x[1]), reverse=True)]
+    else:
+        md.append("- (로그에서 보상 항목 미검출 — 학습 로그 경로 확인)")
+    if diff:
+        rk = ("reward", "weight", "rewterm", "soft_ratio", "torque_soft", "dof_acc", "dof_torque",
+              "action_rate", "track_", "feet_", "upright", "no_flight", "base_height", "curriculum", "joint_deviation")
+        rlines = [ln for ln in diff if any(w in ln.lower() for w in rk)]
+        if rlines:
+            md += ["", "**이번 run에서 바뀐 reward (vs 부모, cfg diff)**:", "```diff"] + rlines[:25] + ["```"]
+    md += ["", "**이번 run 중요/신규 reward + 왜**: **[작성 필요]** — 추가·변경한 항과 그 이유"
+           " (어떤 측정/[[Paperreview/...]]·docs 연구가 근거인지). 예: `torque_soft_limit_ankle` 추가 → 포화 발목 offload(docs/17·22).", ""]
 
     md += ["## 3. 영상 / 이미지"]
     if videos:
