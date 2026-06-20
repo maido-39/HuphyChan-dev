@@ -56,7 +56,7 @@
 +        params={"soft_ratio": 0.80,
 ```
 
-**이번 run 중요/신규 reward + 왜**: **[작성 필요]** — 추가·변경한 항과 그 이유 (어떤 측정/[[Paperreview/...]]·docs 연구가 근거인지). 예: `torque_soft_limit_ankle` 추가 → 포화 발목 offload(docs/17·22).
+**이번 run 중요/신규 reward + 왜**: ★ `torque_soft_limit_ankle` (soft_ratio 0.80, weight −0.01, 발목 joints) **신규 추가** → 포화 발목(stage-2서 100% peak) 부하 분산. **결과**: ankle_pitch **100%→72% peak** ✅ (단 부하가 무릎으로 가고 toe엔 안 감 → CoT↑). 근거 [[17_toe_usage_vibration]]·[[22_energy_toe_reward]](wseyrv4mz item4).
 
 ## 3. 영상 / 이미지
 - 학습 영상 40개: `pygmalion_locomotion/logs/rsl_rl/pygmalion_flat/2026-06-21_03-46-50_stage3_ankle_offload/videos/train/` (예: rl-video-step-0.mp4 … rl-video-step-9000.mp4)
@@ -77,13 +77,21 @@
 +        params={"soft_ratio": 0.80,
 +                "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"])},
 ```
-- reward 곡선 비교: 위 그래프(부모 점선). **정량 비교 [작성 필요]**: 무엇이 좋아졌나/나빠졌나.
+- 정량 비교 (vs stage-2): Mean reward 34→**36.2**, error_vel_xy 0.57→**0.50**(소폭 개선), **ankle_pitch 100%→72% peak**(offload ✅), 다리 진동↓. **단** toe 사용 26%→**6-13%↓**, CoT 높음.
 
-## 5. 분석 (정성/정량)  **[작성 필요]**
-- 정량: gait(추종·CoT)·관절 토크/파워·toe 사용도·진동(>5Hz)·낙상 — 측정 npz/analyze_motor_util 인용.
-- 정성: 보행 자연스러움·실패모드·의도한 변경의 효과.
+## 5. 분석 (정성/정량)
+**정량** (측정 `stage3_clip`/`stage3_unclip`, analyze_motor_util + Pmech):
+- ✅ **ankle_pitch offload**: 이전 100% peak(포화) → **72% peak**(43 N·m, unclipped 65-71%). 발목offload reward 효과 입증.
+- ⚠️ **ankle_roll 여전 100% peak**(14 N·m, unclipped도 100%) — 횡방향이라 분산 불가 → **RS00이 진짜 병목, 상향 필요**.
+- 부하 재분배 행선지 = **무릎**(peak 831W/RMS 250W로 파워 dominant, 44-58% peak), 고관절 43-75%.
+- ✅ **진동↓**: >5Hz 토크에너지 다리 감소 (knee 18-40%→**8.7%**, ankle 15-23%→**12-14%**) — `dof_acc` 전관절+`action_rate`−0.008 수정 작동.
+- ❌ **toe 사용 26%→6-13% (감소)**, toe HF 76%(무부하 채터), 음의일 −1~−8J(미미).
+- ❌ **CoT 0.81** (목표 0.2-0.5) — knee-dominant 비효율.
 
-## 6. 관련 학습 / 연구 링크  **[작성 필요]**
-- 관련 run: [[experiments/<run>]] — *어떤 관계, 무엇을 바꿨고 왜*.
-- 활용 연구: [[Paperreview/<slug>]] / docs/16·17·18 — *어떤 결정에 썼는지*.
+**정성**: 발목offload는 **ankle_pitch + 진동엔 성공**이나 부하를 **무릎으로** 보냈고 **toe 적재·효율은 실패**. → 연구([[22_energy_toe_reward]]) 예측 **"에너지/토크만으론 toe 안 실림"을 실측 확증**. toe 적재엔 **forefoot-rollover + vel-norm power CoT reward**(다음 실험) 필수.
+
+## 6. 관련 학습 / 연구 링크
+- **부모**: [[2026-06-21_01-52-57_flat_wide_dr]] (stage-2 넓은DR). **변경**: `torque_soft_limit_ankle` 추가(발목 offload). **왜**: stage-2 측정서 발목 100% 포화([[17_toe_usage_vibration]]·[[21_motor_power_weight]]).
+- **활용 연구**: [[22_energy_toe_reward]](wseyrv4mz) — 발목offload는 부하분산엔 OK이나 toe 적재엔 forefoot-rollover 필요(이 run이 확증). [[Paperreview/caps-smooth-control]] — 진동(action 평활) 수정 근거.
+- **다음**: forefoot-rollover + vel-norm power CoT([[22_energy_toe_reward]] 레시피) → toe 적재 + CoT↓ 목표, [[19_toe_ablation]]로 검증. HW: **RS00(ankle_roll) 상향** 검토([[21_motor_power_weight]]).
 

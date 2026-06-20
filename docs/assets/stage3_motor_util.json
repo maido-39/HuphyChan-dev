@@ -1,0 +1,137 @@
+{
+  "title": "stage-3 ankle-offload, flat, 51.79kg",
+  "rows": [
+    {
+      "joint": "L_hip_pitch_joint",
+      "peak_clipped": 69.6602783203125,
+      "peak_unclipped": 69.42498016357422,
+      "spec_peak": 120.0,
+      "spec_rated": 40.0,
+      "pct_rated_clipped": 174.15069580078125,
+      "pct_peak_clipped": 58.05023193359375,
+      "pct_rated_unclipped": 173.56245040893555,
+      "pct_peak_unclipped": 57.85415013631185
+    },
+    {
+      "joint": "R_hip_pitch_joint",
+      "peak_clipped": 68.69563293457031,
+      "peak_unclipped": 74.05432891845703,
+      "spec_peak": 120.0,
+      "spec_rated": 40.0,
+      "pct_rated_clipped": 171.73908233642578,
+      "pct_peak_clipped": 57.246360778808594,
+      "pct_rated_unclipped": 185.13582229614258,
+      "pct_peak_unclipped": 61.71194076538086
+    },
+    {
+      "joint": "L_hip_roll_joint",
+      "peak_clipped": 84.17948913574219,
+      "peak_unclipped": 90.04219818115234,
+      "spec_peak": 120.0,
+      "spec_rated": 40.0,
+      "pct_rated_clipped": 210.44872283935547,
+      "pct_peak_clipped": 70.14957427978516,
+      "pct_rated_unclipped": 225.10549545288086,
+      "pct_peak_unclipped": 75.03516515096028
+    },
+    {
+      "joint": "R_hip_roll_joint",
+      "peak_clipped": 89.48851013183594,
+      "peak_unclipped": 81.7682113647461,
+      "spec_peak": 120.0,
+      "spec_rated": 40.0,
+      "pct_rated_clipped": 223.72127532958984,
+      "pct_peak_clipped": 74.57375844319661,
+      "pct_rated_unclipped": 204.42052841186523,
+      "pct_peak_unclipped": 68.1401761372884
+    },
+    {
+      "joint": "L_hip_yaw_joint",
+      "peak_clipped": 36.21974182128906,
+      "peak_unclipped": 38.05259323120117,
+      "spec_peak": 60.0,
+      "spec_rated": 20.0,
+      "pct_rated_clipped": 181.0987091064453,
+      "pct_peak_clipped": 60.3662363688151,
+      "pct_rated_unclipped": 190.26296615600586,
+      "pct_peak_unclipped": 63.42098871866862
+    },
+    {
+      "joint": "R_hip_yaw_joint",
+      "peak_clipped": 25.528541564941406,
+      "peak_unclipped": 35.22057342529297,
+      "spec_peak": 60.0,
+      "spec_rated": 20.0,
+      "pct_rated_clipped": 127.64270782470703,
+      "pct_peak_clipped": 42.547569274902344,
+      "pct_rated_unclipped": 176.10286712646484,
+      "pct_peak_unclipped": 58.70095570882162
+    },
+    {
+      "joint": "L_knee_joint",
+      "peak_clipped": 165.59970092773438,
+      "peak_unclipped": 208.83740234375,
+      "spec_peak": 360.0,
+      "spec_rated": 120.0,
+      "pct_rated_clipped": 137.99975077311197,
+      "pct_peak_clipped": 45.99991692437066,
+      "pct_rated_unclipped": 174.03116861979166,
+      "pct_peak_unclipped": 58.01038953993056
+    },
+    {
+      "joint": "R_knee_joint",
+      "peak_clipped": 159.0949249267578,
+      "peak_unclipped": 162.54989624023438,
+      "spec_peak": 360.0,
+      "spec_rated": 120.0,
+      "pct_rated_clipped": 132.5791041056315,
+      "pct_peak_clipped": 44.19303470187717,
+      "pct_rated_unclipped": 135.45824686686197,
+      "pct_peak_unclipped": 45.15274895562066
+    },
+    {
+      "joint": "L_ankle_pitch_joint",
+      "peak_clipped": 43.19829559326172,
+      "peak_unclipped": 39.07083511352539,
+      "spec_peak": 60.0,
+      "spec_rated": 20.0,
+      "pct_rated_clipped": 215.9914779663086,
+      "pct_peak_clipped": 71.99715932210286,
+      "pct_rated_unclipped": 195.35417556762695,
+      "pct_peak_unclipped": 65.11805852254231
+    },
+    {
+      "joint": "R_ankle_pitch_joint",
+      "peak_clipped": 43.94407653808594,
+      "peak_unclipped": 42.676902770996094,
+      "spec_peak": 60.0,
+      "spec_rated": 20.0,
+      "pct_rated_clipped": 219.7203826904297,
+      "pct_peak_clipped": 73.24012756347656,
+      "pct_rated_unclipped": 213.38451385498047,
+      "pct_peak_unclipped": 71.12817128499348
+    },
+    {
+      "joint": "L_ankle_roll_joint",
+      "peak_clipped": 14.0,
+      "peak_unclipped": 14.0,
+      "spec_peak": 14.0,
+      "spec_rated": 5.0,
+      "pct_rated_clipped": 280.0,
+      "pct_peak_clipped": 100.0,
+      "pct_rated_unclipped": 280.0,
+      "pct_peak_unclipped": 100.0
+    },
+    {
+      "joint": "R_ankle_roll_joint",
+      "peak_clipped": 14.0,
+      "peak_unclipped": 14.0,
+      "spec_peak": 14.0,
+      "spec_rated": 5.0,
+      "pct_rated_clipped": 280.0,
+      "pct_peak_clipped": 100.0,
+      "pct_rated_unclipped": 280.0,
+      "pct_peak_unclipped": 100.0
+    }
+  ]
+}

@@ -31,3 +31,6 @@ screenshot.png
 .claude/
 .vscode/
 .DS_Store
+
+# Obsidian local UI state (noisy)
+**/.obsidian/workspace*.json
