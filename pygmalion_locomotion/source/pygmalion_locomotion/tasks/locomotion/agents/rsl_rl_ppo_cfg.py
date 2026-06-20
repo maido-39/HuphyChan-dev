@@ -15,8 +15,10 @@ class BipedRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     empirical_normalization = False
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
-        actor_hidden_dims=[512, 256, 128],
-        critic_hidden_dims=[512, 256, 128],
+        # ★ matched to the flat runner [256,128,128] so a FLAT-trained policy transfers into rough
+        #   (--init_checkpoint). The 512-vs-256 net mismatch was why the stage-4 transfer failed.
+        actor_hidden_dims=[256, 128, 128],
+        critic_hidden_dims=[256, 128, 128],
         activation="elu",
     )
     algorithm = RslRlPpoAlgorithmCfg(
