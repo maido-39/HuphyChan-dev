@@ -62,4 +62,4 @@
 
 **누적 영상(step 캡션 진화)**: `logs/rsl_rl/pygmalion_rough/2026-06-21_10-33-47_stage5_rough_converge/videos/accumulated_progress.mp4` — 학습 step별 보행 진화(모든 학습 자동 생성). 
 
-관련: [[MIDREPORT_2026-06-21_1100]] · [[experiments/stage4_rough]] · [[18_research_roadmap]] · [[04_reward_experiments]] · [[26_reading_list]] · [[23_toe_use_methods]]
+관련: [[MIDREPORT_2026-06-21_1100]] · [[experiments/2026-06-21_06-41-42_stage4_rough]] · [[18_research_roadmap]] · [[04_reward_experiments]] · [[26_reading_list]] · [[23_toe_use_methods]]
