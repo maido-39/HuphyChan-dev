@@ -2,6 +2,8 @@
 
 > 형식 `## [YYYY-MM-DD] <kind> | <제목> → <페이지>`. kind = research / experiment / decision / fix. 매 ingest마다 append([[SCHEMA]]). 최신이 위.
 
+## [2026-06-21] analysis | 무릎 감속비 통합분석 — 토크-속도 분리·RS04 실측 T-N(사다리꼴)·다조건(rough 2배)·박스모델/순환성→sweep → [[35_knee_gear_ratio_analysis]]
+
 ## [2026-06-21] research | knee 액추에이터 landscape(womafnnro) — 저감속 QDD(Cheetah 5.8~7.67·Berkeley 9·MIT Humanoid 12) vs SEA(Cassie 16); J_ref=J_r·N²(Wensing 2017); RS04 직결=9:1 정통, M107만 저감속 토크밀도 우위(단품X) → [[33_knee_actuator_landscape]] · [[raw/knee-actuator-landscape]]
 ## [2026-06-21] research | CoP/contact 보상공식 검증(wyvmh4gpv) — ★ Siekmann/Walk-These-Ways 모두 CoP/ZMP/heel→toe 보상 없음(foot-force·velocity norm을 위상클록 게이트), heel→toe CoP-progression은 표준공식 아님 → [[34_cop_contact_rewards]] · [[raw/cop-contact-reward-formulas]]
 ## [2026-06-21] research | 실제 휴머노이드 HW 질량/세그먼트/PD 비교(wr1cz09bp) — 다리질량 정상(=H1), 흐물거림=무릎 underdamped → [[31_humanoid_hw_comparison]] · [[raw/humanoid-hw-specs]]
