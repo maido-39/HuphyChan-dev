@@ -34,3 +34,5 @@ screenshot.png
 
 # Obsidian local UI state (noisy)
 **/.obsidian/workspace*.json
+docs/assets/*.mp4
+docs/assets/*official*.png

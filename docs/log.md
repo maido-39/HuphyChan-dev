@@ -19,3 +19,11 @@
 ## [2026-06-21] research | 직접vs간접 toe보상(whirkj8ws: 직접=anti-pattern) → [[23_toe_use_methods]]
 ## [2026-06-21] experiment | stage-2~4 (넓은DR·발목offload·rough) → [[experiments/INDEX]]
 ## [2026-06-21] report | 11시 중간보고 → [[MIDREPORT_2026-06-21_1100]]
+
+## 2026-06-21 · RS04 공식 T-N 곡선 검증 (리서치)
+- 공식 RobStride GitHub `Product_Information/Product Literature/RS04/RS04User Manual260428.pdf`(85pp) 직접 다운로드·pdfimages 추출.
+- **§12 T-N curve**: 출력축 곡선 90~190rpm 표시, 전구간 단조감소(95rpm=120N·m peak → 150rpm 변곡 → 190rpm ~10N·m, no-load 200). 평탄(constant-torque) corner ≤~95rpm. **OpenELAB 리셀러 "flat to 100rpm" 요약 부정확 확정.**
+- **§13 회전 과부하 듀티표**(50rpm, 345mm 방열판): 120N·m=3s … 50=324s, 40=rated. **§14 스톨 듀티표**(1.414× 발열): 120=1s … 50=74s, 28.5=rated.
+- 정격(연속) 40N·m@100rpm(345mm) / 35(220mm), peak 120N·m@90Apk. 무게 1420g, Φ120×56. peak 토크밀도 84.5 N·m/kg.
+- ❌ 효율맵 미공개(공식 매뉴얼·스펙PDF 전수 grep). 3rd-party bench 공개데이터 없음.
+- 곡선 이미지 → `assets/rs04_tn_curve_official.png`·`rs04_overload_{rotating,stall}_official.png`. 정리 → [[robstride-datasheet]], 함의 → [[21_motor_power_weight]].

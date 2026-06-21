@@ -9,7 +9,7 @@
 | ID | 실험 | 변경점 | H-A (측정 판정) | 상태 |
 |---|---|---|---|---|
 | **E1** | **공간 CoP-진행 + ankle 충돌 해소** | ① `torque_soft_limit_ankle`→ankle_roll만(ankle_pitch 자유) ✅완료 ② 공간 CoP-진행 보상(tracking 동급 스케일, heel→toe) ⏳research grounding | toe 적재 9-20%→↑, CoP heel→toe 진행, error_vel 유지 | E1 설계 중 (warm-start soft_contact) |
-| E2 | E1 + 새 PD + 벨트 | knee Kd11/hip24, 벨트 1:2.5 결합 | 충격↓ + 흐물거림↓(ζ0.7) 동시, 구조하중<1.5kN | 큐 (E1 후) |
+| E2 | E1 + 새 PD + **무릎 직결** | knee Kd11/hip24, **무릎 RS04 직결**(belt 2.5→직결, 데이터+RS04 T-N 근거: 무릎 speed-bound, 직결 plateau가 덮음, 반사관성 1×=충격흡수) | 충격↓+흐물거림↓ 동시, 구조하중<1.5kN, **무릎 tau<120 확인**(아니면 belt 1.3-1.5) | 큐 (E1 후) |
 | E3 | phase-clock 대안 | Siekmann/WTW 시간기반 contact schedule | E1(공간 CoP)가 부족할 때만 — ★우리 emergent+HW하중 목표와 긴장 | 조건부 큐 |
 | E4 | 비대칭 critic | toe state·heel/toe GRF·CoP → critic만(privileged) | value가 toe-적재 크레딧 → 간접 개선 | 큐 |
 | E5 | heel 바디 + 진짜 CoP | foot_link을 heel/ball로 분리(USD 재변환) | 2-region(foot/toe)이 부족하면 | 조건부 큐 (HW변경) |

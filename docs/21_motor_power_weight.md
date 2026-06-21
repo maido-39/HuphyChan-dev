@@ -20,6 +20,7 @@
 4. **부위별 peak 파워**: 무릎 ~1290W(dominant), ankle ~500W, hip ~400W, hip_yaw ~120W.
 
 > ⚠️ **토크-속도 곡선 검증**: 위 box는 (peak토크 × max속도) 단순박스. 실모터는 고속서 토크가 강하 → 우상단 모서리 작동점은 실제론 못 냄. RobStride 공식 토크-속도 곡선으로 재검증 필요(로드맵).
+> ✅ **공식 RS04 T-N 곡선 입수·검증 완료** (공식 GitHub `RS04User Manual260428.pdf` §1.3-12, 곡선 추출 = `assets/rs04_tn_curve_official.png`): 곡선은 **95rpm peak 120N·m서 단조 감소 → 190rpm ~10N·m**(no-load 200). **이전 OpenELAB 리셀러 요약 "100rpm까지 평탄, 200서 0"은 부정확** — 평탄부 corner는 ~95rpm 이하(그래프 미표시 저속), 그 위는 즉시 roll-off. 정격(연속) 40N·m@100rpm(345mm 방열판), 작은방열판 35, 스톨정격 28.5. 과부하 듀티 표·토크밀도(peak 84.5 N·m/kg, 연속 28.2)·효율맵 미공개 → 전부 [[robstride-datasheet]] 정리. **함의: 무릎/발목 trade study의 "RS04=120 flat to ~100rpm, 0 at 200" 가정은 corner를 낙관적으로 봤음** — 모터-side로 (omega,tau) 재투영해 이 곡선 아래 들어가는지 재검증 필요.
 
 
 ## 모터 선정 + 대안
