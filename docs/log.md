@@ -2,6 +2,8 @@
 
 > 형식 `## [YYYY-MM-DD] <kind> | <제목> → <페이지>`. kind = research / experiment / decision / fix. 매 ingest마다 append([[SCHEMA]]). 최신이 위.
 
+## [2026-06-21] research | RS03 공식 매뉴얼 T-N·과부하·스톨 곡선 직접 판독(`RS03User Manual260428.pdf` p.9-11) + 5 리셀러/wiki 교차. 헤드라인 20/60·무부하200·Kt2.36·9:1·880g 전부 일치. **T-N: 120rpm=peak60 → 단조감소 → 190rpm~13, corner≤120rpm(저속평탄 잘림)**, 연속정격=20N·m(회전)/13N·m(스톨). ⚠불일치: 정격속도 공식100 vs 리셀러180, 무부하전류 공식2A vs 리셀러0.6A, 전압 24–60 vs 15–60 → [[robstride-datasheet]]. 곡선→`assets/rs03_tn_curve_official.png`·`rs03_overload_thermal_official.png`
+## [2026-06-21] research | RS04 2차출처 교차검증(OpenELAB·AIFITLAB·Seeed wiki·공식X) — 120/40·200/167rpm·Kt2.1·9:1 전부 일치. ⚠리셀러 T-N "100rpm까지 평탄" 요약은 공식곡선(95rpm peak서 곧장 감소)과 불일치 재확인 → [[robstride-datasheet]]
 ## [2026-06-21] analysis | 무릎 감속비 통합분석 — 토크-속도 분리·RS04 실측 T-N(사다리꼴)·다조건(rough 2배)·박스모델/순환성→sweep → [[35_knee_gear_ratio_analysis]]
 
 ## [2026-06-21] research | knee 액추에이터 landscape(womafnnro) — 저감속 QDD(Cheetah 5.8~7.67·Berkeley 9·MIT Humanoid 12) vs SEA(Cassie 16); J_ref=J_r·N²(Wensing 2017); RS04 직결=9:1 정통, M107만 저감속 토크밀도 우위(단품X) → [[33_knee_actuator_landscape]] · [[raw/knee-actuator-landscape]]
@@ -31,3 +33,9 @@
 - 정격(연속) 40N·m@100rpm(345mm) / 35(220mm), peak 120N·m@90Apk. 무게 1420g, Φ120×56. peak 토크밀도 84.5 N·m/kg.
 - ❌ 효율맵 미공개(공식 매뉴얼·스펙PDF 전수 grep). 3rd-party bench 공개데이터 없음.
 - 곡선 이미지 → `assets/rs04_tn_curve_official.png`·`rs04_overload_{rotating,stall}_official.png`. 정리 → [[robstride-datasheet]], 함의 → [[21_motor_power_weight]].
+
+## [2026-06-22] research | 전 액추에이터 T-N 교차검증 (workflow wgk8q2vo3, RS00/03/04 각 2+ 출처) → [[36_all_actuator_tn_envelopes]]
+- **RS03**(verified yes, 6출처): 20/60 N·m·Kt2.36·9:1·880g. T-N corner ≤~120rpm 후 roll-off. 연속 20(회전)/13(스톨). ⚠ **정격속도 공식 100 vs 리셀러 180** → 공식 채택. `assets/rs03_tn_curve_official.png`.
+- **RS00**(verified yes, 5출처): 5/14 N·m·무부하315·Kt1.48·R1.5Ω·10:1·310g. corner ≈100rpm. ⚠ **정격속도 공식 100 vs 리셀러 260** → 공식(우리 "260"=리셀러값, 정정). 과부하 5=무한·14=5초. `assets/rs00_tn_overload_official.png`.
+- 공통: 리셀러 정격속도 over-optimistic. 3모터 다 전압제한 봉투 → "peak×maxspeed 박스" 틀림. ⚠ rotor inertia·효율맵·열시상수 전 모터 미공개(bench 필요).
+- 설계분석(★ankle_roll RS00 바인딩·상향후보) → [[36_all_actuator_tn_envelopes]]. 원자료 → [[robstride-datasheet]].

@@ -5,12 +5,13 @@
 | 모델 | 역할 | rated/peak (N·m) | 무부하/정격부하 속도(rpm) | 감속비 | Kt (N·m/Arms) |
 |---|---|---|---|---|---|
 | **RS00** | ankle_roll | 5 / 14 | 315 / **100**¹ | 10:1 | 1.48 |
-| **RS03** | hip_yaw·ankle_pitch | 20 / 60 | 200 / 180 | 9:1 | 2.36 |
+| **RS03** | hip_yaw·ankle_pitch | 20 / 60 | 200 / **100**² | 9:1 | 2.36 |
 | **RS04** | hip_pitch·roll | 40 / 120 | 200 / 167 | 9:1 | 2.1 |
 | RS04+1:3 belt | knee | 120 / 360 | 66.7 / 55.7 | 9:1×3 | — |
 | RS01 / RS02 | ankle_roll 상향 후보 | 6 / 17 | 315·410 / 275·360 | 7.75 | — |
 
 - ¹ RS00 정격부하속도: 공식 PDF·AIFITLAB 매뉴얼=**100rpm**, OpenELAB 리셀러=260rpm (상충, 하단 RS00 섹션 flag). 무부하 315는 일치.
+- ² RS03 정격부하속도: **공식 매뉴얼=100rpm**(20N·m@100rpm 명시), 리셀러(AIFITLAB·OpenELAB)=180rpm (상충, 하단 RS03 섹션 flag). 무부하 200은 일치. 이전 "180"은 리셀러값.
 - ✅ 우리 *토크* 스펙(robstride_biped.yaml)은 정확.
 - ❌ 유일 오류(수정됨): RS03 `velocity_limit_rpm` 220→**200**(무부하 200; 60/20@220 모델 없음).
 - ⚠ 미검증: RS00 **열 시상수**(145°C 권선한계 곡선만), 권선저항 R·마찰(Kt만 있음) — bench 식별 필요(T1 thermal·T3 Joule reward용).
@@ -146,3 +147,85 @@
 - Seeed wiki: https://wiki.seeedstudio.com/robstride_control/
 - device.report 매뉴얼: https://device.report/m/2e42a909a1575b641836a027c2f4a7f8a4841e2f2b37898548c87a4c67028947
 - verified **yes** (공식 PDF 곡선 직접 추출·판독 + 4 독립 리셀러/매뉴얼 교차).
+
+## ★ RS03 T-N·과부하·열 곡선 + 전기파라미터 (공식 매뉴얼 PDF 직접) — 검증 2026-06-21 (hip_yaw·ankle_pitch)
+> 요청: RS03 T-N 데이터 2+ 신뢰출처(공식 GitHub Product_Information + Seeed/OpenELAB/리셀러/매뉴얼). rated/peak·무부하/정격속도·T-N 모양(corner+roll-off)·연속(thermal)·Kt2.36·line R·감속비9:1·질량/외형 추출, 교차검증·불일치 flag, URL 2+.
+> 출처: **공식 RobStride GitHub `RS03User Manual260428.pdf`** (Product_Information/Product Literature/RS03), §1.3 전기특성+§12 "T-N curve"+§13 "Maximum overload curve"+§14 thermal/stall. `webfetch→pdftoppm`로 p.9-11 렌더 직접 판독. 곡선 이미지: `assets/rs03_tn_curve_official.png`(T-N), `assets/rs03_overload_thermal_official.png`(과부하+스톨 듀티 표).
+
+**공식 RS03 스펙 (매뉴얼 직접 추출)**:
+| 항목 | 공식값 | 비고 |
+|---|---|---|
+| rated / peak 토크 | **20 / 60 N·m** | rated CW |
+| 무부하 속도 | **200 rpm ±10%** | ★사용자 "200" 일치 (리셀러 195) |
+| 정격부하 속도 | **100 rpm** (20N·m@100rpm 명시) | ★공식 (리셀러는 180, flag) |
+| Kt | **2.36 N·m/Arms** | 유효값 |
+| line R | (공식 매뉴얼 전기특성 미기재) → 리셀러 **0.39Ω±10%** | 매뉴얼은 절연저항만; R은 리셀러 교차 |
+| 인덕턴스 L | (매뉴얼 미기재) → 리셀러 **0.275mH±10%** | |
+| back-EMF | **17 Vrms/krpm ±10%** | |
+| 무부하 전류 | **2 Arms** | ★공식 (리셀러는 0.6, flag) |
+| 정격 위상전류 | **13 Apk ±10%** | ★공식 (리셀러는 12) |
+| peak 위상전류 | **43 Apk ±10%** | 일치 |
+| 정격전압 / 범위 | **48 VDC / 24–60 VDC** | ★공식 범위 24–60 (리셀러·Seeed는 15–60, flag) |
+| 정격출력 | 380W±10% (리셀러; 매뉴얼 미기재) | |
+| 감속비 | **9:1** | 일치 |
+| 극수 / 상 | **42 / 3** (FOC) | |
+| 질량 | **880g ±20g** | |
+| 외형 | **106×106×56 mm** (드라이버 Φ70) | |
+| 절연 / 사용온도 | Class B / -20~50℃, 권선한계 145℃(실제180℃) | |
+
+**★ T-N 곡선 모양 (공식 §12 "T-N curve", 출력축 9:1 후, 48V)** → `assets/rs03_tn_curve_official.png`:
+- x축 **120~195rpm만** 표시(저속 평탄부는 잘림, RS04/RS00과 동일 패턴), y축 토크 10~60 N·m.
+- 표시구간 전체 **단조 감소(field-weakening/back-EMF roll-off), concave-down 연속곡선**:
+  - ~120rpm → **60 N·m** (peak) · 135rpm → ~57 · 150rpm → ~50 · 165rpm → ~42 · 180rpm → ~30 · (180rpm 부근 무릎 변곡, 기울기 급증) · 185rpm → ~22 · **188~190rpm → ~13으로 급락** (≈ no-load 200rpm로 외삽 0).
+- ⇒ **corner speed(전류제한 평탄→전압제한 droop 전이) ≤ ~120rpm**: 120rpm서 이미 peak 60 후 즉시 감소 → **constant-torque 평탄부는 ~120rpm 이하**(그래프 미표시 저속부). peak 60N·m는 저속(<~120rpm)서만, 고속선 토크 급감. **"60N·m × 200rpm 단순 박스" 가정 틀림** — RS04/RS00과 동일 결론. **이산점 아닌 연속 곡선.**
+
+**★ 과부하 듀티 (공식 §13 "Maximum overload curve", 회전 100rpm·풀 방열판 215×220mm, 25℃)** → `assets/rs03_overload_thermal_official.png` 상단표:
+| 부하 N·m | 지속시간 |
+|---|---|
+| **60** (peak) | **13 s** |
+| 50 | 34 s |
+| 40 | 67 s |
+| 30 | 393 s |
+| **20** | **rated (무한·연속)** |
+- ⇒ **연속/thermal 정격(회전) = 20 N·m** (= rated 토크). peak 60N·m는 단 13초. 40N·m=67s·30N·m=393s는 짧은 트랜지언트(push-off)만.
+
+**★ 스톨 듀티 (공식 §14 thermal, 스톨, 축소 방열판, 단상발열 1.414×)** → 동 이미지 하단표:
+| 부하 N·m | 지속시간 |
+|---|---|
+| 60 | 1 s |
+| 50 | 4 s |
+| 40 | 9 s |
+| 30 | 25 s |
+| 20 | 190 s |
+| **13** | **rated (무한)** |
+- ⇒ 스톨이 훨씬 엄격: **스톨 연속정격 = 13 N·m**(회전 20N·m 대비). 스톨서 60N·m는 1초만. (단상발열 1.414× 때문.)
+
+**교차검증 (공식 매뉴얼 + 4 독립출처)**:
+| 출처 | rated/peak | 무부하/정격속도 | Kt | line R | 감속비 | 질량 | 전압범위 |
+|---|---|---|---|---|---|---|---|
+| **공식 매뉴얼(GitHub)** | 20 / 60 | **200 / 100** | 2.36 | (미기재) | 9:1 | 880g | **24–60V** |
+| AIFITLAB (리셀러) | 20 / 60 | 195 / **180** | 2.36 | 0.39Ω | 9:1 | 880g | 15–60V |
+| OpenELAB 제품 | 20 / 60 | 195 / **180** | 2.36 | 0.39Ω | 9:1 | 880g | 15–60V |
+| rcdrone (리셀러) | 20 / 60 | 195 / **180** | 2.36 | 0.39Ω | 9:1 | 880g | — |
+| Seeed wiki | (max)60 | (max)**195** | — | — | — | — | — |
+| roboticscenter (리셀러) | 20 / 60 | — | — | — | 9:1 | 880g | — |
+
+**⚠ DISAGREE flag**:
+1. **정격부하 속도**: 공식 매뉴얼 = **100 rpm**(20N·m@100rpm 명시, T-N corner와 정합). 리셀러 4곳 = **180 rpm**. → RS00(공식100 vs 리셀러260)·RS04(공식167)와 **동일 패턴**: 리셀러 정격속도는 over-optimistic. **설계엔 공식 100rpm 채택 권장.**
+2. **무부하 속도**: 공식 = **200 rpm**(사용자값 일치), 리셀러 = **195 rpm**. 5rpm 차이(±10% 내 무시 가능). 공식 200 채택.
+3. **무부하 전류**: 공식 = **2 Arms**, 리셀러 = 0.6 Arms ±10%. → 큰 불일치(리셀러가 더 낙관적). 공식 2 Arms 채택.
+4. **정격 위상전류**: 공식 **13 Apk**, 리셀러 **12 Apk**(드라이버 정격은 12Apk로 표기). 소차.
+5. **전압범위**: 공식 매뉴얼 **24–60V**, 리셀러·Seeed **15–60V**. (15V는 최저 동작, 24V는 정격 권장 하한 추정.)
+- **헤드라인(20/60·무부하200·Kt2.36·9:1·880g·106³·42극·back-EMF17·peak43Apk)은 불일치 출처 없음** — 전 출처 동일.
+
+**우리 값 대조 (사용자 제시)**: peak 20/60 ✅정확. 무부하 200 ✅(공식). **정격 "~180" → 공식은 100(리셀러값, flag)**. Kt 2.36 ✅. line R 0.39Ω ✅(리셀러·매뉴얼 전기특성엔 절연저항만). 감속비 9:1 ✅. → 토크·Kt·R·감속비·무부하속도 일치, **정격부하속도만 리셀러(180) vs 공식(100) 불일치**.
+- ⚠ **미공개**: rotor inertia(전 모델 미공개, sim armature 추정 유지). 효율맵 미공개(RS04와 동일). line R/L은 공식 매뉴얼 전기특성 항목엔 없고 리셀러 스펙시트에만(0.39Ω/0.275mH) — 리셀러 단일출처지만 RS04 패턴상 신뢰.
+
+**출처 URL**:
+- 공식 GitHub 매뉴얼: https://github.com/RobStride/Product_Information (Product Literature/RS03/RS03User Manual260428.pdf)
+- AIFITLAB: https://aifitlab.com/products/robstride-03-motor
+- OpenELAB 제품: https://openelab.io/products/robstride03-qdd-60n-m-integrated-joint-motor-module
+- rcdrone: https://rcdrone.top/products/robstride-03-qdd-60n-m-integrated-actuator-module-48v-dual-encoders-planetary-reducer-ip52-9-1-ratio
+- Seeed wiki: https://wiki.seeedstudio.com/robstride_control/
+- roboticscenter: https://www.roboticscenter.ai/store/product/robstride-03
+- verified **yes** (공식 매뉴얼 T-N·과부하·스톨 곡선 직접 렌더·판독 + 5 독립 리셀러/wiki 교차).
