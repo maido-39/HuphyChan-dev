@@ -111,3 +111,64 @@ class BipedFlatForefootEnvCfg(BipedFlatEnvCfg):
             func=pyg_rewards.foot_impact_force, weight=-0.005,
             params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
                     "force_soft": 650.0, "cap_over": 1500.0})
+
+
+@configclass
+class BipedRoughForefootEnvCfg(BipedRoughEnvCfg):
+    """★ ROUGH-terrain twin of BipedFlatForefootEnvCfg (gear-ratio sweep, rough+DR branch, user 2026-06-22).
+    SAME forefoot/impact reward set as the flat forefoot env, but on the ROUGH terrain + full DR (push +-1.2,
+    mass +-5, friction 0.2-1.25) inherited from BipedRoughEnvCfg = the DEPLOYMENT distribution. Lets the
+    gear-ratio sweep measure the knee/actuator demand under obstacles + disturbances (rough ~2x knee torque
+    -> tests whether a high gear ratio's torque headroom is NEEDED, vs the flat speed-bound result). Obs is
+    unchanged (239-dim) so it warm-starts (--init_checkpoint) from the converged flat forefoot policy."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        # identical forefoot/impact reward set to BipedFlatForefootEnvCfg (so flat vs rough is comparable)
+        self.rewards.forefoot_cop = RewTerm(
+            func=pyg_rewards.forefoot_cop, weight=0.5,
+            params={"foot_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
+                    "forefoot_cfg": SceneEntityCfg("contact_forces", body_names=".*_toe_link"),
+                    "contact_thresh": 8.0, "late_time": 0.15})
+        self.rewards.power_cot = RewTerm(
+            func=pyg_rewards.power_cot, weight=0.4,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=ACTUATED_JOINTS), "scale": 0.003})
+        self.rewards.ankle_pushoff = RewTerm(
+            func=pyg_rewards.ankle_pushoff_work, weight=0.5,
+            params={"ankle_cfg": SceneEntityCfg("robot", joint_names=".*_ankle_pitch_joint"),
+                    "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
+                    "contact_thresh": 8.0, "late_time": 0.15, "scale": 0.02, "cap": 80.0})
+        self.rewards.foot_landing_vel = RewTerm(
+            func=pyg_rewards.foot_landing_vel, weight=-1.0,
+            params={"asset_cfg": SceneEntityCfg("robot", body_names=".*_foot_link"),
+                    "height_thresh": 0.12})
+        self.rewards.foot_impact_force = RewTerm(
+            func=pyg_rewards.foot_impact_force, weight=-0.005,
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
+                    "force_soft": 650.0, "cap_over": 1500.0})
+
+
+@configclass
+class BipedRoughForefootEnvCfg_PLAY(BipedRoughForefootEnvCfg):
+    """Deterministic eval/MEASURE on rough terrain. Rough terrain KEPT (measure demand on rough); the
+    training-only randomization is off. Disturbance push is OFF by default -> measure.py --push re-enables
+    it to quantify the DR/disturbance effect on the actuator demand."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 32
+        self.scene.env_spacing = 2.5
+        self.observations.policy.enable_corruption = False
+        self.curriculum.command_vel_x = None      # full command range for eval (vx up to 2.0)
+        self.events.base_external_force_torque = None
+        self.events.push_robot = None             # OFF by default; measure.py --push re-enables (DR effect)
+        self.events.add_base_mass = None
+        self.events.base_com = None
+        self.events.physics_material.params["static_friction_range"] = (0.9, 0.9)
+        self.events.physics_material.params["dynamic_friction_range"] = (0.7, 0.7)
+        # keep rough terrain but a modest fixed difficulty band for repeatable measurement
+        if self.scene.terrain.terrain_generator is not None:
+            self.scene.terrain.terrain_generator.num_rows = 5
+            self.scene.terrain.terrain_generator.num_cols = 5
+            self.scene.terrain.max_init_terrain_level = 3
+        self.curriculum.terrain_levels = None     # no level progression during measurement
