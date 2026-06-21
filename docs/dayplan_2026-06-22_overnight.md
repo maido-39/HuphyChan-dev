@@ -49,3 +49,23 @@
 3. **모터 T-N 교차검증** RS04(무릎=감속)·RS03/04(hip)·RS00/03(ankle) — 신뢰소스 **2+개** 대조.
 4. **설계탐색**: 각 모터 T-N이 그 demand를 fast/slow서 덮나? 타깃(자연·효율 gait + HW생존)에 맞는 감속비/모터 후보.
 5. **주제별 연구노트 지속** + 부족/문제 가설 시 추가 연구. 계획·노트 지속 갱신. (Stop-hook이 노트 누락 차단.)
+
+## F. ★ Rough + DR 고려 + 분석방법(A vs B) 결정 (사용자 06-22)
+사용자: deploy엔 obstacle/외란 → **rough도 봐야**. flat-only 결과 이미 뒤집힘(direct→1.5). **DR의 요구토크 영향도 미지**. A(flat→rough 따로) vs B(flat+rough 같이) 분석 후 진행.
+
+**A vs B:**
+| 항목 | A: flat·rough 따로 학습/분석 | B: flat+rough 같이 |
+|---|---|---|
+| 정책 | flat baseline + rough(전이) 2개 | 1개 혼합 |
+| sizing demand | terrain별 → 최악(rough+DR) 채택 | 결합 demand |
+| 진단(왜 바뀌나) | ★ terrain별 명확 | binning 필요 |
+| 학습량 | 2× | 1× |
+| 현실성 | rough task=deploy분포(DR포함) | 동일 |
+
+**결정 = A (flat baseline + rough+DR 따로).** 이유: ① sizing은 **rough+DR 최악이 binding**(flat만으론 오판한 전례) ② A가 **terrain 효과를 명확히**(결과 바뀐 이유 진단 = 사용자 관심) ③ **rough task가 이미 deployment 분포**(터레인 변동 + push/마찰 DR 내장)라 rough sweep = deployment-realistic ≈ B. B는 혼합되어 terrain 효과 은폐 + rough task가 이미 mix 제공해 별도 B-mix 불필요.
+
+**진행:**
+1. flat sweep 완주(baseline + 순환성 demo, 진행중).
+2. **rough-forefoot env 생성**(rough terrain + flat과 *동일* forefoot+impact 보상 → 비교가능) → **rough+DR sweep** 4비 → 측정(★ `--push`로 DR/외란 효과도).
+3. 비별 **flat vs rough+DR demand 비교** → deployment-robust 감속비. 전 actuator(hip p/r/y·knee·ankle p/r) 동일 분석(joint+motor side).
+4. ★ **ankle_roll(RS00)이 rough+DR서 더 포화?**(평지서 이미 151% RMS) → 모터 upsize(RS01/02) 검토.

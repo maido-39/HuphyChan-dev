@@ -4,12 +4,13 @@
 
 | 모델 | 역할 | rated/peak (N·m) | 무부하/정격부하 속도(rpm) | 감속비 | Kt (N·m/Arms) |
 |---|---|---|---|---|---|
-| **RS00** | ankle_roll | 5 / 14 | 315 / 260 | 10:1 | 1.48 |
+| **RS00** | ankle_roll | 5 / 14 | 315 / **100**¹ | 10:1 | 1.48 |
 | **RS03** | hip_yaw·ankle_pitch | 20 / 60 | 200 / 180 | 9:1 | 2.36 |
 | **RS04** | hip_pitch·roll | 40 / 120 | 200 / 167 | 9:1 | 2.1 |
 | RS04+1:3 belt | knee | 120 / 360 | 66.7 / 55.7 | 9:1×3 | — |
 | RS01 / RS02 | ankle_roll 상향 후보 | 6 / 17 | 315·410 / 275·360 | 7.75 | — |
 
+- ¹ RS00 정격부하속도: 공식 PDF·AIFITLAB 매뉴얼=**100rpm**, OpenELAB 리셀러=260rpm (상충, 하단 RS00 섹션 flag). 무부하 315는 일치.
 - ✅ 우리 *토크* 스펙(robstride_biped.yaml)은 정확.
 - ❌ 유일 오류(수정됨): RS03 `velocity_limit_rpm` 220→**200**(무부하 200; 60/20@220 모델 없음).
 - ⚠ 미검증: RS00 **열 시상수**(145°C 권선한계 곡선만), 권선저항 R·마찰(Kt만 있음) — bench 식별 필요(T1 thermal·T3 Joule reward용).
@@ -51,3 +52,97 @@
 **물리/토크밀도**: 무게 **1420g±20g**, 외형 **Φ120×56mm**(드라이버 Φ84). → peak 토크밀도 **120/1.42 = 84.5 N·m/kg**, 연속 **40/1.42 = 28.2 N·m/kg**. 극수 42, 3상 FOC, 9:1.
 - ❌ **효율맵(efficiency map): 공식 매뉴얼·스펙PDF에 없음**(85pp 전수 grep 확인). 효율 곡선 미공개 — 필요시 bench 측정.
 - verified **yes** (공식 PDF 곡선 이미지 직접 추출·판독). 3rd-party bench 측정 데이터는 공개본 없음(리셀러 요약만, 부정확).
+
+## RS04 2차출처 교차검증 (공식 GitHub 매뉴얼 外) — 검증 2026-06-21
+> 요청: 공식 RobStride GitHub 매뉴얼 **외** 2개 이상 독립출처로 120/40·200rpm·T-N모양·연속정격·Kt2.1·9:1 재확인, 불일치 출처 flag. 출처 URL 2+.
+
+**독립출처별 RS04 스펙 (전부 헤드라인 일치)**:
+| 출처 | peak/rated | 무부하/정격속도 | Kt | 감속비 | back-EMF |
+|---|---|---|---|---|---|
+| OpenELAB (리셀러) | 120 / 40 N·m | 200 / 167 rpm ±10% | 2.1 N·m/Arms | 9:1 | — |
+| AIFITLAB (리셀러) | 120 / 40 N·m | 200 / 167 rpm ±10% | 2.1 N·m/Arms | 9:1 | 16.9 Vrms/krpm |
+| Seeed wiki (control guide) | max 120 N·m | max 200 rpm ±10% | — | — | — |
+| 공식 RobStride X(@RobStride_com) | 120 / 40 N·m | — | — | (9:1) | — |
+- 전기파라미터도 일치: 정격위상전류 27Apk, peak 90Apk, line R 0.16Ω, L 0.211mH, 42극, 700W±10%, 48V.
+- **무부하 전류** 0.7 Arms±10% (OpenELAB).
+- → **120/40·200/167·Kt2.1·9:1·700W·48V 모두 ≥2 독립출처 교차검증 PASS.** rotor inertia·연속(thermal) 정격값(N·m)·효율맵은 리셀러도 미공개(공식 PDF만 40N·m@100rpm·345mm 방열판).
+
+**⚠ DISAGREE flag — T-N 곡선 모양**:
+- **OpenELAB**(complete-guide 블로그)·WebSearch 요약: "~120 N·m를 ~100rpm까지 **유지(평탄)**, 200rpm서 0으로 점감" → **사다리꼴/평탄플래토 후 roll-off** 묘사.
+- **공식 매뉴얼 §12 곡선(원본 PDF 추출)**: 표시구간 90~190rpm 전체가 **단조 감소**, **95rpm서 이미 peak 120 → 곧장 감소**(110rpm~110, 150rpm~78, 190rpm~10). constant-torque 평탄부는 **≤~95rpm**(그래프 미표시 저속부).
+- ⇒ 리셀러 "100rpm까지 평탄" = **부정확(over-optimistic)**. 단 방향성(평탄→roll-off 사다리꼴)은 정성적으로 맞음; corner를 95→100rpm으로, 고속 토크유지를 과대평가. **설계엔 공식 곡선(95rpm corner) 사용**, 리셀러 요약 불채택.
+- 헤드라인 수치(120/40/200/Kt2.1/9:1)는 **불일치 출처 없음** — 전 출처 동일.
+
+**출처 URL**:
+- OpenELAB 제품: https://openelab.io/products/robstride04-qdd-120n-m-integrated-joint-motor-module
+- OpenELAB 가이드: https://openelab.io/blogs/learn/robstride04-qdd-120n-m-integrated-joint-bldc-gear-motor-complete-guide
+- AIFITLAB: https://aifitlab.com/products/robstride-04-motor
+- Seeed wiki: https://wiki.seeedstudio.com/robstride_control/
+- 공식 RobStride X: https://x.com/RobStride_com/status/1802891697912737824
+- 공식 GitHub 매뉴얼: https://github.com/RobStride/Product_Information (RS04User Manual260428.pdf)
+- verified **yes** (5개 독립출처 교차확인 + 공식 PDF 곡선).
+
+## ★ RS00 T-N·과부하 곡선 + 전기파라미터 (공식 PDF 직접) — 검증 2026-06-21 (ankle_roll, 포화 액추에이터)
+> 요청: RS00 T-N 데이터 2+ 신뢰출처. rated/peak·무부하/정격속도·T-N 모양·연속(thermal)·Kt·line R·감속비·질량/외형 추출, 교차검증·불일치 flag. RS00 = ankle_roll(최소 모터, 우리 데이터서 151% RMS%rated 포화 → 바인딩 후보).
+> 출처: **공식 RobStride GitHub `RobStride Product Specification Document 20250626.pdf`** (p.2 = RS00) — `/tmp`에서 curl+pdftotext+pdftoppm 추출. 곡선 이미지: `assets/rs00_tn_overload_official.png`, 전체 스펙페이지 `assets/rs00_spec_page_official.png`.
+
+**공식 RS00 스펙 (PDF p.2 직접)**:
+| 항목 | 공식값 |
+|---|---|
+| rated / peak 토크 | **5 / 14 N·m** |
+| 무부하 속도 | **315 rpm ±10%** |
+| 정격부하 속도 | **100 rpm ±10%** ← ★공식 (리셀러는 260) |
+| Kt | **1.48 N·m/Arms** |
+| line R | **1.5±10% Ω** |
+| 인덕턴스 L | **750±20 μH** (=0.75mH) |
+| back-EMF | **9.5 Vrms/krpm ±10%** (=0.095 Vrms/rpm) |
+| 정격출력 | **50W ±10%** ← ★공식 (리셀러는 170W) |
+| 무부하 전류 | 0.5 Arms |
+| 정격 위상전류 | 4.7 Apk ±10% |
+| peak 위상전류 | 15.5 Apk ±10% |
+| 감속비 | 10:1 |
+| 극수 / 상 | 28 / 3 (FOC) |
+| 질량 | **310g ±3g** |
+| 외형 | **57×57×51 mm** |
+| 절연 | Class B, 사용온도 -20~50℃ |
+
+**★ T-N 곡선 모양 (공식 "48V T-N curve", p.2 좌측 곡선, 출력축 10:1 후)** → `assets/rs00_tn_overload_official.png`:
+- x축 **0~350rpm**, y축 토크(3·6·9·12·15 N·m 그리드).
+- 모양: **0~~100rpm 평탄(≈14 N·m peak 근처)** 후 **단조 concave-down 감소(field-weakening/back-EMF roll-off)** → ~150rpm 부근부터 기울기↑ → **~315rpm(무부하)서 0 근처로 급락**. RS04와 동일한 전압제한 봉투(평탄 corner → droop), **이산점 아닌 연속 곡선**.
+- ⇒ **corner speed ≈ 100rpm** (= 공식 정격부하 속도와 일치!). peak 14N·m는 **저속(<~100rpm)**서만, 고속선 토크 급감. **"14N·m × 315rpm 단순 박스" 가정 틀림.**
+
+**★ 과부하 듀티 (공식 "Max Overload" 곡선, p.2 우측, 부하 vs 工作时间 s, log축)**:
+| 부하 N·m | 지속시간 |
+|---|---|
+| **5** | **rated (무한·연속)** |
+| 7 | 120 s |
+| 10 | 18 s |
+| 12 | 10 s |
+| 14 | 5 s |
+- ⇒ **연속/thermal 정격 = 5 N·m** (= rated 토크). **peak 14 N·m는 단 5초** 듀티. 우리 데이터 ankle_roll이 RMS 기준 151%%rated 포화 = **연속 5N·m 한계를 1.5배 초과** = 바인딩 액추에이터 정합. (10N·m=18s, 12N·m=10s 듀티는 짧은 push-off 트랜지언트만 허용.)
+
+**교차검증 (5+ 독립출처)**:
+| 출처 | rated/peak | 무부하/정격속도 | Kt | line R | 감속비 | 질량 |
+|---|---|---|---|---|---|---|
+| **공식 PDF(GitHub)** | 5 / 14 | **315 / 100** | 1.48 | **1.5Ω** | 10:1 | 310g |
+| OpenELAB 가이드 | 5 / 14 | 315 / **260** | 1.48 | — | 10:1 | 310g |
+| OpenELAB 비교가이드 | 5 / 14 | 315 / **260** | — | — | 10:1 | 310g |
+| AIFITLAB wiki 매뉴얼 | 5 / 14 | 315 / **100** | 1.48 | — | 10:1 | 310g |
+| Seeed wiki | (max)14 | (max)315 | — | — | — | — |
+| device.report 매뉴얼 | 14 peak | 315 | — | — | — | 310g |
+
+**⚠ DISAGREE flag — 정격부하 속도 & 정격출력**:
+- **정격부하 속도**: 공식 PDF·AIFITLAB 매뉴얼 = **100 rpm**. OpenELAB(리셀러 블로그 2건) = **260 rpm**. → 우리 기존 노트·`robstride_biped.yaml` 트레이스의 "260"은 **OpenELAB 리셀러값**; 공식·매뉴얼 원전은 **100 rpm**. 100rpm이 T-N corner(평탄→droop 전이)와 일치하므로 **물리적으로 100이 정합**(260은 무부하315와 정격간 중간 모호값). → **공식 100 채택 권장**, 단 sim velocity_limit(무부하 315)은 영향 없음(velocity limit은 무부하 기준).
+- **정격출력**: 공식 PDF = **50W±10%**, OpenELAB = **170W**. (170W는 peak/순시 출력 추정값으로 보임; 공식 연속 정격 = 50W.) 5N·m×100rpm×(2π/60)≈52W → **공식 50W가 연속정격과 자기일치**. 170W는 14N·m·peak 구간 순시.
+- 헤드라인(5/14·무부하315·Kt1.48·R1.5Ω·10:1·310g·57×57×51)은 **불일치 출처 없음** — 전 출처 동일.
+
+**우리 값 대조 (사용자 제시)**: peak 5/14 ✅정확. 무부하 315 ✅. **정격 260 → 공식은 100(리셀러값 채택했음, flag)**. Kt 1.48 ✅. line R 1.5Ω ✅. 감속비 10:1 ✅. → 토크·Kt·R·감속비·무부하속도 전부 공식과 일치, **정격부하속도만 리셀러(260) vs 공식(100) 불일치**.
+
+**출처 URL**:
+- 공식 GitHub 스펙PDF: https://github.com/RobStride/Product_Information (RobStride Product Specification Document 20250626.pdf, p.2)
+- OpenELAB RS00 가이드: https://openelab.io/blogs/learn/robstride00-qdd-14n-m-integrated-joint-motor-module-complete-guide
+- OpenELAB 비교가이드: https://openelab.io/blogs/learn/complete-guide-to-robstride-qdd-motors-model-comparison-and-selection
+- AIFITLAB wiki 매뉴얼: https://wiki.aifitlab.com/robstride-docs/robstride-00-instruction-manual
+- Seeed wiki: https://wiki.seeedstudio.com/robstride_control/
+- device.report 매뉴얼: https://device.report/m/2e42a909a1575b641836a027c2f4a7f8a4841e2f2b37898548c87a4c67028947
+- verified **yes** (공식 PDF 곡선 직접 추출·판독 + 4 독립 리셀러/매뉴얼 교차).
