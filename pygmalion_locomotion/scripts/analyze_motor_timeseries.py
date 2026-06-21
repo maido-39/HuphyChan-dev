@@ -74,41 +74,52 @@ def main():
     lbl = [j.replace("_joint", "") for j in act]
     x = np.arange(len(act))
 
-    def bars(getter, spec_idx, unit, ttl, sat_ttl, fname, rated_idx=None):
+    def bars(getter, peak_idx, unit, ttl, sat_ttl, fname, rated_idx=None):
+        # peak_idx = HARD limit index (torque peak / speed limit). rated_idx = CONTINUOUS (thermal) rating
+        # (torque rated; None for speed). ★ SIZING PAIR (De2011 etc): RMS torque vs RATED (thermal — motor
+        # heating ~ I^2R ~ tau^2, so RMS = the thermally-equivalent constant torque, NOT the arithmetic
+        # mean which UNDER-states heat) + MAX vs peak (transient). Speed has no thermal rating -> max vs
+        # limit (back-EMF/mechanical hard cap) is the binding check; RMS shown only as a "typical" stat.
         fig, ax = plt.subplots(1, 2, figsize=(16, 6))
-        avg = [getter(j).mean() for j in act]
-        mx = [getter(j).max() for j in act]
-        ax[0].bar(x - 0.2, avg, 0.4, label="avg", color="#9bbbd6")
+        cont_idx = rated_idx if rated_idx is not None else peak_idx
+        rms = [float(np.sqrt(np.mean(getter(j) ** 2))) for j in act]
+        mx = [float(getter(j).max()) for j in act]
+        ax[0].bar(x - 0.2, rms, 0.4, label="RMS", color="#9bbbd6")
         ax[0].bar(x + 0.2, mx, 0.4, label="max", color="#2980b9")
         for i, j in enumerate(act):
             sp = spec_for(j)
-            ax[0].plot([i - 0.45, i + 0.45], [sp[spec_idx], sp[spec_idx]], color="#c0392b", lw=1.6, ls="--")
+            ax[0].plot([i - 0.45, i + 0.45], [sp[peak_idx], sp[peak_idx]], color="#c0392b", lw=1.6, ls="--")
             if rated_idx is not None:
                 ax[0].plot([i - 0.45, i + 0.45], [sp[rated_idx], sp[rated_idx]], color="#e67e22", lw=1.4)
         ax[0].plot([], [], color="#c0392b", lw=1.6, ls="--", label="peak/limit")
         if rated_idx is not None:
-            ax[0].plot([], [], color="#e67e22", lw=1.4, label="rated (nominal)")
+            ax[0].plot([], [], color="#e67e22", lw=1.4, label="rated (continuous)")
         ax[0].set_xticks(x); ax[0].set_xticklabels(lbl, rotation=60, ha="right", fontsize=7)
         ax[0].set_ylabel(unit); ax[0].set_title(ttl); ax[0].legend(fontsize=8); ax[0].grid(alpha=.3, axis="y")
-        sat_mx = [100 * getter(j).max() / spec_for(j)[spec_idx] for j in act]
-        sat_av = [100 * getter(j).mean() / spec_for(j)[spec_idx] for j in act]
-        ax[1].bar(x, sat_mx, color=[zone(s) for s in sat_mx], label="max %")
-        ax[1].scatter(x, sat_av, color="k", marker="_", s=220, zorder=5, label="avg %")
+        # saturation: MAX vs peak/limit (transient) + RMS vs rated/limit (continuous/thermal)
+        sat_mx = [100 * mx[i] / spec_for(act[i])[peak_idx] for i in range(len(act))]
+        sat_rms = [100 * rms[i] / spec_for(act[i])[cont_idx] for i in range(len(act))]
+        rms_lbl = "RMS %rated (cont/thermal)" if rated_idx is not None else "RMS %limit"
+        ax[1].bar(x - 0.2, sat_mx, 0.4, color=[zone(s) for s in sat_mx], label="max %peak (transient)")
+        ax[1].bar(x + 0.2, sat_rms, 0.4, color=[zone(s) for s in sat_rms], label=rms_lbl)
         ax[1].axhline(100, color="#c0392b", ls="--", lw=1); ax[1].axhline(80, color="#f09010", ls=":", lw=1)
-        for i, s in enumerate(sat_mx):
-            ax[1].text(i, s + 1, f"{s:.0f}", ha="center", fontsize=6)
+        for i in range(len(act)):
+            ax[1].text(i - 0.2, sat_mx[i] + 1, f"{sat_mx[i]:.0f}", ha="center", fontsize=5)
+            ax[1].text(i + 0.2, sat_rms[i] + 1, f"{sat_rms[i]:.0f}", ha="center", fontsize=5)
         ax[1].set_xticks(x); ax[1].set_xticklabels(lbl, rotation=60, ha="right", fontsize=7)
-        ax[1].set_ylabel("% of " + ("peak" if rated_idx is not None else "limit")); ax[1].set_title(sat_ttl)
+        ax[1].set_ylabel("% of limit"); ax[1].set_title(sat_ttl)
         ax[1].legend(fontsize=8); ax[1].grid(alpha=.3, axis="y")
         fig.suptitle(f"{ttl.split('(')[0].strip()} — {title}", fontsize=13); fig.tight_layout(rect=[0, 0, 1, .96])
         p = os.path.join(args.out, fname); fig.savefig(p, dpi=95); plt.close(fig)
-        return p, sat_mx
+        return p, sat_mx, sat_rms
 
-    out["torque"], sat_t = bars(tau, 0, "torque [N*m]", "Joint torque  avg/max vs spec (rated/peak)",
-                                "Torque saturation  (% of peak; 100%=limit)", f"{args.tag}_torque.png", rated_idx=1)
+    satS_mx = satS_rms = None
+    out["torque"], satT_mx, satT_rms = bars(tau, 0, "torque [N*m]", "Joint torque  RMS/max vs spec (rated/peak)",
+                                "Torque sat:  max %peak (transient) + RMS %rated (continuous/thermal)",
+                                f"{args.tag}_torque.png", rated_idx=1)
     if have_w:
-        out["speed"], sat_s = bars(rpm, 2, "speed [rpm]", "Joint speed  avg/max vs spec (speed limit)",
-                                   "Speed saturation  (% of limit)", f"{args.tag}_speed.png")
+        out["speed"], satS_mx, satS_rms = bars(rpm, 2, "speed [rpm]", "Joint speed  RMS/max vs spec (limit)",
+                                   "Speed sat:  max %limit (binding) + RMS %limit", f"{args.tag}_speed.png")
 
     # time-series grids
     present = [ty for ty in TYPES if any(jtype(j) == ty for j in joints)]
@@ -142,11 +153,11 @@ def main():
                                f"{args.tag}_speed_ts.png")
 
     print(f"[motorviz] {title}: wrote {len(out)} PNGs -> {args.out}")
-    worst_t = sorted(zip(lbl, sat_t), key=lambda kv: -kv[1])[:3]
-    print("  토크 포화 top:", ", ".join(f"{n} {s:.0f}%" for n, s in worst_t))
+    top = lambda pairs: ", ".join(f"{n} {s:.0f}%" for n, s in sorted(pairs, key=lambda kv: -kv[1])[:3])
+    print("  토크 max%peak(과도) top:", top(zip(lbl, satT_mx)))
+    print("  토크 RMS%rated(연속/열) top:", top(zip(lbl, satT_rms)))
     if have_w:
-        worst_s = sorted(zip(lbl, sat_s), key=lambda kv: -kv[1])[:3]
-        print("  속도 포화 top:", ", ".join(f"{n} {s:.0f}%" for n, s in worst_s))
+        print("  속도 max%limit(binding) top:", top(zip(lbl, satS_mx)))
     for k, v in out.items():
         print(f"  {k}: {os.path.basename(v)}")
 
