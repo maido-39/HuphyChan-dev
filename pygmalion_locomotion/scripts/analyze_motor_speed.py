@@ -9,7 +9,7 @@ peak torque at high speed). Using the logged joint velocity (omega) this reports
     -> points hugging the top-right corner are where a real torque-speed curve would cut them off.
 
 Joint-side limits (after gear; spec robstride_biped.yaml velocity_limit_rpm): hip pitch/roll 200,
-hip_yaw 220, knee (RS04 1:3 belt) 66.7, ankle_pitch 220, ankle_roll 315 rpm. Peak torque from the
+hip_yaw 200, knee (RS04 1:3 belt) 66.7, ankle_pitch 200, ankle_roll 315 rpm. Peak torque from the
 motor table (analyze_motor_util).
 
 Usage: python scripts/analyze_motor_speed.py --npz logs/measure/<tag>.npz --tag <name> --title "..." --out ../docs/assets
