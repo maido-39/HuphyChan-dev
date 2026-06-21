@@ -63,3 +63,31 @@ def toe_load_stance(env, toe_cfg: SceneEntityCfg, sensor_cfg: SceneEntityCfg,
     gate = (in_contact & other_swing & late & fwd).float()                        # [E, nfoot]
     load = torch.clamp(tau_toe / tau_ref, max=1.0)                                # [E, nfoot]
     return torch.sum(load * gate, dim=1)
+
+
+def forefoot_cop(env, foot_cfg: SceneEntityCfg, forefoot_cfg: SceneEntityCfg,
+                 contact_thresh: float = 8.0, late_time: float = 0.15):
+    """★ Rank-1 INDIRECT reward (direct-vs-indirect research whirkj8ws): reward the CoP advancing onto the
+    FOREFOOT in late single support — the legitimate CAUSE that loads the passive toe. This REPLACES the
+    direct toe-torque reward (toe_load_stance / H1), which is an anti-pattern: |tau_toe| = k*deflection,
+    so it rewards a CORRELATE of the roll and is reward-hackable by a static toe-curl (worse here — the
+    toe is over-damped so a held curl is cheap). Rewarding WHERE the foot bears load (forefoot GRF
+    fraction = the roll) is far harder to game on the toe and reflects the whole-foot rollover.
+    forefoot fraction = forefoot(toe_link) vertical GRF / total foot vertical GRF, gated on (foot in
+    contact) AND (other foot swing) AND (forward) AND (terminal stance). foot_cfg = foot_link bodies,
+    forefoot_cfg = toe_link bodies, SAME L,R order (verify in a config-test). Returns [num_envs]."""
+    sensor = env.scene.sensors[foot_cfg.name]
+    fz = sensor.data.net_forces_w[..., 2].abs()                                   # [E, num_bodies] |Fz|
+    f_foot = fz[:, foot_cfg.body_ids]                                             # [E, nfoot] heel/plate
+    f_fore = fz[:, forefoot_cfg.body_ids]                                         # [E, nfoot] forefoot
+    total = f_foot + f_fore
+    frac = f_fore / (total + 1e-3)                                                # forefoot CoP fraction
+    in_contact = total > contact_thresh
+    other_swing = ~in_contact[:, [1, 0]]
+    fwd = (env.scene["robot"].data.root_lin_vel_b[:, 0] > 0.0).unsqueeze(1)
+    try:
+        late = sensor.data.current_contact_time[:, foot_cfg.body_ids] > late_time
+    except Exception:  # noqa: BLE001
+        late = torch.ones_like(in_contact)
+    gate = (in_contact & other_swing & late & fwd).float()                        # [E, nfoot]
+    return torch.sum(frac * gate, dim=1)

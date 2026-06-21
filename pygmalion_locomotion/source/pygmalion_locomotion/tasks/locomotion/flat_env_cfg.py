@@ -72,13 +72,17 @@ class BipedFlatForefootEnvCfg(BipedFlatEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
-        # H1 — reward loading the passive toe at late single support (the ONLY direct forefoot gradient)
-        self.rewards.toe_forefoot_load = RewTerm(
-            func=pyg_rewards.toe_load_stance, weight=0.4,
-            params={"toe_cfg": SceneEntityCfg("robot", joint_names=".*_toe_joint"),
-                    "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_BODY),
-                    "tau_ref": 27.0, "contact_thresh": 5.0, "late_time": 0.15})
-        # H6 — vel-normalized power cost-of-transport (efficiency -> reason to exploit the toe spring)
+        # ★ Rank-1 INDIRECT CoP/forefoot-progression reward (research whirkj8ws). The DIRECT toe-torque
+        #   reward (H1) is an anti-pattern: |tau_toe|=k*deflection -> reward-hackable by a static toe-curl
+        #   (worse here, the toe is over-damped). Reward WHERE the foot bears load (forefoot GRF fraction
+        #   at terminal single support) = the legitimate CAUSE that loads the passive toe, hard to game.
+        self.rewards.forefoot_cop = RewTerm(
+            func=pyg_rewards.forefoot_cop, weight=0.5,
+            params={"foot_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
+                    "forefoot_cfg": SceneEntityCfg("contact_forces", body_names=".*_toe_link"),
+                    "contact_thresh": 8.0, "late_time": 0.15})
+        # Rank-2 — vel-normalized power CoT (let the free spring do push-off work; NEVER standalone,
+        #   subordinate to CoP + velocity tracking).
         self.rewards.power_cot = RewTerm(
-            func=pyg_rewards.power_cot, weight=0.6,
+            func=pyg_rewards.power_cot, weight=0.4,
             params={"asset_cfg": SceneEntityCfg("robot", joint_names=ACTUATED_JOINTS), "scale": 0.003})

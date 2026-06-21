@@ -26,7 +26,17 @@
 | H4 | 인간 heel-to-toe **레퍼런스 모방**(발목 미추종) | 인간 보행 retarget, hip/knee 모방·**발목 약하게** → toe 자가적재 | 모방오차, GRF 2차피크 |
 | H5 | **AMP** 인간 스타일(최후) | discriminator 스타일 보상 + H1 anchor | discriminator, toe-load% |
 
-**먼저 = H1 + H6** (+ H3 저렴하면): 함수 이미 존재(`rewards.py`), obs 불변 → **flat 정책서 warm-start**, 가장 싼 루프. **static toe-curl 게이트 필수.** [[19_toe_ablation]]로 검증.
+## ★ 정정 — "직접 toe 보상은 anti-pattern" (후속 연구 whirkj8ws, 사용자 지적이 맞음)
+> [!warning] H1(직접 \|τ_toe\| 보상)은 폐기. 간접 CoP로 교체.
+> **H1은 reward hacking 안티패턴**: 수동 toe라 \|τ_toe\|=k·변형 → **변형(상관량)을 보상 = 의도(굴림)와 인과 분리**. 정책이 **정적 toe-curl/등척성**으로 변형만 만들어 보상 챙김(걷지 않고). **우리 toe는 과감쇠(ζ≈2.9)라 *유지된 curl*이 싸서 더 위험.** **게이트로도 안 막힘**(Skalse 2022: 보상 좁혀도 unhackable 아님). 학계가 **수동 스프링을 보상에서 제외**(Cassie)하는 이유 = 인과방향: *결과(push-off/roll)를 보상하면 적재는 부산물로 따라옴*.
+
+**개정 계획 (실제 실행)**:
+1. ★ **CoP/앞발 진행 보상(간접, 리드)** `forefoot_cop` — 종말-단일지지서 **앞발 GRF 비율**(toe_link/(toe+foot)) 보상. *발이 어디에 하중을 싣나(굴림)*를 보상 = toe 적재의 **합법적 원인**, toe로 게임 불가. 우리가 이미 로깅하는 GRF로 계산.
+2. **에너지/CoT**(`power_cot`, 종속) — 자유 스프링을 쓰도록 압력. 단독 금지(셔플/freeze 퇴행).
+3. (선택) ankle-pitch heel-rise 참조(능동 발목이라 합법).
+4. toe-load 항을 **굳이 쓰면 PBRS(potential-based) 형태로만**(Ng-Harada-Russell: 최적정책 불변, 해킹최적 추가 불가) — 원시 \|τ_toe\| 금지.
+5. AMP는 나중.
+> **검증 필수**: toe 적재 에피소드가 *실제 heel→toe CoP 이동 + 전진 CoM 변위*와 일치하는지 적대적 probe(정적 curl 아님). → `Flat-Forefoot-v0`를 **forefoot_cop+power_cot로 교체 적용**(H1 폐기), 학습은 GPU 프리 시.
 
 ## 출처
 - [산업계 active vs passive toe 논쟁](https://www.humanoidsdaily.com/news/stepping-forward-the-debate-over-active-vs-passive-toes-in-humanoid-robotics) · [Menlo/Asimov 다리 설계(우리 51.8kg급 일치)](https://menlo.ai/blog/humanoid-legs-100-days) · [Atlas CoP-forward toe-off (1709.03660)](https://arxiv.org/pdf/1709.03660)

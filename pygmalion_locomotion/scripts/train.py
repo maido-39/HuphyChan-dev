@@ -149,15 +149,25 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # each robot gets its own random cmd_vel / mass / friction / push) + draw the command arrows.
     if args_cli.video:
         try:
-            env_cfg.viewer.origin_type = "world"
-            # ★ closer overview: frame only a FEW envs so each robot is clearly visible (user: too many
-            #   robots = can't see). Was eye(11,-11,8.5)/lookat(3,3,0.3) which showed a huge grid.
-            env_cfg.viewer.eye = (4.5, -4.5, 3.0)
-            env_cfg.viewer.lookat = (1.2, 1.2, 0.45)
+            # ★ FEWER robots IN THE VIDEO without touching training: the velocity envs are independent
+            #   (base-relative obs) so env_spacing is PURE PLACEMENT -> training-neutral. On FLAT we
+            #   spread the envs far apart and frame the corner, so only a HANDFUL land in the camera
+            #   frustum (genuinely fewer robots, not just a zoom). ROUGH's spacing is terrain-bound, so
+            #   there we follow a single env's robot instead.
+            if "Flat" in args_cli.task:
+                env_cfg.scene.env_spacing = 8.0      # spread on the plane (no effect on training)
+                env_cfg.viewer.origin_type = "world"
+                env_cfg.viewer.eye = (6.5, -6.5, 4.0)
+                env_cfg.viewer.lookat = (1.0, 1.0, 0.45)
+            else:                                    # rough: terrain-tied spacing -> follow env 0
+                env_cfg.viewer.origin_type = "env"
+                env_cfg.viewer.env_index = 0
+                env_cfg.viewer.eye = (3.0, -3.0, 2.2)
+                env_cfg.viewer.lookat = (0.0, 0.0, 0.5)
             # per-robot commanded(green)+actual(blue) velocity arrows -> the cmd_vel DR is on-screen
             env_cfg.commands.base_velocity.debug_vis = True
         except Exception as exc:  # pragma: no cover - viewer cfg is best-effort
-            print(f"[WARN] could not set overview viewer / debug_vis: {exc}")
+            print(f"[WARN] could not set video viewer: {exc}")
         # ★ RULE (user-requested, repeated): always run the step-captioned ACCUMULATE video in PARALLEL
         #   (concat of every in-training clip, each stamped with its training step) so the whole
         #   progression is one scrubbable video. Auto-started here so it is NEVER forgotten; killed on exit.
