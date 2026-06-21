@@ -48,11 +48,14 @@ for d in pygmalion_locomotion/logs/rsl_rl/*/*/; do
   [ "$l" -lt 500 ] 2>/dev/null && continue
   [ -n "$(find "$d" -maxdepth 1 -name 'model_*.pt' -mmin -5 2>/dev/null)" ] && continue
   # ★ require BOTH (user 2026-06-22): OVERVIEW (train clips / accumulate) AND CLOSE-UP (play single-robot).
+  #   GRANDFATHER runs that PREDATE this rule (date < 2026-06-22): overview alone satisfied the old rule, so
+  #   we do NOT retroactively demand a close-up for historical experiments (that would just burn GPU).
   ov=0; { [ -f "${d}videos/accumulated_progress.mp4" ] || ls "${d}videos/train/"*.mp4 >/dev/null 2>&1; } && ov=1
   cu=0; ls "${d}videos/play/"*.mp4 >/dev/null 2>&1 && cu=1
-  [ "$ov" = 1 ] && [ "$cu" = 1 ] && continue
-  miss=""; [ "$ov" = 0 ] && miss="overview"; [ "$cu" = 0 ] && miss="$miss close-up"
-  g="$g\n  - run '$run' (iter $l): 영상 누락 ($miss) -> 학습 영상ON(overview) + 끝나고 play.py --video(단일로봇 클로즈업) 둘 다 필요. gait 디버깅용"
+  need_cu=1; [[ "${run:0:10}" < "2026-06-22" ]] && need_cu=0
+  [ "$ov" = 1 ] && { [ "$need_cu" = 0 ] || [ "$cu" = 1 ]; } && continue
+  miss=""; [ "$ov" = 0 ] && miss="overview"; { [ "$need_cu" = 1 ] && [ "$cu" = 0 ]; } && miss="$miss close-up"
+  g="$g\n  - run '$run' (iter $l): 영상 누락 ($miss) -> 학습 영상ON(overview) + 끝나고 play.py --video(단일로봇 클로즈업). gait 디버깅용"
 done
 
 if [ -n "$g" ]; then
