@@ -94,4 +94,4 @@ class BipedFlatForefootEnvCfg(BipedFlatEnvCfg):
             func=pyg_rewards.ankle_pushoff_work, weight=1.0,
             params={"ankle_cfg": SceneEntityCfg("robot", joint_names=".*_ankle_pitch_joint"),
                     "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
-                    "contact_thresh": 8.0, "late_time": 0.15, "scale": 0.02})
+                    "contact_thresh": 8.0, "late_time": 0.15, "scale": 0.1})
