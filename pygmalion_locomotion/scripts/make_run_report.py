@@ -24,6 +24,8 @@ import glob
 import os
 import re
 import shutil
+import subprocess
+import sys
 
 import numpy as np
 import matplotlib
@@ -130,6 +132,21 @@ def main():
         rew_png = os.path.join(args.assets, f"{name}_reward.png")
         fig.tight_layout(); fig.savefig(rew_png, dpi=100); plt.close(fig)
 
+    # ★ training-health (TensorBoard): loss / convergence(noise_std) / fall-rate / reward-term breakdown
+    #   — these say WHETHER training was healthy and HOW to tune next, beyond the reward curve.
+    tb_png, tb_eval = None, []
+    try:
+        subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "analyze_tensorboard.py"),
+                        "--run", run, "--tag", name, "--title", name, "--out", args.assets],
+                       check=True, capture_output=True, timeout=180)
+        cand = os.path.join(args.assets, f"{name}_tensorboard.png")
+        tb_png = cand if os.path.exists(cand) else None
+        tb_mdp = os.path.join(args.assets, f"{name}_tensorboard.md")
+        if os.path.exists(tb_mdp):
+            tb_eval = [ln for ln in open(tb_mdp).read().splitlines() if ln.startswith("- **")]
+    except Exception as exc:  # noqa: BLE001
+        print(f"[report] tensorboard analysis skipped: {exc}")
+
     videos = sorted(glob.glob(os.path.join(run, "videos/train/*.mp4")))
     diff = cfg_diff(run, args.parent_run) if args.parent_run else None
 
@@ -170,6 +187,13 @@ def main():
             md += ["", "**이번 run에서 바뀐 reward (vs 부모, cfg diff)**:", "```diff"] + rlines[:25] + ["```"]
     md += ["", "**이번 run 중요/신규 reward + 왜**: **[작성 필요]** — 추가·변경한 항과 그 이유"
            " (어떤 측정/[[Paperreview/...]]·docs 연구가 근거인지). 예: `torque_soft_limit_ankle` 추가 → 포화 발목 offload(docs/17·22).", ""]
+
+    if tb_png:
+        md += ["## 2c. 학습 건강도 (TensorBoard: loss·수렴·낙상·보상항)",
+               f"![tb](assets/{os.path.basename(tb_png)})", ""]
+        md += tb_eval
+        md += ["- 정성 해석 **[작성 필요]**: noise_std 추세(↓수렴/↑탐색)·value loss·낙상률·error_vel로 "
+               "*학습이 잘 됐나* + *다음 튜닝*(예: 미수렴이면 iter↑/지형커리큘럼/명령범위↓).", ""]
 
     md += ["## 3. 영상 / 이미지"]
     if videos:
