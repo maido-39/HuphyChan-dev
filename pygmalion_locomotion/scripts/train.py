@@ -156,6 +156,19 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             env_cfg.commands.base_velocity.debug_vis = True
         except Exception as exc:  # pragma: no cover - viewer cfg is best-effort
             print(f"[WARN] could not set overview viewer / debug_vis: {exc}")
+        # ★ RULE (user-requested, repeated): always run the step-captioned ACCUMULATE video in PARALLEL
+        #   (concat of every in-training clip, each stamped with its training step) so the whole
+        #   progression is one scrubbable video. Auto-started here so it is NEVER forgotten; killed on exit.
+        try:
+            import atexit
+            import subprocess
+            _acc_sh = os.path.join(os.path.dirname(os.path.abspath(__file__)), "accumulate_train_videos.sh")
+            _acc_proc = subprocess.Popen(["bash", _acc_sh, log_dir],
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            atexit.register(_acc_proc.terminate)
+            print(f"[train] accumulate-video watcher pid {_acc_proc.pid} -> {log_dir}/accumulated_progress.mp4")
+        except Exception as exc:  # pragma: no cover
+            print(f"[WARN] could not start accumulate-video watcher: {exc}")
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)

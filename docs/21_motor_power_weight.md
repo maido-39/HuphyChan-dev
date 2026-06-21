@@ -2,6 +2,26 @@
 
 > 모터 선정·감속비·토크-속도·부위별 W·무게민감도 — HW "힘→강도/사양" 정량 근거. — 리서치 ws2d3t2mh
 
+## ★ 모터 속도 + 토크-속도 (실측 — 토크만 보면 틀린다)
+> `analyze_motor_speed.py` (omega 로깅). 모터는 **토크·속도 둘 다 한계**. % 속도한계 + 토크-속도 작동점.
+![토크-속도 작동점 (rough)](assets/stage4_rough_torque_speed.png)
+
+| 관절 | 토크 %peak | **속도 %한계** | 진짜 병목 |
+|---|---|---|---|
+| **무릎(1:3, 67rpm한계)** | 51% (여유) | **106%** (71rpm) | ★**속도** — 감속비 과함 |
+| **ankle_roll(RS00, 315rpm)** | 100% | **107%**(rough 337rpm) | **토크+속도 둘 다** |
+| ankle_pitch(220rpm) | 100%(rough) | 48-66% | 토크 |
+| hip pitch/roll/yaw | 70-95% | 21-32% | 여유 |
+
+**핵심 (사용자 지적으로 발견)**:
+1. ★ **무릎은 "토크 과설계"가 아니라 "속도 병목"** — 1:3 belt가 토크는 360(여유)인데 관절속도 한계를 66.7rpm으로 깎아, 보행이 요구하는 71rpm을 못 냄(106%). → **1:2로 낮추면**(한계 100rpm/토크 240) 속도 71%·토크 77%로 둘 다 여유. **감속비↓가 정답이되, 이유는 토크가 아니라 속도.**
+2. ★ **ankle_roll(RS00)은 토크(100%)+속도(107%) 동시 포화** → **critically undersized, 상향 필수**(가장 시급).
+3. ankle_pitch 토크 빠듯(속도 여유), hip 여유.
+4. **부위별 peak 파워**: 무릎 ~1290W(dominant), ankle ~500W, hip ~400W, hip_yaw ~120W.
+
+> ⚠️ **토크-속도 곡선 검증**: 위 box는 (peak토크 × max속도) 단순박스. 실모터는 고속서 토크가 강하 → 우상단 모서리 작동점은 실제론 못 냄. RobStride 공식 토크-속도 곡선으로 재검증 필요(로드맵).
+
+
 ## 모터 선정 + 대안
 KEEP RobStride; tune the EXTERNAL knee belt ratio rather than swapping motors. RobStride RS04 already has best-in-slot torque density (~85.7 N*m/kg peak); alternatives that match its torque (CubeMars AK80-64 at 64:1, MyActuator RMD-X8-60 at 36:1) do so only with much higher gear ratios that hurt the reflected-inertia/backdrivability you need for a learned, contact-rich gait. Current mapping is internally consistent and verified against the spec YAML: hip pitch/roll = RS04 (effort 120), hip_yaw = RS03 (60), knee = RS04 + 1:3 belt (effort 360, velocity_limit 66.7 rpm, armature 0.0875 = 0.0097*3^2 -- the ratio^2 reflected inertia is correctly baked in), ankle_pitch = RS03 (60), ankle_roll = RS00 (14). TIGHTEST 'direct' joint to watch: ankle_pitch on RS03 -- human-scaled push-off ~72 N*m exceeds RS03 rated 20 and approaches peak 60; validate it on the torque-SPEED envelope, not peak alone. CAVEAT: RS04 envelope (~120 N*m flat to ~100 rpm, linear to 0 at 200 rpm) is from a reseller summary, not the raw RobStride curve -- pull the official RS04/RS03 manual PDFs from github.com/RobStride/Product_Information and re-confirm corner speeds at your actual bus voltage before locking CAD.
 
