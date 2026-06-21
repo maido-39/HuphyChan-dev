@@ -2,6 +2,9 @@
 
 > 형식 `## [YYYY-MM-DD] <kind> | <제목> → <페이지>`. kind = research / experiment / decision / fix. 매 ingest마다 append([[SCHEMA]]). 최신이 위.
 
+## [2026-06-21] research | 실제 휴머노이드 HW 질량/세그먼트/PD 비교(wr1cz09bp) — 다리질량 정상(=H1), 흐물거림=무릎 underdamped → [[31_humanoid_hw_comparison]] · [[raw/humanoid-hw-specs]]
+## [2026-06-21] research | RobStride 컨트롤러 Kd·감속비 댐핑 산정(w2pkt68gl) — RS03/04 Kd≤100, joint_Kd=motor_Kd×g², 무릎 belt 1:2.5 → [[32_actuator_damping]] · [[raw/robstride-datasheet]]
+
 ## [2026-06-21] decision | LLM Wiki(Karpathy) 채택 → [[SCHEMA]] · [[index]] · [[log]] · [[raw/README]] + lint_docs.sh
 ## [2026-06-21] research | knee biomechanics 학술조사(wsx14ecd0) — ★ live spec엔 이미 flexed nominal(knee −22.9°); 과신전+10°/L-R 비대칭은 결함 → [[30_knee_biomechanics]] · [[raw/knee-biomechanics]]
 ## [2026-06-21] research | passive-toe 자연gait deep(w3g1xw9oq, reward레시피·HW·toe효율·둥근뒤꿈치) → [[29_natural_gait_reward_hw]]
