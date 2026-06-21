@@ -30,7 +30,7 @@
 | EXP-015 | 06-21 | Flat | 16384 / ~50 | softcontact **완주 시도**(model_1950 warm-start) | — | — | — | ❌ **OOM/INCOMPLETE**(iter~50 SIGKILL exit137, warm-start dip 중 사망) [[2026-06-21_21-59-35_softcontact2]] |
 
 > [!note] GPU 성능 튜닝 / 초기 탐색 run (reward 무관, 노트 생략)
-> `gpu_rough_v1/v2/v3`=envs 스윕([[10_gpu_perf_tuning]]) · `gpu_flat_v1/v2dr/teacher/curric/toe150`=초기 탐색(EXP-002~006으로 수렴) · `*_test/_configtest`=설정검증(미기록).
+> `gpu_rough_v1/v2/v3/v3fix/v3vid/toe150`=envs 스윕·rough 초기 탐색([[10_gpu_perf_tuning]]) · `gpu_flat_v1/v2dr/teacher/curric/toe150`=초기 탐색(EXP-002~006으로 수렴) · `*_test/_configtest`=설정검증(미기록).
 
 ## 배운 것 (누적 교훈)
 1. **학습량부터**: reward 튜닝 전에 충분한 iter 확보 (EXP-001→002: err_vxy 0.9→0.25).

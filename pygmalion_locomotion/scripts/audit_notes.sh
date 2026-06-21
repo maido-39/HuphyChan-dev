@@ -11,6 +11,8 @@ g=""
 for d in pygmalion_locomotion/logs/rsl_rl/*/*/; do
   [ -d "$d" ] || continue
   run=$(basename "$d")
+  # skip runs matching the explicit skip-list (exploratory / config-test runs not individually noted)
+  [ -f docs/experiments/.audit_skip ] && grep -qFf docs/experiments/.audit_skip <<<"$run" 2>/dev/null && continue
   l=$(ls "$d"model_*.pt 2>/dev/null | sed 's/.*model_//; s/\.pt//' | sort -n | tail -1)
   [ -z "$l" ] && continue
   [ "$l" -lt 500 ] 2>/dev/null && continue
