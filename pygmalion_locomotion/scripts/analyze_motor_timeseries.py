@@ -83,9 +83,11 @@ def main():
         fig, ax = plt.subplots(1, 2, figsize=(16, 6))
         cont_idx = rated_idx if rated_idx is not None else peak_idx
         rms = [float(np.sqrt(np.mean(getter(j) ** 2))) for j in act]
+        p95 = [float(np.percentile(getter(j), 95)) for j in act]   # sustained near-peak, robust to single spikes
         mx = [float(getter(j).max()) for j in act]
-        ax[0].bar(x - 0.2, rms, 0.4, label="RMS", color="#9bbbd6")
-        ax[0].bar(x + 0.2, mx, 0.4, label="max", color="#2980b9")
+        ax[0].bar(x - 0.27, rms, 0.26, label="RMS", color="#9bbbd6")
+        ax[0].bar(x, p95, 0.26, label="p95", color="#5a9bd4")
+        ax[0].bar(x + 0.27, mx, 0.26, label="max", color="#2980b9")
         for i, j in enumerate(act):
             sp = spec_for(j)
             ax[0].plot([i - 0.45, i + 0.45], [sp[peak_idx], sp[peak_idx]], color="#c0392b", lw=1.6, ls="--")
@@ -98,28 +100,30 @@ def main():
         ax[0].set_ylabel(unit); ax[0].set_title(ttl); ax[0].legend(fontsize=8); ax[0].grid(alpha=.3, axis="y")
         # saturation: MAX vs peak/limit (transient) + RMS vs rated/limit (continuous/thermal)
         sat_mx = [100 * mx[i] / spec_for(act[i])[peak_idx] for i in range(len(act))]
+        sat_p95 = [100 * p95[i] / spec_for(act[i])[peak_idx] for i in range(len(act))]
         sat_rms = [100 * rms[i] / spec_for(act[i])[cont_idx] for i in range(len(act))]
         rms_lbl = "RMS %rated (cont/thermal)" if rated_idx is not None else "RMS %limit"
-        ax[1].bar(x - 0.2, sat_mx, 0.4, color=[zone(s) for s in sat_mx], label="max %peak (transient)")
-        ax[1].bar(x + 0.2, sat_rms, 0.4, color=[zone(s) for s in sat_rms], label=rms_lbl)
+        ax[1].bar(x - 0.27, sat_mx, 0.26, color=[zone(s) for s in sat_mx], label="max %peak (transient)")
+        ax[1].bar(x, sat_p95, 0.26, color=[zone(s) for s in sat_p95], label="p95 %peak")
+        ax[1].bar(x + 0.27, sat_rms, 0.26, color=[zone(s) for s in sat_rms], label=rms_lbl)
         ax[1].axhline(100, color="#c0392b", ls="--", lw=1); ax[1].axhline(80, color="#f09010", ls=":", lw=1)
         for i in range(len(act)):
-            ax[1].text(i - 0.2, sat_mx[i] + 1, f"{sat_mx[i]:.0f}", ha="center", fontsize=5)
-            ax[1].text(i + 0.2, sat_rms[i] + 1, f"{sat_rms[i]:.0f}", ha="center", fontsize=5)
+            ax[1].text(i - 0.27, sat_mx[i] + 1, f"{sat_mx[i]:.0f}", ha="center", fontsize=4.5)
+            ax[1].text(i + 0.27, sat_rms[i] + 1, f"{sat_rms[i]:.0f}", ha="center", fontsize=4.5)
         ax[1].set_xticks(x); ax[1].set_xticklabels(lbl, rotation=60, ha="right", fontsize=7)
         ax[1].set_ylabel("% of limit"); ax[1].set_title(sat_ttl)
         ax[1].legend(fontsize=8); ax[1].grid(alpha=.3, axis="y")
         fig.suptitle(f"{ttl.split('(')[0].strip()} — {title}", fontsize=13); fig.tight_layout(rect=[0, 0, 1, .96])
         p = os.path.join(args.out, fname); fig.savefig(p, dpi=95); plt.close(fig)
-        return p, sat_mx, sat_rms
+        return p, sat_mx, sat_p95, sat_rms
 
-    satS_mx = satS_rms = None
-    out["torque"], satT_mx, satT_rms = bars(tau, 0, "torque [N*m]", "Joint torque  RMS/max vs spec (rated/peak)",
-                                "Torque sat:  max %peak (transient) + RMS %rated (continuous/thermal)",
+    satS_mx = satS_p95 = satS_rms = None
+    out["torque"], satT_mx, satT_p95, satT_rms = bars(tau, 0, "torque [N*m]", "Joint torque  RMS/p95/max vs spec (rated/peak)",
+                                "Torque sat:  max %peak + p95 %peak + RMS %rated (continuous/thermal)",
                                 f"{args.tag}_torque.png", rated_idx=1)
     if have_w:
-        out["speed"], satS_mx, satS_rms = bars(rpm, 2, "speed [rpm]", "Joint speed  RMS/max vs spec (limit)",
-                                   "Speed sat:  max %limit (binding) + RMS %limit", f"{args.tag}_speed.png")
+        out["speed"], satS_mx, satS_p95, satS_rms = bars(rpm, 2, "speed [rpm]", "Joint speed  RMS/p95/max vs spec (limit)",
+                                   "Speed sat:  max %limit (binding) + p95/RMS %limit", f"{args.tag}_speed.png")
 
     # time-series grids
     present = [ty for ty in TYPES if any(jtype(j) == ty for j in joints)]
@@ -155,6 +159,7 @@ def main():
     print(f"[motorviz] {title}: wrote {len(out)} PNGs -> {args.out}")
     top = lambda pairs: ", ".join(f"{n} {s:.0f}%" for n, s in sorted(pairs, key=lambda kv: -kv[1])[:3])
     print("  토크 max%peak(과도) top:", top(zip(lbl, satT_mx)))
+    print("  토크 p95%peak(지속근접) top:", top(zip(lbl, satT_p95)))
     print("  토크 RMS%rated(연속/열) top:", top(zip(lbl, satT_rms)))
     if have_w:
         print("  속도 max%limit(binding) top:", top(zip(lbl, satS_mx)))
