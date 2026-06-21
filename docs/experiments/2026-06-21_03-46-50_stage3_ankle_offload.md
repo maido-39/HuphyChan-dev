@@ -60,6 +60,7 @@
 
 ## 3. 영상 / 이미지
 - 학습 영상 40개: `pygmalion_locomotion/logs/rsl_rl/pygmalion_flat/2026-06-21_03-46-50_stage3_ankle_offload/videos/train/` (예: rl-video-step-0.mp4 … rl-video-step-9000.mp4)
+- 누적 영상: **미생성** — `bash scripts/accumulate_train_videos.sh <run_dir>`로 생성 후 임베딩 필요.
 
 ## 4. 부모 학습 대비 비교
 - **부모**: `2026-06-21_01-52-57_flat_wide_dr`

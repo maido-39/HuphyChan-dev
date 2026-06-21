@@ -16,10 +16,18 @@
 | EXP-002 | 06-20 | Flat | GPU 2048 / 1500 | #001을 충분히 학습 (가중치 동일) | **+41.9** | 990 | **0.25** | ⚠️ 수렴했으나 **방향버그(게걸음)**·DR꺼짐·자기충돌X 발견 (run `…17-08-09_gpu_flat_v1`) |
 | EXP-003 | 06-20 | Flat | GPU 16384 / 800 | omnidirectional cmd + 체중/마찰/COM DR + feet_distance↑ | +42 | ~1000 | 0.28 | ⚠️ DR 추가, 단 방향버그·자기충돌 여전 (run `…gpu_flat_v2dr`) + stale-pyc 삽질 |
 | EXP-004 | 06-20 | Flat | GPU 16384 / 800 | **방향 −90°회전 + 자기충돌 ON + 토크리밋 reward** | +39 | **1000** | **0.28** | ✅ **전진 보행 정상**(MuJoCo FK 검증). 발목 병목 확인 (run `…18-36-47_gpu_flat_v3fix`) |
-| EXP-005 | 06-20 | Rough | GPU 16384 / 1000 | EXP-004 설정 + 계단/경사 커리큘럼 + **학습중 영상(조망+명령화살표)** | _(진행)_ | — | — | 🔄 학습 중 (run `…gpu_rough_v3vid`) |
+| EXP-005 | 06-20 | Rough | GPU 16384 / 1000 | EXP-004 설정 + 계단/경사 커리큘럼 + **학습중 영상(조망+명령화살표)** | +? | — | — | ⚠️ rough 초기 (run `…gpu_rough_v3vid/toe150`) |
+| EXP-006 | 06-21 | Flat | 16384 / 999 | **방향버그 완전수정**(flat_fwd_fixed) — 전진 보행 확립 | +? | 999 | — | ✅ 평지 전진 base (run `…00-38-22_flat_fwd_fixed`) |
+| EXP-007 | 06-21 | Flat | 16384 / 1499 | **넓은 DR**(vx 2.5·yaw 1.57·마찰·외력↑) | +? | — | — | ✅ stage-2 [[2026-06-21_01-52-57_flat_wide_dr]] |
+| EXP-008 | 06-21 | Flat | 16384 / 2499 | **발목 offload**(torque_soft_limit) — 포화 발목 완화 | +? | — | — | ✅ stage-3 [[2026-06-21_03-46-50_stage3_ankle_offload]] |
+| EXP-009 | 06-21 | Rough | 16384 / 1999 | 평지→**rough 이전**(warm-start) | +? | — | — | ⚠️ stage-4 [[2026-06-21_06-41-42_stage4_rough]] |
+| EXP-010 | 06-21 | Rough | 16384 / 1300 | rough **수렴 시도** | +5.3 | 879 | **0.918** | ❌ **미수렴**(낙상20%) [[2026-06-21_10-33-47_stage5_rough_converge]] |
+| EXP-011 | 06-21 | Flat | 16384 / 2499 | **forefoot CoP 간접보상**(H-A: toe 적재 유도) | +? | — | — | ⚠️ **H-A 음성**(toe 미적재) [[2026-06-21_12-22-03_forefoot_cop]] |
+| EXP-012 | 06-21 | Flat | 16384 / 300 | **ankle push-off 일 보상** scale=0.1 | **+484** | 975 | **1.73** | ❌ **reward-HACK** [[2026-06-21_15-40-30_forefoot_pushoff]] |
+| EXP-013 | 06-21 | Flat | 16384 / 900 | push-off **수정**(scale0.02·cap80·w0.5) | +41 | 994 | **0.59** | ✅ **건강·H-A양성**(ankle_pushoff↑), 영상수정위해 중도종료→재개 [[2026-06-21_16-30-58_forefoot_pushoff2]] |
 
-> [!note] GPU 성능 튜닝 run (reward 무관, 참고)
-> `gpu_rough_v1/v2/v3` = num_envs 2048→8192→16384 스윕(GPU util 60→90%). [[10_gpu_perf_tuning]].
+> [!note] GPU 성능 튜닝 / 초기 탐색 run (reward 무관, 노트 생략)
+> `gpu_rough_v1/v2/v3`=envs 스윕([[10_gpu_perf_tuning]]) · `gpu_flat_v1/v2dr/teacher/curric/toe150`=초기 탐색(EXP-002~006으로 수렴) · `*_test/_configtest`=설정검증(미기록).
 
 ## 배운 것 (누적 교훈)
 1. **학습량부터**: reward 튜닝 전에 충분한 iter 확보 (EXP-001→002: err_vxy 0.9→0.25).
