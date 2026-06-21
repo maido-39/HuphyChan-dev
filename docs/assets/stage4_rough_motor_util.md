@@ -1,4 +1,4 @@
-# Motor utilization — stage-4 rough (stairs/slopes), 51.79kg
+# Motor utilization — stage-4 rough
 
 | joint | clip |τ| | unclip |τ| | rated | peak | %rated(clip) | %rated(unclip) | %peak(clip) | %peak(unclip) |
 |---|---|---|---|---|---|---|---|---|---|

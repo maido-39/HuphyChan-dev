@@ -20,7 +20,7 @@ import cli_args  # isort: skip
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
 parser.add_argument("--video", action="store_true", default=False, help="(legacy) record videos during training.")
 parser.add_argument("--no_video", action="store_true", default=False, help="DISABLE the default in-training video recording.")
-parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
+parser.add_argument("--video_length", type=int, default=400, help="Length of the recorded video (in steps). 400 ~= 8s.")
 parser.add_argument("--video_interval", type=int, default=1500, help="Interval between video recordings (in steps, ~60 iters).")
 parser.add_argument("--init_checkpoint", type=str, default=None,
                     help="TRANSFER: initialize policy weights from this checkpoint (fresh optimizer, iter 0). "
@@ -150,8 +150,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     if args_cli.video:
         try:
             env_cfg.viewer.origin_type = "world"
-            env_cfg.viewer.eye = (11.0, -11.0, 8.5)
-            env_cfg.viewer.lookat = (3.0, 3.0, 0.3)
+            # ★ closer overview: frame only a FEW envs so each robot is clearly visible (user: too many
+            #   robots = can't see). Was eye(11,-11,8.5)/lookat(3,3,0.3) which showed a huge grid.
+            env_cfg.viewer.eye = (4.5, -4.5, 3.0)
+            env_cfg.viewer.lookat = (1.2, 1.2, 0.45)
             # per-robot commanded(green)+actual(blue) velocity arrows -> the cmd_vel DR is on-screen
             env_cfg.commands.base_velocity.debug_vis = True
         except Exception as exc:  # pragma: no cover - viewer cfg is best-effort

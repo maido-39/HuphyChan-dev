@@ -1,4 +1,4 @@
-# Connection / link structural loads — stage-4 rough (worst-case terrain), 51.79kg
+# Connection / link structural loads — stage-4 rough
 
 | link (connection) | peak \|F\| [N] | RMS \|F\| | peak \|M\| [N·m] | RMS \|M\| | Fx | Fy | Fz | Tx | Ty | Tz |
 |---|---|---|---|---|---|---|---|---|---|---|

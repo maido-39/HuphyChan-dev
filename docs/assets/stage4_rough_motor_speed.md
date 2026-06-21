@@ -1,4 +1,4 @@
-# Motor speed + torque-speed — stage-4 rough, 51.79kg
+# Motor speed + torque-speed — stage-4 rough
 
 | joint | peak rpm | RMS rpm | limit rpm | **% speed** | peak \|tau\| | peak W | RMS W |
 |---|---|---|---|---|---|---|---|
