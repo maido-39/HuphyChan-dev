@@ -41,4 +41,10 @@
 - 직결·1.5·2.0·2.5 각각 학습(8192env·warm-start forefoot_cop·800iter) → 비별 측정(무릎 토크%·속도%·error_vel·CoT·충격·gait).
 - **H2**: 무릎 speed-bound → 저감속(1.0-1.5) 추종·효율 우수, 고감속(2.5) 속도캡으로 추종↓; rough고려 **1.5 균형**일 것. (sweep이 검증.)
 
+## 부록 — 관련 분석 플롯
+- 발 heel/toe 수직GRF 분리 (충격/toe적재 분석, §6 리워드 감사 근거):
+![](assets/forefoot_cop_grf_split.png)
+- 무릎 속도 demand (regime별 초기 분석, §1 보강):
+![](assets/knee_speed_demand_by_regime.png)
+
 > 영어 플롯(한글 폰트 없음). 공식 RS04 곡선 이미지는 저작권으로 gitignore(로컬만).

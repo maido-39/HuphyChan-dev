@@ -74,3 +74,13 @@
   Omniverse Kit 최초 구동은 대화형 EULA 동의를 요구 → 비대화형(스크립트)에선 EOFError로 죽음.
   → 해결: 환경변수 `OMNI_KIT_ACCEPT_EULA=YES`. 영구화: `conda env config vars set OMNI_KIT_ACCEPT_EULA=YES -n pygmalion`
   (이후 모든 Isaac Sim 스크립트가 자동 통과). **이건 Blackwell 크래시가 아님** — 단순 동의 프롬프트.
+
+## OOM (RAM) — 학습이 SIGKILL로 죽음 (exit 137)
+- **증상**: 학습 run이 도중에 갑자기 사망(예: soft_contact iter1919에서 OOM-KILL), 또는 시작 시점(warm-start)에서 멈춤/사망.
+  exit code **137 = SIGKILL = OOM-killer**.
+- **원인**: **16384 envs (~15-18G RAM)** + 동시 무거운 작업(npz 로드·matplotlib 분석, subagent) → RAM 22G 초과 → OOM-killer가 학습 프로세스를 SIGKILL.
+  - 실제 사례: [[2026-06-21_19-03-51_softcontact]] (iter1919에서 사망) / [[2026-06-21_21-59-35_softcontact2]] (startup warm-start dip에서 iter~50 사망, INCOMPLETE).
+- **FIX**:
+  - 자율/야간(overnight) 학습은 **num_envs 8192** (~6G GPU, RAM ~11G 여유 확보)로.
+  - **학습 중 matplotlib/npz 분석 절대 금지** (RAM 스파이크 → 학습 OOM-kill).
+  - **GPU 작업은 한 번에 하나만** (동시 실행 금지).

@@ -25,6 +25,9 @@
 | EXP-011 | 06-21 | Flat | 16384 / 2499 | **forefoot CoP 간접보상**(H-A: toe 적재 유도) | +? | — | — | ⚠️ **H-A 음성**(toe 미적재) [[2026-06-21_12-22-03_forefoot_cop]] |
 | EXP-012 | 06-21 | Flat | 16384 / 300 | **ankle push-off 일 보상** scale=0.1 | **+484** | 975 | **1.73** | ❌ **reward-HACK** [[2026-06-21_15-40-30_forefoot_pushoff]] |
 | EXP-013 | 06-21 | Flat | 16384 / 900 | push-off **수정**(scale0.02·cap80·w0.5) | +41 | 994 | **0.59** | ✅ **건강·H-A양성**(ankle_pushoff↑), 영상수정위해 중도종료→재개 [[2026-06-21_16-30-58_forefoot_pushoff2]] |
+| EXP-013b | 06-21 | Flat | 16384 / 500 | pushoff2 이어서(평지영상 밀도수정·재개) `…18-00-41_forefoot_pushoff3` | +43 | — | 0.50 | ⚠️ 영상수정 후 재개, iter500서 **측정 위해 종료**(이 npz가 무릎 감속비 분석의 주 데이터 → [[35_knee_gear_ratio_analysis]]) |
+| EXP-014 | 06-21 | Flat | 16384 / 1919 | **impact reward**(foot_landing_vel w−2.0 + foot_impact_force w−0.01), pushoff2 warm-start | +34.5 | — | **0.72** | ❌ **OOM**(iter1919 RAM kill) + **추종 악화**(0.50→0.72 plateau, 가중치 과대→−1.0/−0.005 하향) [[2026-06-21_19-03-51_softcontact]] |
+| EXP-015 | 06-21 | Flat | 16384 / ~50 | softcontact **완주 시도**(model_1950 warm-start) | — | — | — | ❌ **OOM/INCOMPLETE**(iter~50 SIGKILL exit137, warm-start dip 중 사망) [[2026-06-21_21-59-35_softcontact2]] |
 
 > [!note] GPU 성능 튜닝 / 초기 탐색 run (reward 무관, 노트 생략)
 > `gpu_rough_v1/v2/v3`=envs 스윕([[10_gpu_perf_tuning]]) · `gpu_flat_v1/v2dr/teacher/curric/toe150`=초기 탐색(EXP-002~006으로 수렴) · `*_test/_configtest`=설정검증(미기록).
