@@ -112,7 +112,8 @@ def joint_overrating_penalty(env, asset_cfg: SceneEntityCfg, rated):
 
 
 def ankle_pushoff_work(env, ankle_cfg: SceneEntityCfg, sensor_cfg: SceneEntityCfg,
-                       contact_thresh: float = 8.0, late_time: float = 0.15, scale: float = 0.02):
+                       contact_thresh: float = 8.0, late_time: float = 0.15, scale: float = 0.02,
+                       cap: float = 80.0):
     """Kuo push-off reward ([[Paperreview/kuo-donelan-dynamic-walking]]): reward POSITIVE ankle-pitch WORK
     (plantarflexion power, clamp(tau*omega, >=0)) at LATE single support + forward — the pre-emptive
     push-off Kuo shows is the cheap power source AND the cause that rolls the CoP onto the forefoot and
@@ -123,7 +124,9 @@ def ankle_pushoff_work(env, ankle_cfg: SceneEntityCfg, sensor_cfg: SceneEntityCf
     asset = env.scene[ankle_cfg.name]
     tau = asset.data.applied_torque[:, ankle_cfg.joint_ids]                        # [E, nfoot]
     omega = asset.data.joint_vel[:, ankle_cfg.joint_ids]                           # [E, nfoot]
-    pushoff = torch.clamp(tau * omega, min=0.0)                                    # positive work rate [W]
+    pushoff = torch.clamp(tau * omega, min=0.0, max=cap)                           # capped positive work [W]:
+    #   the cap + the terminal-single-support gate block ankle-oscillation reward-farming (research w3g1xw9oq;
+    #   my earlier scale=0.1 with no cap reward-HACKED -> reward 324, error_vel 1.56).
     sensor = env.scene.sensors[sensor_cfg.name]
     f = sensor.data.net_forces_w[:, sensor_cfg.body_ids, :]                        # [E, nfoot, 3]
     in_contact = torch.norm(f, dim=-1) > contact_thresh

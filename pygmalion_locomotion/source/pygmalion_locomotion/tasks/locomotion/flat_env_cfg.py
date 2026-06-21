@@ -90,8 +90,9 @@ class BipedFlatForefootEnvCfg(BipedFlatEnvCfg):
         #   terminal stance. forefoot_cop@0.5 alone failed H-A (gated GRF-fraction too weak, ~0.02% of
         #   reward); push-off work is the stronger, Kuo-principled CAUSE that rolls CoP onto the forefoot
         #   and loads the passive toe. Tune weight/scale in a config-test.
+        # research w3g1xw9oq: w~0.5, scale 0.02, + per-step cap (NOT my earlier 0.1/no-cap which reward-HACKED).
         self.rewards.ankle_pushoff = RewTerm(
-            func=pyg_rewards.ankle_pushoff_work, weight=1.0,
+            func=pyg_rewards.ankle_pushoff_work, weight=0.5,
             params={"ankle_cfg": SceneEntityCfg("robot", joint_names=".*_ankle_pitch_joint"),
                     "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
-                    "contact_thresh": 8.0, "late_time": 0.15, "scale": 0.1})
+                    "contact_thresh": 8.0, "late_time": 0.15, "scale": 0.02, "cap": 80.0})
