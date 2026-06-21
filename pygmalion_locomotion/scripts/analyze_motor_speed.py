@@ -29,8 +29,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 RAD2RPM = 60.0 / (2.0 * np.pi)
 # joint substring -> (peak_torque N*m, joint-side velocity limit rpm)
 MOTOR = {
-    "hip_pitch": (120.0, 200.0), "hip_roll": (120.0, 200.0), "hip_yaw": (60.0, 220.0),
-    "knee": (360.0, 66.7), "ankle_pitch": (60.0, 220.0), "ankle_roll": (14.0, 315.0),
+    "hip_pitch": (120.0, 200.0), "hip_roll": (120.0, 200.0), "hip_yaw": (60.0, 200.0),
+    "knee": (360.0, 66.7), "ankle_pitch": (60.0, 200.0), "ankle_roll": (14.0, 315.0),
 }
 ORDER = ["hip_pitch", "hip_roll", "hip_yaw", "knee", "ankle_pitch", "ankle_roll"]
 

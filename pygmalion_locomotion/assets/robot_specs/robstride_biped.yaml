@@ -56,7 +56,7 @@ actuators:
     type: motor
     joints: [".*_hip_yaw_joint"]
     effort_limit: 60.0
-    velocity_limit_rpm: 220.0
+    velocity_limit_rpm: 200.0          # RS03 no-load (corrected 220->200 vs official datasheet, docs/28)
     stiffness: 150.0
     damping: 5.0
     armature: 0.0049
@@ -72,7 +72,7 @@ actuators:
     type: motor
     joints: [".*_ankle_pitch_joint"]
     effort_limit: 60.0
-    velocity_limit_rpm: 220.0
+    velocity_limit_rpm: 200.0          # RS03 no-load (corrected 220->200 vs official datasheet, docs/28)
     stiffness: 80.0
     damping: 3.0
     armature: 0.0049

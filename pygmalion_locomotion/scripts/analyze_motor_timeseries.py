@@ -23,8 +23,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 RAD2RPM = 60.0 / (2.0 * np.pi)
 # joint substring -> (PEAK N*m, RATED/nominal N*m, speed-limit rpm)  [robstride_biped.yaml]
 SPEC = {
-    "hip_pitch": (120.0, 40.0, 200.0), "hip_roll": (120.0, 40.0, 200.0), "hip_yaw": (60.0, 20.0, 220.0),
-    "knee": (360.0, 120.0, 66.7), "ankle_pitch": (60.0, 20.0, 220.0), "ankle_roll": (14.0, 5.0, 315.0),
+    "hip_pitch": (120.0, 40.0, 200.0), "hip_roll": (120.0, 40.0, 200.0), "hip_yaw": (60.0, 20.0, 200.0),
+    "knee": (360.0, 120.0, 66.7), "ankle_pitch": (60.0, 20.0, 200.0), "ankle_roll": (14.0, 5.0, 315.0),
 }
 TYPES = ["hip_pitch", "hip_roll", "hip_yaw", "knee", "ankle_pitch", "ankle_roll", "toe"]
 

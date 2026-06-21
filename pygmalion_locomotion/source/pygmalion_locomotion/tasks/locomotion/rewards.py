@@ -91,3 +91,21 @@ def forefoot_cop(env, foot_cfg: SceneEntityCfg, forefoot_cfg: SceneEntityCfg,
         late = torch.ones_like(in_contact)
     gate = (in_contact & other_swing & late & fwd).float()                        # [E, nfoot]
     return torch.sum(frac * gate, dim=1)
+
+
+def joint_overrating_penalty(env, asset_cfg: SceneEntityCfg, rated):
+    """T2 thermal/load-balancing penalty (research wyilgvpyj). Per-joint utilization hinge:
+    sum_j max((|tau_j|/tau_rated_j)^2 - 1, 0) — ZERO below each joint's CONTINUOUS rating, QUADRATIC above
+    (matches tau^2 heating). Normalize by EACH joint's OWN rating (load-balancing, NOT equal load) so it
+    pushes load OFF an overloaded joint (our ankle_roll at 151% RMS%rated) ONTO joints with margin
+    (hip/knee). Use a NEGATIVE weight. WHY this and not power_cot: power_cot sums |tau*omega| over all 14
+    joints and is POWER not HEAT — a holding ankle_roll has omega~0 (~0 power) yet heats as tau^2, so
+    power_cot never saw the overload. Summed over an episode this ~ the RMS-over-rating thermal load; a
+    stateful EMA-thermal term (T1) is the upgrade. `rated` = continuous-rated torques aligned to
+    asset_cfg.joint_ids, VERIFIED datasheet (ankle_roll 5, hip_yaw/ankle_pitch 20, hip 40, knee 120 N*m).
+    Returns [num_envs]. See docs/28."""
+    asset = env.scene[asset_cfg.name]
+    tau = torch.abs(asset.data.applied_torque[:, asset_cfg.joint_ids])             # [E, nj]
+    rated_t = torch.tensor(rated, device=tau.device, dtype=tau.dtype)             # [nj]
+    u = tau / rated_t                                                              # utilization per joint
+    return torch.sum(torch.clamp(u * u - 1.0, min=0.0), dim=1)
