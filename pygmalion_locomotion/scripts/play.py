@@ -89,6 +89,19 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     agent_cfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
 
+    # ★ GAIT-DEBUG close-up (user 2026-06-22: "영상 녹화하고 Audit"): single-robot NEAR camera so leg-cross /
+    #   foot-edge / knee-angle detail is visible (train.py's video is a density/terrain OVERVIEW, too far for
+    #   gait detail). Follows env 0 closely + draws the cmd/actual velocity arrows.
+    if args_cli.video:
+        try:
+            env_cfg.viewer.origin_type = "env"
+            env_cfg.viewer.env_index = 0
+            env_cfg.viewer.eye = (1.8, -1.8, 1.1)
+            env_cfg.viewer.lookat = (0.0, 0.0, 0.45)
+            env_cfg.commands.base_velocity.debug_vis = True
+        except Exception as exc:
+            print(f"[WARN] could not set close-up viewer: {exc}")
+
     # set the environment seed
     # note: certain randomizations occur in the environment initialization so we set the seed here
     env_cfg.seed = agent_cfg.seed
