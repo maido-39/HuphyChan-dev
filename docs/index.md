@@ -11,7 +11,7 @@
 - **toe/발**: [[12_toe_stiffness]] · [[15_toe_joint_research]] · [[17_toe_usage_vibration]] · [[19_toe_ablation]] · [[23_toe_use_methods]] toe-use(산업/최신/직접보상)
 - **HW/사이징·생체역학**: [[20_fusion360_isaaclab]] · [[21_motor_power_weight]] 모터·파워·무게 · [[30_knee_biomechanics]] 무릎(과신전·굽힘자세) · [[31_humanoid_hw_comparison]] 실제로봇 HW비교(질량·댐핑→흐물거림 판정) · [[32_actuator_damping]] 액추에이터 댐핑(RobStride Kd·g²·토크요구)
 - **지형/전이**: [[13_sim2real_height_scan]] · [[14_heightmap_survey]] · [[16_dr_expansion]] DR확장
-- **분석/계획**: [[24_training_health_analysis]] 학습건강도+모터viz(RMS/p95/peak) · [[18_research_roadmap]] 로드맵 · [[25_dayplan_2026-06-21]] 일일계획+검토프로토콜 · [[26_reading_list]] 리딩리스트v2(검증) · [[99_troubleshooting]]
+- **분석/계획**: [[24_training_health_analysis]] 학습건강도+모터viz(RMS/p95/peak) · [[18_research_roadmap]] 로드맵 · [[experiment_queue]] ★실험큐(toe-roll/충격/gait) · [[25_dayplan_2026-06-21]] 일일계획 · [[26_reading_list]] 리딩리스트v2(검증) · [[99_troubleshooting]]
 
 ## 논문 리뷰 (verified) — [[Paperreview/INDEX]]
 - [[Paperreview/kuo-donelan-dynamic-walking]] Kuo 전이-에너지 캐논 · [[Paperreview/siekmann-periodic-reward]] 주기보상 · [[Paperreview/margolis-rapid-locomotion]] · [[Paperreview/radosavovic-humanoid-transformer]] · [[Paperreview/caps-smooth-control]] · [[Paperreview/toe-stiffness-optimization]]

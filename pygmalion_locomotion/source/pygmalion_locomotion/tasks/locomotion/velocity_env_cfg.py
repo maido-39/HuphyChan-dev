@@ -118,16 +118,15 @@ class BipedRewards(RewardsCfg):
         weight=-0.0025,
         params={"soft_ratio": 0.85, "asset_cfg": SceneEntityCfg("robot", joint_names=LEG_TORQUE_JOINTS)},
     )
-    # ★ ANKLE OFFLOAD (research wseyrv4mz): the ankle (RS03 60 / RS00 14) saturates at 100% peak and
-    #   is the binding actuator. An ANKLE-scoped, tighter (0.80) + heavier soft-limit penalty pushes
-    #   the policy to reduce ankle peaks (offload toward knee/hip + the passive toe). Safe: same
-    #   verified reward fn, just scoped. (NOTE: this offloads the ankle but does NOT by itself LOAD
-    #   the toe -- toe loading needs a vel-norm power CoT + forefoot-rollover term, see docs/22.)
+    # ★ ANKLE_ROLL-ONLY OFFLOAD (was ankle_pitch+roll). The thermal binding joint is ankle_ROLL (RS00 14
+    #   N·m, RMS%rated 151%). ankle_PITCH (RS03) is the PUSH-OFF prime mover; penalising its torque 4x
+    #   FOUGHT ankle_pushoff (the external toe-roll report verified this self-conflict on our table).
+    #   Fix: scope this offload to ankle_ROLL only -> ankle_PITCH is free to plantarflex / load the toe.
     torque_soft_limit_ankle = RewTerm(
         func=mdp.applied_torque_soft_limit,
         weight=-0.01,
         params={"soft_ratio": 0.80,
-                "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"])},
+                "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_roll_joint"])},
     )
 
 
