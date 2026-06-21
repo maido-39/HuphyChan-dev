@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
 
-from .velocity_env_cfg import BipedRoughEnvCfg, HIP_KNEE_JOINTS
+from . import rewards as pyg_rewards
+from .velocity_env_cfg import ACTUATED_JOINTS, BipedRoughEnvCfg, FOOT_BODY, HIP_KNEE_JOINTS
 
 
 @configclass
@@ -58,3 +60,25 @@ class BipedFlatEnvCfg_PLAY(BipedFlatEnvCfg):
         self.events.base_com = None
         self.events.physics_material.params["static_friction_range"] = (0.9, 0.9)
         self.events.physics_material.params["dynamic_friction_range"] = (0.7, 0.7)
+
+
+@configclass
+class BipedFlatForefootEnvCfg(BipedFlatEnvCfg):
+    """★ TOE-LOADING experiment (toe-use research wljkv3uu8, docs/23): H1 late-single-support
+    forefoot-load reward + H6 vel-norm power-CoT, on the flat env. Warm-start (--init_checkpoint) from a
+    converged flat policy. The toe stays PASSIVE / out of the policy; these terms only shape the FOOT /
+    stance so the passive toe self-loads at terminal stance (load goes to the toe, not the knee).
+    NOTE: tune `scale` (power_cot) + weights in a config-test; obs is UNCHANGED (239) so it transfers."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        # H1 — reward loading the passive toe at late single support (the ONLY direct forefoot gradient)
+        self.rewards.toe_forefoot_load = RewTerm(
+            func=pyg_rewards.toe_load_stance, weight=0.4,
+            params={"toe_cfg": SceneEntityCfg("robot", joint_names=".*_toe_joint"),
+                    "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_BODY),
+                    "tau_ref": 27.0, "contact_thresh": 5.0, "late_time": 0.15})
+        # H6 — vel-normalized power cost-of-transport (efficiency -> reason to exploit the toe spring)
+        self.rewards.power_cot = RewTerm(
+            func=pyg_rewards.power_cot, weight=0.6,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=ACTUATED_JOINTS), "scale": 0.003})
