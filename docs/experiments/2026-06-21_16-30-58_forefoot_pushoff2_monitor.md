@@ -7,6 +7,9 @@
 | 시각 | iter | reward | noise_std | error_vel | ep_len | 낙상 | ankle_pushoff | 판정 |
 |---|---|---|---|---|---|---|---|---|
 | 16:55 | 190 | 43.08 | 0.26 | 0.48 | 1000 | 0% | 0.029 | CONTINUE |
+| 17:30 | 580 | 42.39 | 0.27 | 0.52 | 1000 | 0% | 0.042 | CONTINUE |
+
+*iter 580 — 건강(reward 42·error_vel 0.52·낙상 0%). ★ ankle_pushoff 0.029→0.042 증가(forefoot_cop ~6배) = push-off가 cause-reward로 작동, 정책이 더 미는 중. 완주 측정서 toe 적재+발목 전이 확인 예정.*
 
 ## 정성 + verify_run.sh (디버깅 루프)
 - **수정 성공**: iter 190서 reward 43·error_vel 0.48·낙상 0% = **정상**(해킹 run은 같은 iter서 324/1.56). scale0.02+cap이 해킹 차단.
