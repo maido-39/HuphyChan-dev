@@ -101,6 +101,7 @@ def main():
     ap.add_argument("--parent_run", default=None)
     ap.add_argument("--parent_log", default=None)
     ap.add_argument("--measure", default=None, help="path to a motor_util png to embed")
+    ap.add_argument("--measure_npz", default=None, help="measurement npz -> auto torque/speed bars + %sat + time-series viz")
     ap.add_argument("--cmd", default=None)
     ap.add_argument("--note", default=None, help="intent / what changed vs parent")
     ap.add_argument("--out", default=os.path.join(ROOT, "docs/experiments"))
@@ -146,6 +147,22 @@ def main():
             tb_eval = [ln for ln in open(tb_mdp).read().splitlines() if ln.startswith("- **")]
     except Exception as exc:  # noqa: BLE001
         print(f"[report] tensorboard analysis skipped: {exc}")
+
+    # ★ motor visualization from the measurement npz: per-joint avg/max torque & speed vs spec lines
+    #   (rated/peak/limit) + %saturation + TIME-SERIES (how each joint is used over time). Makes the
+    #   loads readable instead of text-only.
+    motor_pngs = []
+    if args.measure_npz and os.path.exists(args.measure_npz):
+        try:
+            subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "analyze_motor_timeseries.py"),
+                            "--npz", args.measure_npz, "--tag", name, "--title", name, "--out", args.assets],
+                           check=True, capture_output=True, timeout=180)
+            for suf in ["torque", "speed", "torque_ts", "speed_ts"]:
+                c = os.path.join(args.assets, f"{name}_{suf}.png")
+                if os.path.exists(c):
+                    motor_pngs.append((suf, c))
+        except Exception as exc:  # noqa: BLE001
+            print(f"[report] motor viz skipped: {exc}")
 
     videos = sorted(glob.glob(os.path.join(run, "videos/train/*.mp4")))
     diff = cfg_diff(run, args.parent_run) if args.parent_run else None
@@ -194,6 +211,17 @@ def main():
         md += tb_eval
         md += ["- 정성 해석 **[작성 필요]**: noise_std 추세(↓수렴/↑탐색)·value loss·낙상률·error_vel로 "
                "*학습이 잘 됐나* + *다음 튜닝*(예: 미수렴이면 iter↑/지형커리큘럼/명령범위↓).", ""]
+
+    if motor_pngs:
+        cap = {"torque": "관절 토크 avg/max vs rated/peak 가로선 + 포화%",
+               "speed": "관절 속도 avg/max vs 속도한계 가로선 + 포화%",
+               "torque_ts": "관절 토크 시계열 (시간에 따른 토크 활용, peak/rated 선)",
+               "speed_ts": "관절 속도 시계열 (시간에 따른 속도 활용, limit 선)"}
+        md += ["## 2d. 모터 활용 시각화 (토크·속도: avg/max·스펙선·포화%·시계열)"]
+        for suf, p in motor_pngs:
+            md += [f"**{cap.get(suf, suf)}**", f"![{suf}](assets/{os.path.basename(p)})", ""]
+        md += ["- 정량 해석 **[작성 필요]**: 포화 top 관절(토크/속도 %) + 시계열의 피크 타이밍·L/R 비대칭 "
+               "→ 어느 모터를 키우고/감속비를 바꿀지(HW 사이징).", ""]
 
     md += ["## 3. 영상 / 이미지"]
     if videos:

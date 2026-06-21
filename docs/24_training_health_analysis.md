@@ -36,4 +36,30 @@
 3. **평지 정책은 건강**(낙상 1%, error_vel 0.50) → forefoot CoP 실험은 stage-3서 warm-start.
 4. value loss·entropy를 매 학습 기록 → 과제 난이도 정량 비교(평지 0.014 vs rough 0.077).
 
+## 모터 활용 시각화 (토크·속도: avg/max·스펙선·포화%·시계열)
+> 텍스트만으론 안 보임 → 측정 npz(env-0 시계열)에서 `analyze_motor_timeseries.py`가 생성. **모든 측정 리포트에 자동 임베드**(규칙). `bash scripts/analyze_run.sh <tag> <clip.npz>`.
+
+### stage-3 평지 (건강 베이스라인)
+**① 토크 avg/max + rated(주황)·peak(빨강--) 가로선 + 포화%** — ankle_roll L/R **100%(빨강존)**, 나머지 여유.
+![s3-tq](assets/stage3_motor_torque.png)
+**② 속도 avg/max + 속도한계(빨강--) + 포화%** — knee L/R **102-106%(속도병목)**, ankle_roll 87%.
+![s3-sp](assets/stage3_motor_speed.png)
+**③ 토크 시계열** (L파랑/R주황, peak=빨강--·rated=주황:) — ankle_roll이 push-off마다 peak 도달, knee는 큰 여유.
+![s3-tqts](assets/stage3_motor_torque_ts.png)
+**④ 속도 시계열** — knee가 limit(66.7rpm) 근처서 반복 포화 = **속도병목을 눈으로 확인**.
+![s3-spts](assets/stage3_motor_speed_ts.png)
+
+### stage-4 rough (포화 심화)
+**토크** — ankle_pitch+ankle_roll **둘 다 100%**(rough서 발목 토크 한계).
+![s4-tq](assets/stage4_motor_torque.png)
+**속도** — ankle_roll **107%** + knee 105-106% (토크·속도 동시 포화).
+![s4-sp](assets/stage4_motor_speed.png)
+
+### 시각화가 확정한 HW 결론 (텍스트가 아닌 그림으로)
+- **ankle_roll(RS00)** = 토크 100%(평지·rough)+속도 87→107% → **최우선 상향**(시계열서 push-off 스파이크 보임).
+- **knee** = 토크 46%(여유)인데 **속도 102-106% 포화** → 감속비 1:3 과함 → **1:2**(속도 시계열이 병목을 직관적으로 보여줌).
+- **ankle_pitch** = rough서 토크 100% → 빠듯. L/R 비대칭 작음(보행 대칭) ✅.
+
+**누적 영상(step 캡션 진화)**: `logs/rsl_rl/pygmalion_rough/2026-06-21_10-33-47_stage5_rough_converge/videos/accumulated_progress.mp4` — 학습 step별 보행 진화(모든 학습 자동 생성). 
+
 관련: [[MIDREPORT_2026-06-21_1100]] · [[experiments/stage4_rough]] · [[18_research_roadmap]] · [[04_reward_reference]]

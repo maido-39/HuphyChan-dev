@@ -95,3 +95,15 @@
 - **활용 연구**: [[22_energy_toe_reward]](wseyrv4mz) — 발목offload는 부하분산엔 OK이나 toe 적재엔 forefoot-rollover 필요(이 run이 확증). [[Paperreview/caps-smooth-control]] — 진동(action 평활) 수정 근거.
 - **다음**: forefoot-rollover + vel-norm power CoT([[22_energy_toe_reward]] 레시피) → toe 적재 + CoT↓ 목표, [[19_toe_ablation]]로 검증. HW: **RS00(ankle_roll) 상향** 검토([[21_motor_power_weight]]).
 
+## 7. 모터 활용 시각화 (사후 추가 — 토크·속도 avg/max·스펙선·포화%·시계열)
+> `bash scripts/analyze_run.sh`가 생성(이후 리포트는 자동 임베드). 전체 해석 [[24_training_health_analysis]].
+
+**토크** (avg/max + rated/peak 가로선 + 포화%): ankle_roll L/R **100%(빨강)**, 나머지 여유.
+![s3-tq](../assets/stage3_motor_torque.png)
+**속도** (avg/max + 속도한계 + 포화%): knee L/R **102-106%(속도병목)**.
+![s3-sp](../assets/stage3_motor_speed.png)
+**토크 시계열 · 속도 시계열** (시간에 따른 관절별 활용, L파랑/R주황):
+![s3-tqts](../assets/stage3_motor_torque_ts.png)
+![s3-spts](../assets/stage3_motor_speed_ts.png)
+- **HW**: ankle_roll 상향 · knee 감속비 1:3→**1:2**(속도 시계열이 병목을 직관 확인).
+
