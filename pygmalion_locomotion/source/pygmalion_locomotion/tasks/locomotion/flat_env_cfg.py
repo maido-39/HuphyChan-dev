@@ -28,8 +28,8 @@ class BipedFlatEnvCfg(BipedRoughEnvCfg):
         # reward tweaks for flat (mirror G1 flat)
         self.rewards.track_ang_vel_z_exp.weight = 1.0
         self.rewards.lin_vel_z_l2.weight = -0.2
-        self.rewards.action_rate_l2.weight = -0.005
-        self.rewards.dof_acc_l2.weight = -1.0e-7
+        self.rewards.action_rate_l2.weight = -0.01    # ★ jitter↑ (user: 발 여전히 떨림) 1st-order smoothness 강화
+        self.rewards.dof_acc_l2.weight = -3.0e-7      # ★ jitter↑: 가속 페널티 3x (LEG_TORQUE_JOINTS = ankle/toe 포함, 고주파 진동 타깃)
         self.rewards.feet_air_time.weight = 0.75
         self.rewards.feet_air_time.params["threshold"] = 0.4
         self.rewards.dof_torques_l2.weight = -2.0e-6
@@ -77,7 +77,7 @@ class BipedFlatForefootEnvCfg(BipedFlatEnvCfg):
         #   (worse here, the toe is over-damped). Reward WHERE the foot bears load (forefoot GRF fraction
         #   at terminal single support) = the legitimate CAUSE that loads the passive toe, hard to game.
         self.rewards.forefoot_cop = RewTerm(
-            func=pyg_rewards.forefoot_cop, weight=0.5,
+            func=pyg_rewards.forefoot_cop, weight=0.8,   # ★ 강화: 간접 CoP-roll driver (toe 적재) — ankle_pushoff(직접) 대신
             params={"foot_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
                     "forefoot_cfg": SceneEntityCfg("contact_forces", body_names=".*_toe_link"),
                     "contact_thresh": 8.0, "late_time": 0.15})
@@ -92,7 +92,7 @@ class BipedFlatForefootEnvCfg(BipedFlatEnvCfg):
         #   and loads the passive toe. Tune weight/scale in a config-test.
         # research w3g1xw9oq: w~0.5, scale 0.02, + per-step cap (NOT my earlier 0.1/no-cap which reward-HACKED).
         self.rewards.ankle_pushoff = RewTerm(
-            func=pyg_rewards.ankle_pushoff_work, weight=0.5,
+            func=pyg_rewards.ankle_pushoff_work, weight=0.1,   # ★ DE-EMPHASIZED (user: side-effect=ankle saturation/"stab" + torque-limit self-conflict). Rely on the INDIRECT set (forefoot_cop + foot_landing_vel + foot_impact_force + power_cot) for a smooth low-impact roll-off that loads the toe NATURALLY.
             params={"ankle_cfg": SceneEntityCfg("robot", joint_names=".*_ankle_pitch_joint"),
                     "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
                     "contact_thresh": 8.0, "late_time": 0.15, "scale": 0.02, "cap": 80.0})
@@ -126,7 +126,7 @@ class BipedRoughForefootEnvCfg(BipedRoughEnvCfg):
         super().__post_init__()
         # identical forefoot/impact reward set to BipedFlatForefootEnvCfg (so flat vs rough is comparable)
         self.rewards.forefoot_cop = RewTerm(
-            func=pyg_rewards.forefoot_cop, weight=0.5,
+            func=pyg_rewards.forefoot_cop, weight=0.8,   # ★ 강화: 간접 CoP-roll driver (toe 적재) — ankle_pushoff(직접) 대신
             params={"foot_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
                     "forefoot_cfg": SceneEntityCfg("contact_forces", body_names=".*_toe_link"),
                     "contact_thresh": 8.0, "late_time": 0.15})
@@ -134,7 +134,7 @@ class BipedRoughForefootEnvCfg(BipedRoughEnvCfg):
             func=pyg_rewards.power_cot, weight=0.4,
             params={"asset_cfg": SceneEntityCfg("robot", joint_names=ACTUATED_JOINTS), "scale": 0.003})
         self.rewards.ankle_pushoff = RewTerm(
-            func=pyg_rewards.ankle_pushoff_work, weight=0.5,
+            func=pyg_rewards.ankle_pushoff_work, weight=0.1,   # ★ DE-EMPHASIZED (user: side-effect=ankle saturation/"stab" + torque-limit self-conflict). Rely on the INDIRECT set (forefoot_cop + foot_landing_vel + foot_impact_force + power_cot) for a smooth low-impact roll-off that loads the toe NATURALLY.
             params={"ankle_cfg": SceneEntityCfg("robot", joint_names=".*_ankle_pitch_joint"),
                     "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
                     "contact_thresh": 8.0, "late_time": 0.15, "scale": 0.02, "cap": 80.0})

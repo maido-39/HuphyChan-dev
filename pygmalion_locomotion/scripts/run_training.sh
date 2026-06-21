@@ -37,7 +37,10 @@ python scripts/play.py --task "$PLAYTASK" --checkpoint "$CK" --num_envs 1 --vide
   >> "$LOG" 2>&1
 echo "[run_training] play exit=$? "
 
-# (3) formatted report (embeds overview + close-up + TB plots)
+# (3) formatted report (embeds overview + close-up + TB plots; §4 vs parent if warm-started -> forefoot_pushoff 구조)
 echo "[run_training] (3/3) REPORT"
-python scripts/make_run_report.py --run "$D" --log "$LOG" >> "$LOG" 2>&1
+PARENT=""
+PCK=$(printf '%s' "$EXTRA" | grep -oE 'logs/rsl_rl/[^ ]+/model_[0-9]+\.pt' | head -1)
+[ -n "$PCK" ] && PARENT="--parent_run $(dirname "$PCK")"
+python scripts/make_run_report.py --run "$D" --log "$LOG" $PARENT >> "$LOG" 2>&1
 echo "[run_training] report exit=$?  ALL DONE -> $D"

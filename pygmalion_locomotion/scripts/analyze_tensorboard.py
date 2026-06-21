@@ -68,7 +68,7 @@ def main():
     a2.set_ylabel("ep_len", color="#27ae60")
     # (0,1) convergence: noise_std + LR
     x, y = g("Policy/mean_noise_std"); ax[0, 1].plot(x, y, color="#8e44ad", label="noise_std")
-    ax[0, 1].set_title("Convergence: action noise_std (↓=수렴) + LR"); ax[0, 1].set_xlabel("iter"); ax[0, 1].grid(alpha=.3); ax[0, 1].legend(loc="upper left", fontsize=8)
+    ax[0, 1].set_title("Convergence: action noise_std (low=converged) + LR"); ax[0, 1].set_xlabel("iter"); ax[0, 1].grid(alpha=.3); ax[0, 1].legend(loc="upper left", fontsize=8)
     a2 = ax[0, 1].twinx(); xl, yl = g("Loss/learning_rate"); a2.plot(xl, yl, color="#e67e22", lw=.8); a2.set_ylabel("LR", color="#e67e22")
     # (0,2) losses
     for t, c in [("Loss/value_function", "#c0392b"), ("Loss/surrogate", "#2980b9"), ("Loss/entropy", "#7f8c8d")]:
@@ -81,7 +81,7 @@ def main():
         x, y = g(t)
         if len(x):
             ax[1, 0].plot(x, ema(y), color=c, label=t.split("/")[-1])
-    ax[1, 0].set_title("Tracking error (↓ good) + curriculum"); ax[1, 0].set_xlabel("iter"); ax[1, 0].legend(loc="upper right", fontsize=8); ax[1, 0].grid(alpha=.3)
+    ax[1, 0].set_title("Tracking error (low=good) + curriculum"); ax[1, 0].set_xlabel("iter"); ax[1, 0].legend(loc="upper right", fontsize=8); ax[1, 0].grid(alpha=.3)
     a2 = ax[1, 0].twinx(); xc, yc = g("Curriculum/command_vel_x"); a2.plot(xc, yc, color="#16a085", lw=1, ls="--"); a2.set_ylabel("cmd vx ceil", color="#16a085")
     # (1,1) termination: falls vs timeout
     xf, yf = g("Episode_Termination/base_contact"); xt, yt = g("Episode_Termination/time_out")
@@ -89,14 +89,14 @@ def main():
         ax[1, 1].plot(xf, ema(yf), color="#c0392b", label="base_contact (fall)")
     if len(xt):
         ax[1, 1].plot(xt, ema(yt), color="#27ae60", label="time_out (survive)")
-    ax[1, 1].set_title("Termination: 낙상 vs 생존"); ax[1, 1].set_xlabel("iter"); ax[1, 1].legend(fontsize=8); ax[1, 1].grid(alpha=.3)
+    ax[1, 1].set_title("Termination: falls vs survival"); ax[1, 1].set_xlabel("iter"); ax[1, 1].legend(fontsize=8); ax[1, 1].grid(alpha=.3)
     # (1,2) reward-term final contributions (top by |.|)
     terms = {k.split("/")[-1]: v[1][-1] for k, v in d.items() if k.startswith("Episode_Reward/") and len(v[1])}
     top = sorted(terms.items(), key=lambda kv: abs(kv[1]), reverse=True)[:12]
     names = [k for k, _ in top]; vals = [v for _, v in top]
     ax[1, 2].barh(range(len(top)), vals, color=["#27ae60" if v > 0 else "#c0392b" for v in vals])
     ax[1, 2].set_yticks(range(len(top))); ax[1, 2].set_yticklabels(names, fontsize=7); ax[1, 2].invert_yaxis()
-    ax[1, 2].set_title("Reward 항목별 기여(최종)"); ax[1, 2].grid(alpha=.3, axis="x")
+    ax[1, 2].set_title("Reward term contributions (final)"); ax[1, 2].grid(alpha=.3, axis="x")
     fig.suptitle(f"Training TensorBoard — {title}", fontsize=13)
     fig.tight_layout(rect=[0, 0, 1, 0.97])
     png = os.path.join(args.out, f"{args.tag}_tensorboard.png"); fig.savefig(png, dpi=95); plt.close(fig)
