@@ -24,4 +24,16 @@
 - ★ **flat baseline 완료 (4비)**: 전 비 추종 **0.60~0.62**(차이 미미). 무릎 속도활용 53→97→100→101%(감속비↑ = 속도천장↓이 binding), 토크 항상 39~67%peak(여유). g=2.5(80rpm)서 토크 RMS 21→**34↑**(저속보상=효율 비용 첫 신호). **flat 권고: 저감속(1.0~1.5)** = 속도여유 + 낮은 토크RMS + 효율. **단 flat은 판별력 약함**(다 추종) → 진짜 판별 = **rough+DR**(토크 2배 → 고감속 필요성 시험). 다음 단계.
 - ★ **flat에선 고감속 토크여유(180~300)는 낭비** — 무릎이 120 토크를 안 씀. **단 ROUGH+DR은 토크 2배(무릎 max 184, 다조건 분석)라 직결 120 초과 가능** → **rough sweep이 토크측을 시험**: flat=speed가 저감속 선호, rough=torque가 고감속 요구 → 둘의 충돌이 진짜 설계점. (그래서 사용자 rough+DR 요구가 정확.)
 
-관련: [[35_knee_gear_ratio_analysis]] · [[33_knee_actuator_landscape]] · [[experiment_queue]]
+## rough+DR sweep (deployment 분포 — ★ 진짜 판별자)
+> env: `Pygmalion-Velocity-Rough-Forefoot-v0`(flat과 *동일* forefoot 보상 + rough terrain + 전체 DR push±1.2/mass±5/friction0.2-1.25). config-test ✅(5보상 발화·오류없음). warm-start = 비-매칭 flat sweep 정책 → rough 적응, **1000iter**(rough 더 어려움). 측정 시 `--push`로 외란 효과도 정량화.
+
+| g | run | 무릎토크 RMS/max | 무릎속도 max(rpm) | error_vel | flat 대비 | 판정 |
+|---|---|---|---|---|---|---|
+| 1.0 | `rough_sweep_g1p0` | (진행) | | | | |
+| 1.5 | | | | | | |
+| 2.0 | | | | | | |
+| 2.5 | | | | | | |
+
+**가설**: rough는 무릎 토크 ~2배(다조건 분석 max 184·[[35_knee_gear_ratio_analysis]]) → **직결(120 peak)이 클립될 수 있음** → 고감속 필요성 부상. flat은 저감속 선호였으나 **rough가 뒤집을 수 있음** = 이 sweep의 핵심. + 발목도 rough서 더 포화하는지([[37_ankle_linkage_fidelity]]).
+
+관련: [[35_knee_gear_ratio_analysis]] · [[33_knee_actuator_landscape]] · [[37_ankle_linkage_fidelity]] · [[experiment_queue]]
