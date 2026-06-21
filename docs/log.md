@@ -39,3 +39,9 @@
 - **RS00**(verified yes, 5출처): 5/14 N·m·무부하315·Kt1.48·R1.5Ω·10:1·310g. corner ≈100rpm. ⚠ **정격속도 공식 100 vs 리셀러 260** → 공식(우리 "260"=리셀러값, 정정). 과부하 5=무한·14=5초. `assets/rs00_tn_overload_official.png`.
 - 공통: 리셀러 정격속도 over-optimistic. 3모터 다 전압제한 봉투 → "peak×maxspeed 박스" 틀림. ⚠ rotor inertia·효율맵·열시상수 전 모터 미공개(bench 필요).
 - 설계분석(★ankle_roll RS00 바인딩·상향후보) → [[36_all_actuator_tn_envelopes]]. 원자료 → [[robstride-datasheet]].
+
+## [2026-06-21] research | Agibot X2 발목/다리 actuation 재조사 (보강) → [[37_ankle_linkage_fidelity]]
+- 사용자 주장("roll직결+pitch 1:1 원격링크 = Agibot X2와 동일") 재확증. X2 자체는 기계 디테일 미공개 → 증거는 주로 X1 오픈소스 + X2-N 논문.
+- 신규: X1 BOM 확정(R86-2×9/R86-3×6/R52×10/**L28추杆×4**), L28=자체개발 선형 추杆 ~200g. X1 teardown(지후): 발목="拉杆구동 + 万向节 재사용", 모터 shank탑재, shank 304.94mm.
+- ★ 뉘앙스: X1 teardown은 발목 **양축 차동(2-rod)** ↔ 사용자/우리 sim·X2-N 논문은 **roll직결+pitch단일링크**. 사용자 설계는 X2-N 논문과 정합, X1 차동발목과는 상이(세대차 추정). X2 마케팅 "병렬 미사용"과 일관(추杆=직렬).
+- 출처: zhuanlan.zhihu.com/p/1895593089554436375 · zhiyuan-robot.com/DOCS/PM/PFL28 · github.com/AgibotTech/agibot_x1_hardware · zhuanlan.zhihu.com/p/1909304508170875310 · arxiv.org/html/2604.21541v1
