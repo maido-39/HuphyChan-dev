@@ -61,24 +61,22 @@ actuators:
     stiffness: 150.0
     damping: 6.5    # ★ HW-grounded: RS03 large-frame Kd<=100. ZETA=0.7 (was 5 -> ~0.53).
     armature: 0.0049
-  knee_rs04_direct:                  # ★ DIRECT RS04, NO external belt (was belt 1:2.5 -> reverted).
-                                     #   Data+research (w3spyyp5u): REAL RS04 T-N is TRAPEZOIDAL (flat 120
-                                     #   N*m to ~95rpm, not the linear model). Knee is SPEED-bound, not
-                                     #   torque-bound: torque-speed DECOUPLED (high tau@~0 speed, high
-                                     #   speed@~18 N*m). Knee runs <=66.7rpm (on the 120 plateau) + RMS tau
-                                     #   32 < continuous 40. Direct gives 200rpm no-load (huge speed margin
-                                     #   vs the belt's 80) + 1x reflected inertia (vs belt 6.25x) = best
-                                     #   impact compliance (HW survives). 1% impact transients (158>120) ->
-                                     #   knee YIELDS = good for soft landing. RE-MEASURE on soft_contact to
-                                     #   confirm converged knee tau <120; if not, small belt 1.3-1.5.
+  knee_rs04_belt15:                  # ★ RS04 + SMALL belt 1:1.5 (no space for direct; multi-condition data).
+                                     #   Flat: knee speed-bound, tau RMS 32 (direct would cover). BUT ROUGH
+                                     #   terrain DOUBLES knee torque (RMS 31->73, p95 58->125, max 184 N*m)!
+                                     #   vs REAL RS04 trapezoid (flat 120 to ~95rpm): belt 1.0=2.7% infeasible
+                                     #   (rough exceeds 120), belt 1.3=0.2%, belt 1.5=0.0% (covers all incl
+                                     #   rough p95 125). 2.5 was over-reduced (speed-cap 80rpm, inertia 6.25x).
+                                     #   1.5 = sweet spot: covers rough torque (180), speed ωmax 133rpm (2x
+                                     #   the masked ~67 demand), inertia 2.25x (vs 6.25). [speed still capped
+                                     #   in data -> re-measure with raised limit for the true speed ceiling.]
     type: motor
     joints: [".*_knee_joint"]
-    effort_limit: 120.0                # RS04 peak (output, post internal 9:1)
-    velocity_limit_rpm: 200.0          # RS04 no-load output
+    effort_limit: 180.0                # 1.5 x RS04 peak 120 (joint) -> covers rough p95 125 / max 184
+    velocity_limit_rpm: 133.0          # RS04 no-load 200rpm / 1.5
     stiffness: 200.0
-    damping: 11.0   # ZETA=0.71 (Kp 200, I_eff 0.3). Direct: joint_Kd = motor_Kd (no g² belt amp); RS04
-                    #   large-frame supports Kd<=100 so 11 is fine. (was floppy at 5 -> ZETA 0.32.)
-    armature: 0.0097   # RS04 internal 9:1 only -> rotor_I 1.2e-4 x 9^2 (no belt; was 0.0608 @ belt 2.5)
+    damping: 11.0   # ZETA=0.71 (Kp 200, I_eff 0.3). joint_Kd 11 = motor_Kd ~4.9 x belt 1.5^2 (RS04 Kd<=100).
+    armature: 0.0219   # RS04 9:1 x belt 1.5 = total G 13.5 -> rotor_I 1.2e-4 x 13.5^2 (was 0.0097 direct)
   ankle_pitch_rs03:                  # RS03 DIRECT motor on the joint axis (NOT a rod/linkage)
     type: motor
     joints: [".*_ankle_pitch_joint"]
