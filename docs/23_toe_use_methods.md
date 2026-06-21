@@ -1,0 +1,35 @@
+# 23 · Toe를 쓰게 하는 법 — 산업계 + 최신 논문 + Trial-and-Error 계획 (wljkv3uu8)
+
+> [!question] 질문: Optimus/Figure 등 대기업은 toe를 어떻게 쓰나? 최신 논문은? → 가설 세워 실제 적용(trial-and-error).
+
+## 한 줄 결론
+**우리 하드웨어(수동 toe + 능동 발목)는 Optimus/Asimov와 정확히 일치 = 산업 표준**(toe 모터 추가 X). **수동 toe에 직접 보상한 RL 논문은 없음 = 우리가 학계 최전선(발표 가능).** toe는 **간접 적재** — 종말기에 CoP/접촉을 앞발로 굴려야 함. → **H1(종말-단일지지 forefoot-load 보상) + H6(power-CoT)** 먼저 시도.
+
+## ① 산업계 (Optimus/Figure/Atlas/Unitree/Figure/Apollo/1X/Sanctuary)
+- **전원 toe 모터 없음** — 전 업계가 능동 toe를 mass/복잡도/제어부담 대비 toe-off 이득이 작다고 **거부**. **우리의 수동-toe·능동-발목 설계 = 지배적·검증된 산업 선택. toe 모터 추가하지 말 것.**
+- **Tesla Optimus Gen2 / Asimov(Menlo)** = 우리와 거의 동일(2-DOF 능동 발목 + 수동 sprung toe, 제어 밖).
+- **toe는 간접 적재**: ① Atlas(강체발)는 whole-body 제어가 발 pitch를 **미구속**하고 종말기에 **CoP를 앞발로 이동** → toe-off 창발. 우리 forefoot-rollover 보상이 그 RL 대응 = **정답 메커니즘**. ② **rocker/forefoot 기하**가 굴림을 가능케 함 — **우리 robot.xml에 별도 forefoot(L/R_toe_link + 콜리전 geom)이 이미 있음(검증됨) = 기하는 장애 아님.** ③ k=60(1.05 N·m/deg) = 인간 최적(~56).
+
+## ② 최신 논문 (state-of-the-art)
+- **수동 toe 스프링을 직접 보상한 휴머노이드 RL 논문 = 없음** → 우리가 frontier.
+- **heel-to-toe 굴림은 거의 전부 인간 모션 모방으로** 달성: [Adam (AMP, arXiv 2402.18294)](https://arxiv.org/html/2402.18294v4) 유일 시연(단 toe DOF 없음, 굴림은 발목 운동학·정성적 사진뿐), [GMP (CVAE prior, 2503.09015)](https://arxiv.org/html/2503.09015v1) 안정적 후속.
+- **수동 발 스프링 적재는 사족에서 에너지/CoT 보상으로 해결**(우리 stage-3 확증): [Compliant-feet quadruped (2605.14411)](https://arxiv.org/html/2605.14411) — "스프링 적재" 항 없이 토크/에너지 페널티만으로 적재, **중간 강성 최적**. 수동요소는 **에너지항으로만 간접 적재**.
+- **우리의 빈 primitive(기회)**: 에너지/CoT항 + **CoP를 종말기에 앞발로 강제하는 공간 제약** → 부하가 무릎이 아니라 toe로. 도구: [CoP/ZMP-progression 보상 (2509.09106)](https://arxiv.org/pdf/2509.09106), [Siekmann 주기클록 (2011.01387)](https://arxiv.org/abs/2011.01387)을 **sub-foot(heel 초기·forefoot 종말)로 확장**.
+
+## ③ Trial-and-Error 계획 (랭크) — 빠른 실험 루프
+| # | 가설 | 방법(핵심) | 검증 메트릭 |
+|---|---|---|---|
+| **H1** ★먼저 | 종말-단일지지 **forefoot-load** 보상 | `toe_load_stance` 업그레이드: \|τ_toe\| 보상, **(접지)∧(반대발 swing)∧(종말)∧(전진)** 게이트(static curl 방지). w+0.3-0.5, τ_ref 27 | toe-load% 6-26%→40-70%, **GRF 2차피크**, ankle τ↓, CoT 유지, 추종 −<5% |
+| **H6** ★H1과 함께 | vel-norm **power-CoT**(효율 곱셈) | `power_cot`(존재): exp(−scale·Σ\|τω\|/(σ\|v\|+ε)), 정지 비최적. w+0.5-1.0, scale 0.003 | CoT↓, toe-load는 H1과 결합시만↑ |
+| H3 | 발 pitch/**heel-rise** shaping(운동학 원인) | 종말-단일지지서 stance발 toe-down pitch 보상(H1 static-curl 방지) | heel-rise·toe-load 동반↑ |
+| H2 | Siekmann 클록 + **sub-foot CoP** 스케줄 | obs에 위상클록 추가 + heel→toe CoP 이동 보상 | CoP_x 단조, GRF 2차피크 |
+| H4 | 인간 heel-to-toe **레퍼런스 모방**(발목 미추종) | 인간 보행 retarget, hip/knee 모방·**발목 약하게** → toe 자가적재 | 모방오차, GRF 2차피크 |
+| H5 | **AMP** 인간 스타일(최후) | discriminator 스타일 보상 + H1 anchor | discriminator, toe-load% |
+
+**먼저 = H1 + H6** (+ H3 저렴하면): 함수 이미 존재(`rewards.py`), obs 불변 → **flat 정책서 warm-start**, 가장 싼 루프. **static toe-curl 게이트 필수.** [[19_toe_ablation]]로 검증.
+
+## 출처
+- [산업계 active vs passive toe 논쟁](https://www.humanoidsdaily.com/news/stepping-forward-the-debate-over-active-vs-passive-toes-in-humanoid-robotics) · [Menlo/Asimov 다리 설계(우리 51.8kg급 일치)](https://menlo.ai/blog/humanoid-legs-100-days) · [Atlas CoP-forward toe-off (1709.03660)](https://arxiv.org/pdf/1709.03660)
+- [Adam AMP heel-to-toe (2402.18294)](https://arxiv.org/html/2402.18294v4) · [GMP (2503.09015)](https://arxiv.org/html/2503.09015v1) · [Compliant-feet quadruped (2605.14411)](https://arxiv.org/html/2605.14411) · [CoP/ZMP RL (2509.09106)](https://arxiv.org/pdf/2509.09106) · [Siekmann (2011.01387)](https://arxiv.org/abs/2011.01387)
+
+관련: [[17_toe_usage_vibration]] · [[22_energy_toe_reward]] · [[19_toe_ablation]] · [[Paperreview/siekmann-periodic-reward]] · [[18_research_roadmap]]

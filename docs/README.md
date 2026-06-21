@@ -37,7 +37,8 @@
 21. [[20_fusion360_isaaclab]] — Fusion360 → URDF/MJCF → USD 연동 + 함정 체크리스트
 22. [[21_motor_power_weight]] — 모터/감속비·부위별 W·무게/페이로드 민감도 (HW 사양)
 23. [[22_energy_toe_reward]] — 에너지/토크 reward로 toe 적재+발목 offload (★순수에너지론 toe 안실림, 레시피)
-24. [[99_troubleshooting]] — 문제·해결 로그
+24. [[23_toe_use_methods]] — toe 사용법: 산업계(Optimus/Asimov 일치)+최신논문+trial plan(H1 forefoot-load 먼저)
+25. [[99_troubleshooting]] — 문제·해결 로그
 - [[Paperreview/INDEX]] — 핵심 논문 리뷰 색인 (커리큘럼·주기보상·toe·액션평활·강성)
 - [[experiments/INDEX]] — 학습 실험 대장 (trial-and-error 전부)
 - [[RESUME]] — 현재 상태 & 재개 지점 (재부팅 대비)

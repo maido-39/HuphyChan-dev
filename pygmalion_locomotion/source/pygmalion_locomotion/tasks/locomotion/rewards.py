@@ -40,15 +40,26 @@ def power_cot(env, asset_cfg: SceneEntityCfg, command_name: str = "base_velocity
 
 
 def toe_load_stance(env, toe_cfg: SceneEntityCfg, sensor_cfg: SceneEntityCfg,
-                    tau_ref: float = 15.0, contact_thresh: float = 5.0):
-    """Reward loading the passive toe while its foot is in contact. [num_envs] (sum over feet, ~[0,2]).
-
-    toe_cfg selects the two toe joints; sensor_cfg selects the matching foot contact bodies in the SAME
-    L,R order (verify in a config-test). load = clamp(|tau_toe|/tau_ref, 0,1) gated on foot contact."""
+                    tau_ref: float = 27.0, contact_thresh: float = 5.0, late_time: float = 0.15):
+    """H1 (toe-use research wljkv3uu8): reward loading the passive toe at LATE SINGLE SUPPORT — the only
+    direct gradient onto the forefoot, since the toe is passive and a power term alone offloads to the
+    KNEE (stage-3). The late-single-support gate is NON-NEGOTIABLE: it prevents the static toe-curl
+    degeneracy (pressing toes down without rolling). Per foot, reward clamp(|tau_toe|/tau_ref, 0,1) when:
+      (this foot in contact) AND (other foot in swing = single support) AND (base moving forward)
+      AND (contact age > late_time, i.e. terminal stance — used if the sensor tracks air time).
+    toe_cfg selects the two toe joints, sensor_cfg the matching foot bodies in the SAME L,R order
+    (verify in a config-test). Returns [num_envs] (~[0,2])."""
     asset = env.scene[toe_cfg.name]
-    tau_toe = torch.abs(asset.data.applied_torque[:, toe_cfg.joint_ids])          # [E, nfoot]
+    tau_toe = torch.abs(asset.data.applied_torque[:, toe_cfg.joint_ids])          # [E, nfoot] (L,R)
     sensor = env.scene.sensors[sensor_cfg.name]
     f = sensor.data.net_forces_w[:, sensor_cfg.body_ids, :]                        # [E, nfoot, 3]
-    in_contact = (torch.norm(f, dim=-1) > contact_thresh).float()                 # [E, nfoot]
+    in_contact = torch.norm(f, dim=-1) > contact_thresh                           # [E, nfoot] bool
+    other_swing = ~in_contact[:, [1, 0]]                                          # other foot not in contact
+    fwd = (asset.data.root_lin_vel_b[:, 0] > 0.0).unsqueeze(1)                    # [E, 1] forward progress
+    try:  # terminal-stance gate (needs track_air_time); fall back to single-support if unavailable
+        late = sensor.data.current_contact_time[:, sensor_cfg.body_ids] > late_time
+    except Exception:  # noqa: BLE001
+        late = torch.ones_like(in_contact)
+    gate = (in_contact & other_swing & late & fwd).float()                        # [E, nfoot]
     load = torch.clamp(tau_toe / tau_ref, max=1.0)                                # [E, nfoot]
-    return torch.sum(load * in_contact, dim=1)
+    return torch.sum(load * gate, dim=1)
