@@ -3,7 +3,7 @@
 > 형식 `## [YYYY-MM-DD] <kind> | <제목> → <페이지>`. kind = research / experiment / decision / fix. 매 ingest마다 append([[SCHEMA]]). 최신이 위.
 
 ## [2026-06-21] decision | LLM Wiki(Karpathy) 채택 → [[SCHEMA]] · [[index]] · [[log]] · [[raw/README]] + lint_docs.sh
-## [2026-06-21] research | knee biomechanics 학술조사(wsx14ecd0, ROM/과신전·gait·screw-home·로봇설계) → [[30_knee_biomechanics]] (작성 예정)
+## [2026-06-21] research | knee biomechanics 학술조사(wsx14ecd0) — ★ live spec엔 이미 flexed nominal(knee −22.9°); 과신전+10°/L-R 비대칭은 결함 → [[30_knee_biomechanics]] · [[raw/knee-biomechanics]]
 ## [2026-06-21] research | passive-toe 자연gait deep(w3g1xw9oq, reward레시피·HW·toe효율·둥근뒤꿈치) → [[29_natural_gait_reward_hw]]
 ## [2026-06-21] experiment | forefoot_pushoff2 (Kuo push-off w0.5/scale0.02/cap80, 해킹수정) → [[experiments/2026-06-21_16-30-58_forefoot_pushoff2_monitor]]
 ## [2026-06-21] fix | push-off reward-hacking(scale0.1→0.02+cap) + 영상 로봇수(env_spacing 8→15+origin_env, 프레임검증) + debugging loop verify_run.sh

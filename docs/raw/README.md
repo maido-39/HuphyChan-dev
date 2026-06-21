@@ -18,5 +18,6 @@
 ## 현재 raw
 - [[raw/kuo-canon-numbers]] — Kuo/Donelan/Ruina dynamic-walking 검증 수치
 - [[raw/robstride-datasheet]] — RobStride 액추에이터 스펙(공식 PDF)
+- [[raw/knee-biomechanics]] — 무릎 ROM/과신전·gait·screw-home·로봇관례 검증
 
 (이후 연구는 ingest 워크플로우대로 여기에 추가.)
