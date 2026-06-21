@@ -212,16 +212,18 @@ def main():
         md += ["- 정성 해석 **[작성 필요]**: noise_std 추세(↓수렴/↑탐색)·value loss·낙상률·error_vel로 "
                "*학습이 잘 됐나* + *다음 튜닝*(예: 미수렴이면 iter↑/지형커리큘럼/명령범위↓).", ""]
 
+    motor_sec = []   # ## 7 (사후 추가, 끝에 배치) — built here, appended after §6
     if motor_pngs:
-        cap = {"torque": "관절 토크 avg/max vs rated/peak 가로선 + 포화%",
-               "speed": "관절 속도 avg/max vs 속도한계 가로선 + 포화%",
+        cap = {"torque": "관절 토크 RMS/p95/MAX vs rated(연속/열)·peak 가로선 + 포화%",
+               "speed": "관절 속도 RMS/p95/MAX(rpm) vs 속도한계 가로선 + 포화%",
                "torque_ts": "관절 토크 시계열 (시간에 따른 토크 활용, peak/rated 선)",
                "speed_ts": "관절 속도 시계열 (시간에 따른 속도 활용, limit 선)"}
-        md += ["## 2d. 모터 활용 시각화 (토크·속도: avg/max·스펙선·포화%·시계열)"]
+        motor_sec += ["## 7. 모터 활용 시각화 (사후 — 토크·속도 RMS/p95/peak·스펙선·포화%·시계열)",
+                      "*스펙선(rated/peak/velocity-limit)은 이 run의 config(감속비·effort/vel)에서 자동.*", ""]
         for suf, p in motor_pngs:
-            md += [f"**{cap.get(suf, suf)}**", f"![{suf}](assets/{os.path.basename(p)})", ""]
-        md += ["- 정량 해석 **[작성 필요]**: 포화 top 관절(토크/속도 %) + 시계열의 피크 타이밍·L/R 비대칭 "
-               "→ 어느 모터를 키우고/감속비를 바꿀지(HW 사이징).", ""]
+            motor_sec += [f"**{cap.get(suf, suf)}**", f"![{suf}](assets/{os.path.basename(p)})", ""]
+        motor_sec += ["- 정량 해석 **[작성 필요]**: 포화 top 관절(토크/속도 %) — ★ **RMS%rated(연속/열) · p95%peak(지속) · "
+                      "max%peak(순시) 따로** 판정 + 시계열 피크 타이밍·L/R 비대칭 → 어느 모터 키우고/감속비 바꿀지(HW 사이징).", ""]
 
     # mid-training monitoring log (accumulated per-snapshot reviews) -> fold into the final report
     monitor_p = os.path.join(args.out, f"{name}_monitor.md")
@@ -281,6 +283,8 @@ def main():
            "## 6. 관련 학습 / 연구 링크  **[작성 필요]**",
            "- 관련 run: [[experiments/<run>]] — *어떤 관계, 무엇을 바꿨고 왜*.",
            "- 활용 연구: [[Paperreview/<slug>]] / docs/16·17·18 — *어떤 결정에 썼는지*.", ""]
+
+    md += motor_sec   # ★ §7 motor-util at the END (사후 추가; populated only when --measure_npz was given)
 
     outp = os.path.join(args.out, f"{name}.md")
     open(outp, "w").write("\n".join(md) + "\n")
