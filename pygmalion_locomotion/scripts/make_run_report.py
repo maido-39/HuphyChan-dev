@@ -223,6 +223,13 @@ def main():
         md += ["- 정량 해석 **[작성 필요]**: 포화 top 관절(토크/속도 %) + 시계열의 피크 타이밍·L/R 비대칭 "
                "→ 어느 모터를 키우고/감속비를 바꿀지(HW 사이징).", ""]
 
+    # mid-training monitoring log (accumulated per-snapshot reviews) -> fold into the final report
+    monitor_p = os.path.join(args.out, f"{name}_monitor.md")
+    if os.path.exists(monitor_p):
+        md += ["## 2e. 모니터링 로그 (중간검토 누적)", f"*원본*: `{os.path.relpath(monitor_p, ROOT)}`", ""]
+        md += [ln for ln in open(monitor_p).read().splitlines() if not ln.startswith("# ")]
+        md += [""]
+
     md += ["## 3. 영상 / 이미지"]
     if videos:
         md.append(f"- 학습 영상 {len(videos)}개: `{os.path.relpath(os.path.dirname(videos[0]), ROOT)}/` (예: {os.path.basename(videos[0])} … {os.path.basename(videos[-1])})")
