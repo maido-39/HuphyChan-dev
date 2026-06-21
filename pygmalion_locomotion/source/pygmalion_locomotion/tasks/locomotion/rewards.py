@@ -138,3 +138,34 @@ def ankle_pushoff_work(env, ankle_cfg: SceneEntityCfg, sensor_cfg: SceneEntityCf
         late = torch.ones_like(in_contact)
     gate = (in_contact & other_swing & late & fwd).float()
     return torch.sum(pushoff * gate, dim=1) * scale
+
+
+def foot_impact_force(env, sensor_cfg: SceneEntityCfg, force_soft: float = 700.0, cap_over: float = 1500.0):
+    """★ HW-SURVIVAL penalty: punish the foot contact-force MAGNITUDE above a soft limit. Our hardware is
+    3D-printed + partial aluminium; the MEASURED heel-strike spikes (1.5-2.7 kN ~ 3-5x body weight, see the
+    forefoot_cop GRF analysis) would DESTROY it. Only the EXCESS over `force_soft` is penalised (clamped at
+    `cap_over` so a single PhysX solver mega-spike can't blow the gradient), so normal ~bodyweight stance
+    contact is FREE and only the hard impacts are punished -> drives peak GRF toward human walking
+    (~1.1-1.3x BW ~= 560-660 N here). sensor_cfg = foot bodies. NEGATIVE weight. Returns [num_envs]."""
+    sensor = env.scene.sensors[sensor_cfg.name]
+    f = sensor.data.net_forces_w[:, sensor_cfg.body_ids, :]                        # [E, nfoot, 3]
+    fmag = torch.norm(f, dim=-1)                                                   # [E, nfoot] |F|
+    over = torch.clamp(fmag - force_soft, min=0.0, max=cap_over)
+    return torch.sum(over, dim=1)                                                  # penalty (neg weight)
+
+
+def foot_landing_vel(env, asset_cfg: SceneEntityCfg, height_thresh: float = 0.12):
+    """★ Soft-landing penalty (targets the CAUSE of the impact / STRUCTURAL-load spike): punish the foot's
+    DOWNWARD speed whenever the foot is NEAR THE GROUND (world height < height_thresh) = the descent into
+    touchdown. A planted foot has vz~0 so steady stance is FREE; a fast slam-down is punished -> the policy
+    approaches the ground slowly and rolls instead of stomping, which drops BOTH the ground force AND the
+    link-reaction wrench (the measured 1.5-2.7 kN is the LINK wrench = the real HW-breaking structural load,
+    LARGER than the contact sensor reads -> penalising landing VELOCITY is the reliable, sensor-scale-free
+    lever). Height-gated (NOT contact-gated: by the time contact registers the slam is already over).
+    asset_cfg = foot bodies. NEGATIVE weight. Returns [num_envs]."""
+    asset = env.scene[asset_cfg.name]
+    vz = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, 2]                       # [E, nfoot] vertical vel
+    pz = asset.data.body_pos_w[:, asset_cfg.body_ids, 2]                           # [E, nfoot] foot world height
+    down = torch.clamp(-vz, min=0.0)                                               # downward speed [m/s]
+    near = (pz < height_thresh).float()                                            # near/at the ground
+    return torch.sum(down * near, dim=1)                                           # penalty (neg weight)

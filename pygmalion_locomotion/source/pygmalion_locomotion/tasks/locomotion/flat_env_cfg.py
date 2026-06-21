@@ -96,3 +96,18 @@ class BipedFlatForefootEnvCfg(BipedFlatEnvCfg):
             params={"ankle_cfg": SceneEntityCfg("robot", joint_names=".*_ankle_pitch_joint"),
                     "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
                     "contact_thresh": 8.0, "late_time": 0.15, "scale": 0.02, "cap": 80.0})
+        # ★ HW-SURVIVAL + 충격 (user): 3D-print+Al breaks at ~1.5kN; MEASURED heel-strike spikes were
+        #   1.5-2.7kN (~3-5x BW). Penalise foot contact force ABOVE 800N (~1.6x BW) -> only the hard
+        #   spikes are punished (normal ~bodyweight stance is FREE), driving peak GRF toward human walking
+        #   (~1.2x BW). + soft-landing penalty on downward foot speed at touchdown (the CAUSE of the spike).
+        #   Energy stays via power_cot (w0.4). Warm-start from a walking policy so it fine-tunes to land soft.
+        # PRIMARY lever = soft landing (penalise foot downward speed near the ground = the CAUSE of the
+        #   impact, robust to the contact-sensor scale). SECONDARY = contact-force soft-cap (650N).
+        self.rewards.foot_landing_vel = RewTerm(
+            func=pyg_rewards.foot_landing_vel, weight=-2.0,
+            params={"asset_cfg": SceneEntityCfg("robot", body_names=".*_foot_link"),
+                    "height_thresh": 0.12})
+        self.rewards.foot_impact_force = RewTerm(
+            func=pyg_rewards.foot_impact_force, weight=-0.01,
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
+                    "force_soft": 650.0, "cap_over": 1500.0})
