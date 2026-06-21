@@ -125,4 +125,42 @@ toe_a/b 푸시로드 체인: link 0.031 + ball 0.057 + loop 0.006 (×2)
 
 신규 출처: X1 teardown https://zhuanlan.zhihu.com/p/1895593089554436375 · L28 추杆 https://www.zhiyuan-robot.com/DOCS/PM/PFL28 · X1 하드웨어 BOM/STEP https://github.com/AgibotTech/agibot_x1_hardware · X2 상세 https://zhuanlan.zhihu.com/p/1909304508170875310
 
-관련: [[36_all_actuator_tn_envelopes]] · [[30_knee_biomechanics]] · [[17_toe_usage_vibration]] · [[31_humanoid_hw_comparison]]
+## ★ ankle_pitch 링크 설계안 도출 (사용자: 설계 미확정, "안까지 도출" — 데이터 기반, 2026-06-22)
+
+### 실측: 두 발목 다 포화 (flat sweep_g2p0, joint-side)
+| 관절 | 모터 | tau RMS/p95/max | %연속 | %peak | 속도 | 판정 |
+|---|---|---|---|---|---|---|
+| hip_pitch | RS04 | 16.8/32/96 | 42% | 80% | 42rpm | ✅ |
+| hip_roll | RS04 | 27.9/51/93 | 70% | 78% | 30rpm | ✅ |
+| hip_yaw | RS03 | 6.6/14/49 | 33% | 82% | 43rpm | ✅ |
+| **ankle_pitch** | RS03(링크) | 25.6/50/**60** | **128%** | **100%** | 91rpm(46%) | ❌ **포화·열과부하·토크bound** |
+| **ankle_roll** | RS00(직결) | 5.7/14/**14** | **114%** | **100%** | 142rpm | ❌ **포화·열과부하** |
+
+→ ★ **두 발목이 binding**(hip은 OK). ankle_pitch = **토크-bound**(토크 100%포화·속도 46%만) → **속도여유를 토크로 바꿀 수 있음**(=링크 감속의 기회).
+
+### "로드 길이 70-80% 종아리" — ★ 크게 영향 안 줌
+로드 길이는 (a) 모터 위치(근위=낮은 distal 관성, 좋음) (b) 좌굴만 좌우. **로드 힘·전달비는 *레버암*이 결정**(로드 길이 아님). 0.24m(0.8×종아리304mm) 로드 + 1.5kN 압축 → 좌굴 SF2.5에 **Al Ø~9mm**(또는 steel Ø6 / CF 튜브)면 충분 → **70-80%는 그대로 OK**. (로드 가늘게 유지됨.)
+
+### ★ 설계 핵심 = 레버암 2개 (로드 힘 + 전달비)
+- **r_m (모터측 레버암)** → 로드 힘 `F = τ_motor / r_m`. HW 파손 1.5-2.7kN → 마진 위해 **F ≤ 1.3-1.5kN** → RS03 peak 60N·m서 **r_m ≥ 40-45mm**.
+- **N = r_a/r_m (전달비)** → `ankle토크 = N×60`, `ankle속도 = motor/N`. (1:1=N1; ★ **링크로 *무료* 감속 가능 — 직결 ankle_roll엔 없는 이점**.)
+
+### ★ 권고: ankle_pitch에 링크 감속 **N ≈ 1.5** (RS03 유지, 기어박스 불필요)
+ankle_pitch가 토크-포화+속도여유 → 레버암비로 감속이 정답:
+| N | r_m/r_a(mm) | ankle peak | ankle 무부하 | motor RMS(=25.6/N) | 로드힘@60 | 판정 |
+|---|---|---|---|---|---|---|
+| 1.0(1:1) | 45/45 | 60 | 200rpm | 25.6 (>20 ❌열) | 1330N | 포화·열과부하 |
+| **1.5** | 45/68 | **90** | 133rpm | **17 (<20 ✅)** | 1330N | ★ peak·열 둘다 해소 |
+| 2.0 | 45/90 | 120 | 100rpm | 12.8 | 1330N | 토크과잉·속도빡빡·r_a큼 |
+- **N=1.5**: ankle peak 90(포화 해소)·**motor RMS 17 < 20 연속(열 OK)**·속도 91rpm→motor 137rpm(<200 OK)·로드힘 1.3kN(HW안전). 단 **r_a 68mm = 패키징 검토** 필요.
+- r_a 부담 시: N=1.25(r_a 56, motor RMS 20.5≈연속 경계) 또는 모터 상향(RS04 → +540g, 단 링크라 종아리 탑재).
+
+### ankle_roll (RS00, 직결)은 링크 escape 없음
+직결이라 레버암 감속 불가 → **모터 상향(RS01/02, 연속 6도 빡빡) 또는 demand 저감**([[36_all_actuator_tn_envelopes]]). **링크 ankle_pitch가 유리**(무료 감속)한 게 대비됨 — 향후 ankle_roll도 링크화 고려 가치.
+
+### 캐비엇 (확정 전)
+- 포화는 **push-off 보상이 일부 유도**(단 push-off는 의도된 자연 gait → demand 실재).
+- **circularity**: N 바꾸면 정책 재적응 → 엄밀히는 **ankle 링크비 sweep**(무릎처럼)이 refine. 현 데이터는 **N=1.5 출발점**.
+- ★ **rough+DR이 발목 demand 더 키움(~2배)** → 감속 필요성 *강화* → **rough sweep 후 최종 확정**.
+
+관련: [[36_all_actuator_tn_envelopes]] · [[30_knee_biomechanics]] · [[17_toe_usage_vibration]] · [[31_humanoid_hw_comparison]] · [[35_knee_gear_ratio_analysis]]
