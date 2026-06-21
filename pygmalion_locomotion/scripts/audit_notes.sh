@@ -37,6 +37,21 @@ for p in docs/assets/*.png; do
   g="$g\n  - plot '$n': 어떤 노트에도 미임베딩 (분석 노트에 ![](assets/$n) 추가)"
 done
 
+# (4) substantial TRAINING runs with NO in-training VIDEO (--no_video used -> gait 디버깅 불가; user rule:
+#     항상 영상 ON, FLAT=밀도유지 / ROUGH=spacing조정해 로봇 분간). accumulate 또는 train clip 둘 다 없으면 flag.
+for d in pygmalion_locomotion/logs/rsl_rl/*/*/; do
+  [ -d "$d" ] || continue
+  run=$(basename "$d")
+  [ -f docs/experiments/.audit_skip ] && grep -qFf docs/experiments/.audit_skip <<<"$run" 2>/dev/null && continue
+  l=$(ls "$d"model_*.pt 2>/dev/null | sed 's/.*model_//; s/\.pt//' | sort -n | tail -1)
+  [ -z "$l" ] && continue
+  [ "$l" -lt 500 ] 2>/dev/null && continue
+  [ -n "$(find "$d" -maxdepth 1 -name 'model_*.pt' -mmin -5 2>/dev/null)" ] && continue
+  [ -f "${d}videos/accumulated_progress.mp4" ] && continue
+  ls "${d}videos/train/"*.mp4 >/dev/null 2>&1 && continue
+  g="$g\n  - run '$run' (iter $l): NO in-training VIDEO (--no_video?) -> 영상 없이 gait 디버깅 불가. 재학습(영상ON) 또는 play영상 생성 후 노트 임베딩"
+done
+
 if [ -n "$g" ]; then
   printf "★★ NOTE-AUDIT BLOCK — 미기록 실험/분석이 있습니다. 종료 전 노트화하세요 (feedback-training-report-rule / feedback-research-recording-rule):%b\n(진짜 끝내려면: 노트를 만들거나, config-test면 무시 가능 — 단 반복 누락은 사용자가 싫어함)\n" "$g" >&2
   exit 2
