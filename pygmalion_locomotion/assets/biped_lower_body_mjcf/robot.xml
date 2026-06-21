@@ -5,7 +5,7 @@
   </option>
   <default>
     <joint limited="true" armature="0.01" damping="0.5" frictionloss="0.1" />
-    <geom condim="3" contype="1" conaffinity="0" friction="1.0 0.005 0.0001" />
+    <geom condim="3" contype="1" conaffinity="1" friction="1.0 0.005 0.0001" />
     <default class="rs04">
       <joint armature="0.0097" damping="1.0" frictionloss="0.3" />
     </default>

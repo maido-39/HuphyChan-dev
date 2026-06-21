@@ -5,3 +5,8 @@ _test
 _configtest
 _cfgtest
 vidtest
+# superseded (broken-gait + no-video; re-run after gait fix 2026-06-22):
+2026-06-21_22-30-15_sweep_g1p0
+2026-06-21_23-01-44_sweep_g1p5
+2026-06-21_23-38-32_sweep_g2p0
+2026-06-22_00-07-58_sweep_g2p5

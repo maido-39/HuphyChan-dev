@@ -169,3 +169,44 @@ def foot_landing_vel(env, asset_cfg: SceneEntityCfg, height_thresh: float = 0.12
     down = torch.clamp(-vz, min=0.0)                                               # downward speed [m/s]
     near = (pz < height_thresh).float()                                            # near/at the ground
     return torch.sum(down * near, dim=1)                                           # penalty (neg weight)
+
+
+# ===================================================================================================
+# GAIT-FIDELITY fixes (user 2026-06-22, after auditing the close-up video): the policy scissors its legs,
+# walks on the FOOT EDGE (-> ankle_roll overload), and straightens the knee (0..-10deg) -> infeasible /
+# unstable motion. These three terms penalize those failure modes. NEGATIVE weights. Tune in a config-test.
+# ===================================================================================================
+def feet_lateral_separation(env, asset_cfg: SceneEntityCfg, min_lat: float = 0.14):
+    """★ Anti-CROSS: legs scissor while walking. feet_distance_l1 uses the EUCLIDEAN gap, which a crossing
+    gait satisfies via a fore-aft offset while the feet pass laterally. This penalizes the LATERAL (base-frame
+    y) gap dropping below min_lat (or crossing). asset_cfg = the two foot bodies. NEG weight. [num_envs]."""
+    from isaaclab.utils.math import quat_rotate_inverse
+    asset = env.scene[asset_cfg.name]
+    fids = asset_cfg.body_ids
+    rel = asset.data.body_pos_w[:, fids, :] - asset.data.root_pos_w[:, None, :]    # [E, 2, 3] world
+    q = asset.data.root_quat_w
+    rel_b = torch.stack([quat_rotate_inverse(q, rel[:, i, :]) for i in range(rel.shape[1])], dim=1)  # base frame
+    gap = torch.abs(rel_b[:, 0, 1] - rel_b[:, 1, 1])                               # lateral (y) distance
+    return torch.relu(min_lat - gap)                                              # >0 when too close / crossed
+
+
+def foot_roll_flat(env, asset_cfg: SceneEntityCfg):
+    """★ FOOT-FLATNESS: the policy walks on the foot EDGE -> lateral CoP -> ankle_roll OVERLOAD (user
+    hypothesis). Penalize the ankle_ROLL joint deviating from flat (default 0): a flat foot has roll~0; the
+    lateral edge deflects it. Keeping the foot flat removes edge contact -> should DROP the roll torque
+    (tests whether the roll saturation is a GAIT artifact, not a HW need). asset_cfg = ankle_roll joints.
+    NEG weight. [num_envs]."""
+    asset = env.scene[asset_cfg.name]
+    q = asset.data.joint_pos[:, asset_cfg.joint_ids]                               # [E, 2] ankle_roll angles
+    return torch.sum(q ** 2, dim=1)                                               # penalty (neg weight)
+
+
+def knee_straight_penalty(env, asset_cfg: SceneEntityCfg, min_flexion: float = -0.17):
+    """★ Penalize the knee TOO STRAIGHT (knee 0..-10deg during walking = unstable). Knee nominal is FLEXED
+    (~-0.40 rad); more-negative = more flexed. Penalty grows when the knee is LESS flexed than min_flexion
+    (-0.17 rad ~= -10deg), incl. hyperextension. asset_cfg = knee joints. NEG weight. [num_envs].
+    NOTE: assumes more-negative = more flexed (matches init -0.40); verify the knee-angle sign in config-test."""
+    asset = env.scene[asset_cfg.name]
+    q = asset.data.joint_pos[:, asset_cfg.joint_ids]                               # [E, 2] knee angles
+    over = torch.relu(q - min_flexion)                                            # >0 when straighter than min
+    return torch.sum(over ** 2, dim=1)                                            # penalty (neg weight)

@@ -23,6 +23,7 @@ from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import (
 
 from ...robots.biped_cfg import BIPED_CFG, ROLES, SPEC
 from . import mdp
+from . import rewards as pyg_rewards
 from .curriculums import command_lin_vel_x_levels
 
 # ---- spec-derived name groups (single source of truth = robot spec YAML) ----
@@ -220,7 +221,23 @@ class BipedRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.ang_vel_xy_l2.weight = -0.05
         self.rewards.flat_orientation_l2.weight = -1.0
         self.rewards.action_rate_l2.weight = -0.008  # ★ slightly stronger 1st-order action smoothness
-        self.rewards.undesired_contacts = None
+        # ★ GAIT-FIDELITY fixes (user 2026-06-22 close-up video audit): legs SCISSOR, foot-EDGE walking
+        #   (-> ankle_roll OVERLOAD), knee 0..-10deg (unstable). Re-enable thigh/shin contact penalty +
+        #   add lateral-cross, foot-flatness, knee-straight penalties. Tune weights in a config-test.
+        self.rewards.undesired_contacts = RewTerm(
+            func=mdp.undesired_contacts, weight=-1.0,
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=UNDESIRED_BODIES), "threshold": 1.0})
+        self.rewards.feet_distance.weight = -3.0
+        self.rewards.feet_distance.params["min_dist"] = 0.20
+        self.rewards.feet_lateral_sep = RewTerm(   # anti-cross the euclidean feet_distance misses
+            func=pyg_rewards.feet_lateral_separation, weight=-3.0,
+            params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY), "min_lat": 0.14})
+        self.rewards.foot_roll_flat = RewTerm(     # ★ keep foot FLAT -> no edge -> drop ankle_roll torque
+            func=pyg_rewards.foot_roll_flat, weight=-0.5,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_roll_joint"])})
+        self.rewards.knee_straight = RewTerm(      # no knee 0..-10deg (keep flexed)
+            func=pyg_rewards.knee_straight_penalty, weight=-5.0,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_knee_joint"]), "min_flexion": -0.17})
         self.rewards.dof_acc_l2.weight = -1.25e-7
         # ★ FOOT VIBRATION FIX (rank-1, research wuq4tvpfa): regularize ALL actuated joints incl. the
         #   ANKLES (were excluded -> ankle/toe had ZERO accel penalty -> high-freq buzz, confirmed in
