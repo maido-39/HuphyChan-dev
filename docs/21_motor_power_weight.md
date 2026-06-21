@@ -79,4 +79,17 @@ DESIGN GUIDANCE TO REPORT: place the ~10 kg payload HIGH and CENTERED near torso
 - [LinearMotionTips -- why RMS torque matters for motor sizing (T_rms formula, thermal-equivalent continuous sizing)](https://www.linearmotiontips.com/why-rms-torque-is-important-for-motor-sizing/) — _power_weight_
 - [Grabowski, Farley, Kram 2005 -- independent metabolic costs of supporting body weight vs accelerating mass (~28% is body-weight support)](https://journals.physiology.org/doi/full/10.1152/japplphysiol.00734.2004) — _power_weight_
 
+## 연결부 / 링크 구조하중 (6축 wrench → 강도 사양) — Theme 1.3
+> `analyze_link_loads.py` (stage-4 rough 최악부하). 각 링크의 조인트 반력 6축 wrench(Fx,Fy,Fz,Tx,Ty,Tz)를 **결합력 |F|·결합모멘트 |M|**로 환산 = 그 **연결부**(하우징·볼트패턴·베어링·링크단면)가 견뎌야 할 하중.
+
+![연결부 구조하중](assets/stage4_rough_link_loads.png)
+
+**핵심 (rough 최악부하)**:
+- **힘-임계 연결부**: foot / ankle_pitch / shin = **peak |F| ~6600 N** (~13× 체중, 대부분 **축방향 Fz=착지충격**) → 강한 축/베어링 용량·볼트 전단 필요.
+- **모멘트-임계 연결부**: **shin = 420 N·m**(굽힘 Tx≈379), **hip_roll 310 N·m**, ankle_pitch 197 → **굽힘강도 임계**(링크 단면계수).
+- **toe 연결부는 가벼움**(|F| 730 N, |M| 35 N·m) — 수동 toe는 구조적으로 작게 가능.
+- 좌우 비대칭(R>L)은 미수렴 gait 탓 → **대칭설계는 max(R) 기준**.
+
+> ⚠️ caveat: **미수렴 rough 정책**(error_vel 1.10)이라 거친 착지로 peak |F|가 과장됐을 수 있음. **rough 수렴 후 재측정**으로 확정. 전체 표: `assets/stage4_rough_link_loads.md`(.json). flat은 `analyze_link_loads.py --npz stage3_clip.npz`로 비교.
+
 관련: [[07_measurement]] · [[18_research_roadmap]]
