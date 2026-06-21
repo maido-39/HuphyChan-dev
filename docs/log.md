@@ -45,3 +45,16 @@
 - 신규: X1 BOM 확정(R86-2×9/R86-3×6/R52×10/**L28추杆×4**), L28=자체개발 선형 추杆 ~200g. X1 teardown(지후): 발목="拉杆구동 + 万向节 재사용", 모터 shank탑재, shank 304.94mm.
 - ★ 뉘앙스: X1 teardown은 발목 **양축 차동(2-rod)** ↔ 사용자/우리 sim·X2-N 논문은 **roll직결+pitch단일링크**. 사용자 설계는 X2-N 논문과 정합, X1 차동발목과는 상이(세대차 추정). X2 마케팅 "병렬 미사용"과 일관(추杆=직렬).
 - 출처: zhuanlan.zhihu.com/p/1895593089554436375 · zhiyuan-robot.com/DOCS/PM/PFL28 · github.com/AgibotTech/agibot_x1_hardware · zhuanlan.zhihu.com/p/1909304508170875310 · arxiv.org/html/2604.21541v1
+
+## [2026-06-22] research | 2-모터 병렬발목 sim2real (Unitree G1/Booster T1/LiPS/BRUCE) → [[38_parallel_ankle_sim2real]]
+- 사용자 제안: 양 발목 포화(노트36/37) → **2×RS03 병렬발목**(2모터→pitch+roll 연성구동, G1/Tesla식). 질문: sim2real 방법(정책 출력공간/Jacobian/DR/gotcha).
+- ★ **두 아키텍처 캠프**: (A) 정책=joint-space(가상직렬 pitch/roll), 저수준 SDK가 **J^T(joint토크→모터토크)+PD**로 배포변환 — **Booster Gym/T1·LiPS/Tien Kung·Unitree G1 PR mode**(업계 다수, ★우리 권장). (B) 정책=모터 A/B 직접, 학습 sim에 closed-chain(MuJoCo eq constraint) — **BRUCE·G1 AB mode·TopA**(전이충실도 최고·sim느림).
+- **Jacobian**: 링크기하서 해석적(LiPS Eq.12 `J=1/((BC×CP)_y)·CP^T·R`). 캘리브=CAD 레버암+엔코더 홈잉. τ변환 `τ_motor=J^T τ_joint`, 로드힘 `F=τ_motor/r_m`.
+- **DR gap**: 4편 전부 friction/mass/latency/Kp만, **링크기하/Jacobian-error/백래시/로드컴플라이언스 거의 미보고** → 우리가 추가하면 이득(±5-10% J·deadband 백래시·로드 stiffness → [[16_dr_expansion]]).
+- **gotcha**: ★특이점 near ROM(로드 공선→J폭발; 우리 pitch 70-90° 큼=위험), 백래시(구면조인트 유격), PR↔AB 모드일치, ★**모터 동시포화**(pitch+roll worst가 한 RS03에 합산 → 하중측정 반드시 모터공간 J^T 후에). open-chain baseline은 병렬HW서 실패(TopA).
+- 출처: arxiv 2506.15132(Booster) · 2503.08349(LiPS) · 2507.00273(BRUCE) · 2507.10164(TopA) · G1 dev guide · github booster_gym/unitree_rl_gym. 원자료 → [[raw/parallel-ankle-sim2real]].
+
+## [2026-06-22] research | 발목 상향-토크 QDD 시장조사 (RS00/RS03 대체) → [[39_ankle_qdd_uptorque_survey]]
+- ROLL(RS00 14/310g/$125 직결·포화): ★승자 = **DAMIAO DM-J4340** (27 N·m peak / 9 cont / 362g / Φ57 / 40:1 / $155) — 같은 외형·peak 1.9×·+52g·+$30, 디커플드 직결 드롭인. 목표 25-30 N·m 정확 충족. 단 40:1 저속 → roll-rate sim검증 필요. 차점 AK70-10(24.8/610g)·AK80-8(25/570g)=토크는 닿으나 무게·Φ 초과.
+- PITCH/MID(RS03 60/880g/$225): RS03이 가격·토크밀도(66.67 N.m/kg) 챔피언, off-the-shelf로 못 이김. 동급 Φ98 후보 전부 토크 ↓+가격 1.7-3× (DM-J8009 40/$385, AK10-9 48/$699, RMD-X10-40 40/$625). 60 초과는 고감속(AK80-64 120/64:1, RMD-X10 100/35:1)뿐=저속·고가·부적합. → **RS03 유지+링크감속 fix가 정답**.
+- 출처: seeed RS00/RS03 · aifitlab DM-J4340/RMD-X10 · cubemars AK10-9/AK80-64/AK70-10 · dronegearup DM-J8009 · robotshop RMD-X10. 원자료 → [[raw/ankle-qdd-uptorque-survey]].

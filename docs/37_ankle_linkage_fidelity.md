@@ -163,4 +163,29 @@ ankle_pitch가 토크-포화+속도여유 → 레버암비로 감속이 정답:
 - **circularity**: N 바꾸면 정책 재적응 → 엄밀히는 **ankle 링크비 sweep**(무릎처럼)이 refine. 현 데이터는 **N=1.5 출발점**.
 - ★ **rough+DR이 발목 demand 더 키움(~2배)** → 감속 필요성 *강화* → **rough sweep 후 최종 확정**.
 
-관련: [[36_all_actuator_tn_envelopes]] · [[30_knee_biomechanics]] · [[17_toe_usage_vibration]] · [[31_humanoid_hw_comparison]] · [[35_knee_gear_ratio_analysis]]
+### ★ 토크·속도 동시 검토 — 감속 후 T-N 봉투 충족? (사용자: "토크와 속도 둘다", 2026-06-22)
+감속은 토크를 속도와 맞바꾸므로 감속 후 *고속*에서 토크가 충분한지 공식 T-N 곡선으로 검증(무릎 토크-속도 분리 교훈). 각 timestep `τ_demand ≤ N×T-N_motor(N×ω_ankle)` 위반율:
+- ★ **발목도 토크-속도 분리**(무릎과 동일): ankle_pitch 최대토크(60)@속도 **0rpm**(push-off) · 최대속도(91rpm)@토크 **2N·m**(swing). → 고속점은 토크가 작아 감속해도 문제없음.
+
+| 관절 N | motor RMS(/연속) | motor 속도max | ★T-N 위반(토크·속도 동시) |
+|---|---|---|---|
+| pitch 1.0 | 25.6 (>20 ❌열) | 91rpm | 0% |
+| pitch 1.5 | 17 (✅) | 137rpm(<200) | 0% |
+| pitch **2.0(1:2)** | 12.8 (✅) | 183rpm(<200) | **0%** |
+| roll 1.0 | 5.7 (>5 ❌열) | 142rpm | 0% |
+| roll 1.5 | 3.8 (✅) | 213rpm(<315) | 0% |
+| roll 2.0 | 2.8 (✅) | 284rpm(<315) | 0% |
+
+→ ★ **감속 1.5~2.0이 토크·속도·열 셋 다 충족**(T-N 위반 0%, *분리* 덕분). 사용자 **1:2 검증됨**. ⚠ 단 N=2면 모터속도가 무부하 근접(pitch 183/200·roll 284/315) → **rough서 속도demand↑하면 빡빡** → rough선 N 낮추거나(1.5) 재검증. (flat 데이터·circularity 有 → ankle 링크비 sweep이 정밀화 = 무릎과 동형 co-design.)
+
+### 현 RP-분리 설계 살리기 4레버 (사용자 2026-06-22, vs 2-RSU 병렬 [[38_parallel_ankle_sim2real]])
+1. **toe↑**: ankle_pitch push-off offload(passive·무료·~20-30%·**pitch만**, roll 무관).
+2. **pitch 1:2 링크**: ✅ 토크·속도·열 다 충족(위 표). rough 마진상 1.5보다 1:2 유리.
+3. **roll 감속**: RS00 직결이라 감속=roll도 링크화(복잡↑). N1.5→21·N2→28, T-N 위반 0%.
+4. **저가 모터 스왑**(roll 병목): 조사 `w0iyi5u9p` 진행 → 완료 시 BOM 기록.
+- 판정: pitch=쉬움(1:2+toe). **roll이 병목**(직결) → 저가 ~28N·m 모터 스왑(직결유지·단순) OR roll감속링크 OR 2-RSU(roll 무료해결). 디커플 유지면 #4가 최단.
+
+## ★ 후속: 2-모터 병렬발목 전환안 (사용자 2026-06-22) → [[38_parallel_ankle_sim2real]]
+본 노트는 **1모터→1DOF 직렬링크**(roll직결+pitch 1:1, Agibot X2식). 사용자가 양쪽 발목 포화 해소 위해 **2×RS03 병렬발목**(2모터가 pitch+roll *연성*구동, Unitree G1/Booster T1/Tesla식)으로 전환 검토 → sim2real 방법(정책 joint-space + J^T 배포변환 vs 모터공간 end-to-end·Jacobian·DR·특이점)은 **[[38_parallel_ankle_sim2real]]** 참조. ★ 운동학이 근본적으로 다름(2×2 연립·특이점).
+
+관련: [[38_parallel_ankle_sim2real]] · [[36_all_actuator_tn_envelopes]] · [[30_knee_biomechanics]] · [[17_toe_usage_vibration]] · [[31_humanoid_hw_comparison]] · [[35_knee_gear_ratio_analysis]]
