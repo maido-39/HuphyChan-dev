@@ -50,7 +50,8 @@ actuators:
     effort_limit: 120.0
     velocity_limit_rpm: 200.0
     stiffness: 200.0
-    damping: 5.0
+    damping: 24.0   # ★ HW-grounded (research w2pkt68gl): RS04 large-frame Kd<=100 -> 24 OK. eff inertia
+                    #   ~1.5 kg·m² is large so ZETA=0.7 needs Kd~24 (was 5 -> ZETA 0.14 = floppy swing).
     armature: 0.0097
   hip_yaw_rs03:                      # RS03 direct
     type: motor
@@ -58,7 +59,7 @@ actuators:
     effort_limit: 60.0
     velocity_limit_rpm: 200.0          # RS03 no-load (corrected 220->200 vs official datasheet, docs/28)
     stiffness: 150.0
-    damping: 5.0
+    damping: 6.5    # ★ HW-grounded: RS03 large-frame Kd<=100. ZETA=0.7 (was 5 -> ~0.53).
     armature: 0.0049
   knee_rs04_belt:                    # RS04 + AT3 belt 1:3  -> 360 N*m, speed/3
     type: motor
@@ -66,8 +67,10 @@ actuators:
     effort_limit: 360.0
     velocity_limit_rpm: 66.7
     stiffness: 200.0
-    damping: 5.0
-    armature: 0.0875
+    damping: 11.0   # ★ HW-grounded: knee = RS04 + external belt 1:2~2.5. joint_Kd = motor_Kd × g², so
+                    #   motor_Kd~2.5 × belt(2~2.5)² -> joint Kd 11 (well within RS04's 100). ZETA=0.71
+                    #   (was 5 -> 0.32 = floppy, the user's "낙지관절" swing). Belt AMPLIFIES damping = key.
+    armature: 0.0875   # ⚠ STILL at belt 1:3 (G=27). If belt -> 1:2~2.5, set 0.039(2.0)~0.061(2.5) + effort/vel.
   ankle_pitch_rs03:                  # RS03 DIRECT motor on the joint axis (NOT a rod/linkage)
     type: motor
     joints: [".*_ankle_pitch_joint"]
