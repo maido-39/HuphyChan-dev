@@ -38,9 +38,9 @@
 
 ## 3. 영상 / 이미지
 - 학습 영상 5개: `logs/rsl_rl/pygmalion_flat/2026-06-21_15-40-30_forefoot_pushoff/videos/train/` (rl-video-step-0 … 6000).
-- **누적(step-captioned) 영상 — 노트에서 재생**:
+- **누적(step-captioned) 영상 — 노트에서 재생** (vault 복사본):
 ![[2026-06-21_15-40-30_forefoot_pushoff_accumulate.mp4]]
-  (원본 `pygmalion_locomotion/logs/rsl_rl/pygmalion_flat/2026-06-21_15-40-30_forefoot_pushoff/videos/accumulated_progress.mp4`, 4MB)
+  (원본 참조 `pygmalion_locomotion/logs/rsl_rl/pygmalion_flat/2026-06-21_15-40-30_forefoot_pushoff/videos/accumulated_progress.mp4`, 4MB)
 
 ## 4. 부모 학습 대비 비교
 - **부모**: [[2026-06-21_12-22-03_forefoot_cop]] (CoP 진단 run).

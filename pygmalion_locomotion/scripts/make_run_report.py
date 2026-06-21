@@ -233,9 +233,28 @@ def main():
     md += ["## 3. 영상 / 이미지"]
     if videos:
         md.append(f"- 학습 영상 {len(videos)}개: `{os.path.relpath(os.path.dirname(videos[0]), ROOT)}/` (예: {os.path.basename(videos[0])} … {os.path.basename(videos[-1])})")
-        acc = os.path.join(run, "accumulated_progress.mp4")
+        # ★ RULE (user [60], re-reminded): EMBED the step-captioned ACCUMULATE video PLAYABLE in the note.
+        #   COPY it into docs/assets (user: copy, don't symlink — symlink breaks when logs/ is cleaned + is
+        #   unreliable in Obsidian) + wikilink-embed by unique basename, and reference the ORIGINAL path.
+        #   (was a bug: acc path missed /videos/ so the accumulate line never appeared.)
+        acc = os.path.join(run, "videos", "accumulated_progress.mp4")
         if os.path.exists(acc):
-            md.append(f"- 누적 영상: `{os.path.relpath(acc, ROOT)}`")
+            import shutil
+            link_name = f"{os.path.basename(run.rstrip('/'))}_accumulate.mp4"
+            assets_dir = os.path.join(ROOT, "docs", "assets")
+            os.makedirs(assets_dir, exist_ok=True)
+            dst = os.path.join(assets_dir, link_name)
+            try:
+                if os.path.islink(dst) or os.path.exists(dst):
+                    os.remove(dst)
+                shutil.copy2(acc, dst)   # real COPY -> note is self-contained, embed never breaks
+            except OSError:
+                pass
+            md.append("- **누적(step-captioned) 영상 — 노트에서 재생** (vault 복사본):")
+            md.append(f"![[{link_name}]]")
+            md.append(f"  (원본 참조 `{os.path.relpath(acc, ROOT)}`, {os.path.getsize(acc)//(1024*1024)}MB)")
+        else:
+            md.append("- 누적 영상: **미생성** — `bash scripts/accumulate_train_videos.sh <run_dir>`로 생성 후 임베딩 필요.")
     else:
         md.append("- (영상 없음)")
     if args.measure:

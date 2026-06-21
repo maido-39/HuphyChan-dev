@@ -36,9 +36,9 @@
 
 ## 3. 영상 / 이미지
 - 학습 영상 22개: `pygmalion_locomotion/logs/rsl_rl/pygmalion_rough/2026-06-21_10-33-47_stage5_rough_converge/videos/train/` (예: rl-video-step-0.mp4 … rl-video-step-9000.mp4)
-- **누적(step-captioned) 영상 — 노트에서 재생**:
+- **누적(step-captioned) 영상 — 노트에서 재생** (vault 복사본):
 ![[2026-06-21_10-33-47_stage5_rough_converge_accumulate.mp4]]
-  (원본 `pygmalion_locomotion/logs/rsl_rl/pygmalion_rough/2026-06-21_10-33-47_stage5_rough_converge/videos/accumulated_progress.mp4`, 156MB)
+  (원본 참조 `pygmalion_locomotion/logs/rsl_rl/pygmalion_rough/2026-06-21_10-33-47_stage5_rough_converge/videos/accumulated_progress.mp4`, 156MB)
 
 ## 4. 부모 학습 대비 비교
 - **부모**: [[2026-06-21_06-41-42_stage4_rough]] (stage-4 rough, 1999 iter).
