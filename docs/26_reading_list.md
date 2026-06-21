@@ -44,6 +44,6 @@
 ## 우리 연구로의 연결 (왜 읽나)
 - **TOPIC 1** = 우리가 *쓰는* 기계: Rudin(스택+rough 커리큘럼)·Siekmann(우리 GRF에 직결되는 보상설계)·Margolis(teleop 명령변수)·Li(이중 history)·Radosavovic(transformer history = teacher-student 대안).
 - **TOPIC 2** = 핵심질문(효율=자연?): Fu(긍정)+Heess(반례, 에너지 없으면 ungainly)+Schumacher(정정, 에너지+pain) = **우리 forefoot_cop(원인)+power_cot(에너지)+pain 페널티 방향이 문헌과 정렬됨**을 확인.
-- **TOPIC 3** = 우리 frontier(passive toe/발): McGeer(역학이 gait 준다)·**rolling-foot(충돌∝곡률², 우리 발 형상)**·Kuo(push-off 4배싸다·선제)·Zelik(push-off가 후행다리+COM 가속) = toe/push-off 보상의 생체역학 근거.
+- **TOPIC 3** = 우리 frontier(passive toe/발): McGeer(역학이 gait 준다)·**rolling-foot(충돌∝곡률², 우리 발 형상)**·Kuo(push-off 4배싸다·선제)·Zelik(push-off가 후행다리+COM 가속) = toe/push-off 보상의 생체역학 근거. → **정식 리뷰 [[Paperreview/kuo-donelan-dynamic-walking]]**(Kuo 전이-에너지 캐논, 원문검증 수치).
 
-관련: [[25_dayplan_2026-06-21]] · [[27_training_review_loop]] · [[23_toe_use_methods]] · [[24_training_health_analysis]]
+관련: [[25_dayplan_2026-06-21]] · [[27_training_review_loop]] · [[23_toe_use_methods]] · [[24_training_health_analysis]] · [[Paperreview/kuo-donelan-dynamic-walking]]

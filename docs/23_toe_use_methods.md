@@ -42,4 +42,7 @@
 - [산업계 active vs passive toe 논쟁](https://www.humanoidsdaily.com/news/stepping-forward-the-debate-over-active-vs-passive-toes-in-humanoid-robotics) · [Menlo/Asimov 다리 설계(우리 51.8kg급 일치)](https://menlo.ai/blog/humanoid-legs-100-days) · [Atlas CoP-forward toe-off (1709.03660)](https://arxiv.org/pdf/1709.03660)
 - [Adam AMP heel-to-toe (2402.18294)](https://arxiv.org/html/2402.18294v4) · [GMP (2503.09015)](https://arxiv.org/html/2503.09015v1) · [Compliant-feet quadruped (2605.14411)](https://arxiv.org/html/2605.14411) · [CoP/ZMP RL (2509.09106)](https://arxiv.org/pdf/2509.09106) · [Siekmann (2011.01387)](https://arxiv.org/abs/2011.01387)
 
-관련: [[17_toe_usage_vibration]] · [[22_energy_toe_reward]] · [[19_toe_ablation]] · [[Paperreview/siekmann-periodic-reward]] · [[18_research_roadmap]]
+> [!note] 이론 근거 (CoP/push-off 방향이 *왜* 맞나)
+> [[Paperreview/kuo-donelan-dynamic-walking]] — Kuo/Donelan/Ruina 캐논: 보행 에너지는 **step-to-step 전이(선제 push-off/collision)**가 지배(순대사 ~2/3), 관절각이 아니라 **COM 전이 에너지**를 보상해야 함. 우리 forefoot CoP·CoT 방향을 직접 뒷받침하고 *평탄 COM·관절각 템플릿 보상 금지*까지 명시.
+
+관련: [[17_toe_usage_vibration]] · [[22_energy_toe_reward]] · [[19_toe_ablation]] · [[Paperreview/kuo-donelan-dynamic-walking]] · [[Paperreview/siekmann-periodic-reward]] · [[18_research_roadmap]]
