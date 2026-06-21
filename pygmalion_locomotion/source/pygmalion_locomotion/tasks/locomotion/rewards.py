@@ -210,3 +210,23 @@ def knee_straight_penalty(env, asset_cfg: SceneEntityCfg, min_flexion: float = -
     q = asset.data.joint_pos[:, asset_cfg.joint_ids]                               # [E, 2] knee angles
     over = torch.relu(q - min_flexion)                                            # >0 when straighter than min
     return torch.sum(over ** 2, dim=1)                                            # penalty (neg weight)
+
+
+def foot_flat_orientation(env, asset_cfg: SceneEntityCfg):
+    """★ FOOT-BODY flatness (research wycgc5rlb 2026-06-22, replaces the ankle_roll JOINT-angle foot_roll_flat):
+    penalize each FOOT LINK's tilt vs the ground = the world gravity direction projected INTO the foot frame,
+    xy components (a flat foot has gravity straight down in its frame -> xy~0; an edge-tilted foot -> xy>0).
+    Strictly better than the joint-angle penalty: joint angle != contact tilt (base lean / hip-roll / terrain
+    confound it); this is the field standard (IsaacLab flat_orientation_l2 ported to the foot; Booster/SoFTA
+    feet-roll). Keep weight MODEST (-0.1..-0.5): ankle roll is LOAD-BEARING for lateral balance, so over-
+    penalizing trades balance for flatness -- the real fix for edge-walking is a WIDER STANCE (biomech: CoP is
+    capped by foot width). asset_cfg = foot bodies. NEG weight. [num_envs]."""
+    from isaaclab.utils.math import quat_rotate_inverse
+    asset = env.scene[asset_cfg.name]
+    quat = asset.data.body_quat_w[:, asset_cfg.body_ids, :]                        # [E, nfoot, 4]
+    gvec = torch.zeros(quat.shape[0], 3, device=quat.device); gvec[:, 2] = -1.0    # world gravity direction
+    pen = torch.zeros(quat.shape[0], device=quat.device)
+    for i in range(quat.shape[1]):
+        pg = quat_rotate_inverse(quat[:, i, :], gvec)                             # gravity in this foot's frame
+        pen = pen + torch.sum(pg[:, :2] ** 2, dim=1)                              # xy = sole-normal tilt vs up
+    return pen                                                                     # penalty (neg weight)

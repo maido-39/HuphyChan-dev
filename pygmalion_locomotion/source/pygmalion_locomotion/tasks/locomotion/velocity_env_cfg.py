@@ -227,14 +227,17 @@ class BipedRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.undesired_contacts = RewTerm(
             func=mdp.undesired_contacts, weight=-1.0,
             params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=UNDESIRED_BODIES), "threshold": 1.0})
+        # ★ gaitfix_v4 (research wycgc5rlb): edge-walking/ankle_roll-overload is a STANCE-WIDTH deficit forcing
+        #   lateral balance through the ankle (CoP capped by foot width). WIDEN the stance + use a FOOT-BODY
+        #   flatness penalty (not the joint-angle one). reward_research note 2026-06-22_foot_flat_ankle_roll_stance.
         self.rewards.feet_distance.weight = -3.0
-        self.rewards.feet_distance.params["min_dist"] = 0.20
+        self.rewards.feet_distance.params["min_dist"] = 0.24       # ★ WIDER stance target (was 0.20) -> lateral CoP from a wide base, not the ankle edge
         self.rewards.feet_lateral_sep = RewTerm(   # anti-cross the euclidean feet_distance misses
             func=pyg_rewards.feet_lateral_separation, weight=-3.0,
-            params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY), "min_lat": 0.14})
-        self.rewards.foot_roll_flat = RewTerm(     # ★ keep foot FLAT -> no edge -> drop ankle_roll torque
-            func=pyg_rewards.foot_roll_flat, weight=-0.5,
-            params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_roll_joint"])})
+            params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY), "min_lat": 0.18})  # wider (was 0.14)
+        self.rewards.foot_roll_flat = RewTerm(     # ★ FOOT-BODY orientation flatness (research: > joint-angle); MODEST weight (roll is load-bearing for balance)
+            func=pyg_rewards.foot_flat_orientation, weight=-0.3,
+            params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY)})
         self.rewards.knee_straight = RewTerm(      # no knee 0..-10deg (keep flexed)
             func=pyg_rewards.knee_straight_penalty, weight=-5.0,
             params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_knee_joint"]), "min_flexion": -0.17})
