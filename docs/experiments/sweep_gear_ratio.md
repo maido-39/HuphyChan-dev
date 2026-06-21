@@ -1,6 +1,7 @@
 # 무릎 감속비 SWEEP — 결과 (살아있는 노트, 비별 갱신)
 
 > 순환성 깨기: 후보 감속비를 *각각 학습*(8192env·warm-start forefoot_cop·800iter·impact완화 −1.0/−0.005)해 demand·성능 측정·비교. 설계 근거 [[35_knee_gear_ratio_analysis]]. 평지(forefoot task) 기준.
+> 실행 run: `2026-06-21_22-30-15_sweep_g1p0`(g1.0 ✅·측정 sweep_g1p0.npz) · `sweep_g1p5`(g1.5 진행) · `sweep_g2p0` · `sweep_g2p5`. 각 비 단독 학습(8192env=OOM안전).
 
 ## 결과표 (비별)
 | g | knee effort/vel | 무릎토크 RMS/p95/max | 무릎속도 p95/max(rpm) | 토크활용 | 속도활용 | error_vel | reward | 판정 |
