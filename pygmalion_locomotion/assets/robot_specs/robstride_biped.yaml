@@ -63,14 +63,14 @@ actuators:
     armature: 0.0049
   knee_rs04_sweep:                   # ★ GEAR-RATIO SWEEP (autonomous overnight 06-22). Per ratio g set:
                                      #   effort=g*120, velocity_rpm=200/g, armature=1.2e-4*(9g)^2. damping 11
-                                     #   + stiffness 200 fixed (ZETA~0.7). CURRENT: g=2.0.
+                                     #   + stiffness 200 fixed (ZETA~0.7). CURRENT: g=2.5.
     type: motor
     joints: [".*_knee_joint"]
-    effort_limit: 240.0                # g=2.0: 2.0 x RS04 peak 120
-    velocity_limit_rpm: 100.0          # g=2.0: RS04 no-load 200 / 2.0
+    effort_limit: 300.0                # g=2.5: 2.5 x RS04 peak 120
+    velocity_limit_rpm: 80.0           # g=2.5: RS04 no-load 200 / 2.5
     stiffness: 200.0
     damping: 11.0
-    armature: 0.0389                   # g=2.0: total G 18 (9 x 2) -> 1.2e-4 x 18^2
+    armature: 0.0608                   # g=2.5: total G 22.5 (9 x 2.5) -> 1.2e-4 x 22.5^2
   ankle_pitch_rs03:                  # RS03 DIRECT motor on the joint axis (NOT a rod/linkage)
     type: motor
     joints: [".*_ankle_pitch_joint"]
