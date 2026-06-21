@@ -104,10 +104,10 @@ class BipedFlatForefootEnvCfg(BipedFlatEnvCfg):
         # PRIMARY lever = soft landing (penalise foot downward speed near the ground = the CAUSE of the
         #   impact, robust to the contact-sensor scale). SECONDARY = contact-force soft-cap (650N).
         self.rewards.foot_landing_vel = RewTerm(
-            func=pyg_rewards.foot_landing_vel, weight=-2.0,
+            func=pyg_rewards.foot_landing_vel, weight=-1.0,
             params={"asset_cfg": SceneEntityCfg("robot", body_names=".*_foot_link"),
                     "height_thresh": 0.12})
         self.rewards.foot_impact_force = RewTerm(
-            func=pyg_rewards.foot_impact_force, weight=-0.01,
+            func=pyg_rewards.foot_impact_force, weight=-0.005,
             params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
                     "force_soft": 650.0, "cap_over": 1500.0})

@@ -45,4 +45,7 @@
 > [!note] 이론 근거 (CoP/push-off 방향이 *왜* 맞나)
 > [[Paperreview/kuo-donelan-dynamic-walking]] — Kuo/Donelan/Ruina 캐논: 보행 에너지는 **step-to-step 전이(선제 push-off/collision)**가 지배(순대사 ~2/3), 관절각이 아니라 **COM 전이 에너지**를 보상해야 함. 우리 forefoot CoP·CoT 방향을 직접 뒷받침하고 *평탄 COM·관절각 템플릿 보상 금지*까지 명시.
 
-관련: [[17_toe_usage_vibration]] · [[22_energy_toe_reward]] · [[19_toe_ablation]] · [[26_reading_list]] · [[Paperreview/kuo-donelan-dynamic-walking]] · [[Paperreview/siekmann-periodic-reward]] · [[18_research_roadmap]]
+> [!warning] ★ 정정 — Siekmann/Walk-These-Ways엔 CoP 보상이 없다 (후속 검증 wyvmh4gpv)
+> 위 ②·개정계획이 참조한 "Siekmann 클록 + sub-foot CoP", "CoP/ZMP-progression 보상"의 **검증 결과**: **Siekmann도 Walk-These-Ways도 CoP/ZMP/heel→toe 보상을 포함하지 않는다** — 둘 다 **foot-force norm·foot-velocity norm을 위상클록으로 게이트**할 뿐. heel→toe CoP-progression은 **검증된 표준 공식이 아님.** 우리 `forefoot_cop`(앞발 GRF 비율)은 **자체 합성 항**이지 논문 차용이 아니다. verbatim 공식·근거 → [[34_cop_contact_rewards]] · [[raw/cop-contact-reward-formulas]].
+
+관련: [[17_toe_usage_vibration]] · [[22_energy_toe_reward]] · [[19_toe_ablation]] · [[26_reading_list]] · [[34_cop_contact_rewards]] · [[Paperreview/kuo-donelan-dynamic-walking]] · [[Paperreview/siekmann-periodic-reward]] · [[18_research_roadmap]]
