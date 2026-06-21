@@ -109,3 +109,29 @@ def joint_overrating_penalty(env, asset_cfg: SceneEntityCfg, rated):
     rated_t = torch.tensor(rated, device=tau.device, dtype=tau.dtype)             # [nj]
     u = tau / rated_t                                                              # utilization per joint
     return torch.sum(torch.clamp(u * u - 1.0, min=0.0), dim=1)
+
+
+def ankle_pushoff_work(env, ankle_cfg: SceneEntityCfg, sensor_cfg: SceneEntityCfg,
+                       contact_thresh: float = 8.0, late_time: float = 0.15, scale: float = 0.02):
+    """Kuo push-off reward ([[Paperreview/kuo-donelan-dynamic-walking]]): reward POSITIVE ankle-pitch WORK
+    (plantarflexion power, clamp(tau*omega, >=0)) at LATE single support + forward — the pre-emptive
+    push-off Kuo shows is the cheap power source AND the cause that rolls the CoP onto the forefoot and
+    loads the passive toe. Stronger + more direct than forefoot_cop's gated GRF-fraction (which was ~0.02%
+    of reward and failed to recruit the toe, H-A negative). ankle_cfg = ankle_pitch joints, sensor_cfg =
+    matching foot bodies (SAME L,R order). POSITIVE weight. Tune `scale` so the value ~O(0.1-1) in a
+    config-test. Returns [num_envs]."""
+    asset = env.scene[ankle_cfg.name]
+    tau = asset.data.applied_torque[:, ankle_cfg.joint_ids]                        # [E, nfoot]
+    omega = asset.data.joint_vel[:, ankle_cfg.joint_ids]                           # [E, nfoot]
+    pushoff = torch.clamp(tau * omega, min=0.0)                                    # positive work rate [W]
+    sensor = env.scene.sensors[sensor_cfg.name]
+    f = sensor.data.net_forces_w[:, sensor_cfg.body_ids, :]                        # [E, nfoot, 3]
+    in_contact = torch.norm(f, dim=-1) > contact_thresh
+    other_swing = ~in_contact[:, [1, 0]]
+    fwd = (asset.data.root_lin_vel_b[:, 0] > 0.0).unsqueeze(1)
+    try:
+        late = sensor.data.current_contact_time[:, sensor_cfg.body_ids] > late_time
+    except Exception:  # noqa: BLE001
+        late = torch.ones_like(in_contact)
+    gate = (in_contact & other_swing & late & fwd).float()
+    return torch.sum(pushoff * gate, dim=1) * scale

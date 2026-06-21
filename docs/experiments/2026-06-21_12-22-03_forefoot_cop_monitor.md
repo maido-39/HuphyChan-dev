@@ -31,4 +31,16 @@
 2. **Siekmann 주기 foot-force 보상** (phase별 종말기 앞발 force 강제 — 원리적, 우리 GRF 직결, [[26_reading_list]] T1) — 1이 안 되면.
 3. **H3 heel-rise** (ankle-pitch 종말기 참조, 능동발목=합법) + Schumacher 'pain'(GRF/관절한계) 병행 검토.
 
-관련: [[27_training_review_loop]] · [[25_dayplan_2026-06-21]] · [[23_toe_use_methods]]
+## ★ 완주(iter 2500) + H-A 정식판정 = 음성 (측정 clip/unclip)
+| 관절 | forefoot RMS/max | stage-3 RMS/max | 해석 |
+|---|---|---|---|
+| **toe (L/R)** | 0.8/6.0 · 1.4/14.1 | 0.7/8.6 · 1.9/8.9 | **거의 불변 = toe 미적재 확정** |
+| ankle_pitch | 12.6/46.9 | 9.3/43.2 | ↑ (toe 아닌 발목으로) |
+| knee | 35.1/198.5 | 58.0/165.6 | RMS↓ (power_cot 효과) |
+| ankle_roll | 5.7/14.0 | 7.6/14.0 | RMS↓ |
+
+- **판정**: `forefoot_cop@0.5`는 toe를 적재 못함. power_cot(에너지)가 knee·ankle_roll **연속토크는** 줄였으나(ankle_roll RMS%rated **151→113%** 개선) toe는 아님.
+- **진단(핵심)**: forefoot_cop(게이트된 앞발 GRF비율)이 본질적으로 작음(총보상 ~0.02%) → **가중↑만으로 부족할 가능성**(형식 한계). Kuo 캐논: toe는 **push-off 일**의 부산물 → 다음에 push-off-work 보상 검토.
+- **다음 실험**: ① forefoot_cop 0.5→4.0 (가중 가설 테스트, 지금) → 부족 시 ② **ankle push-off 일 보상**([[Paperreview/kuo-donelan-dynamic-walking]]) / Siekmann 주기 foot-force.
+
+관련: [[27_training_review_loop]] · [[25_dayplan_2026-06-21]] · [[23_toe_use_methods]] · [[Paperreview/kuo-donelan-dynamic-walking]]
