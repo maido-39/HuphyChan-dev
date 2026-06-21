@@ -155,10 +155,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             #   frustum (genuinely fewer robots, not just a zoom). ROUGH's spacing is terrain-bound, so
             #   there we follow a single env's robot instead.
             if "Flat" in args_cli.task:
-                env_cfg.scene.env_spacing = 8.0      # spread on the plane (no effect on training)
+                # ★ RULE (user, persisted): FEW robots in the frame. env_spacing is pure placement for the
+                #   independent velocity envs -> TRAINING-NEUTRAL. 8m was still ~15-20 robots; 30m + a
+                #   higher/steeper frame leaves only ~a few in the camera frustum. (NOT a camera-distance
+                #   hack — the spread is what cuts the count; the frame just trims the horizon band.)
+                env_cfg.scene.env_spacing = 30.0
                 env_cfg.viewer.origin_type = "world"
-                env_cfg.viewer.eye = (6.5, -6.5, 4.0)
-                env_cfg.viewer.lookat = (1.0, 1.0, 0.45)
+                env_cfg.viewer.eye = (4.5, -4.5, 5.0)
+                env_cfg.viewer.lookat = (1.5, 1.5, 0.2)
             else:                                    # rough: terrain-tied spacing -> follow env 0
                 env_cfg.viewer.origin_type = "env"
                 env_cfg.viewer.env_index = 0
