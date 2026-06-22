@@ -20,7 +20,7 @@ from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import Re
 
 from . import mdp
 from .velocity_env_cfg import FOOT_BODY
-from .flat_env_cfg import BipedFlatEnvCfg   # ★ FLAT terrain base (was BipedRoughEnvCfg = rough; bug fix)
+from .flat_env_cfg import BipedFlatEnvCfg, BipedFlatForefootEnvCfg   # FLAT base; Forefoot = OUR gaitfix reward
 
 
 @configclass
@@ -88,6 +88,50 @@ class BipedG1VanillaEnvCfg(BipedFlatEnvCfg):
 
 @configclass
 class BipedG1VanillaEnvCfg_PLAY(BipedG1VanillaEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 32
+        self.scene.env_spacing = 2.5
+        self.episode_length_s = 40.0
+        self.scene.terrain.max_init_terrain_level = None
+        if self.scene.terrain.terrain_generator is not None:
+            self.scene.terrain.terrain_generator.num_rows = 5
+            self.scene.terrain.terrain_generator.num_cols = 5
+            self.scene.terrain.terrain_generator.curriculum = False
+        self.observations.policy.enable_corruption = False
+        self.events.base_external_force_torque = None
+        self.events.push_robot = None
+        self.events.add_base_mass = None
+        self.events.base_com = None
+        self.events.physics_material.params["static_friction_range"] = (0.9, 0.9)
+        self.events.physics_material.params["dynamic_friction_range"] = (0.7, 0.7)
+
+
+# ============================================================================================
+# OUR latest gaitfix reward UNDER G1-MATCHED CONDITIONS (fair reward A/B vs full-G1).
+# user 2026-06-22: full-G1 LOOKS unstable (wobble) despite 0% falls; isolate the REWARD by matching DR+commands.
+# ============================================================================================
+@configclass
+class BipedFlatForefootG1CondEnvCfg(BipedFlatForefootEnvCfg):
+    """OUR latest gaitfix reward (BipedFlatForefootEnvCfg = v3-v7 set) but with G1-MATCHED conditions: light DR
+    (push/mass/com OFF + deterministic reset) + forward-only commands + no curriculum. Now ONLY the reward
+    differs from full-G1 (BipedG1VanillaEnvCfg) -> a clean reward A/B (does OUR reward look more stable?)."""
+
+    def __post_init__(self):
+        super().__post_init__()                       # our gaitfix reward + OUR heavy DR + omni commands
+        # ★ G1-matched conditions (identical to BipedG1VanillaEnvCfg): light DR + forward-only
+        self.events.push_robot = None
+        self.events.add_base_mass = None
+        self.events.base_com = None
+        self.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
+        self.curriculum.command_vel_x = None
+        self.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)
+        self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
+        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
+
+
+@configclass
+class BipedFlatForefootG1CondEnvCfg_PLAY(BipedFlatForefootG1CondEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.scene.num_envs = 32
