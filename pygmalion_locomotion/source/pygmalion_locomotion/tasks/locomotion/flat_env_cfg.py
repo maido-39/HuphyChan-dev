@@ -92,7 +92,7 @@ class BipedFlatForefootEnvCfg(BipedFlatEnvCfg):
         #   and loads the passive toe. Tune weight/scale in a config-test.
         # research w3g1xw9oq: w~0.5, scale 0.02, + per-step cap (NOT my earlier 0.1/no-cap which reward-HACKED).
         self.rewards.ankle_pushoff = RewTerm(
-            func=pyg_rewards.ankle_pushoff_work, weight=0.1,   # ★ DE-EMPHASIZED (user: side-effect=ankle saturation/"stab" + torque-limit self-conflict). Rely on the INDIRECT set (forefoot_cop + foot_landing_vel + foot_impact_force + power_cot) for a smooth low-impact roll-off that loads the toe NATURALLY.
+            func=pyg_rewards.ankle_pushoff_work, weight=0.5,   # ★ gaitfix_v6 RESTORE (was 0.1): the push-off engine. v5 resolved the ankle_roll self-conflict + base relaxed (vault allowed) -> restore push-off to load the toe (CoP rolls forward). research 2026-06-22_13-30. Re-check ankle_pitch/roll saturation in §7.
             params={"ankle_cfg": SceneEntityCfg("robot", joint_names=".*_ankle_pitch_joint"),
                     "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
                     "contact_thresh": 8.0, "late_time": 0.15, "scale": 0.02, "cap": 80.0})
@@ -134,7 +134,7 @@ class BipedRoughForefootEnvCfg(BipedRoughEnvCfg):
             func=pyg_rewards.power_cot, weight=0.4,
             params={"asset_cfg": SceneEntityCfg("robot", joint_names=ACTUATED_JOINTS), "scale": 0.003})
         self.rewards.ankle_pushoff = RewTerm(
-            func=pyg_rewards.ankle_pushoff_work, weight=0.1,   # ★ DE-EMPHASIZED (user: side-effect=ankle saturation/"stab" + torque-limit self-conflict). Rely on the INDIRECT set (forefoot_cop + foot_landing_vel + foot_impact_force + power_cot) for a smooth low-impact roll-off that loads the toe NATURALLY.
+            func=pyg_rewards.ankle_pushoff_work, weight=0.5,   # ★ gaitfix_v6 RESTORE (was 0.1): the push-off engine. v5 resolved the ankle_roll self-conflict + base relaxed (vault allowed) -> restore push-off to load the toe (CoP rolls forward). research 2026-06-22_13-30. Re-check ankle_pitch/roll saturation in §7.
             params={"ankle_cfg": SceneEntityCfg("robot", joint_names=".*_ankle_pitch_joint"),
                     "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
                     "contact_thresh": 8.0, "late_time": 0.15, "scale": 0.02, "cap": 80.0})

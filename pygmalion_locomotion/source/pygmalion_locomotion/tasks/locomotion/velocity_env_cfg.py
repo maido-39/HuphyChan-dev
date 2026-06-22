@@ -265,6 +265,15 @@ class BipedRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
             func=pyg_rewards.lateral_foot_placement, weight=0.3,
             params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY), "sigma": 0.06})
 
+        # ★ gaitfix_v6 (research 2026-06-22_13-30): base_height fights the single-support VAULT / push-off CoM rise
+        #   -> relax the base so the pelvis can BOB and the toe can ROLL (shared root cause of unused toe + rigid
+        #   pelvis; IsaacLab G1/H1 disable lin_vel_z + drop base_height entirely). foot-flat ROLL-ONLY so the foot
+        #   can PITCH for heel-rise. (ankle_pushoff 0.1->0.5 restore is in flat_env_cfg forefoot envs.)
+        self.rewards.base_height.weight = -0.25          # was -1.0: allow the ~2.5cm single-support vault
+        self.rewards.lin_vel_z_l2.weight = -0.05         # was -0.2: allow vertical CoM velocity (small, no bounce)
+        self.rewards.flat_orientation_l2.weight = -0.5   # was -1.0: allow pelvic tilt/obliquity 4-7deg
+        self.rewards.foot_roll_flat.params["roll_only"] = True  # allow foot PITCH (heel-rise/push-off), keep roll flat
+
         # --- Commands (omnidirectional). Forward up to 2.0 m/s (~Fr 0.51, walk-run boundary;
         #     2.5 m/s would be a running/flight regime -> unstable for walking PPO + unrepresentative
         #     joint loads). The wide vx range is reached via a COMMAND CURRICULUM (see curriculum

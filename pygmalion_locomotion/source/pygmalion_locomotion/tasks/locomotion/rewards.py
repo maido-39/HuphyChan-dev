@@ -212,7 +212,7 @@ def knee_straight_penalty(env, asset_cfg: SceneEntityCfg, min_flexion: float = -
     return torch.sum(over ** 2, dim=1)                                            # penalty (neg weight)
 
 
-def foot_flat_orientation(env, asset_cfg: SceneEntityCfg):
+def foot_flat_orientation(env, asset_cfg: SceneEntityCfg, roll_only: bool = False):
     """★ FOOT-BODY flatness (research wycgc5rlb 2026-06-22, replaces the ankle_roll JOINT-angle foot_roll_flat):
     penalize each FOOT LINK's tilt vs the ground = the world gravity direction projected INTO the foot frame,
     xy components (a flat foot has gravity straight down in its frame -> xy~0; an edge-tilted foot -> xy>0).
@@ -228,7 +228,9 @@ def foot_flat_orientation(env, asset_cfg: SceneEntityCfg):
     pen = torch.zeros(quat.shape[0], device=quat.device)
     for i in range(quat.shape[1]):
         pg = quat_rotate_inverse(quat[:, i, :], gvec)                             # gravity in this foot's frame
-        pen = pen + torch.sum(pg[:, :2] ** 2, dim=1)                              # xy = sole-normal tilt vs up
+        # x = pitch-tilt (toe up/down = heel-rise), y = roll-tilt (foot edge). roll_only=True penalizes ONLY
+        # roll so the foot can PITCH for heel-rise/push-off (research 2026-06-22_13-30 gaitfix_v6).
+        pen = pen + (pg[:, 1] ** 2 if roll_only else torch.sum(pg[:, :2] ** 2, dim=1))
     return pen                                                                     # penalty (neg weight)
 
 
