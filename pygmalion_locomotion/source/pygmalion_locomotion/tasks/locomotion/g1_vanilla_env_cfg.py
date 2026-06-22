@@ -76,6 +76,14 @@ class BipedG1VanillaEnvCfg(BipedFlatEnvCfg):
         self.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
+        # ★ G1 vanilla DR (LIGHT, user 2026-06-22): G1RoughEnvCfg disables push/mass/com randomization +
+        #   deterministic joint reset. Without this the baseline was "G1 reward + OUR HEAVY DR" = confounded;
+        #   full-G1 (reward + DR both G1) is the clean morphology-vs-our-approach test. (base_external_force +
+        #   physics_material friction kept, as G1 does.)
+        self.events.push_robot = None
+        self.events.add_base_mass = None
+        self.events.base_com = None
+        self.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
 
 
 @configclass
