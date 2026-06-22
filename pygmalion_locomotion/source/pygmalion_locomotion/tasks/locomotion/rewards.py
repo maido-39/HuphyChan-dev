@@ -230,3 +230,25 @@ def foot_flat_orientation(env, asset_cfg: SceneEntityCfg):
         pg = quat_rotate_inverse(quat[:, i, :], gvec)                             # gravity in this foot's frame
         pen = pen + torch.sum(pg[:, :2] ** 2, dim=1)                              # xy = sole-normal tilt vs up
     return pen                                                                     # penalty (neg weight)
+
+
+def lateral_foot_placement(env, asset_cfg: SceneEntityCfg, sigma: float = 0.06):
+    """★ Lateral foot-placement / capture-point support tracking (research wdi7t94jn; Hof XcoM + MIT footstep-RL
+    arXiv 2408.02662): foot PLACEMENT is the PRIMARY frontal-plane balance mechanism (the stance ankle_roll is
+    only a saturating supplement bounded by foot half-width). Reward the lateral MIDPOINT of the feet (the support
+    center, base frame) tracking the extrapolated CoM XcoM_y = v_y / omega (omega = sqrt(g/h), Hof eigenfrequency)
+    -> when the CoM drifts laterally the policy STEPS the support under the XcoM, so lateral disturbance is caught
+    by foot placement instead of driving the stance ankle_roll (RS00) to its foot-edge torque floor. Routes the
+    PEAK lateral load off the ankle onto the swing leg. POS weight. [num_envs]."""
+    from isaaclab.utils.math import quat_rotate_inverse
+    asset = env.scene[asset_cfg.name]
+    h = asset.data.root_pos_w[:, 2].clamp(min=0.3)                                 # CoM height (base z)
+    omega = torch.sqrt(9.81 / h)                                                   # Hof eigenfrequency [E]
+    xcom_y = asset.data.root_lin_vel_b[:, 1] / omega                              # extrapolated-CoM lateral offset (base frame) [E]
+    foot_w = asset.data.body_pos_w[:, asset_cfg.body_ids, :]                       # feet world pos [E, nf, 3]
+    rel_w = foot_w - asset.data.root_pos_w[:, None, :]                             # relative to base [E, nf, 3]
+    nf = foot_w.shape[1]
+    quat = asset.data.root_quat_w[:, None, :].expand(-1, nf, -1).reshape(-1, 4)
+    foot_b = quat_rotate_inverse(quat, rel_w.reshape(-1, 3)).reshape(foot_w.shape) # feet in base frame
+    mid_y = foot_b[:, :, 1].mean(dim=1)                                            # lateral support center [E]
+    return torch.exp(-((mid_y - xcom_y) ** 2) / (sigma ** 2))                      # POS weight [E]

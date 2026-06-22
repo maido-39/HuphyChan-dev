@@ -249,6 +249,22 @@ class BipedRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.dof_torques_l2.weight = -1.5e-6
         self.rewards.dof_torques_l2.params["asset_cfg"] = SceneEntityCfg("robot", joint_names=LEG_TORQUE_JOINTS)
 
+        # ★ gaitfix_v5 (research wdi7t94jn): the PEAK lateral ankle_roll sits at the PHYSICAL floor (mg x foot-half-
+        #   width = foot edge); reward shaping (v3 joint-angle, v4 wide-stance+foot-flat) provably could NOT lower
+        #   it. ROUTE the peak OFF the ankle (do NOT push the ankle harder): (1) HIP-ROLL lateral-balance offload --
+        #   joint_deviation_hip was pinning hip_roll to default -> scope it to hip_YAW only + a RELAXED hip_roll
+        #   term so the hip can abduct to take lateral load; (2) lateral FOOT-PLACEMENT (capture-point) so STEPS
+        #   catch lateral drift instead of the stance ankle. CLEAN artifact-vs-HW discriminator: ankle_roll PEAK
+        #   <90% -> gait artifact; still pins 14 N.m -> RS00 under-spec (HW).
+        #   reward_research 2026-06-22_11-00_ankle_roll_peak_gaitfix_v5_or_hw.
+        self.rewards.joint_deviation_hip.params["asset_cfg"] = SceneEntityCfg("robot", joint_names=[".*_hip_yaw_joint"])  # free hip_roll
+        self.rewards.joint_deviation_hiproll = RewTerm(   # RELAXED hip_roll reg (was -0.1 inside the hip term) -> hip can abduct for lateral balance
+            func=mdp.joint_deviation_l1, weight=-0.02,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_roll_joint"])})
+        self.rewards.lateral_foot_placement = RewTerm(    # ★ capture-point: feet support-center tracks XcoM -> STEPS catch lateral drift, not the ankle
+            func=pyg_rewards.lateral_foot_placement, weight=0.3,
+            params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY), "sigma": 0.06})
+
         # --- Commands (omnidirectional). Forward up to 2.0 m/s (~Fr 0.51, walk-run boundary;
         #     2.5 m/s would be a running/flight regime -> unstable for walking PPO + unrepresentative
         #     joint loads). The wide vx range is reached via a COMMAND CURRICULUM (see curriculum
