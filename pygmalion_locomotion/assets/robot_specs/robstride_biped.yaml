@@ -32,7 +32,7 @@ init:
     ".*_knee_joint": -0.40
     ".*_ankle_pitch_joint": 0.20
     ".*_ankle_roll_joint": 0.0
-    ".*_toe_joint": 0.0
+    # toe joint removed (rigid hard-link) -- no init
 
 roles:
   base: base_link                    # trunk/pelvis body (height scan, fall-contact, push)
@@ -87,18 +87,9 @@ actuators:
     stiffness: 40.0
     damping: 2.0
     armature: 0.0015
-  toe_passive:                       # NO motor -> passive spring-damper to default (0)
-    type: passive_spring
-    joints: [".*_toe_joint"]
-    # ★ tuned from the toe-joint research (docs/15): human MTP ~56 N*m/rad; the KEY stability knob
-    #   is ARMATURE (rotor inertia). old armature 0.0005 was ~1/24 of Cassie's toe (0.01225) -> the
-    #   low-inertia toe + high stiffness blew up numerically. Fix: stiffness 150->60 (human-like),
-    #   armature 0.0005->0.008 (Cassie-like), damping 4 (kills slap). effort 60 > peak spring torque.
-    effort_limit: 60.0
-    velocity_limit_rpm: 315.0
-    stiffness: 60.0
-    damping: 4.0
-    armature: 0.008
+  # ★ toe_passive REMOVED (user 2026-06-22): the toe joint is now a RIGID hard-link (joint deleted in robot.xml)
+  #   -> no passive DOF. Tests whether the floppy passive-toe spring was destabilizing the gait (G1 reward
+  #   walked; every reward I added on top did not -> suspect the underactuated toe). Restore from git if needed.
 
 # Policy-controlled joints. If omitted, derived = union of all type:motor groups
 # (so passive joints are always excluded automatically). Override only if you need a subset.

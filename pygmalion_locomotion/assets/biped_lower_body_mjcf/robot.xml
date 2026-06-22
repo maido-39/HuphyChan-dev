@@ -83,7 +83,7 @@
                   <geom pos="0.109751 -0.174834 0.786996" quat="1 0 0 0" mesh="L_feet_1" class="collision" name="L_foot_col" type="mesh" contype="9" conaffinity="8" />
                   <body name="L_toe_link" pos="-0.022377 -0.192019 -0.049772">
                     <inertial pos="0.0022345 -0.0212923 -0.00971525" quat="-0.0398115 0.692985 0.0175697 0.719638" mass="0.129142" diaginertia="0.000101106 7.31339e-05 4.77603e-05" />
-                    <joint name="L_toe_joint" pos="0 0 0" axis="1 0 0" range="-0.872665 0" class="toe" />
+                    <!-- ★ toe joint REMOVED (user 2026-06-22): rigid hard-link (welded to foot) -> test if the passive toe DOF was destabilizing -->
                     <geom pos="0.132128 0.017185 0.836768" quat="1 0 0 0" mesh="L_feet_toe_1" class="visual" type="mesh" />
                     <geom pos="0.132128 0.017185 0.836768" quat="1 0 0 0" mesh="L_feet_toe_1" class="collision" name="L_toe_col" type="mesh" />
                   </body>
@@ -125,7 +125,7 @@
                   <geom pos="-0.109806 -0.174834 0.786996" quat="1 0 0 0" mesh="R_feet_1" class="collision" name="R_foot_col" type="mesh" contype="9" conaffinity="8" />
                   <body name="R_toe_link" pos="0.022377 -0.192019 -0.049772">
                     <inertial pos="-0.00223392 -0.0212923 -0.00971525" quat="0.0175697 0.719638 -0.0398115 0.692985" mass="0.129142" diaginertia="0.000101106 7.31339e-05 4.77603e-05" />
-                    <joint name="R_toe_joint" pos="0 0 0" axis="1 0 0" range="-0.785398 0" class="toe" />
+                    <!-- ★ toe joint REMOVED (user 2026-06-22): rigid hard-link (welded to foot) -->
                     <geom pos="-0.132183 0.017185 0.836768" quat="1 0 0 0" mesh="R_feet_toe_1" class="visual" type="mesh" />
                     <geom pos="-0.132183 0.017185 0.836768" quat="1 0 0 0" mesh="R_feet_toe_1" class="collision" name="R_toe_col" type="mesh" />
                   </body>
