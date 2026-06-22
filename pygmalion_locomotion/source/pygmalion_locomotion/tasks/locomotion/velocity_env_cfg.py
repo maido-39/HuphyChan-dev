@@ -274,6 +274,22 @@ class BipedRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.flat_orientation_l2.weight = -0.5   # was -1.0: allow pelvic tilt/obliquity 4-7deg
         self.rewards.foot_roll_flat.params["roll_only"] = True  # allow foot PITCH (heel-rise/push-off), keep roll flat
 
+        # ★ gaitfix_v7 (research wax3nuuc3, ADVERSARIAL-VERIFIED): base relaxation ALONE was null (v6 base terms
+        #   contribute ~0 at the operating point) -> bundle the GENERATIVE levers. (1) base_height fixed-target
+        #   -> collapse FLOOR (vault free, G1/H1 pattern); (2) flat_orientation +-7deg DEADBAND (tilt free in-band,
+        #   strong -1.0 outside); (3) double_support bonus to restore the step-to-step TRANSITION that mechanically
+        #   PRODUCES the vault (single-support 98% -> human ~15-20% double). cop_progression toe reward = flat_env_cfg.
+        #   ankle_pushoff HELD 0.5 (ankle_pitch RS03-saturated; no v7 term couples to ankle torque).
+        self.rewards.base_height.func = pyg_rewards.base_height_floor
+        self.rewards.base_height.weight = -0.5
+        self.rewards.base_height.params = {"target_height": TARGET_BASE_HEIGHT, "margin": 0.06}
+        self.rewards.flat_orientation_l2.func = pyg_rewards.flat_orientation_deadband
+        self.rewards.flat_orientation_l2.weight = -1.0
+        self.rewards.flat_orientation_l2.params = {"deadband": 0.122}
+        self.rewards.double_support = RewTerm(   # restore step-to-step transition -> vault driver
+            func=pyg_rewards.double_support_bonus, weight=0.1,
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_BODY)})
+
         # --- Commands (omnidirectional). Forward up to 2.0 m/s (~Fr 0.51, walk-run boundary;
         #     2.5 m/s would be a running/flight regime -> unstable for walking PPO + unrepresentative
         #     joint loads). The wide vx range is reached via a COMMAND CURRICULUM (see curriculum

@@ -76,11 +76,11 @@ class BipedFlatForefootEnvCfg(BipedFlatEnvCfg):
         #   reward (H1) is an anti-pattern: |tau_toe|=k*deflection -> reward-hackable by a static toe-curl
         #   (worse here, the toe is over-damped). Reward WHERE the foot bears load (forefoot GRF fraction
         #   at terminal single support) = the legitimate CAUSE that loads the passive toe, hard to game.
-        self.rewards.forefoot_cop = RewTerm(
-            func=pyg_rewards.forefoot_cop, weight=0.8,   # ★ 강화: 간접 CoP-roll driver (toe 적재) — ankle_pushoff(직접) 대신
+        self.rewards.forefoot_cop = RewTerm(   # ★ gaitfix_v7: STATIC forefoot_cop -> TEMPORAL cop_progression (tau_n*frac = heel->toe roll). v6 measured static frac at only 0.06% of reward. research wax3nuuc3.
+            func=pyg_rewards.cop_progression, weight=1.2,
             params={"foot_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
                     "forefoot_cfg": SceneEntityCfg("contact_forces", body_names=".*_toe_link"),
-                    "contact_thresh": 8.0, "late_time": 0.15})
+                    "contact_thresh": 8.0, "T_stance": 0.35})
         # Rank-2 — vel-normalized power CoT (let the free spring do push-off work; NEVER standalone,
         #   subordinate to CoP + velocity tracking).
         self.rewards.power_cot = RewTerm(
@@ -125,11 +125,11 @@ class BipedRoughForefootEnvCfg(BipedRoughEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         # identical forefoot/impact reward set to BipedFlatForefootEnvCfg (so flat vs rough is comparable)
-        self.rewards.forefoot_cop = RewTerm(
-            func=pyg_rewards.forefoot_cop, weight=0.8,   # ★ 강화: 간접 CoP-roll driver (toe 적재) — ankle_pushoff(직접) 대신
+        self.rewards.forefoot_cop = RewTerm(   # ★ gaitfix_v7: STATIC forefoot_cop -> TEMPORAL cop_progression (tau_n*frac = heel->toe roll). v6 measured static frac at only 0.06% of reward. research wax3nuuc3.
+            func=pyg_rewards.cop_progression, weight=1.2,
             params={"foot_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
                     "forefoot_cfg": SceneEntityCfg("contact_forces", body_names=".*_toe_link"),
-                    "contact_thresh": 8.0, "late_time": 0.15})
+                    "contact_thresh": 8.0, "T_stance": 0.35})
         self.rewards.power_cot = RewTerm(
             func=pyg_rewards.power_cot, weight=0.4,
             params={"asset_cfg": SceneEntityCfg("robot", joint_names=ACTUATED_JOINTS), "scale": 0.003})

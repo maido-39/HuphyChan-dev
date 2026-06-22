@@ -254,3 +254,63 @@ def lateral_foot_placement(env, asset_cfg: SceneEntityCfg, sigma: float = 0.06):
     foot_b = quat_rotate_inverse(quat, rel_w.reshape(-1, 3)).reshape(foot_w.shape) # feet in base frame
     mid_y = foot_b[:, :, 1].mean(dim=1)                                            # lateral support center [E]
     return torch.exp(-((mid_y - xcom_y) ** 2) / (sigma ** 2))                      # POS weight [E]
+
+
+def cop_progression(env, foot_cfg: SceneEntityCfg, forefoot_cfg: SceneEntityCfg,
+                    T_stance: float = 0.35, contact_thresh: float = 8.0):
+    """★ TEMPORAL heel->toe CoP progression (research wax3nuuc3 gaitfix_v7, replaces the STATIC forefoot_cop):
+    reward the forefoot GRF fraction RISING with normalized stance phase (contact-time as a clock-proxy) so the
+    CoP must ROLL forward through stance -> loads the passive toe toward ~human moment WITHOUT cranking the
+    (already RS03-saturated) ankle. r = tau_n * frac * gate: early stance (tau_n~0) pays ~0 even at a high
+    forefoot fraction -> heel/mid first; terminal stance (tau_n->1) pays only if the forefoot fraction is high
+    -> the CoP must have rolled forward. No gait clock (current_contact_time), no heel body (2-segment foot_link
+    vs toe_link fraction). foot_cfg=foot_link, forefoot_cfg=toe_link, SAME L,R order. POSITIVE weight. [num_envs]."""
+    sensor = env.scene.sensors[foot_cfg.name]
+    fz = sensor.data.net_forces_w[..., 2].abs()                                    # [E, nbodies] |Fz|
+    f_foot = fz[:, foot_cfg.body_ids]                                              # [E, nfoot] heel/plate
+    f_fore = fz[:, forefoot_cfg.body_ids]                                          # [E, nfoot] forefoot(toe)
+    total = f_foot + f_fore
+    frac = f_fore / (total + 1e-3)                                                 # forefoot CoP fraction [0,1]
+    in_contact = total > contact_thresh
+    other_swing = ~in_contact[:, [1, 0]]                                           # single support (other foot up)
+    fwd = (env.scene["robot"].data.root_lin_vel_b[:, 0] > 0.0).unsqueeze(1)        # [E,1] forward
+    try:
+        ct = sensor.data.current_contact_time[:, foot_cfg.body_ids]               # [E, nfoot] time in contact
+    except Exception:
+        ct = torch.zeros_like(frac)
+    tau_n = torch.clamp(ct / T_stance, 0.0, 1.0)                                   # normalized stance phase [0,1]
+    return torch.sum(tau_n * frac * (in_contact & other_swing & fwd).float(), dim=1)  # POS weight [E]
+
+
+def base_height_floor(env, target_height: float, margin: float = 0.06, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
+    """★ Asymmetric base-height FLOOR (research wax3nuuc3 gaitfix_v7, replaces fixed-target base_height_l2): penalize
+    ONLY a sag below (target - margin) -- a squat-collapse safety net -- and leave the whole normal-bob band + the
+    single-support VAULT free. A fixed-target L2 fights the metabolically-optimal vault (Ortega&Farley) and our
+    measured walking height (82.5cm) is already below the 85cm target; margin 0.06 clears the operating band so the
+    pelvis can rise. (IsaacLab G1/H1 drop base_height entirely.) NEG weight. [num_envs]."""
+    h = env.scene[asset_cfg.name].data.root_pos_w[:, 2]
+    sag = (target_height - margin - h).clamp(min=0.0)                              # 0 above (target-margin); grows on collapse
+    return sag * sag
+
+
+def flat_orientation_deadband(env, deadband: float = 0.122, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
+    """★ Base-orientation penalty with a DEADBAND (research wax3nuuc3 gaitfix_v7, replaces flat_orientation_l2):
+    zero penalty inside a +-deadband cone (projected-gravity xy magnitude ~= sin(tilt); 0.122 = sin 7deg) so the
+    natural pelvic tilt/obliquity (4-7deg) is FORMALLY free, square penalty outside (use a STRONG -1.0 weight so
+    off-band correction is firmer than v6's -0.5). Fixes v6's 'tilt unchanged' (v6 only scaled the slope, barely
+    changing the already-tiny gradient; a deadband changes the SHAPE -> exactly zero pressure in-band). NEG weight."""
+    pg = env.scene[asset_cfg.name].data.projected_gravity_b[:, :2]                 # [E,2] = [pitch-tilt, roll-tilt]
+    over = (torch.norm(pg, dim=1) - deadband).clamp(min=0.0)
+    return over * over                                                             # 0 inside +-7deg, square outside
+
+
+def double_support_bonus(env, sensor_cfg: SceneEntityCfg, contact_thresh: float = 8.0):
+    """★ Restore the step-to-step TRANSITION (research wax3nuuc3 gaitfix_v7 adversarial fix): a 98%-single-support
+    flat-foot gait has NO double-support -> no heel-strike/push-off CoM redirection -> NO vault (the pelvis has no
+    mechanical reason to bob; Adamczyk&Kuo). A small POSITIVE reward for BOTH feet in contact nudges toward the
+    human ~15-20% double-support that PRODUCES the vault. Small weight (counter-balanced by feet_air_time +
+    velocity tracking so it can't collapse to standing). POSITIVE weight. [num_envs]."""
+    sensor = env.scene.sensors[sensor_cfg.name]
+    f = sensor.data.net_forces_w[:, sensor_cfg.body_ids, :]                        # [E, nfoot, 3]
+    in_contact = torch.norm(f, dim=-1) > contact_thresh                           # [E, nfoot]
+    return in_contact.all(dim=1).float()                                          # [E] both feet down (double support)
