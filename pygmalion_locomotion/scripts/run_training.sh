@@ -31,6 +31,7 @@ CK="$D/model_$(ls "$D"/model_*.pt 2>/dev/null | sed 's/.*model_//;s/\.pt//' | so
 case "$TASK" in
   *G1Vanilla*) PLAYTASK="Pygmalion-Velocity-Flat-G1Vanilla-Play-v0" ;;
   *OursG1cond*) PLAYTASK="Pygmalion-Velocity-Flat-OursG1cond-Play-v0" ;;
+  *G1Impact*) PLAYTASK="Pygmalion-Velocity-Flat-G1Impact-Play-v0" ;;
   *Rough*) PLAYTASK="Pygmalion-Velocity-Rough-Forefoot-Play-v0" ;;
   *)       PLAYTASK="Pygmalion-Velocity-Flat-Play-v0" ;;
 esac

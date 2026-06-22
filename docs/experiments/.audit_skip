@@ -12,3 +12,5 @@ vidtest
 2026-06-22_00-07-58_sweep_g2p5
 # INVALID config-bug run (G1Vanilla inherited BipedRoughEnvCfg = ROUGH terrain; should be FLAT; killed iter750, superseded by g1van_flat 2026-06-22):
 2026-06-22_17-28-08_g1vanilla
+# A/B negative result (OUR gaitfix reward under G1 conditions = DOESN'T walk, error_vel 0.90; killed iter612; finding captured in g1van_full report + chat 2026-06-22):
+2026-06-22_20-02-38_ours_g1cond

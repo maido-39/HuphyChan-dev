@@ -21,6 +21,7 @@ from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import Re
 from . import mdp
 from .velocity_env_cfg import FOOT_BODY
 from .flat_env_cfg import BipedFlatEnvCfg, BipedFlatForefootEnvCfg   # FLAT base; Forefoot = OUR gaitfix reward
+from . import rewards as pyg_rewards   # custom reward funcs for the minimal targeted additions
 
 
 @configclass
@@ -132,6 +133,53 @@ class BipedFlatForefootG1CondEnvCfg(BipedFlatForefootEnvCfg):
 
 @configclass
 class BipedFlatForefootG1CondEnvCfg_PLAY(BipedFlatForefootG1CondEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 32
+        self.scene.env_spacing = 2.5
+        self.episode_length_s = 40.0
+        self.scene.terrain.max_init_terrain_level = None
+        if self.scene.terrain.terrain_generator is not None:
+            self.scene.terrain.terrain_generator.num_rows = 5
+            self.scene.terrain.terrain_generator.num_cols = 5
+            self.scene.terrain.terrain_generator.curriculum = False
+        self.observations.policy.enable_corruption = False
+        self.events.base_external_force_torque = None
+        self.events.push_robot = None
+        self.events.add_base_mass = None
+        self.events.base_com = None
+        self.events.physics_material.params["static_friction_range"] = (0.9, 0.9)
+        self.events.physics_material.params["dynamic_friction_range"] = (0.7, 0.7)
+
+
+# ============================================================================================
+# ★ G1 vanilla base + ONLY the truly-necessary additions (user 2026-06-22): ground-IMPACT reduction +
+#   no knee hyperextension. NOT the 20-term gaitfix mess -- minimal & targeted (the G1 reward WALKS; just
+#   tame the impact + protect the knee, for HW survival 1.5-2.7 kN). Keeps G1 conditions (fwd-only, light DR).
+# ============================================================================================
+@configclass
+class BipedG1ImpactEnvCfg(BipedG1VanillaEnvCfg):
+    """G1 vanilla reward + 3 targeted terms: foot_landing_vel + foot_impact_force (low-impact landing) +
+    knee_straight (no 0..-10deg hyperextension). Nothing else."""
+
+    def __post_init__(self):
+        super().__post_init__()                       # G1 vanilla rewards + G1 conditions (fwd-only, light DR)
+        # ★ ground-IMPACT reduction (soft landing -> connection-load survival within 1.5-2.7 kN)
+        self.rewards.foot_landing_vel = RewTerm(
+            func=pyg_rewards.foot_landing_vel, weight=-1.0,
+            params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY), "height_thresh": 0.12})
+        self.rewards.foot_impact_force = RewTerm(
+            func=pyg_rewards.foot_impact_force, weight=-0.005,
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_BODY),
+                    "force_soft": 650.0, "cap_over": 1500.0})
+        # ★ no knee hyperextension (knee 0..-10deg forbidden mid-walk -- stated hard requirement; only fires near the limit)
+        self.rewards.knee_straight = RewTerm(
+            func=pyg_rewards.knee_straight_penalty, weight=-5.0,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_knee_joint"]), "min_flexion": -0.17})
+
+
+@configclass
+class BipedG1ImpactEnvCfg_PLAY(BipedG1ImpactEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.scene.num_envs = 32
