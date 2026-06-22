@@ -10,3 +10,5 @@ vidtest
 2026-06-21_23-01-44_sweep_g1p5
 2026-06-21_23-38-32_sweep_g2p0
 2026-06-22_00-07-58_sweep_g2p5
+# INVALID config-bug run (G1Vanilla inherited BipedRoughEnvCfg = ROUGH terrain; should be FLAT; killed iter750, superseded by g1van_flat 2026-06-22):
+2026-06-22_17-28-08_g1vanilla
