@@ -19,7 +19,8 @@ from isaaclab.utils import configclass
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import RewardsCfg
 
 from . import mdp
-from .velocity_env_cfg import BipedRoughEnvCfg, FOOT_BODY
+from .velocity_env_cfg import FOOT_BODY
+from .flat_env_cfg import BipedFlatEnvCfg   # ★ FLAT terrain base (was BipedRoughEnvCfg = rough; bug fix)
 
 
 @configclass
@@ -53,8 +54,10 @@ class G1VanillaRewards(RewardsCfg):
 
 
 @configclass
-class BipedG1VanillaEnvCfg(BipedRoughEnvCfg):
-    """Our robot + scene/sensors, but the G1 VANILLA reward set (baseline, user 2026-06-22)."""
+class BipedG1VanillaEnvCfg(BipedFlatEnvCfg):
+    """Our robot + scene/sensors on FLAT terrain (matches the gaitfix Flat-Forefoot baseline), but the G1
+    VANILLA reward set (baseline, user 2026-06-22). Inherits BipedFlatEnvCfg = plane terrain; the flat reward
+    tweaks are discarded by the self.rewards swap below."""
 
     def __post_init__(self):
         super().__post_init__()                       # robot/scene/sensors/events + (discarded) gaitfix rewards
