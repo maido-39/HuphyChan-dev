@@ -22,5 +22,6 @@
 - [[raw/humanoid-hw-specs]] — 실제 휴머노이드 질량·세그먼트·PD 검증
 - [[raw/knee-actuator-landscape]] — 실제 휴머노이드 knee 감속비/토크 + 저감속 철학(Wensing 2017) + 액추에이터 시장
 - [[raw/cop-contact-reward-formulas]] — Siekmann/Walk-These-Ways verbatim 보상공식(★ CoP 보상 부재 검증)
+- [[raw/research-methodology-multiagent]] — multi-agent 연구 방법론(구조 vs 페르소나) 발췌·수치(⚠ 일부 arXiv id 미래표기=추정)
 
 (이후 연구는 ingest 워크플로우대로 여기에 추가.)
