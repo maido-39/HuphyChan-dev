@@ -17,7 +17,12 @@
 ## 3. 배포 / sim2real (verified)
 - `deploy/deploy_real/common/command_helper.py`: `class MotorMode: PR=0  # Series Control for Pitch/Roll`, `AB=1  # Parallel Control for A/B Joints`.
 - `deploy/deploy_real/deploy_real.py`: `self.mode_pr_ = MotorMode.PR` → `init_cmd_hg(..., self.mode_pr_)`로 모드 전송. **PR(Series) 모드 = ankle pitch/roll 명령(sim과 동일 joint-space)을 보내면 펌웨어(`mode_machine`)가 내부에서 병렬 모터 A/B로 변환**.
-- ★ **실제 rod 기구학/J^T 수식은 repo에 없음**(`sin/cos/rod/jacobian` grep 0건) = 펌웨어에 구현. python 측은 모드 플래그만 세팅.
+- ★ **실제 rod 기구학/J^T 수식은 repo에 없음**(`sin/cos/rod/jacobian` grep 0건) = 펌웨어에 구현. python 측은 모드 플래그만 세팅. (`unitree_mujoco`의 G1도 직렬 — equality/tendon 0 — 이중확인.)
+
+### PR vs AB 모드 (Weston/Unitree 문서 + 웹 verified)
+- **PR(기본)**: pitch/roll 모터 제어 = URDF 직렬과 일치. **펌웨어가 PR↔모터 변환을 내부 처리** → sim-trained 정책 그대로 보냄.
+- **AB**: A/B 모터 직접 제어 = **"사용자가 병렬 기구학을 직접 계산해야"**(Weston G1 가이드). Unitree는 변환 수식 **비공개**(펌웨어/CAD).
+- ★ **IK인가?**: joint(pitch/roll)→motor(A/B) 역기구학이 맞으나 **2-DOF 병렬발목은 닫힌형(analytic), 반복 IK 솔버 아님**. 정기구학 `pitch≈k_p(θ_A+θ_B)/2, roll≈k_r(θ_A−θ_B)/2`(차동)+rod 삼각함수; 역+`τ_motor=J^T·τ_joint`. = 닫힌 펌웨어 블랙박스(PR) 또는 사용자 닫힌형(AB).
 
 ## 4. ★ 우리 로봇 적용 (2-RSU 채택 시)
 - 우리 sim은 이미 `ankle_pitch`/`ankle_roll` 직렬 → **G1과 동일 구조. 그대로 가면 됨**(병렬을 sim에 넣을 필요 없음; IsaacLab/PhysX는 닫힌루프 native 미지원).
