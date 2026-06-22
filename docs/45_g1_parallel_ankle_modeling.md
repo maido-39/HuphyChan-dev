@@ -24,6 +24,14 @@
 - **AB**: A/B 모터 직접 제어 = **"사용자가 병렬 기구학을 직접 계산해야"**(Weston G1 가이드). Unitree는 변환 수식 **비공개**(펌웨어/CAD).
 - ★ **IK인가?**: joint(pitch/roll)→motor(A/B) 역기구학이 맞으나 **2-DOF 병렬발목은 닫힌형(analytic), 반복 IK 솔버 아님**. 정기구학 `pitch≈k_p(θ_A+θ_B)/2, roll≈k_r(θ_A−θ_B)/2`(차동)+rod 삼각함수; 역+`τ_motor=J^T·τ_joint`. = 닫힌 펌웨어 블랙박스(PR) 또는 사용자 닫힌형(AB).
 
+## 3.5 ★ joint 파라미터 충실도 — G1은 병렬 보정을 *안 한다* (verified)
+질문: 직렬 모델이면 병렬의 반사관성·마찰이 빠지는데 joint 파라미터로 보정하나? → **G1은 안 함.**
+- G1 MJCF 발목 joint = `actuatorfrcrange ±50`뿐. **`armature` 0 · `frictionloss` 0 · `damping` 0** (default 클래스에도 없음) = **모터 반사관성·rod/베어링 마찰 미모델**. 링크 `inertial`(mass 0.608·diaginertia)만 CAD 실측.
+- `g1_config.py`: `armature=0`(base 기본값), joint friction 0. `domain_rand` = 지면마찰[0.1,1.25]·base질량·push만 — **joint armature/friction 랜덤화 0**.
+- 왜 그래도 됨: **PD 게인(kp40/kd2)을 실로봇서 튜닝** → 컨트롤러가 미모델 동역학 흡수 + DR robustness + G1 backdrivable QDD는 마찰 작음 + position 제어(action_scale 0.25)라 관성/마찰 민감도 낮음.
+- ★ **덜 엄밀한 쪽**. 엄밀법(PACE/K-Bot·[[44_sim2real_hw_matching]]): **armature=I_rotor·gear² + friction 3항(Coulomb/viscous/static) 벤치 ID**. ★ **병렬 발목은 반사관성이 *각도의존*(병렬 야코비안 J(θ))** → 상수 armature는 근사(중립/worst-case).
+- 우리: armature는 *설정함*(RS00 0.0015·RS03 0.0049 = G1보다 엄밀) but **friction 전무**([[44_sim2real_hw_matching]] §6 미해결). 2-RSU면 armature = 2모터를 J(θ)로 반사한 값.
+
 ## 4. ★ 우리 로봇 적용 (2-RSU 채택 시)
 - 우리 sim은 이미 `ankle_pitch`/`ankle_roll` 직렬 → **G1과 동일 구조. 그대로 가면 됨**(병렬을 sim에 넣을 필요 없음; IsaacLab/PhysX는 닫힌루프 native 미지원).
 - 병렬→모터 변환은 **배포 SDK/펌웨어**에 (RobStride CAN + 우리 rod 기하). sim의 flat joint effort 한계(예 RS00 14·RS03 60)는 병렬 기구의 **각도의존 유효토크를 근사**한 것 = 충실도 단순화([[37_ankle_linkage_fidelity]]·[[41_ankle_pitch_pushoff_rs03_underspec]]).
