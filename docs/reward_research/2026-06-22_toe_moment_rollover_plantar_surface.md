@@ -1,4 +1,5 @@
 # reward 연구 — toe moment(왜 15 N·m뿐인가) + heel→toe rollover로 plantar surface 쓰게 하기 (2026-06-22)
+> ⚠ **SUPERSEDED** (finder 노트) — 정본: [[2026-06-22_12-30_toe_rollover_cop_progression_gaitfix_v6]]. README 인덱스 참조.
 
 > 트리거: gaitfix_v4 측정 — toe Fz max ~340N(67%BW)이지만 toe joint torque ~15 N·m·굴곡 5–11°(mean −1°)뿐. 사용자: "인간 MTP는 push-off ~40 N·m·30–60° 굴곡인데 우리는 안 굴림." 질문 (1) rollover로 toe moment를 30–40 N·m로 올릴 수 있나, 아니면 스프링을 더 무르게? (2) lateral edge가 아니라 발바닥 전체(heel→mid→forefoot→toe)를 쓰게 하는 보상은? 변경하려는 reward: forefoot_cop / 신규 contact-sequence·foot-pitch 항, 그리고 toe spring k. 웹+geometry 정량분석, confidence high.
 

@@ -1,4 +1,5 @@
 # reward 연구 — base(골반) 과도하게 rigid → CoM 수직진동 부족 (2026-06-22)
+> ⚠ **SUPERSEDED** (finder 노트) — 정본: [[2026-06-22_11-30_base_overconstrain_pelvis_swing_gaitfix_v6]]. README 인덱스 참조.
 > 트리거: 측정 — base_link(골반) 수직 CoM 진동 std ~1.0cm (amp ~1.4cm) = 사람(~2.5cm amp)의 **~55%**. 바꾸려는 reward: base_height_l2(−1.0)·flat_orientation_l2(−1.0)·lin_vel_z_l2(−0.2)·ang_vel_xy_l2(−0.05)·upright(+0.5). 가설(user): 이들이 자연 골반 swing(fore-aft + up-down + tilt/rotation)과 push-off vault를 억제. 조사(web, 6 sources, high confidence).
 
 ## 1. 직전 결과 분석
