@@ -79,6 +79,16 @@ class WrenchLogger:
             row["cmd_vy"] = float(cmd[1]) if cmd.size > 1 else 0.0
             row["cmd_wz"] = float(cmd[2]) if cmd.size > 2 else 0.0
 
+        # ★ base/pelvis motion for NATURAL-SWING analysis (vertical CoM bob + pelvic tilt/obliquity/rotation):
+        #   euler = base_roll(obliquity)/pitch(tilt)/yaw(rotation), wrapped to [-pi,pi]; world lin_vel = bob/sway.
+        from isaaclab.utils.math import euler_xyz_from_quat
+        import math as _m
+        _e = euler_xyz_from_quat(d.root_quat_w[i:i + 1])
+        for _nm, _ang in zip(("base_roll", "base_pitch", "base_yaw"), _e):
+            row[_nm] = float((float(_ang[0]) + _m.pi) % (2 * _m.pi) - _m.pi)
+        _lv = d.root_lin_vel_w[i].detach().cpu().numpy()
+        row["base_vx"] = float(_lv[0]); row["base_vy"] = float(_lv[1]); row["base_vz"] = float(_lv[2])
+
         # joint torque + velocity + position + MECHANICAL POWER (tau*omega) per joint.
         # (omega/qpos were read but never logged -> blocked CoT, electrical power, torque-speed
         #  validation, and the toe ankle-offload metric. See docs/21 + roadmap ws2d3t2mh.)
