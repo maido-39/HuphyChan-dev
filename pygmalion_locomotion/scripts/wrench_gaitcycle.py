@@ -46,7 +46,7 @@ def resample(sig, cycles):
 def draw(exp, d, cycles, ph, out, phased, info):
     jtypes = [jt for jt in ORDER if any(f"Fz_{s}_{J2L[jt]}" in d.files for s in "LR")]
     rows = len(jtypes)
-    fig, axes = plt.subplots(rows, 2, figsize=(10, 2.05 * rows), squeeze=False)
+    fig, axes = plt.subplots(rows, 2, figsize=(11, 3.0 * rows), squeeze=False)
     for r, jt in enumerate(jtypes):
         cell = {}
         for side in "LR":
@@ -57,8 +57,6 @@ def draw(exp, d, cycles, ph, out, phased, info):
                     stk = resample(d[k], cycles)
                     comps[c] = (stk.mean(0), np.percentile(stk, 5, 0), np.percentile(stk, 95, 0))
             cell[side] = comps
-        fmax = max([np.abs(np.r_[v[1], v[2]]).max() for s in cell for c, v in cell[s].items() if c[0] == "F"] + [1.0])
-        mmax = max([np.abs(np.r_[v[1], v[2]]).max() for s in cell for c, v in cell[s].items() if c[0] == "T"] + [1.0])
         for cidx, side in enumerate("LR"):
             ax = axes[r][cidx]; ax2 = ax.twinx()
             if phased:
@@ -66,14 +64,21 @@ def draw(exp, d, cycles, ph, out, phased, info):
                 ax.axvspan(info["toeoff"], 100, color="#1f77b4", alpha=0.06, zorder=0)
                 ax.axvline(info["toeoff"], color="#555", lw=0.9, ls=":", zorder=1)
                 ax.axvline(info["opp_ic"], color="#999", lw=0.7, ls=":", zorder=1)
+            fpk = mpk = 0.0
             for c, (mu, lo, hi) in cell[side].items():
                 axx = ax if c[0] == "F" else ax2
                 col = FCOL.get(c) or MCOL.get(c)
-                axx.plot(ph, mu, col, lw=1.5, ls=("-" if c[0] == "F" else "--"),
+                axx.plot(ph, mu, col, lw=1.7, ls=("-" if c[0] == "F" else "--"),
                          label=(c if c[0] == "F" else c.replace("T", "M")))
                 axx.fill_between(ph, lo, hi, color=col, alpha=0.10)
-            ax.set_ylim(-fmax * 1.12, fmax * 1.12); ax2.set_ylim(-mmax * 1.12, mmax * 1.12)
+                pk = float(np.abs(np.r_[lo, hi]).max())
+                fpk, mpk = (max(fpk, pk), mpk) if c[0] == "F" else (fpk, max(mpk, pk))
+            # each axis autoscales to its OWN data (max visibility); small margin so curves don't touch edges
+            ax.margins(y=0.10); ax2.margins(y=0.10)
             ax.axhline(0, color="#ccc", lw=0.4)
+            ax.text(0.015, 0.035, f"|F|max {fpk:.0f} N   |M|max {mpk:.0f} N·m", transform=ax.transAxes,
+                    fontsize=7, va="bottom", ha="left", color="#222",
+                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.65))
             ax.set_title(f"{side}_{jt}", fontsize=11)
             ax.tick_params(labelsize=7.5); ax2.tick_params(labelsize=7.5)
             if r == rows - 1:

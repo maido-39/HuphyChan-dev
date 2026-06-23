@@ -9,7 +9,7 @@
 - ★ **NOMINAL**(PLAY env, DR 끔). DR-worst 아님([[46_wrench_6dof_loads]] 주석 동일).
 
 ## 읽는 법
-- **배치**: 행 = 관절(proximal→distal: hip_pitch→…→toe), 열 = **L \| R**(같은 행·y축 공유) → **좌우 비대칭 직접 비교**.
+- **배치**: 행 = 관절(proximal→distal: hip_pitch→…→toe), 열 = **L \| R** 인접. 각 subplot은 **자기 데이터에 독립 autoscale**(개형 최대 가시) — 절대크기 비교는 좌하단 **`|F|max·|M|max` 주석**으로(축 스케일이 달라도 크기 읽힘).
 - **X = 보행주기 %** (0% = 기준발 heel-strike/접지). **Y = 힘[N] 좌축 / 모멘트[N·m] 우축**.
 - **색 분리**: 힘 Fx/Fy/Fz = **쿨(파랑·청록·남색, 실선)**, 모멘트 Mx/My/Mz = **웜(빨강·주황·보라, 점선)** → 힘/모멘트 한눈에 구분. **음영** = 주기간 변동(p5-p95).
 - **phased 버전**(권장): 🟢 **stance**(발 접지) / 🔵 **swing**(다리 흔듦) 음영 + 점선 = **toe-off**(발 뗌) · **opposite-contact**(반대발 접지 = double-support 시작).
