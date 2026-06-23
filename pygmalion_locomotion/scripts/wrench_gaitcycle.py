@@ -100,6 +100,52 @@ def main():
         fig.savefig(out, dpi=85); plt.close(fig)
         print(f"[gc] {exp}: {len(cycles)} cycles -> {out}")
 
+        # ===== NEW: phase-annotated version (separate file _phased.png) =====
+        def rmean(sig):
+            return np.stack([np.interp(np.linspace(0, 1, NP), np.linspace(0, 1, b - a), np.asarray(sig)[a:b].astype(float))
+                             for a, b in cycles]).mean(0)
+        refg = rmean(np.abs(d[f"GRF_{bside}_foot_link_z"]))
+        opp = "R" if bside == "L" else "L"
+        oppg = rmean(np.abs(d[f"GRF_{opp}_foot_link_z"]))
+        ron = refg > 0.15 * max(refg.max(), 1.0)        # ref foot on ground (stance)
+        oon = oppg > 0.15 * max(oppg.max(), 1.0)        # opposite foot on ground
+        toeoff = float(ph[np.where(ron)[0][-1]]) if ron.any() else 60.0   # ref foot lifts (stance->swing)
+        opp_ic = float(ph[np.where(oon)[0][0]]) if oon.any() else 50.0     # opposite heel-strike (double support)
+        ds_frac = float((ron & oon).mean() * 100)
+        figp, axp = plt.subplots(rows, cols, figsize=(4.3 * cols, 2.9 * rows), squeeze=False)
+        for ax in axp.flat:
+            ax.axis("off")
+        for idx, (jl, lk) in enumerate(joints):
+            ax = axp[idx // cols][idx % cols]; ax.axis("on"); ax2 = ax.twinx()
+            ax.axvspan(0, toeoff, color="#2ca02c", alpha=0.06, zorder=0)       # stance (foot down)
+            ax.axvspan(toeoff, 100, color="#1f77b4", alpha=0.06, zorder=0)     # swing (foot up)
+            ax.axvline(toeoff, color="#555", lw=0.9, ls=":", zorder=1)          # toe-off
+            ax.axvline(opp_ic, color="#999", lw=0.7, ls=":", zorder=1)          # opposite contact
+            for comp, axx in [(FC, ax), (MC, ax2)]:
+                for c, col in comp.items():
+                    key = f"{c}_{lk}"
+                    if key not in d.files:
+                        continue
+                    sig = np.asarray(d[key]).astype(float)
+                    stk = np.stack([np.interp(np.linspace(0, 1, NP), np.linspace(0, 1, b - a), sig[a:b]) for a, b in cycles])
+                    axx.plot(ph, stk.mean(0), col, lw=1.3, label=(c if c[0] == "F" else c.replace("T", "M")))
+                    axx.fill_between(ph, np.percentile(stk, 5, 0), np.percentile(stk, 95, 0), color=col, alpha=0.12)
+            ax.set_title(jl, fontsize=9); ax.axhline(0, color="#ccc", lw=0.5)
+            ax.set_ylabel("force [N]", fontsize=7); ax2.set_ylabel("moment [N.m]", fontsize=7)
+            ax.set_xlabel("gait cycle [%]", fontsize=7); ax.tick_params(labelsize=6); ax2.tick_params(labelsize=6)
+            if idx == 0:
+                yt = ax.get_ylim()[1]
+                ax.text(toeoff / 2, yt * 0.9, "stance", ha="center", fontsize=6.5, color="#2ca02c", weight="bold")
+                ax.text((toeoff + 100) / 2, yt * 0.9, "swing", ha="center", fontsize=6.5, color="#1f77b4", weight="bold")
+                ax.legend(loc="lower left", fontsize=6, ncol=3); ax2.legend(loc="lower right", fontsize=6, ncol=3)
+        figp.suptitle(f"{exp} — gait cycle WITH PHASES ({bside}-stride, n={len(cycles)}): green=stance(foot down), "
+                      f"blue=swing(foot up); dotted = toe-off {toeoff:.0f}% & opposite-contact {opp_ic:.0f}%; "
+                      f"double-support {ds_frac:.0f}%  (NOMINAL not DR-worst)", fontsize=9)
+        figp.tight_layout(rect=[0, 0, 1, 0.96])
+        out2 = os.path.join(ASSET, f"{exp}_gaitcycle_phased.png")
+        figp.savefig(out2, dpi=85); plt.close(figp)
+        print(f"[gc] {exp}: phased  toe-off={toeoff:.0f}% opp-IC={opp_ic:.0f}% DS={ds_frac:.0f}% -> {out2}")
+
 
 if __name__ == "__main__":
     main()
