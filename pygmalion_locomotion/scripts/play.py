@@ -48,6 +48,14 @@ sys.argv = [sys.argv[0]] + hydra_args
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
+"""Check for installed RSL-RL version."""
+
+import importlib.metadata as metadata
+
+from packaging import version
+
+installed_version = metadata.version("rsl-rl-lib")
+
 """Rest everything follows."""
 
 import gymnasium as gym
@@ -66,9 +74,16 @@ from isaaclab.envs import (
 )
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
-from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
+from isaaclab_rl.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper, export_policy_as_jit, export_policy_as_onnx
+from isaaclab_rl.rsl_rl import (
+    RslRlOnPolicyRunnerCfg,
+    RslRlVecEnvWrapper,
+    export_policy_as_jit,
+    export_policy_as_onnx,
+    handle_deprecated_rsl_rl_cfg,
+    handle_deprecated_rsl_rl_checkpoint,
+)
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
@@ -89,9 +104,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     agent_cfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
 
-    # ★ GAIT-DEBUG close-up (user 2026-06-22: "영상 녹화하고 Audit"): single-robot NEAR camera so leg-cross /
-    #   foot-edge / knee-angle detail is visible (train.py's video is a density/terrain OVERVIEW, too far for
-    #   gait detail). Follows env 0 closely + draws the cmd/actual velocity arrows.
+    agent_cfg = handle_deprecated_rsl_rl_cfg(agent_cfg, installed_version)
+
+    # ★ GAIT-DEBUG close-up: single-robot NEAR camera for leg/foot detail + velocity arrows.
     if args_cli.video:
         try:
             env_cfg.viewer.origin_type = "env"
@@ -121,6 +136,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     else:
         resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
+    resume_path = handle_deprecated_rsl_rl_checkpoint(resume_path, installed_version)
+
     log_dir = os.path.dirname(resume_path)
 
     # create isaac environment
@@ -146,33 +163,28 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
-    # load previously trained model
     ppo_runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
     ppo_runner.load(resume_path)
 
-    # obtain the trained policy for inference
     policy = ppo_runner.get_inference_policy(device=env.unwrapped.device)
 
-    # extract the neural network module
-    # we do this in a try-except to maintain backwards compatibility.
-    try:
-        # version 2.3 onwards
-        policy_nn = ppo_runner.alg.policy
-    except AttributeError:
-        # version 2.2 and below
-        policy_nn = ppo_runner.alg.actor_critic
-
-    # export policy to onnx/jit
     export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
-    export_policy_as_jit(policy_nn, ppo_runner.obs_normalizer, path=export_model_dir, filename="policy.pt")
-    export_policy_as_onnx(
-        policy_nn, normalizer=ppo_runner.obs_normalizer, path=export_model_dir, filename="policy.onnx"
-    )
+    if version.parse(installed_version) >= version.parse("4.0.0"):
+        ppo_runner.export_policy_to_jit(path=export_model_dir, filename="policy.pt")
+        ppo_runner.export_policy_to_onnx(path=export_model_dir, filename="policy.onnx")
+    else:
+        try:
+            policy_nn = ppo_runner.alg.policy
+        except AttributeError:
+            policy_nn = ppo_runner.alg.actor_critic
+        export_policy_as_jit(policy_nn, ppo_runner.obs_normalizer, path=export_model_dir, filename="policy.pt")
+        export_policy_as_onnx(
+            policy_nn, normalizer=ppo_runner.obs_normalizer, path=export_model_dir, filename="policy.onnx"
+        )
 
     dt = env.unwrapped.step_dt
 
-    # reset environment
-    obs, _ = env.get_observations()
+    obs = env.get_observations()
     timestep = 0
     # simulate environment
     while simulation_app.is_running():

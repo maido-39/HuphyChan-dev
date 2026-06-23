@@ -36,3 +36,18 @@ screenshot.png
 **/.obsidian/workspace*.json
 docs/assets/*.mp4
 docs/assets/*official*.png
+
+# === Cloned upstream reference repos (not ours; reference only — do NOT commit) ===
+unitree_rl_lab/
+unitree_rl_mjlab/
+
+# === Large binaries: model checkpoints + videos (regenerable, never commit) ===
+*.pt
+*.onnx
+*.mp4
+
+# === Local wandb run logs (regenerable, large) ===
+**/wandb/
+
+# === Generated USD next to the MJCF source (rebuilt by convert_asset.py) ===
+**/biped_lower_body_mjcf/robot/

@@ -82,11 +82,11 @@
                   <joint name="L_ankle_roll_joint" pos="0 0 0" axis="0 1 0" range="-0.349066 0.349066" class="rs00" actuatorfrcrange="-14 14" />
                   <geom pos="0.109751 -0.174834 0.786996" quat="1 0 0 0" mesh="L_feet_1" class="visual" type="mesh" />
                   <!-- G1-style sole: 5 coplanar foot capsules on foot_link (y=forward, x=lateral, z=sole) -->
-                  <geom name="L_foot2_collision" class="foot_collision" fromto="-0.05 -0.171 -0.06  -0.05 -0.085 -0.06" />
-                  <geom name="L_foot3_collision" class="foot_collision" fromto="-0.03 -0.193 -0.06  -0.03 0.016 -0.06" />
-                  <geom name="L_foot4_collision" class="foot_collision" fromto="-0.01 -0.193 -0.06  -0.01 0.032 -0.06" />
-                  <geom name="L_foot5_collision" class="foot_collision" fromto="0.01 -0.180 -0.06  0.01 0.033 -0.06" />
-                  <geom name="L_foot6_collision" class="foot_collision" fromto="0.03 -0.171 -0.06  0.03 0.033 -0.06" />
+                  <geom name="L_foot2_collision" class="foot_collision" type="capsule" size="0.01" fromto="-0.05 -0.171 -0.06  -0.05 -0.085 -0.06" />
+                  <geom name="L_foot3_collision" class="foot_collision" type="capsule" size="0.01" fromto="-0.03 -0.193 -0.06  -0.03 0.016 -0.06" />
+                  <geom name="L_foot4_collision" class="foot_collision" type="capsule" size="0.01" fromto="-0.01 -0.193 -0.06  -0.01 0.032 -0.06" />
+                  <geom name="L_foot5_collision" class="foot_collision" type="capsule" size="0.01" fromto="0.01 -0.180 -0.06  0.01 0.033 -0.06" />
+                  <geom name="L_foot6_collision" class="foot_collision" type="capsule" size="0.01" fromto="0.03 -0.171 -0.06  0.03 0.033 -0.06" />
                   <body name="L_toe_link" pos="-0.022377 -0.192019 -0.049772">
                     <inertial pos="0.0022345 -0.0212923 -0.00971525" quat="-0.0398115 0.692985 0.0175697 0.719638" mass="0.129142" diaginertia="0.000101106 7.31339e-05 4.77603e-05" />
                     <joint name="L_toe_joint" pos="0 0 0" axis="1 0 0" range="-0.872665 0" class="toe" />
@@ -124,11 +124,11 @@
                   <inertial pos="0.00483618 -0.0710465 -0.0435501" quat="0.455717 0.564037 -0.470839 0.502488" mass="0.973562" diaginertia="0.00399906 0.00393731 0.000853629" />
                   <joint name="R_ankle_roll_joint" pos="0 0 0" axis="0 -1 0" range="-0.349066 0.349066" class="rs00" actuatorfrcrange="-14 14" />
                   <geom pos="-0.109806 -0.174834 0.786996" quat="1 0 0 0" mesh="R_feet_1" class="visual" type="mesh" />
-                  <geom name="R_foot2_collision" class="foot_collision" fromto="-0.03 -0.171 -0.06  -0.03 0.033 -0.06" />
-                  <geom name="R_foot3_collision" class="foot_collision" fromto="-0.01 -0.180 -0.06  -0.01 0.033 -0.06" />
-                  <geom name="R_foot4_collision" class="foot_collision" fromto="0.01 -0.193 -0.06  0.01 0.032 -0.06" />
-                  <geom name="R_foot5_collision" class="foot_collision" fromto="0.03 -0.193 -0.06  0.03 0.016 -0.06" />
-                  <geom name="R_foot6_collision" class="foot_collision" fromto="0.05 -0.171 -0.06  0.05 -0.085 -0.06" />
+                  <geom name="R_foot2_collision" class="foot_collision" type="capsule" size="0.01" fromto="-0.03 -0.171 -0.06  -0.03 0.033 -0.06" />
+                  <geom name="R_foot3_collision" class="foot_collision" type="capsule" size="0.01" fromto="-0.01 -0.180 -0.06  -0.01 0.033 -0.06" />
+                  <geom name="R_foot4_collision" class="foot_collision" type="capsule" size="0.01" fromto="0.01 -0.193 -0.06  0.01 0.032 -0.06" />
+                  <geom name="R_foot5_collision" class="foot_collision" type="capsule" size="0.01" fromto="0.03 -0.193 -0.06  0.03 0.016 -0.06" />
+                  <geom name="R_foot6_collision" class="foot_collision" type="capsule" size="0.01" fromto="0.05 -0.171 -0.06  0.05 -0.085 -0.06" />
                   <body name="R_toe_link" pos="0.022377 -0.192019 -0.049772">
                     <inertial pos="-0.00223392 -0.0212923 -0.00971525" quat="0.0175697 0.719638 -0.0398115 0.692985" mass="0.129142" diaginertia="0.000101106 7.31339e-05 4.77603e-05" />
                     <joint name="R_toe_joint" pos="0 0 0" axis="1 0 0" range="-0.785398 0" class="toe" />

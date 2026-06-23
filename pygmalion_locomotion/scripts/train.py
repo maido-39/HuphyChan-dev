@@ -22,6 +22,12 @@ parser.add_argument("--video", action="store_true", default=False, help="(legacy
 parser.add_argument("--no_video", action="store_true", default=False, help="DISABLE the default in-training video recording.")
 parser.add_argument("--video_length", type=int, default=400, help="Length of the recorded video (in steps). 400 ~= 8s.")
 parser.add_argument("--video_interval", type=int, default=1500, help="Interval between video recordings (in steps, ~60 iters).")
+parser.add_argument("--no_telemetry", action="store_true", default=False,
+                    help="DISABLE per-joint motor telemetry (applied_torque/joint_vel/joint_acc RMS/p95/max) logging.")
+parser.add_argument("--telemetry_scalar_interval", type=int, default=120,
+                    help="Env-steps between per-joint telemetry SCALAR updates to wandb (smaller = more frequent).")
+parser.add_argument("--telemetry_chart_interval", type=int, default=None,
+                    help="Env-steps between per-joint telemetry BAR-CHART renders (default: = --video_interval).")
 parser.add_argument("--init_checkpoint", type=str, default=None,
                     help="TRANSFER: initialize policy weights from this checkpoint (fresh optimizer, iter 0). "
                          "e.g. flat->rough. Requires matching obs/action dims.")
@@ -90,10 +96,18 @@ from isaaclab.envs import (
     ManagerBasedRLEnvCfg,
     multi_agent_to_single_agent,
 )
-from isaaclab.utils.dict import print_dict
-from isaaclab.utils.io import dump_pickle, dump_yaml
+import pickle
 
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper
+from isaaclab.utils.dict import print_dict
+from isaaclab.utils.io import dump_yaml
+
+
+def dump_pickle(filename: str, data: object):
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    with open(filename, "wb") as f:
+        pickle.dump(data, f)
+
+from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper, handle_deprecated_rsl_rl_cfg
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
@@ -117,6 +131,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     agent_cfg.max_iterations = (
         args_cli.max_iterations if args_cli.max_iterations is not None else agent_cfg.max_iterations
     )
+
+    agent_cfg = handle_deprecated_rsl_rl_cfg(agent_cfg, installed_version)
 
     # set the environment seed
     # note: certain randomizations occur in the environment initialization so we set the seed here
@@ -210,6 +226,27 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         print("[INFO] Recording videos during training.")
         print_dict(video_kwargs, nesting=4)
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
+
+    # per-joint motor telemetry: applied_torque / joint_vel / joint_acc -> RMS / p95 / max,
+    # logged to wandb (on rsl_rl's iteration axis) + saved bar charts in <log_dir>/telemetry/.
+    if not args_cli.no_telemetry:
+        from joint_telemetry import JointTelemetryWrapper
+
+        chart_interval = (
+            args_cli.telemetry_chart_interval
+            if args_cli.telemetry_chart_interval is not None
+            else args_cli.video_interval
+        )
+        env = JointTelemetryWrapper(
+            env,
+            log_dir=log_dir,
+            scalar_interval=args_cli.telemetry_scalar_interval,
+            chart_interval=chart_interval,
+        )
+        print(
+            f"[INFO] Joint telemetry ON (scalars every {args_cli.telemetry_scalar_interval} steps, "
+            f"charts every {chart_interval} steps -> {os.path.join(log_dir, 'telemetry')})."
+        )
 
     # wrap around environment for rsl-rl
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)

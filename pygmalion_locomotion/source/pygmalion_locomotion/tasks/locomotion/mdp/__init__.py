@@ -18,5 +18,10 @@ from .rewards import (  # noqa: F401
     no_flight_phase,
     applied_torque_soft_limit,
 )
+from .unitree_rewards import (  # noqa: F401
+    energy,
+    feet_gait,
+    foot_clearance_reward,
+)
 # Spec-driven physical-property override (startup event).
 from .events import apply_robot_physics  # noqa: F401

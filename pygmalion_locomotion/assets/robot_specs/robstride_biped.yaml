@@ -18,8 +18,7 @@ source:
 convert:
   fix_base: false                    # false = floating base for locomotion
   import_inertia_tensor: true        # use <inertial> mass/inertia from the source
-  self_collision: true               # ★ enable self-collision (PhysX auto-excludes parent-child;
-                                     #   so only left<->right leg / foot-foot collide). prevents scissoring.
+  self_collision: false              # primitive colliders + no inter-link PhysX collision (unitree-lab style)
   make_instanceable: true
 
 init:
