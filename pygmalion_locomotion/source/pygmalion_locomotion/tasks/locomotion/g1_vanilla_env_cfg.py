@@ -235,6 +235,14 @@ def _apply_g1_impact_stable(env):
     env.rewards.knee_straight = RewTerm(
         func=pyg_rewards.knee_straight_penalty, weight=-5.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_knee_joint"]), "min_flexion": -0.17})
+    # ★ anti-tiptoe/anti-shuffle (docs/reward_research/2026-06-28_heeltoe_stride_fix): swing-foot clearance.
+    #   A tiptoe/shuffle can't satisfy a swing-height target -> forces a real full-foot lift + longer stride
+    #   (Unitree G1 feet_swing_height -20). h_target = standing foot_link z (~0.07) + ~0.06 clearance; verify config-test.
+    env.rewards.feet_swing_height = RewTerm(
+        func=pyg_rewards.feet_swing_height, weight=-20.0,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY),
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_BODY), "h_target": 0.12})
+    env.rewards.feet_air_time.weight = 0.0   # demote (dead at +0.009; swing_height carries the stride, as in G1)
     # G1 conditions: forward-only commands + light DR (matches the G1 baseline)
     env.curriculum.command_vel_x = None
     env.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)

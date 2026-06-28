@@ -314,3 +314,20 @@ def double_support_bonus(env, sensor_cfg: SceneEntityCfg, contact_thresh: float 
     f = sensor.data.net_forces_w[:, sensor_cfg.body_ids, :]                        # [E, nfoot, 3]
     in_contact = torch.norm(f, dim=-1) > contact_thresh                           # [E, nfoot]
     return in_contact.all(dim=1).float()                                          # [E] both feet down (double support)
+
+
+def feet_swing_height(env, asset_cfg: SceneEntityCfg, sensor_cfg: SceneEntityCfg,
+                      h_target: float = 0.12, contact_thresh: float = 1.0):
+    """★ Anti-tiptoe / anti-shuffle (Unitree G1 feet_swing_height; docs/reward_research/2026-06-28_heeltoe_stride_fix).
+    Penalize the SWING foot's height error vs h_target while NOT in contact -> forces the policy to LIFT the whole
+    foot off the ground each step. A tiptoe/shuffle (forefoot barely leaving the floor) CANNOT satisfy this, so it
+    directly cures tiptoe + lengthens stride. h_target = standing foot-body z + desired clearance (the foot_link
+    origin sits ~standing z above ground due to the sole-capsule offset). asset_cfg = .*_foot_link bodies, sensor_cfg
+    the matching contact bodies (SAME L,R order). Returns sum_feet (z - h_target)^2 * (not in contact)  [num_envs];
+    use a NEGATIVE weight."""
+    asset = env.scene[asset_cfg.name]
+    sensor = env.scene.sensors[sensor_cfg.name]
+    foot_z = asset.data.body_pos_w[:, asset_cfg.body_ids, 2]                       # [E, nfoot] world z
+    in_contact = torch.norm(sensor.data.net_forces_w[:, sensor_cfg.body_ids, :], dim=-1) > contact_thresh
+    err = torch.square(foot_z - h_target) * (~in_contact).float()                 # [E, nfoot] swing-only
+    return torch.sum(err, dim=1)                                                  # [E]
