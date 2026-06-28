@@ -42,5 +42,12 @@
 - **peak GRF < HW 한계**(1.5-2.7kN) — 충격 안 늘었나.
 - 학습건강(noise_std 수렴·낙상<5%·error_vel≤0.3).
 
+## 베이스라인/참조 시각화
+**사람 reference 곡선 + 우리 관절 retarget** (`gait_reference.py`, 검증):
+![gait reference](assets/gait_reference_preview.png)
+
+**베이스라인 human-likeness** (`gait_humanlikeness.py`): 현 gait 모두 사람 관절범위의 **5-30%만 사용**(검은 점선=사람, 거의 평평한 색선=로봇 shuffle); 점수 g1is_dm4340 -0.03·v2 -0.01·asimov 0.07. v3 목표 = 색선이 점선에 근접(range_ratio→1, corr→+1).
+![human-likeness baselines](assets/gait_humanlikeness_baselines.png)
+
 ## refs
 워크플로 w9d8ys8av(원본 /tmp tasks/w9d8ys8av.output) · Peng AMP 2104.02180 · DeepMimic Peng 2018(1804.02717) · Siekmann 2011.01387(periodic contact) · Winter 'Biomechanics' · Perry 'Gait Analysis'(Figs 8-2,8-3) · 내부 [[gait_reference]]·[[51_joint_sign_conventions]]·[[2026-06-28_heeltoe_stride_fix]]·[[experiments/2026-06-28_19-55-27_g1is_dm4340_flat]]·[[human-gait-reference-direction]].
