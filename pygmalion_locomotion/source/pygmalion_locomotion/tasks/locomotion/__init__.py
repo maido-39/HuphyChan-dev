@@ -222,6 +222,27 @@ gym.register(
     },
 )
 
+# ★ v4: human-ref + toe_load_stance (push-off windlass) — docs/.../2026-06-29_human_gait_reference (toe review)
+gym.register(
+    id="Pygmalion-Velocity-Flat-HumanRefToe-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedHumanRefToeEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedFlatPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Pygmalion-Velocity-Flat-HumanRefToe-Play-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedHumanRefToeEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedFlatPPORunnerCfg",
+    },
+)
+
 # ★ obs restructuring (Menlo blog review 2026-06-28): asymmetric actor-critic + base_lin_vel/toe critic-only + history
 gym.register(
     id="Pygmalion-Velocity-Flat-G1ImpactStableAsymObs-v0",

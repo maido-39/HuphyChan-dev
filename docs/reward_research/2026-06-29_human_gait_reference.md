@@ -42,6 +42,16 @@
 - **peak GRF < HW 한계**(1.5-2.7kN) — 충격 안 늘었나.
 - 학습건강(noise_std 수렴·낙상<5%·error_vel≤0.3).
 
+## ★ toe 검토 (user 2026-06-29) — windlass 타이밍 누락 → v4서 toe_load_stance 추가
+**검토 결과**: `gait_reference_tracking`은 **sagittal 3관절(hip_pitch/knee/ankle_pitch)만 추종, toe 미포함**(toe는 passive=위치추종 불가). toe는 "ankle reference plantarflex@toe-off + collision"으로 **간접** 굽도록 설계했으나 — 실측(`scripts/gait_toe_timing.py`)으로 **타이밍이 틀림 확인**:
+- g1is_dm4340/asimov: toe **0.001 rad = 안 굽음**(옛 로봇, collision 없음).
+- v2(collision 有): toe **0.087 rad 굽으나 최대굽힘 78-95% = swing(관성)** — push-off(~50-60%) 아님 = **windlass 미발생**. τ_toe max ~25N·m(스프링 작동) but L/R 비대칭(mean 10 vs 2 = 절뚝).
+
+**원인**: toe가 **적절한 시기(push-off)에 하중받도록 강제하는 항이 없음**. ankle reference만으론 forefoot roll을 못 만들어 toe가 안 실림. ("reference가 toe-off 인코딩하니 충분"이란 초기 가정이 과낙관 — reference는 ankle 관절각만, 발이 실제로 toe로 구르는 건 별개).
+
+**fix (v4 = `BipedHumanRefToeEnvCfg`)**: ★ **`toe_load_stance` 추가**(기존, research wljkv3uu8/docs/22) = passive toe 스프링토크 `clamp(|τ_toe|/27,0,1)`를 **terminal stance(이 발 contact + 반대발 swing=single support + 전진 + contact age>0.15s)** = **정확히 push-off 시기**에만 보상 → toe를 올바른 타이밍에 하중. static toe-curl degeneracy 방지 게이트 내장. weight **+0.5**(gated라 미발화 잦음, config-test 후 tune). 반대발 swap `[1,0]`·L/R 순서 일치 필요(preserve_order).
+**iteration 순서**: v3(reference만, shape 격리) → **v4(+toe_load_stance, windlass 격리)** → v5(+power_cot 에너지). 각 단일 추가(과적 stack 방지).
+
 ## 베이스라인/참조 시각화
 **사람 reference 곡선 + 우리 관절 retarget** (`gait_reference.py`, 검증):
 ![gait reference](assets/gait_reference_preview.png)

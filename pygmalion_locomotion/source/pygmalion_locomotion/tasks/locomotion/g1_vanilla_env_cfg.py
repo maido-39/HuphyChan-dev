@@ -370,6 +370,38 @@ class BipedHumanRefRoughEnvCfg_PLAY(BipedHumanRefRoughEnvCfg):
 
 
 # ============================================================================================
+# v4: human-ref + EXPLICIT toe loading at push-off (toe_load_stance) — docs/.../2026-06-29_human_gait_reference
+#   Review (user): the reference tracks only sagittal hip/knee/ankle; the toe is passive & untracked, and
+#   gait_toe_timing.py showed the toe bends in SWING (inertia), NOT at push-off (no windlass). toe_load_stance
+#   rewards the passive-toe spring torque at TERMINAL STANCE (late single-support + forward) = the right timing.
+# ============================================================================================
+def _apply_human_ref_toe(env):
+    """human-ref + toe_load_stance (terminal-stance windlass driver). Isolates the toe effect (v4)."""
+    _apply_human_ref(env)
+    env.rewards.toe_load_stance = RewTerm(
+        func=pyg_rewards.toe_load_stance, weight=0.5,
+        params={"toe_cfg": SceneEntityCfg("robot", joint_names=[".*_toe_joint"], preserve_order=True),
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["L_foot_link", "R_foot_link"],
+                                             preserve_order=True),
+                "tau_ref": 27.0, "contact_thresh": 5.0, "late_time": 0.15})
+
+
+@configclass
+class BipedHumanRefToeEnvCfg(BipedFlatEnvCfg):
+    """FLAT v4: human-ref reference + toe_load_stance (push-off windlass). Warm-start from a HumanRef ckpt."""
+    def __post_init__(self):
+        super().__post_init__()
+        _apply_human_ref_toe(self)
+
+
+@configclass
+class BipedHumanRefToeEnvCfg_PLAY(BipedHumanRefToeEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        _play_overrides(self)
+
+
+# ============================================================================================
 # ★ OBS RESTRUCTURING (Menlo/Asimov blog review 2026-06-28, docs/reward_research/2026-06-28_menlo_blog_review).
 #   Asymmetric actor-critic (Pinto 2017 / Lee 2020 / Berkeley 2024): ACTOR = proprioception only — NO base_lin_vel
 #   (deployable; not memoryless-reliant on ground-truth velocity), scoped to ACTUATED_JOINTS so the encoder-less
