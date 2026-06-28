@@ -250,6 +250,15 @@ def _apply_g1_impact_stable(env):
     env.rewards.foot_flat_orientation = RewTerm(
         func=pyg_rewards.foot_flat_orientation, weight=-0.5,
         params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY), "roll_only": False})
+    # ★★ ROOT-CAUSE FIX for the TIPTOE REGRESSION (user 2026-06-29; workflow wbpisjawi high-conf). The G1 reward
+    #   DROPPED gaitfix's base_height (mdp.base_height_l2 -1.0 @ 0.85). Temporal proof: the FIRST tiptoe run
+    #   (g1vanilla 2026-06-22) used the SAME old-mesh foot as flat-walking gaitfix v2/v3 -> tiptoe appeared the
+    #   instant the reward changed (morphology unchanged). Without base_height, PPO extends the legs for tracking
+    #   reach (base 0.95) -> the only way to keep feet down is plantarflex = TIPTOE. Restore it HERE (upstream) so
+    #   the WHOLE G1 lineage (g1is/dm4340/asimov/human-ref) inherits the fix. docs/reward_research/2026-06-29_tiptoe_regression.
+    env.rewards.base_height = RewTerm(
+        func=mdp.base_height_l2, weight=-1.0,
+        params={"target_height": TARGET_BASE_HEIGHT, "asset_cfg": SceneEntityCfg("robot")})
     # G1 conditions: forward-only commands + light DR (matches the G1 baseline)
     env.curriculum.command_vel_x = None
     env.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)
@@ -336,14 +345,7 @@ def _apply_human_ref(env):
                 "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["L_foot_link", "R_foot_link"],
                                              preserve_order=True),
                 "k": 2.0, "t_stance": 0.6, "t_swing": 0.4})
-    # ★★ ROOT-CAUSE FIX for the TIPTOE REGRESSION (user 2026-06-29): the G1 reward DROPPED gaitfix's base_height
-    #   (mdp.base_height_l2 -1.0 @ 0.85). Without it PPO extends the legs to maximize tracking reach (base 0.95)
-    #   and the only way to keep the feet on the ground is to plantarflex = TIPTOE. gaitfix kept base 0.80-0.83
-    #   (legs bent) = FLAT feet WITH this term. Restoring it removes the INCENTIVE to extend -> no tiptoe at the
-    #   root (vs the weak foot_flat penalty which only fought the symptom). docs/reward_research/2026-06-29_tiptoe_regression.
-    env.rewards.base_height = RewTerm(
-        func=mdp.base_height_l2, weight=-1.0,
-        params={"target_height": TARGET_BASE_HEIGHT, "asset_cfg": SceneEntityCfg("robot")})
+    # base_height (tiptoe ROOT-CAUSE fix) is inherited from _apply_g1_impact_stable (applied to the whole lineage).
 
 
 @configclass

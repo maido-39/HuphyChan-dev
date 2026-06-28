@@ -29,5 +29,12 @@ gaitfix의 **lateral 항**(feet_distance −2.0, lateral_foot_placement, feet_la
 - `gait_humanlikeness.py`: score↑·corr↑·GRF 대칭.
 - 낙상<5%·error_vel≤0.3·noise_std 수렴.
 
+## ★ 워크플로 확정 (wbpisjawi, 17 agent, high confidence)
+- **base_height 제거가 주원인 ~75%** — ★ **결정적 시간 증거**: 첫 까치발 run(g1vanilla 2026-06-22)이 **flat-walking gaitfix v2/v3와 동일한 옛 mesh 발**(key qpos z=0.87, capsule 없음)을 사용 → **reward 바뀐 순간 까치발 발생**, 5캡슐 모델 교체(527fd48)는 **6일 뒤** = morphology 아님(confound). reward 회귀 확정.
+- **랭킹**: base_height 제거 ~75% · lin_vel_z_l2(-0.2→0) ~10%(수직 CoM 감쇠 상실, 증폭자) · swing clearance 부재 ~8% · 약한 ankle/action_rate reg ~4%(이미 _apply_g1_impact_stable서 수정) · 모델 교체 ~3%(후발 aggravator).
+- ★ **핵심 보완**: base_height를 `_apply_human_ref`에만 넣었으나(de0d073) **`_apply_g1_impact_stable`(상위)로 이동** → g1is/dm4340/asimov/human-ref **전 계통 상속**(적용함). 일반 g1is도 이제 base_height 보유.
+- **검증 A/B(권고)**: G1ImpactStable + base_height **단독**이 까치발 제거하면 root lever 확정. swing_height/foot_flat는 **저렴한 2차 보험으로 유지(가중치 올리지 말 것)** — base_height 복원 시 작동점서 거의 비활성.
+- (옵션) 자연스런 vault(~2.5cm) 원하면 symmetric L2 대신 `base_height_floor`(margin 0.06, -0.5). 단 까치발 제거 우선엔 검증된 symmetric -1.0 @ 0.85.
+
 ## refs
 git 527fd48·189db20 · `velocity_env_cfg.py:94`(base_height -1.0@0.85)·`g1_vanilla_env_cfg.py`(G1VanillaRewards 주석)·`mdp/rewards.py:20`(base_height_l2) · 실측 gaitfix_v5-7 vs g1is_dm4340 npz · 워크플로 wbpisjawi(확정+geometry 점검) · [[2026-06-29_human_gait_reference]]·[[experiments/2026-06-28_19-55-27_g1is_dm4340_flat]].
