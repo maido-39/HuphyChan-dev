@@ -51,6 +51,37 @@ def resample_cycles(sig, starts, n=NPH):
     return np.array(out) if out else np.zeros((0, n))
 
 
+def _extra_metrics(d):
+    """Energy/toe/force/symmetry metrics the user cares about (CoT, toe-use, peak GRF, L/R asymmetry)."""
+    import numpy as np
+    m = {}
+    # toe USE: passive-toe deflection range [rad] (windlass loads the toe -> it bends; ~0 = unused)
+    for leg in ("L", "R"):
+        key = f"qpos_{leg}_toe_joint"
+        if key in d.files:
+            toe = d[key]
+            m[f"toe_range_{leg}"] = float(toe.max() - toe.min())
+    # ENERGY: cost of transport = mean sum_j|tau*omega| / (m*g*v)  (dimensionless; lower = more efficient)
+    power = None
+    for k in d.files:
+        if k.startswith("tau_"):
+            jn = k[4:]
+            if f"omega_{jn}" in d.files:
+                p = np.abs(d[k] * d[f"omega_{jn}"])
+                power = p if power is None else power + p
+    m["mech_power_W"] = float(np.mean(power)) if power is not None else 0.0
+    vmean = float(np.mean(np.abs(d["cmd_vx"]))) if "cmd_vx" in d.files else 0.0
+    m["cot"] = m["mech_power_W"] / (BW * max(vmean, 0.1))
+    # FORCE: peak vertical GRF vs the HW break limit (1.5-2.7 kN)
+    gl = np.abs(d["GRF_L_foot_link_z"]); gr = np.abs(d["GRF_R_foot_link_z"])
+    m["peak_grf_N"] = float(max(gl.max(), gr.max()))
+    m["peak_grf_BW"] = m["peak_grf_N"] / BW
+    # SYMMETRY: GRF impulse L/R asymmetry (0 = symmetric, ->1 = limping)
+    iL, iR = float(gl.sum()), float(gr.sum())
+    m["grf_asym"] = abs(iL - iR) / (iL + iR + 1e-6)
+    return m
+
+
 def analyze(tag):
     f = os.path.join(ROOT, "logs", "measure", f"{tag}.npz")
     if not os.path.exists(f):
@@ -82,7 +113,7 @@ def analyze(tag):
             ratio = rng_robot / rng_ref if rng_ref > 1e-6 else 0.0
             corr = float(np.corrcoef(mean, ref)[0, 1]) if mean.std() > 1e-6 else 0.0
             results[f"{leg}_{j}"] = dict(mean=mean, std=std, ref=ref, rms=rms, ratio=ratio, corr=corr)
-    return dict(tag=tag, side=side, ncyc=len(starts) - 1, ph=ph, results=results)
+    return dict(tag=tag, side=side, ncyc=len(starts) - 1, ph=ph, results=results, extra=_extra_metrics(d))
 
 
 def report_and_plot(analyses):
@@ -101,6 +132,11 @@ def report_and_plot(analyses):
             corrs.append(r["corr"]); ratios.append(r["ratio"])
         score = float(np.mean(corrs) * np.clip(np.mean(ratios), 0, 1)) if corrs else 0.0
         print(f"  -> human-likeness score = {score:.2f} (mean corr x min(1,mean range_ratio); 1.0=human, ~0=shuffle/tiptoe)")
+        e = a.get("extra", {})
+        if e:
+            tr = f"L{e.get('toe_range_L', 0):.3f} R{e.get('toe_range_R', 0):.3f}"
+            print(f"     energy/toe: CoT {e['cot']:.2f} ({e['mech_power_W']:.0f}W) | toe-use(range rad) {tr} | "
+                  f"peak GRF {e['peak_grf_N']:.0f}N ({e['peak_grf_BW']:.1f}xBW) | GRF L/R asym {e['grf_asym']:.2f}")
         a["score"] = score
     # plot: rows = sagittal joint, cols = L|R; robot mean+-band vs human ref
     fig, ax = plt.subplots(len(SAGITTAL), 2, figsize=(12, 3.0 * len(SAGITTAL)), dpi=130, squeeze=False)
