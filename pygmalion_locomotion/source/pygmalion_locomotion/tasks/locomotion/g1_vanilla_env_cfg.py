@@ -15,11 +15,14 @@ from __future__ import annotations
 
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import ObservationGroupCfg as ObsGroup
+from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.utils import configclass
+from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import RewardsCfg
 
 from . import mdp
-from .velocity_env_cfg import FOOT_BODY, BipedRoughEnvCfg
+from .velocity_env_cfg import FOOT_BODY, BipedRoughEnvCfg, ACTUATED_JOINTS
 from .flat_env_cfg import BipedFlatEnvCfg, BipedFlatForefootEnvCfg   # FLAT base; Forefoot = OUR gaitfix reward
 from . import rewards as pyg_rewards   # custom reward funcs for the minimal targeted additions
 
@@ -286,6 +289,88 @@ class BipedG1ImpactStableRoughEnvCfg(BipedRoughEnvCfg):
 
 @configclass
 class BipedG1ImpactStableRoughEnvCfg_PLAY(BipedG1ImpactStableRoughEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        _play_overrides(self)
+
+
+# ============================================================================================
+# ★ OBS RESTRUCTURING (Menlo/Asimov blog review 2026-06-28, docs/reward_research/2026-06-28_menlo_blog_review).
+#   Asymmetric actor-critic (Pinto 2017 / Lee 2020 / Berkeley 2024): ACTOR = proprioception only — NO base_lin_vel
+#   (deployable; not memoryless-reliant on ground-truth velocity), scoped to ACTUATED_JOINTS so the encoder-less
+#   passive TOE stops leaking (verified leak), + 5-step history (Walk-These-Ways: history estimates velocity, so
+#   removing base_lin_vel doesn't kill tracking). CRITIC = full obs + privileged base_lin_vel + passive-toe state.
+#   rsl_rl 2.3.3: the critic group MUST be named `critic` (auto-detected); the obs_groups API does NOT exist here.
+# ============================================================================================
+@configclass
+class AsymObservationsCfg:
+    @configclass
+    class PolicyCfg(ObsGroup):
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2),
+                               history_length=5, flatten_history_dim=True)
+        projected_gravity = ObsTerm(func=mdp.projected_gravity, noise=Unoise(n_min=-0.05, n_max=0.05),
+                                    history_length=5, flatten_history_dim=True)
+        velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
+        joint_pos = ObsTerm(func=mdp.joint_pos_rel,
+                            params={"asset_cfg": SceneEntityCfg("robot", joint_names=ACTUATED_JOINTS)},
+                            noise=Unoise(n_min=-0.01, n_max=0.01), history_length=5, flatten_history_dim=True)
+        joint_vel = ObsTerm(func=mdp.joint_vel_rel,
+                            params={"asset_cfg": SceneEntityCfg("robot", joint_names=ACTUATED_JOINTS)},
+                            noise=Unoise(n_min=-1.5, n_max=1.5), history_length=5, flatten_history_dim=True)
+        actions = ObsTerm(func=mdp.last_action, history_length=5, flatten_history_dim=True)
+        height_scan = ObsTerm(func=mdp.height_scan, params={"sensor_cfg": SceneEntityCfg("height_scanner")},
+                              noise=Unoise(n_min=-0.1, n_max=0.1), clip=(-1.0, 1.0))
+
+        def __post_init__(self):
+            self.enable_corruption = True
+            self.concatenate_terms = True
+
+    @configclass
+    class CriticCfg(ObsGroup):
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel)          # ★ privileged (ground-truth)
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel)
+        projected_gravity = ObsTerm(func=mdp.projected_gravity)
+        velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
+        joint_pos = ObsTerm(func=mdp.joint_pos_rel)           # ALL joints incl passive toe (privileged)
+        joint_vel = ObsTerm(func=mdp.joint_vel_rel)
+        actions = ObsTerm(func=mdp.last_action)
+        height_scan = ObsTerm(func=mdp.height_scan, params={"sensor_cfg": SceneEntityCfg("height_scanner")},
+                              clip=(-1.0, 1.0))
+
+        def __post_init__(self):
+            self.enable_corruption = False                     # critic sees clean ground truth
+            self.concatenate_terms = True
+
+    policy: PolicyCfg = PolicyCfg()
+    critic: CriticCfg = CriticCfg()
+
+
+@configclass
+class BipedG1ImpactStableAsymObsEnvCfg(BipedG1ImpactStableEnvCfg):
+    """FLAT: G1ImpactStable + Menlo-validated obs restructuring (asym actor-critic, base_lin_vel & toe critic-only,
+    5-step history). A/B vs the stock-obs baseline (g1is_dm4340_flat). NOTE: obs-dim change -> from-scratch retrain."""
+    def __post_init__(self):
+        super().__post_init__()
+        self.observations = AsymObservationsCfg()
+
+
+@configclass
+class BipedG1ImpactStableAsymObsEnvCfg_PLAY(BipedG1ImpactStableAsymObsEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        _play_overrides(self)
+
+
+@configclass
+class BipedG1ImpactStableAsymObsRoughEnvCfg(BipedG1ImpactStableRoughEnvCfg):
+    """ROUGH: same obs restructuring; resume from the FLAT asym-obs checkpoint (obs match)."""
+    def __post_init__(self):
+        super().__post_init__()
+        self.observations = AsymObservationsCfg()
+
+
+@configclass
+class BipedG1ImpactStableAsymObsRoughEnvCfg_PLAY(BipedG1ImpactStableAsymObsRoughEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         _play_overrides(self)

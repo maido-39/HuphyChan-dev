@@ -179,3 +179,44 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedRoughPPORunnerCfg",
     },
 )
+
+# ★ obs restructuring (Menlo blog review 2026-06-28): asymmetric actor-critic + base_lin_vel/toe critic-only + history
+gym.register(
+    id="Pygmalion-Velocity-Flat-G1ImpactStableAsymObs-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedG1ImpactStableAsymObsEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedFlatPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Pygmalion-Velocity-Flat-G1ImpactStableAsymObs-Play-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedG1ImpactStableAsymObsEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedFlatPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Pygmalion-Velocity-Rough-G1ImpactStableAsymObs-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedG1ImpactStableAsymObsRoughEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedRoughPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Pygmalion-Velocity-Rough-G1ImpactStableAsymObs-Play-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedG1ImpactStableAsymObsRoughEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedRoughPPORunnerCfg",
+    },
+)
