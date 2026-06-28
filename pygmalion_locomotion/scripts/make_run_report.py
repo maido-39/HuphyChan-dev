@@ -46,6 +46,16 @@ OBS_NOTE = ("base_lin_vel(3)+base_ang_vel(3)+projected_gravity(3)+velocity_comma
             "+joint_vel(14)+last_action(12)+height_scan(187) = 239 dims; enable_corruption=obs noise")
 ACTION_NOTE = "12 actuated joint position targets (hip pitch/roll/yaw, knee, ankle pitch/roll x2); passive toe excluded"
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from reward_glossary import lookup as _glossary_lookup, parse_reward_weights  # term->(무엇,왜); env.yaml weights
+except Exception:  # noqa: BLE001
+    def _glossary_lookup(_t):
+        return ("[작성 필요]", "[작성 필요]")
+
+    def parse_reward_weights(_d):
+        return {}
+
 
 def parse_log(logp):
     """Return (iters, rewards, final_metrics dict, reward_terms dict)."""
@@ -188,14 +198,22 @@ def main():
     md.append("")
 
     # ---- Reward: 무엇을 / 왜 / 이번 run 변경 (rule item 7 — always document rewards) ----
-    md += ["## 2b. Reward (무엇을 · 왜)",
-           "활성 보상 항과 **최종 기여**는 아래. 각 항의 **의미 · 가중치 · 왜**는 → [[04_reward_experiments]] "
-           "(\"현재 활성 Reward 전체\" 표) 참조 (재도출 금지, 링크로 추적)."]
-    if terms:
-        md += ["", "**보상 항목별 기여(최종, 절대값 큰 순)**:"]
-        md += [f"- `{k}`: {v:+.4f}" for k, v in sorted(terms.items(), key=lambda x: abs(x[1]), reverse=True)]
+    md += ["## 2b. Reward (이름 · 값 · 무엇 · 왜)",
+           "이 run의 **활성 보상 항 전체** — 이름 · 가중치(값) · 최종 기여 · 무엇인지 · 왜 줬는지 (규칙, user 2026-06-29). "
+           "의미 누적 추적: [[04_reward_experiments]]."]
+    _weights = parse_reward_weights(args.run)
+    _names = sorted(set(list(_weights.keys()) + list(terms.keys())), key=lambda n: -abs(terms.get(n, 0.0)))
+    if _names:
+        md += ["", "| Reward | 가중치 | 기여(final) | 무엇 | 왜 |", "|---|--:|--:|---|---|"]
+        for n in _names:
+            w = _weights.get(n)
+            c = terms.get(n)
+            what, why = _glossary_lookup(n)
+            wstr = f"{w:+g}" if isinstance(w, (int, float)) else "—"
+            cstr = f"{c:+.4f}" if isinstance(c, (int, float)) else "—"
+            md.append(f"| `{n}` | {wstr} | {cstr} | {what} | {why} |")
     else:
-        md.append("- (로그에서 보상 항목 미검출 — 학습 로그 경로 확인)")
+        md.append("- (env.yaml/로그에서 보상 항목 미검출 — 경로 확인)")
     if diff:
         rk = ("reward", "weight", "rewterm", "soft_ratio", "torque_soft", "dof_acc", "dof_torque",
               "action_rate", "track_", "feet_", "upright", "no_flight", "base_height", "curriculum", "joint_deviation")

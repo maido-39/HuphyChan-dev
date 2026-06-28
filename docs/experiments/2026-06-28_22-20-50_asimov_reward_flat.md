@@ -22,25 +22,26 @@
 
 ![reward curve](assets/2026-06-28_22-20-50_asimov_reward_flat_reward.png)
 
-## 2b. Reward (무엇을 · 왜)
+## 2b. Reward (이름 · 값 · 무엇 · 왜)
 활성 보상 항과 **최종 기여**는 아래. 각 항의 **의미 · 가중치 · 왜**는 → [[04_reward_experiments]] ("현재 활성 Reward 전체" 표) 참조 (재도출 금지, 링크로 추적).
 
-**보상 항목별 기여(최종, 절대값 큰 순)**:
-- `track_ang_vel_z_exp`: +1.8381
-- `track_lin_vel_xy_exp`: +0.9268
-- `joint_deviation_ankle`: -0.0853
-- `feet_slide`: -0.0325
-- `action_rate_l2`: -0.0285
-- `joint_deviation_hip`: -0.0200
-- `feet_air_time`: -0.0164
-- `ang_vel_xy_l2`: -0.0113
-- `flat_orientation_l2`: -0.0038
-- `termination_penalty`: -0.0027
-- `dof_acc_l2`: -0.0024
-- `foot_impact_force`: -0.0023
-- `dof_torques_l2`: -0.0017
-- `lin_vel_z_l2`: +0.0000
-- `dof_pos_limits`: -0.0000
+| Reward | 가중치 | 기여(final) | 무엇 | 왜 |
+|---|--:|--:|---|---|
+| `track_ang_vel_z_exp` | +2 | +1.8381 | 명령 각속도(yaw) 추종 exp | 작업 목표: 방향 전환 추종 |
+| `track_lin_vel_xy_exp` | +1 | +0.9268 | 명령 선속도(x,y) 추종 exp | 작업 목표: 원하는 속도로 보행 |
+| `joint_deviation_ankle` | -0.5 | -0.0853 | ankle 중립 이탈 penalty | 발목 자세 tight 유지(블로그식) |
+| `feet_slide` | -0.1 | -0.0325 | 접지 발 미끄러짐 penalty | 발 고정(slip 방지) |
+| `action_rate_l2` | -0.005 | -0.0285 | action 변화율 penalty | 급격한 명령 변화 억제 = smooth |
+| `joint_deviation_hip` | -0.1 | -0.0200 | hip 중립 이탈 penalty | hip 자세 안정(과회전 억제) |
+| `feet_air_time` | +0.5 | -0.0164 | 발 공중(또는 single-stance) 시간 보상 | 보폭/스텝 유도(threshold 미달 시 dead) |
+| `ang_vel_xy_l2` | -0.08 | -0.0113 | roll/pitch 각속도 penalty | 몸통 흔들림 억제 |
+| `flat_orientation_l2` | -1 | -0.0038 | 몸통 수평(중력 proj) penalty | 몸통 똑바로 유지 |
+| `termination_penalty` | -200 | -0.0027 | 조기 종료(낙상) penalty | 넘어짐 회피 |
+| `dof_acc_l2` | -1.25e-07 | -0.0024 | 관절 가속도 L2 penalty | 고주파 진동(떨림) 억제 = smooth |
+| `foot_impact_force` | -0.005 | -0.0023 | 발 접지력 초과분 penalty | 저충격 착지(HW 파손 보호) |
+| `dof_torques_l2` | -1.5e-07 | -0.0017 | 관절 토크 L2 penalty | 에너지/토크 절감(과사용 억제) |
+| `lin_vel_z_l2` | +0 | +0.0000 | 수직 속도 penalty | 상하 bounce 억제(보통 0으로 끔) |
+| `dof_pos_limits` | -1 | -0.0000 | 관절 한계 근접 penalty | ROM 끝 회피(HW 보호) |
 
 **이번 run 중요/신규 reward + 왜**: 블로그 핵심 = **feet_air_time +0.5**(actual air-time=flight 보상) + **joint_deviation_ankle -0.5**(ankle을 neutral 근처로 tight). 결과: ★ **air_time 기여 -0.0164 = DEAD** — 51.8kg 로봇은 flight 거의 못 만듦(flight 1.3%) → 블로그 시그니처 레버가 무거운 로봇엔 무력(연구 [[2026-06-28_menlo_blog_review]] 예측: air_time=flight=경량 로봇용, 확증). ★ **joint_deviation_ankle -0.0853**(2번째 큰 penalty) = ankle을 neutral로 당기며 추종과 충돌 → §5·§7 ankle_pitch 과부하의 직접 원인.
 

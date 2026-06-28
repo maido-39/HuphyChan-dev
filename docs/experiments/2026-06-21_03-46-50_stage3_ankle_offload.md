@@ -23,29 +23,30 @@
 
 ![reward curve](assets/2026-06-21_03-46-50_stage3_ankle_offload_reward.png)
 
-## 2b. Reward (무엇을 · 왜)
+## 2b. Reward (이름 · 값 · 무엇 · 왜)
 활성 보상 항과 **최종 기여**는 아래. 각 항의 **의미 · 가중치 · 왜**는 → [[04_reward_experiments]] ("현재 활성 Reward 전체" 표) 참조 (재도출 금지, 링크로 추적).
 
-**보상 항목별 기여(최종, 절대값 큰 순)**:
-- `track_lin_vel_xy_exp`: +0.7817
-- `track_ang_vel_z_exp`: +0.7453
-- `upright`: +0.4713
-- `feet_air_time`: +0.1020
-- `joint_deviation_hip`: -0.0493
-- `dof_acc_l2`: -0.0489
-- `torque_soft_limit_ankle`: -0.0434
-- `dof_torques_l2`: -0.0337
-- `ang_vel_xy_l2`: -0.0268
-- `action_rate_l2`: -0.0208
-- `torque_soft_limit`: -0.0208
-- `feet_distance`: -0.0205
-- `feet_slide`: -0.0159
-- `no_flight`: -0.0134
-- `lin_vel_z_l2`: -0.0053
-- `flat_orientation_l2`: -0.0053
-- `termination_penalty`: -0.0025
-- `dof_pos_limits`: -0.0011
-- `base_height`: -0.0003
+| Reward | 가중치 | 기여(final) | 무엇 | 왜 |
+|---|--:|--:|---|---|
+| `track_lin_vel_xy_exp` | +1 | +0.7817 | 명령 선속도(x,y) 추종 exp | 작업 목표: 원하는 속도로 보행 |
+| `track_ang_vel_z_exp` | +1 | +0.7453 | 명령 각속도(yaw) 추종 exp | 작업 목표: 방향 전환 추종 |
+| `upright` | +0.5 | +0.4713 | 몸통 직립 자세 보상 | 몸통 똑바로(앞으로 안 숙임) |
+| `feet_air_time` | +0.75 | +0.1020 | 발 공중(또는 single-stance) 시간 보상 | 보폭/스텝 유도(threshold 미달 시 dead) |
+| `joint_deviation_hip` | -0.1 | -0.0493 | hip 중립 이탈 penalty | hip 자세 안정(과회전 억제) |
+| `dof_acc_l2` | -1e-07 | -0.0489 | 관절 가속도 L2 penalty | 고주파 진동(떨림) 억제 = smooth |
+| `torque_soft_limit_ankle` | -0.01 | -0.0434 | ankle_roll 토크 한계 penalty | 포화 ankle_roll offload(열보호) |
+| `dof_torques_l2` | -2e-06 | -0.0337 | 관절 토크 L2 penalty | 에너지/토크 절감(과사용 억제) |
+| `ang_vel_xy_l2` | -0.05 | -0.0268 | roll/pitch 각속도 penalty | 몸통 흔들림 억제 |
+| `action_rate_l2` | -0.005 | -0.0208 | action 변화율 penalty | 급격한 명령 변화 억제 = smooth |
+| `torque_soft_limit` | -0.0025 | -0.0208 | effort 85% 초과 토크 penalty | 모터 가용범위 유지(sim2real/HW) |
+| `feet_distance` | -2 | -0.0205 | 양발 간격(min/max) penalty | 발 교차(scissoring) 방지 |
+| `feet_slide` | -0.1 | -0.0159 | 접지 발 미끄러짐 penalty | 발 고정(slip 방지) |
+| `no_flight` | -0.5 | -0.0134 | 양발 동시 공중(flight) penalty | 비행 억제(저충격 하중측정) |
+| `lin_vel_z_l2` | -0.2 | -0.0053 | 수직 속도 penalty | 상하 bounce 억제(보통 0으로 끔) |
+| `flat_orientation_l2` | -1 | -0.0053 | 몸통 수평(중력 proj) penalty | 몸통 똑바로 유지 |
+| `termination_penalty` | -200 | -0.0025 | 조기 종료(낙상) penalty | 넘어짐 회피 |
+| `dof_pos_limits` | -1 | -0.0011 | 관절 한계 근접 penalty | ROM 끝 회피(HW 보호) |
+| `base_height` | -1 | -0.0003 | 몸통 높이 목표(0.85) L2 penalty | ★ 다리 신전(까치발) 방지 = 근본 자세제약(gaitfix) |
 
 **이번 run에서 바뀐 reward (vs 부모, cfg diff)**:
 ```diff
