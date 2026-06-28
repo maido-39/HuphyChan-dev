@@ -44,7 +44,7 @@ Phase1(swing_height -20@0.12) 실패 원인 2가지 확정:
 - **검증**: v2 학습 → close-up(발 평탄·toe 굽힘) + measure(발목 RMS↓?). toe 굽으면 성공.
 
 ### Collision geometry 시각화 (MuJoCo, `scripts/viz_collision.py`)
-18 collision geom = torso 캡슐 + head 구 + thigh/shin 캡슐(×2) + **발바닥 5캡슐 rake(×2)** + ★ **toe collision(×2, 신규)**. 측면뷰서 toe 블록이 sole 앞쪽 끝·sole 높이에 위치 = 발이 앞으로 구르면 toe 접촉→하중→스프링 굽힘. (primitive=unitree-lab식, mesh보다 빠르고 안정.)
+22 collision geom = torso 캡슐 + head 구 + thigh/shin 캡슐(×2) + **발바닥 5캡슐 rake(×2)** + ★ **toe 3캡슐(×2, 신규 — PRIMITIVE)**. toe bbox(toe_link 프레임): x±0.044, y -0.065~0(앞=−y), sole bottom -0.023≈foot sole flush. toe 캡슐을 sole 높이(z=-0.010)에 y축 3개로 두어 **sole rake를 앞으로 연장(flush)** → 발이 앞으로 구르면 toe 접촉→하중→스프링 굽힘. **전부 primitive(=unitree-lab식), mesh collision 0개** (처음엔 toe를 mesh로 넣었으나 사용자 지적으로 capsule 통일).
 ![collision body](assets/collision_body.png)
 ![collision foot (sole rake + toe block at front)](assets/collision_foot_side.png)
 
