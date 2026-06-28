@@ -38,3 +38,5 @@
 3. **"서있기" local optimum**: 제약(자기충돌·토크리밋) 추가 시 ep_len 먼저 차고(서있기) err_vxy 나중에 하락(보행). 중간 과민반응 금지 (EXP-004).
 4. **토크리밋 reward 효과**: 고관절 util 100%→70%. 단 발목은 진짜 병목(못 피함).
 5. **편집설치 stale .pyc**: 소스 고쳐도 옛 동작 → `find -name '*.pyc' -delete` + `PYTHONDONTWRITEBYTECODE=1`.
+6. ★ **까치발=발목 과부하** (2026-06-28 g1is_dm4340_flat): 속도추종+저충격 reward만으론 정책이 **까치발-shuffle** 학습 → ankle_roll/pitch RMS **~200%rated 포화**. 모터를 키워도(DM-J4340 27) 정책이 늘어난 토크를 다 씀. **plantigrade heel-toe 쉐이핑(foot-flat+cop_progression+air_time)이 인간형 *그리고* 저하중 둘 다의 열쇠** — 단순 모터 상향 불충분. HW 사이징은 *gait 정상화 후* 재측정해야 유효.
+7. **feet_air_time threshold 함정**: threshold(0.4s)를 못 넘기면 보상이 0으로 미발화 → 발 안 드는 shuffle=짧은 보폭. 보폭엔 threshold↓(~0.25)·weight↑ 필요 (블로그 air_time+0.5의 anti-shuffle 의도와 일치).
