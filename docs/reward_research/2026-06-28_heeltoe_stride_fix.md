@@ -43,5 +43,10 @@ Phase1(swing_height -20@0.12) 실패 원인 2가지 확정:
 - stiffness: 60 유지(부하 생기면 적정 변형). MJCF class toe(20) vs YAML(60) 불일치는 reconvert 후 런타임 확인.
 - **검증**: v2 학습 → close-up(발 평탄·toe 굽힘) + measure(발목 RMS↓?). toe 굽으면 성공.
 
+### Collision geometry 시각화 (MuJoCo, `scripts/viz_collision.py`)
+18 collision geom = torso 캡슐 + head 구 + thigh/shin 캡슐(×2) + **발바닥 5캡슐 rake(×2)** + ★ **toe collision(×2, 신규)**. 측면뷰서 toe 블록이 sole 앞쪽 끝·sole 높이에 위치 = 발이 앞으로 구르면 toe 접촉→하중→스프링 굽힘. (primitive=unitree-lab식, mesh보다 빠르고 안정.)
+![collision body](assets/collision_body.png)
+![collision foot (sole rake + toe block at front)](assets/collision_foot_side.png)
+
 ## 출처
 Unitree g1_config/g1_env(feet_swing_height -20·contact +0.18·period 0.8s·offset 0.5·is_stance phase<0.55) · Siekmann 2011.01387(periodic clock) · WTW 2212.03238 · Hansen PMC2906615(roll-over) · Gait-Conditioned RL 2505.20619(간섭) · Peng 2021 2104.02180(AMP) · IsaacLab mdp feet_air_time_positive_biped(verified) · 내부 [[experiments/2026-06-28_19-55-27_g1is_dm4340_flat]]·[[2026-06-28_menlo_blog_review]]·[[2026-06-28_g1_trembling_saturation]].
