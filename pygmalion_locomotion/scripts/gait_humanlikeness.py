@@ -87,33 +87,32 @@ def analyze(tag):
     if not os.path.exists(f):
         print(f"[{tag}] npz 없음: {f}"); return None
     d = np.load(f, allow_pickle=True)
-    # pick the busier foot for cycle detection
     grfL, grfR = np.abs(d["GRF_L_foot_link_z"]), np.abs(d["GRF_R_foot_link_z"])
-    grf = grfL if grfL.std() >= grfR.std() else grfR
-    side = "L" if grfL.std() >= grfR.std() else "R"
-    starts = detect_cycles(grf, fz_thresh=0.1 * BW)
-    if len(starts) < 3:
-        print(f"[{tag}] 주기 부족({len(starts)})"); return None
     ph = np.linspace(0, 1, NPH)
-    results = {}
-    for leg in ("L", "R"):
+    results, ncyc = {}, {}
+    # ★ PER-LEG cycle detection: each leg's OWN heel strike = phase 0, compared to the base leg reference (no L/R
+    #   offset). (Prev bug: one busier-foot cycle for BOTH legs + a +0.5 R shift -> contralateral leg was phase-
+    #   misaligned -> spurious NEGATIVE corr even for a correct gait.)
+    for leg, grf in (("L", grfL), ("R", grfR)):
+        starts = detect_cycles(grf, fz_thresh=0.1 * BW)
+        ncyc[leg] = max(len(starts) - 1, 0)
+        if len(starts) < 3:
+            continue
         for j in SAGITTAL:
-            q = d[f"qpos_{leg}_{j}_joint"]
-            cyc = resample_cycles(q, starts)
+            cyc = resample_cycles(d[f"qpos_{leg}_{j}_joint"], starts)
             if cyc.shape[0] == 0:
                 continue
             mean, std = cyc.mean(0), cyc.std(0)
-            # human reference for this joint+leg (R = phase+0.5)
-            php = ph + (0.5 if leg == "R" else 0.0)
-            hl, _, _hk = None, None, None
-            ref = np.array([GR.leg_targets_rad(p) for p in php])[:, GR._LEG.index(j)]
+            ref = np.array([GR.leg_targets_rad(p) for p in ph])[:, GR._LEG.index(j)]
             rms = float(np.sqrt(np.mean((mean - ref) ** 2)))
-            rng_robot = float(mean.max() - mean.min())
             rng_ref = float(ref.max() - ref.min())
-            ratio = rng_robot / rng_ref if rng_ref > 1e-6 else 0.0
+            ratio = float(mean.max() - mean.min()) / rng_ref if rng_ref > 1e-6 else 0.0
             corr = float(np.corrcoef(mean, ref)[0, 1]) if mean.std() > 1e-6 else 0.0
             results[f"{leg}_{j}"] = dict(mean=mean, std=std, ref=ref, rms=rms, ratio=ratio, corr=corr)
-    return dict(tag=tag, side=side, ncyc=len(starts) - 1, ph=ph, results=results, extra=_extra_metrics(d))
+    if not results:
+        print(f"[{tag}] 주기 부족 (L{ncyc.get('L',0)}/R{ncyc.get('R',0)})"); return None
+    return dict(tag=tag, side=f"L{ncyc.get('L',0)}/R{ncyc.get('R',0)}",
+                ncyc=ncyc.get('L', 0) + ncyc.get('R', 0), ph=ph, results=results, extra=_extra_metrics(d))
 
 
 def report_and_plot(analyses):
