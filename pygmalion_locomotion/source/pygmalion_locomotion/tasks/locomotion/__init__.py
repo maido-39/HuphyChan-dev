@@ -180,6 +180,48 @@ gym.register(
     },
 )
 
+# ★ Human gait-reference tracking (contact-phase DeepMimic) — docs/reward_research/2026-06-29_human_gait_reference.
+#   Warm-start from a G1ImpactStable flat ckpt (obs 239 unchanged). Fixes shuffle via a dense human-traj signal.
+gym.register(
+    id="Pygmalion-Velocity-Flat-HumanRef-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedHumanRefEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedFlatPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Pygmalion-Velocity-Flat-HumanRef-Play-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedHumanRefEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedFlatPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Pygmalion-Velocity-Rough-HumanRef-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedHumanRefRoughEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedRoughPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Pygmalion-Velocity-Rough-HumanRef-Play-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedHumanRefRoughEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedRoughPPORunnerCfg",
+    },
+)
+
 # ★ obs restructuring (Menlo blog review 2026-06-28): asymmetric actor-critic + base_lin_vel/toe critic-only + history
 gym.register(
     id="Pygmalion-Velocity-Flat-G1ImpactStableAsymObs-v0",

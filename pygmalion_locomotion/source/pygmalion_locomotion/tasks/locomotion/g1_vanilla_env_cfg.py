@@ -310,6 +310,66 @@ class BipedG1ImpactStableRoughEnvCfg_PLAY(BipedG1ImpactStableRoughEnvCfg):
 
 
 # ============================================================================================
+# Human gait-reference tracking (contact-phase DeepMimic) — docs/reward_research/2026-06-29_human_gait_reference
+#   A DENSE POSITIVE signal that pulls the whole leg toward the human joint trajectory (the weak foot_flat/
+#   swing_height penalties plateaued; human-likeness tool showed the gait uses only 5-30% of the human joint
+#   range = shuffle). Phase is derived from foot contact (no obs change) -> warm-start from a G1ImpactStable ckpt.
+# ============================================================================================
+# 6 sagittal joints in L,L,L,R,R,R order; preserve_order is REQUIRED (the gait_reference_tracking reward assumes
+# columns 0:3 = L(hip_pitch,knee,ankle_pitch), 3:6 = R, matching gait_reference.leg_targets_rad).
+_HUMANREF_SAGITTAL = ["L_hip_pitch_joint", "L_knee_joint", "L_ankle_pitch_joint",
+                      "R_hip_pitch_joint", "R_knee_joint", "R_ankle_pitch_joint"]
+
+
+def _apply_human_ref(env):
+    """Human gait-reference tracking on the G1 impact-stable base. Removes terms that are redundant with or FIGHT
+    the reference, then adds the dense positive tracking reward. v3 isolates the reference (energy power_cot / toe
+    toe_load_stance added in later iterations once the gait is human-like, to avoid the reference-vs-energy conflict)."""
+    _apply_g1_impact_stable(env)
+    env.rewards.feet_swing_height = None        # reference hip/knee flexion already carries swing clearance
+    env.rewards.foot_flat_orientation = None    # reference ankle traj sets foot pitch; full-axis flat fights heel-toe
+    env.rewards.knee_straight = None            # reference flexes the knee ~60deg in swing; straight-penalty fights it
+    # ★ contact-phase DeepMimic tracking of the retargeted human reference (gait_reference.py). Weight below velocity.
+    env.rewards.gait_reference_tracking = RewTerm(
+        func=pyg_rewards.gait_reference_tracking, weight=1.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=_HUMANREF_SAGITTAL, preserve_order=True),
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["L_foot_link", "R_foot_link"],
+                                             preserve_order=True),
+                "k": 2.0, "t_stance": 0.6, "t_swing": 0.4})
+
+
+@configclass
+class BipedHumanRefEnvCfg(BipedFlatEnvCfg):
+    """FLAT: human gait-reference tracking (contact-phase DeepMimic). Warm-start from a G1ImpactStable flat ckpt
+    (obs 239 unchanged). Fixes shuffle/tiptoe via a dense human-trajectory signal (docs/.../2026-06-29_human_gait_reference)."""
+    def __post_init__(self):
+        super().__post_init__()
+        _apply_human_ref(self)
+
+
+@configclass
+class BipedHumanRefEnvCfg_PLAY(BipedHumanRefEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        _play_overrides(self)
+
+
+@configclass
+class BipedHumanRefRoughEnvCfg(BipedRoughEnvCfg):
+    """ROUGH: same human-reference reward; resume from the FLAT human-ref checkpoint (obs match, 239-dim)."""
+    def __post_init__(self):
+        super().__post_init__()
+        _apply_human_ref(self)
+
+
+@configclass
+class BipedHumanRefRoughEnvCfg_PLAY(BipedHumanRefRoughEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        _play_overrides(self)
+
+
+# ============================================================================================
 # ★ OBS RESTRUCTURING (Menlo/Asimov blog review 2026-06-28, docs/reward_research/2026-06-28_menlo_blog_review).
 #   Asymmetric actor-critic (Pinto 2017 / Lee 2020 / Berkeley 2024): ACTOR = proprioception only — NO base_lin_vel
 #   (deployable; not memoryless-reliant on ground-truth velocity), scoped to ACTUATED_JOINTS so the encoder-less

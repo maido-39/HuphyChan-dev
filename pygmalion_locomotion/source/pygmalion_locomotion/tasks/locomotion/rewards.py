@@ -22,6 +22,34 @@ from __future__ import annotations
 import torch
 from isaaclab.managers import SceneEntityCfg
 
+from . import gait_reference as _gait_ref  # numpy-only human gait reference (retargeted to our joints)
+
+# cache of the reference sagittal table [n+1, 3] (hip_pitch, knee, ankle_pitch in rad over phase 0..1) per device
+_REF_TABLE_CACHE: dict = {}
+
+
+def _gait_ref_table(device, n: int = 240):
+    """Torch lookup table of the retargeted human reference for the 3 sagittal joints over phase [0,1]."""
+    key = str(device)
+    t = _REF_TABLE_CACHE.get(key)
+    if t is None:
+        import numpy as np
+        ph = np.linspace(0.0, 1.0, n + 1)
+        tg = np.stack([_gait_ref.leg_targets_rad(p) for p in ph], axis=0)   # [n+1, 6]
+        sag = tg[:, [0, 3, 4]]                                              # hip_pitch, knee, ankle_pitch
+        t = torch.tensor(sag, dtype=torch.float32, device=device)
+        _REF_TABLE_CACHE[key] = t
+    return t
+
+
+def _phase_lookup(phase, table):
+    """Linear-interp `table` [n+1,3] at phase [E] in [0,1) -> [E,3]."""
+    n = table.shape[0] - 1
+    x = (phase - torch.floor(phase)) * n
+    i0 = x.long().clamp(0, n - 1)
+    fr = (x - i0.to(x.dtype)).unsqueeze(-1)
+    return table[i0] * (1.0 - fr) + table[i0 + 1] * fr
+
 
 def power_cot(env, asset_cfg: SceneEntityCfg, command_name: str = "base_velocity",
               scale: float = 0.003, sigma: float = 1.0, eps: float = 0.1):
@@ -331,3 +359,33 @@ def feet_swing_height(env, asset_cfg: SceneEntityCfg, sensor_cfg: SceneEntityCfg
     in_contact = torch.norm(sensor.data.net_forces_w[:, sensor_cfg.body_ids, :], dim=-1) > contact_thresh
     err = torch.square(foot_z - h_target) * (~in_contact).float()                 # [E, nfoot] swing-only
     return torch.sum(err, dim=1)                                                  # [E]
+
+
+def gait_reference_tracking(env, asset_cfg: SceneEntityCfg, sensor_cfg: SceneEntityCfg,
+                            k: float = 2.0, t_stance: float = 0.6, t_swing: float = 0.4):
+    """DeepMimic-style soft tracking of the human gait reference, CONTACT-PHASE indexed (no obs change).
+
+    Per leg, the gait phase is derived from the foot contact sensor (current_contact_time/air_time) -> stance maps
+    to [0,0.6], swing to [0.6,1.0] using nominal durations; each leg uses its OWN contact so L/R phase-offset is
+    natural. The reward = mean_leg exp(-k * ||q_sagittal - q_ref(phase)||^2) over the 3 sagittal joints
+    (hip_pitch, knee, ankle_pitch). POSITIVE weight, kept BELOW velocity tracking. Frontal/transverse joints are
+    left free (balance). The reference (gait_reference.py) is retargeted with FK-verified signs (docs/51).
+
+    asset_cfg.joint_ids MUST resolve to [L_hip_pitch, L_knee, L_ankle_pitch, R_hip_pitch, R_knee, R_ankle_pitch]
+    (use SceneEntityCfg(..., preserve_order=True)); sensor_cfg.body_ids to [L_foot_link, R_foot_link] (same order).
+    Returns [num_envs] in (0,1]."""
+    asset = env.scene[asset_cfg.name]
+    sensor = env.scene.sensors[sensor_cfg.name]
+    q = asset.data.joint_pos[:, asset_cfg.joint_ids]                               # [E,6] L(hp,kn,ap) R(hp,kn,ap)
+    ct = sensor.data.current_contact_time[:, sensor_cfg.body_ids]                  # [E,2] L,R
+    at = sensor.data.current_air_time[:, sensor_cfg.body_ids]                      # [E,2] L,R
+    in_contact = ct > 0.0
+    phase = torch.where(in_contact,
+                        0.6 * (ct / t_stance).clamp(0.0, 1.0),
+                        0.6 + 0.4 * (at / t_swing).clamp(0.0, 1.0))                # [E,2]
+    table = _gait_ref_table(q.device)
+    ref_l = _phase_lookup(phase[:, 0], table)                                      # [E,3]
+    ref_r = _phase_lookup(phase[:, 1], table)
+    err_l = torch.sum((q[:, 0:3] - ref_l) ** 2, dim=1)                             # [E]
+    err_r = torch.sum((q[:, 3:6] - ref_r) ** 2, dim=1)
+    return 0.5 * (torch.exp(-k * err_l) + torch.exp(-k * err_r))                   # [E] in (0,1]
