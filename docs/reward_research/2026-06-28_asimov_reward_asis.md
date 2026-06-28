@@ -22,5 +22,13 @@ G1-vanilla(블로그가 "inspired by Unitree/Booster/MJLab") + 블로그 명시 
 ## 결론(예상)
 flight로 **충격↑(하중측정 무효)** + **까치발 지속** + (obs 미스매치) **진동/불안정** 가능. = "블로그 reward 그대로"는 *우리 목표(저충격·인간형·하중측정)*엔 부적합. 실측(measure 후) 확정. 우리 방향(swing_height+cop+비대칭A-C, 단 air_time 회피)이 타당한 이유의 대조군.
 
+## ★ 실측 결과 (run 완료 → [[experiments/2026-06-28_22-20-50_asimov_reward_flat]])
+대조 measure(vs g1is_dm4340) — **결론 방향은 예측대로(부적합), 단 메커니즘이 예상과 다름**:
+- ✅ **충격↑ 확정**(예측#1): GRF peak **1991N=3.9×BW**(g1is 1079N=2.1×BW) → HW 파손범위(1.5-2.7kN) **진입** = 하중측정 무효.
+- ❌ **flight 메커니즘은 빗나감**(예측#1 수정): flight 1.3%·**air_time 기여 -0.0164=DEAD** — 51.8kg는 flight 자체를 못 만듦. 충격↑는 flight가 아니라 **tight ankle deviation의 낮은 컴플라이언스(딱딱한 착지)** 탓.
+- ⚠ **까치발은 오히려 덜함**(예측#2와 반대): base_h 0.864·ankle_roll 77% — tight tol이 측방 shuffle 억제.
+- ★ **새 발견**: **ankle_pitch 243%rated 과부하**(블로그 joint_deviation_ankle -0.5가 발목을 neutral로 당겨 추종과 충돌; 예측#3 'ankle 과구속'의 실제 형태).
+→ 순결론: 블로그 air_time/tight-ankle은 **우리 하중측정 로봇엔 부적합**(충격·발목과부하). v2(swing_height+foot_flat, air_time·tight-ankle 없이)로 진행. 상세 [[experiments/2026-06-28_22-20-50_asimov_reward_flat]] §5.
+
 ## 출처
 [[2026-06-28_menlo_blog_review]](블로그 항목별 검증) · Menlo blog · IsaacLab mdp(feet_air_time 실제-airtime vs positive_biped 확인).
