@@ -3,6 +3,8 @@
 > 트리거 (user 2026-06-25): "Ankle 토크를 더 늘려야. rough 포함 토크-RPM 산점도(실험별 색). **감속비 추가로 액추에이터 바꾸면 속도가 줄 텐데, 고속을 요구하는 경우가 있는지** 검토. RS00·DM-J4310-2EC 속도-토크 선도도."
 > 데이터: 기존 measure npz (rough = stage4, base_height std 0.31≫0.01 flat로 확인) + 액추에이터 사양은 다중소스 검증 워크플로 `actuator-tn-specs`(공식 매뉴얼+유통사, HIGH confidence). 스크립트 `scripts/scatter_torque_rpm.py`·`scripts/motor_util_cross.py`.
 
+> ★ **업데이트 2026-06-28 — 최종 ankle_roll 모터 = DM-J4340-2EC** (DM-J4310 아님; 더 큰 57mm 형제). 사용자 제공 **공식 데이터시트**: peak **27** / rated **9** N·m, 무부하 **100rpm@48V**(52@24V), 정격 36rpm, **40:1**, Kt~3.6, 362g. → 단일 모터로 충분(peak 27 > 필요 ~20, rated 9 > rough RMS 7.3, 무부하 100rpm은 운전점 ~0.6%만 클립) → **외부 감속비 불필요**(아래 DM-J4310+3:1 분석은 참고용). knee는 **+1.8:1**(effort 216/vel 111). 로봇모델은 reward_tuning 브랜치(primitive collision + G1 발바닥 + toe 복원) 채택. ⚠ 웹 일부는 "14/40 V1.1"을 인용하나 실물 데이터시트는 **27/9** — 이걸 사용.
+
 ## 1. 동기 — ankle_roll 토크기아 ([[48_motor_util_sizing]])
 - **25 실험 전부** ankle_roll이 **peak(14 N·m)에 saturation**, RMS는 정격(5) 대비 **101~200%**. **rough(stage4)** RMS **7.3 = 147%**, peak에 16~18% 시간 붙음 = 정책이 14보다 더 원함. → 토크 증대는 데이터로 정당화.
 

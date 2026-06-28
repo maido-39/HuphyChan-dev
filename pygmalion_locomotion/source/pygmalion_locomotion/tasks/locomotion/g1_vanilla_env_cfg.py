@@ -19,7 +19,7 @@ from isaaclab.utils import configclass
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import RewardsCfg
 
 from . import mdp
-from .velocity_env_cfg import FOOT_BODY
+from .velocity_env_cfg import FOOT_BODY, BipedRoughEnvCfg
 from .flat_env_cfg import BipedFlatEnvCfg, BipedFlatForefootEnvCfg   # FLAT base; Forefoot = OUR gaitfix reward
 from . import rewards as pyg_rewards   # custom reward funcs for the minimal targeted additions
 
@@ -197,3 +197,95 @@ class BipedG1ImpactEnvCfg_PLAY(BipedG1ImpactEnvCfg):
         self.events.base_com = None
         self.events.physics_material.params["static_friction_range"] = (0.9, 0.9)
         self.events.physics_material.params["dynamic_friction_range"] = (0.7, 0.7)
+
+
+# ============================================================================================
+# ★ G1 + impact + VERIFIED anti-trembling/saturation fixes (user 2026-06-28).
+#   ROOT-CAUSE research docs/reward_research/2026-06-28_g1_trembling_saturation: vanilla G1 EXCLUDED the ankle
+#   from dof_acc (-> high-freq foot buzz = 발 떨림) + weak action_rate; our gaitfix INCLUDED ankle dof_acc -3e-7
+#   + action_rate -0.01 and measured 2-3x less torque chatter. FIX = include ankle in dof_acc(-3e-7) + action_rate
+#   -0.01. Saturation handled STRUCTURALLY by the ankle_roll RS00->DM-J4340-2EC upgrade (clip 14->40, rated 5->14).
+#   Terrain-agnostic helper -> identical reward on FLAT + ROUGH (obs match, 239-dim) so flat ckpt transfers.
+# ============================================================================================
+def _apply_g1_impact_stable(env):
+    """Full G1-vanilla reward swap + impact terms + verified anti-trembling fixes. Terrain-agnostic (flat/rough)."""
+    env.rewards = G1VanillaRewards()
+    env.rewards.lin_vel_z_l2.weight = 0.0
+    env.rewards.undesired_contacts = None
+    env.rewards.flat_orientation_l2.weight = -1.0
+    # ★ anti-trembling (verified, gaitfix-proven values): ankle INCLUDED in dof_acc + stronger action_rate
+    env.rewards.action_rate_l2.weight = -0.01
+    env.rewards.dof_acc_l2.weight = -3.0e-7
+    env.rewards.dof_acc_l2.params["asset_cfg"] = SceneEntityCfg(
+        "robot", joint_names=[".*_hip_.*", ".*_knee_joint", ".*_ankle_.*"])
+    env.rewards.dof_torques_l2.weight = -1.5e-7
+    env.rewards.dof_torques_l2.params["asset_cfg"] = SceneEntityCfg(
+        "robot", joint_names=[".*_hip_.*", ".*_knee_joint", ".*_ankle_.*"])
+    # impact reduction + knee protection (HW survival 1.5-2.7 kN)
+    env.rewards.foot_landing_vel = RewTerm(
+        func=pyg_rewards.foot_landing_vel, weight=-1.0,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY), "height_thresh": 0.12})
+    env.rewards.foot_impact_force = RewTerm(
+        func=pyg_rewards.foot_impact_force, weight=-0.005,
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_BODY),
+                "force_soft": 650.0, "cap_over": 1500.0})
+    env.rewards.knee_straight = RewTerm(
+        func=pyg_rewards.knee_straight_penalty, weight=-5.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_knee_joint"]), "min_flexion": -0.17})
+    # G1 conditions: forward-only commands + light DR (matches the G1 baseline)
+    env.curriculum.command_vel_x = None
+    env.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)
+    env.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
+    env.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
+    env.events.push_robot = None
+    env.events.add_base_mass = None
+    env.events.base_com = None
+    env.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
+
+
+def _play_overrides(env):
+    env.scene.num_envs = 32
+    env.scene.env_spacing = 2.5
+    env.episode_length_s = 40.0
+    env.scene.terrain.max_init_terrain_level = None
+    if env.scene.terrain.terrain_generator is not None:
+        env.scene.terrain.terrain_generator.num_rows = 5
+        env.scene.terrain.terrain_generator.num_cols = 5
+        env.scene.terrain.terrain_generator.curriculum = False
+    env.observations.policy.enable_corruption = False
+    env.events.base_external_force_torque = None
+    env.events.push_robot = None
+    env.events.add_base_mass = None
+    env.events.base_com = None
+    env.events.physics_material.params["static_friction_range"] = (0.9, 0.9)
+    env.events.physics_material.params["dynamic_friction_range"] = (0.7, 0.7)
+
+
+@configclass
+class BipedG1ImpactStableEnvCfg(BipedFlatEnvCfg):
+    """FLAT: G1 + impact + verified anti-trembling/saturation fixes (user 2026-06-28). Train FIRST; transfer to rough."""
+    def __post_init__(self):
+        super().__post_init__()
+        _apply_g1_impact_stable(self)
+
+
+@configclass
+class BipedG1ImpactStableEnvCfg_PLAY(BipedG1ImpactStableEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        _play_overrides(self)
+
+
+@configclass
+class BipedG1ImpactStableRoughEnvCfg(BipedRoughEnvCfg):
+    """ROUGH: same G1 + impact + anti-trembling reward; resume from the FLAT checkpoint (obs match, 239-dim)."""
+    def __post_init__(self):
+        super().__post_init__()
+        _apply_g1_impact_stable(self)
+
+
+@configclass
+class BipedG1ImpactStableRoughEnvCfg_PLAY(BipedG1ImpactStableRoughEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        _play_overrides(self)

@@ -18,8 +18,7 @@ source:
 convert:
   fix_base: false                    # false = floating base for locomotion
   import_inertia_tensor: true        # use <inertial> mass/inertia from the source
-  self_collision: true               # ★ enable self-collision (PhysX auto-excludes parent-child;
-                                     #   so only left<->right leg / foot-foot collide). prevents scissoring.
+  self_collision: false              # primitive colliders + no inter-link PhysX collision (unitree-lab style)
   make_instanceable: true
 
 init:
@@ -32,7 +31,7 @@ init:
     ".*_knee_joint": -0.40
     ".*_ankle_pitch_joint": 0.20
     ".*_ankle_roll_joint": 0.0
-    # toe joint removed (rigid hard-link) -- no init
+    ".*_toe_joint": 0.0
 
 roles:
   base: base_link                    # trunk/pelvis body (height scan, fall-contact, push)
@@ -61,16 +60,16 @@ actuators:
     stiffness: 150.0
     damping: 6.5    # ★ HW-grounded: RS03 large-frame Kd<=100. ZETA=0.7 (was 5 -> ~0.53).
     armature: 0.0049
-  knee_rs04_sweep:                   # ★ GEAR-RATIO SWEEP (autonomous overnight 06-22). Per ratio g set:
-                                     #   effort=g*120, velocity_rpm=200/g, armature=1.2e-4*(9g)^2. damping 11
-                                     #   + stiffness 200 fixed (ZETA~0.7). CURRENT: g=1.0 (ROUGH sweep).
+  knee_rs04_sweep:                   # ★ GEAR-RATIO SWEEP. Per ratio g: effort=g*120, velocity_rpm=200/g,
+                                     #   armature=1.2e-4*(9g)^2, damping 11 + stiffness 200 (ZETA~0.7).
+                                     #   CURRENT: g=1.8 (user 2026-06-28: knee 1:1.8 reduction for torque headroom).
     type: motor
     joints: [".*_knee_joint"]
-    effort_limit: 120.0                # g=1.0 (direct): RS04 peak 120
-    velocity_limit_rpm: 200.0          # g=1.0: RS04 no-load 200rpm
+    effort_limit: 216.0                # g=1.8: 1.8 x RS04 peak 120
+    velocity_limit_rpm: 111.0          # g=1.8: 200/1.8 no-load
     stiffness: 200.0
     damping: 11.0
-    armature: 0.0097                   # g=1.0: RS04 9:1 internal only (1.2e-4 x 81)
+    armature: 0.0315                   # g=1.8: 1.2e-4 x (9*1.8=16.2)^2
   ankle_pitch_rs03:                  # RS03 DIRECT motor on the joint axis (NOT a rod/linkage)
     type: motor
     joints: [".*_ankle_pitch_joint"]
@@ -79,17 +78,27 @@ actuators:
     stiffness: 80.0
     damping: 3.0
     armature: 0.0049
-  ankle_roll_rs00:                   # RS00 DIRECT motor
+  ankle_roll_rs00:                   # ★ now DM-J4340-2EC (user datasheet 2026-06-28; was RS00 14/5). docs/49:
+                                     #   peak 27 / rated 9 N·m, no-load 100rpm@48V (52@24V), 40:1, Kt 3.6. (key kept for refs)
     type: motor
     joints: [".*_ankle_roll_joint"]
-    effort_limit: 14.0
-    velocity_limit_rpm: 315.0
+    effort_limit: 27.0                 # DM-J4340-2EC peak (2x RS00's 14)
+    velocity_limit_rpm: 100.0          # no-load @48V (52 @24V). demand p95 32rpm -> ~0.6% clipped (docs/49)
     stiffness: 40.0
-    damping: 2.0
-    armature: 0.0015
-  # ★ toe_passive REMOVED (user 2026-06-22): the toe joint is now a RIGID hard-link (joint deleted in robot.xml)
-  #   -> no passive DOF. Tests whether the floppy passive-toe spring was destabilizing the gait (G1 reward
-  #   walked; every reward I added on top did not -> suspect the underactuated toe). Restore from git if needed.
+    damping: 3.0                       # up from 2.0 (40:1 inertia + anti-trembling)
+    armature: 0.06                     # EST: I_rotor ~3.75e-5 x 40^2; refine w/ datasheet rotor inertia
+  toe_passive:                       # NO motor -> passive spring-damper to default (0)
+    type: passive_spring
+    joints: [".*_toe_joint"]
+    # ★ tuned from the toe-joint research (docs/15): human MTP ~56 N*m/rad; the KEY stability knob
+    #   is ARMATURE (rotor inertia). old armature 0.0005 was ~1/24 of Cassie's toe (0.01225) -> the
+    #   low-inertia toe + high stiffness blew up numerically. Fix: stiffness 150->60 (human-like),
+    #   armature 0.0005->0.008 (Cassie-like), damping 4 (kills slap). effort 60 > peak spring torque.
+    effort_limit: 60.0
+    velocity_limit_rpm: 315.0
+    stiffness: 60.0
+    damping: 4.0
+    armature: 0.008
 
 # Policy-controlled joints. If omitted, derived = union of all type:motor groups
 # (so passive joints are always excluded automatically). Override only if you need a subset.

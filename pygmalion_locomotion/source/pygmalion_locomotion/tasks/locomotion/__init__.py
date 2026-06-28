@@ -138,3 +138,44 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedFlatPPORunnerCfg",
     },
 )
+
+# ★ G1 + impact + VERIFIED anti-trembling/saturation fixes (user 2026-06-28). FLAT first -> transfer to ROUGH.
+gym.register(
+    id="Pygmalion-Velocity-Flat-G1ImpactStable-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedG1ImpactStableEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedFlatPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Pygmalion-Velocity-Flat-G1ImpactStable-Play-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedG1ImpactStableEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedFlatPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Pygmalion-Velocity-Rough-G1ImpactStable-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedG1ImpactStableRoughEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedRoughPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Pygmalion-Velocity-Rough-G1ImpactStable-Play-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedG1ImpactStableRoughEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedRoughPPORunnerCfg",
+    },
+)
