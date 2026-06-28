@@ -22,7 +22,7 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import RewardsCfg
 
 from . import mdp
-from .velocity_env_cfg import FOOT_BODY, BipedRoughEnvCfg, ACTUATED_JOINTS
+from .velocity_env_cfg import FOOT_BODY, BipedRoughEnvCfg, ACTUATED_JOINTS, TARGET_BASE_HEIGHT
 from .flat_env_cfg import BipedFlatEnvCfg, BipedFlatForefootEnvCfg   # FLAT base; Forefoot = OUR gaitfix reward
 from . import rewards as pyg_rewards   # custom reward funcs for the minimal targeted additions
 
@@ -336,6 +336,14 @@ def _apply_human_ref(env):
                 "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["L_foot_link", "R_foot_link"],
                                              preserve_order=True),
                 "k": 2.0, "t_stance": 0.6, "t_swing": 0.4})
+    # ★★ ROOT-CAUSE FIX for the TIPTOE REGRESSION (user 2026-06-29): the G1 reward DROPPED gaitfix's base_height
+    #   (mdp.base_height_l2 -1.0 @ 0.85). Without it PPO extends the legs to maximize tracking reach (base 0.95)
+    #   and the only way to keep the feet on the ground is to plantarflex = TIPTOE. gaitfix kept base 0.80-0.83
+    #   (legs bent) = FLAT feet WITH this term. Restoring it removes the INCENTIVE to extend -> no tiptoe at the
+    #   root (vs the weak foot_flat penalty which only fought the symptom). docs/reward_research/2026-06-29_tiptoe_regression.
+    env.rewards.base_height = RewTerm(
+        func=mdp.base_height_l2, weight=-1.0,
+        params={"target_height": TARGET_BASE_HEIGHT, "asset_cfg": SceneEntityCfg("robot")})
 
 
 @configclass
