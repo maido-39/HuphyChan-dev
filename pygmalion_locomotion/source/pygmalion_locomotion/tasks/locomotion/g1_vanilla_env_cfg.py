@@ -382,3 +382,39 @@ class BipedG1ImpactStableAsymObsRoughEnvCfg_PLAY(BipedG1ImpactStableAsymObsRough
     def __post_init__(self):
         super().__post_init__()
         _play_overrides(self)
+
+
+# ============================================================================================
+# ★ Menlo/Asimov blog reward AS-IS (user 2026-06-28) — to surface the problems of applying it directly to our
+#   51.8 kg robot. G1-vanilla (the Unitree baseline the blog builds on) + blog mods. NO swing_height/cop/foot_flat/
+#   impact-stack/anti-trembling (the blog's MINIMAL shaping). docs/reward_research/2026-06-28_asimov_reward_asis.md
+#   (lists the expected problems: air_time+0.5 flight->impact on a heavy robot, tiptoe persists, ankle-ROM mismatch,
+#   reward-obs coupling broken on our stock obs, morphology mismatch, underspecified weights).
+# ============================================================================================
+@configclass
+class BipedAsimovRewardEnvCfg(BipedG1VanillaEnvCfg):
+    """Blog reward replication. NOTE: faithful-as-possible (blog underspecifies some weights); stock obs kept."""
+    def __post_init__(self):
+        super().__post_init__()                                  # G1 vanilla (Unitree baseline)
+        # ★ blog air_time = ACTUAL air-time variant @ +0.5 (flight lever; our default positive_biped = single-stance)
+        self.rewards.feet_air_time = RewTerm(
+            func=mdp.feet_air_time, weight=0.5,
+            params={"command_name": "base_velocity", "threshold": 0.4,
+                    "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_BODY)})
+        self.rewards.ang_vel_xy_l2.weight = -0.08               # blog body_ang_vel (narrow-stance stability)
+        # gentle-feet contact-force penalty (blog: place feet gently, not stomp)
+        self.rewards.foot_impact_force = RewTerm(
+            func=pyg_rewards.foot_impact_force, weight=-0.005,
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_BODY),
+                    "force_soft": 650.0, "cap_over": 1500.0})
+        # asymmetric per-joint pose tolerance: TIGHT on the limited-ROM ankle (blog 0.2/0.12), hip/knee left loose
+        self.rewards.joint_deviation_ankle = RewTerm(
+            func=mdp.joint_deviation_l1, weight=-0.5,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"])})
+
+
+@configclass
+class BipedAsimovRewardEnvCfg_PLAY(BipedAsimovRewardEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        _play_overrides(self)
