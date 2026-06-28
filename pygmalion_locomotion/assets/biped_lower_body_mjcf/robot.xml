@@ -91,6 +91,9 @@
                     <inertial pos="0.0022345 -0.0212923 -0.00971525" quat="-0.0398115 0.692985 0.0175697 0.719638" mass="0.129142" diaginertia="0.000101106 7.31339e-05 4.77603e-05" />
                     <joint name="L_toe_joint" pos="0 0 0" axis="1 0 0" range="-0.872665 0" class="toe" />
                     <geom pos="0.132128 0.017185 0.836768" quat="1 0 0 0" mesh="L_feet_toe_1" class="visual" type="mesh" />
+                    <!-- ★ toe COLLISION (user 2026-06-28): the passive toe had NO collision -> never loaded -> never
+                         deflected. Re-add so the toe contacts the ground at the front and the passive spring works. -->
+                    <geom pos="0.132128 0.017185 0.836768" quat="1 0 0 0" mesh="L_feet_toe_1" class="collision" name="L_toe_collision" type="mesh" />
                   </body>
                 </body>
               </body>
@@ -133,6 +136,8 @@
                     <inertial pos="-0.00223392 -0.0212923 -0.00971525" quat="0.0175697 0.719638 -0.0398115 0.692985" mass="0.129142" diaginertia="0.000101106 7.31339e-05 4.77603e-05" />
                     <joint name="R_toe_joint" pos="0 0 0" axis="1 0 0" range="-0.785398 0" class="toe" />
                     <geom pos="-0.132183 0.017185 0.836768" quat="1 0 0 0" mesh="R_feet_toe_1" class="visual" type="mesh" />
+                    <!-- ★ toe COLLISION (user 2026-06-28): see L_toe_collision -->
+                    <geom pos="-0.132183 0.017185 0.836768" quat="1 0 0 0" mesh="R_feet_toe_1" class="collision" name="R_toe_collision" type="mesh" />
                   </body>
                 </body>
               </body>

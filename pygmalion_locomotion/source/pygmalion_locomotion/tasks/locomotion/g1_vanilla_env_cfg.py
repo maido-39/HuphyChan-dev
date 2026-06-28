@@ -239,10 +239,17 @@ def _apply_g1_impact_stable(env):
     #   A tiptoe/shuffle can't satisfy a swing-height target -> forces a real full-foot lift + longer stride
     #   (Unitree G1 feet_swing_height -20). h_target = standing foot_link z (~0.07) + ~0.06 clearance; verify config-test.
     env.rewards.feet_swing_height = RewTerm(
-        func=pyg_rewards.feet_swing_height, weight=-20.0,
+        func=pyg_rewards.feet_swing_height, weight=-30.0,
         params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY),
                 "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_BODY), "h_target": 0.12})
     env.rewards.feet_air_time.weight = 0.0   # demote (dead at +0.009; swing_height carries the stride, as in G1)
+    # ★ v2 (2026-06-28): DIRECT anti-tiptoe — penalize the STANCE foot's PITCH-tilt (toe-down) via full-axis
+    #   foot_flat_orientation. swing_height only shapes the SWING foot; this flattens the STANCE foot so the robot
+    #   plants the whole sole (plantigrade) instead of standing on the forefoot. Moderate weight (research warns
+    #   full-axis can fight heel-strike pitch; monitor — raise if tiptoe persists, lower if walking breaks).
+    env.rewards.foot_flat_orientation = RewTerm(
+        func=pyg_rewards.foot_flat_orientation, weight=-0.5,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY), "roll_only": False})
     # G1 conditions: forward-only commands + light DR (matches the G1 baseline)
     env.curriculum.command_vel_x = None
     env.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)
