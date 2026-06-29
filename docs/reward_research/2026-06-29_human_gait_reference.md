@@ -59,5 +59,13 @@
 **베이스라인 human-likeness** (`gait_humanlikeness.py`): 현 gait 모두 사람 관절범위의 **5-30%만 사용**(검은 점선=사람, 거의 평평한 색선=로봇 shuffle); 점수 g1is_dm4340 -0.03·v2 -0.01·asimov 0.07. v3 목표 = 색선이 점선에 근접(range_ratio→1, corr→+1).
 ![human-likeness baselines](assets/gait_humanlikeness_baselines.png)
 
+## v3→v7 진행 (까치발 fix 후 절뚝·진폭)
+- **v3**(human-ref, base_height 無): base 0.926 까치발 지속 + 불안정 → base_height 필요 입증.
+- **v4**(+base_height): ★ 까치발 FIXED(base 0.851·안정 57cyc·hip corr +0.6~0.7). 남음: 진폭 range_ratio 0.29·절뚝 asym 0.87·GRF 8×BW.
+- **v5**(+toe_load): toe 굽힘 0.075→0.108↑(toe 사용) but 타이밍 push-off 아님 + 절뚝 0.83·CoT 1.69↑. = toe_load는 강도만.
+- **v6**(대칭 warm-start from g1is_dm4340): ★ FAILED(cross-robot 붕괴: base 0.93·한발·asym 1.0). 교훈: same-robot ckpt만 warm-start.
+- ★ **v7 계획**: 절뚝+진폭 둘 다 = **gait_reference weight +1.0→+2.5**. reference는 대칭 곡선이라 **강하게 추종 시 양다리 대칭화(절뚝↓) + 전 진폭 추종(range_ratio↑=보폭↑)** 동시 노림. exp(-k·err) 형태라 과도 rigid 위험은 모니터(추종/낙상 악화 시 +2.0). warm-start from v4. 부족 시 → **symmetry augmentation**(rsl_rl RslRlSymmetryCfg, 데이터 미러로 대칭 강제; 미러함수 복잡)로 v8.
+- (human-likeness 툴 버그 수정: per-leg cycle 검출 — v4 hip corr 음→양 +0.6~0.7. 이전 음수는 버그였음.)
+
 ## refs
 워크플로 w9d8ys8av(원본 /tmp tasks/w9d8ys8av.output) · Peng AMP 2104.02180 · DeepMimic Peng 2018(1804.02717) · Siekmann 2011.01387(periodic contact) · Winter 'Biomechanics' · Perry 'Gait Analysis'(Figs 8-2,8-3) · 내부 [[gait_reference]]·[[51_joint_sign_conventions]]·[[2026-06-28_heeltoe_stride_fix]]·[[experiments/2026-06-28_19-55-27_g1is_dm4340_flat]]·[[human-gait-reference-direction]].

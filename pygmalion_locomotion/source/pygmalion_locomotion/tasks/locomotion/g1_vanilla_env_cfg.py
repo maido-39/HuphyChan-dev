@@ -340,7 +340,7 @@ def _apply_human_ref(env):
     env.rewards.knee_straight = None            # reference flexes the knee ~60deg in swing; straight-penalty fights it
     # ★ contact-phase DeepMimic tracking of the retargeted human reference (gait_reference.py). Weight below velocity.
     env.rewards.gait_reference_tracking = RewTerm(
-        func=pyg_rewards.gait_reference_tracking, weight=1.0,
+        func=pyg_rewards.gait_reference_tracking, weight=2.5,   # v7: +1->+2.5 to force amplitude + L/R symmetry (limp)
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=_HUMANREF_SAGITTAL, preserve_order=True),
                 "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["L_foot_link", "R_foot_link"],
                                              preserve_order=True),
