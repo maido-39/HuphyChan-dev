@@ -48,6 +48,7 @@ REWARD_GLOSSARY = {
     "ankle_pushoff": ("ankle push-off 일(work) 보상", "toe-off 추진력"),
     "gait_reference_tracking": ("사람 gait reference 관절각 추종(contact-phase)", "★ 인간형 gait shape(까치발/shuffle 격파)"),
     "toe_load_stance": ("terminal stance toe 하중 보상", "★ push-off windlass(toe 적시 사용)"),
+    "periodic_contact": ("Siekmann 주기 contact-schedule: stance엔 발 정지·swing엔 발 이지(공유 clock)", "★ heel→toe-off 리듬 legislate = 까치발·절뚝·충격 동시해결(reference-free)"),
     # --- termination / contacts ---
     "termination_penalty": ("조기 종료(낙상) penalty", "넘어짐 회피"),
     "undesired_contacts": ("원치 않는 link 접촉 penalty", "무릎/몸통 지면 충돌 회피"),
