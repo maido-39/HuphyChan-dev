@@ -449,6 +449,46 @@ class BipedSiekmannEnvCfg_PLAY(BipedSiekmannEnvCfg):
 
 
 # ============================================================================================
+# Stage 4 — toe-use via the CAUSE (docs/reward_research/2026-06-29_toe_use_reward). The passive toe windlass
+#   EMERGES from loading the forefoot in terminal stance, so reward the CAUSE — ankle push-off power (rolls the
+#   CoP forward) + the forefoot-fraction RISING through stance — NOT |tau_toe| (a gameable correlate, v5 failed).
+#   Requires the Siekmann foot-roll FIRST (backbone), so warm-start from a Siekmann (v8) ckpt.
+# ============================================================================================
+def _apply_siekmann_pushoff(env):
+    """Siekmann backbone + ankle_pushoff_work (terminal-stance plantarflexion power = the CoP-forward engine) +
+    cop_progression (forefoot GRF fraction rising through stance). Toe-use is the emergent byproduct."""
+    _apply_siekmann(env)
+    env.rewards.ankle_pushoff_work = RewTerm(
+        func=pyg_rewards.ankle_pushoff_work, weight=0.5,
+        params={"ankle_cfg": SceneEntityCfg("robot", joint_names=["L_ankle_pitch_joint", "R_ankle_pitch_joint"],
+                                            preserve_order=True),
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["L_foot_link", "R_foot_link"],
+                                             preserve_order=True)})
+    env.rewards.cop_progression = RewTerm(
+        func=pyg_rewards.cop_progression, weight=1.2,
+        params={"foot_cfg": SceneEntityCfg("contact_forces", body_names=["L_foot_link", "R_foot_link"],
+                                           preserve_order=True),
+                "forefoot_cfg": SceneEntityCfg("contact_forces", body_names=["L_toe_link", "R_toe_link"],
+                                               preserve_order=True)})
+
+
+@configclass
+class BipedSiekmannPushoffEnvCfg(BipedFlatEnvCfg):
+    """FLAT Stage4: Siekmann + ankle push-off + CoP-progression -> toe-use (windlass) via the CAUSE (load). Same
+    obs (241) as Siekmann -> warm-start from a Siekmann (v8) ckpt."""
+    def __post_init__(self):
+        super().__post_init__()
+        _apply_siekmann_pushoff(self)
+
+
+@configclass
+class BipedSiekmannPushoffEnvCfg_PLAY(BipedSiekmannPushoffEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        _play_overrides(self)
+
+
+# ============================================================================================
 # ★ OBS RESTRUCTURING (Menlo/Asimov blog review 2026-06-28, docs/reward_research/2026-06-28_menlo_blog_review).
 #   Asymmetric actor-critic (Pinto 2017 / Lee 2020 / Berkeley 2024): ACTOR = proprioception only — NO base_lin_vel
 #   (deployable; not memoryless-reliant on ground-truth velocity), scoped to ACTUATED_JOINTS so the encoder-less

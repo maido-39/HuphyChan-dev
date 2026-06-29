@@ -29,6 +29,7 @@ CK="$D/model_$(ls "$D"/model_*.pt 2>/dev/null | sed 's/.*model_//;s/\.pt//' | so
 
 # (2) CLOSE-UP single-robot play video (separate camera in play.py)
 case "$TASK" in
+  *SiekmannPushoff*) PLAYTASK="Pygmalion-Velocity-Flat-SiekmannPushoff-Play-v0" ;;
   *Siekmann*) PLAYTASK="Pygmalion-Velocity-Flat-Siekmann-Play-v0" ;;
   *Rough-HumanRef*) PLAYTASK="Pygmalion-Velocity-Rough-HumanRef-Play-v0" ;;
   *HumanRefToe*) PLAYTASK="Pygmalion-Velocity-Flat-HumanRefToe-Play-v0" ;;

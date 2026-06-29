@@ -264,6 +264,27 @@ gym.register(
     },
 )
 
+# ★ Stage 4: Siekmann + ankle push-off + CoP-progression -> toe-use (docs/.../2026-06-29_toe_use_reward)
+gym.register(
+    id="Pygmalion-Velocity-Flat-SiekmannPushoff-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedSiekmannPushoffEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedFlatPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Pygmalion-Velocity-Flat-SiekmannPushoff-Play-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedSiekmannPushoffEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedFlatPPORunnerCfg",
+    },
+)
+
 # ★ obs restructuring (Menlo blog review 2026-06-28): asymmetric actor-critic + base_lin_vel/toe critic-only + history
 gym.register(
     id="Pygmalion-Velocity-Flat-G1ImpactStableAsymObs-v0",
