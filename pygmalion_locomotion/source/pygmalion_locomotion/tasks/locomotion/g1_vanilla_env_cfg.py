@@ -412,6 +412,43 @@ class BipedHumanRefToeEnvCfg_PLAY(BipedHumanRefToeEnvCfg):
 
 
 # ============================================================================================
+# Stage 1 — Siekmann periodic contact-schedule (arXiv:2011.01387). The HIGHEST-leverage reference-free fix:
+#   legislate stance(foot planted)/swing(foot off) via a phase clock -> heel-strike->toe-off timing, NO tiptoe,
+#   NO limp. Replaces the weak foot_flat/swing_height shaping. Clock in obs (239->241) -> train from SCRATCH.
+#   docs/reward_research/2026-06-29_gait_emergence_siekmann (user-provided deep-research report).
+# ============================================================================================
+def _apply_siekmann(env):
+    """G1 impact-stable + base_height base, MINUS weak foot shaping, PLUS the Siekmann periodic contact reward
+    + a phase clock in the policy obs (the policy must see phi to sync its contacts to the schedule)."""
+    _apply_g1_impact_stable(env)
+    env.rewards.feet_swing_height = None        # periodic contact legislates swing (foot off) -> replaces this
+    env.rewards.foot_flat_orientation = None    # periodic contact legislates stance (foot planted) -> replaces this
+    env.observations.policy.clock = ObsTerm(func=pyg_rewards.clock_phase, params={"period": 1.0})
+    env.rewards.periodic_contact = RewTerm(
+        func=pyg_rewards.periodic_contact, weight=1.5,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=["L_foot_link", "R_foot_link"], preserve_order=True),
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["L_foot_link", "R_foot_link"],
+                                             preserve_order=True),
+                "period": 1.0, "stance_ratio": 0.6, "k_v": 8.0, "k_f": 0.02, "sharp": 20.0})
+
+
+@configclass
+class BipedSiekmannEnvCfg(BipedFlatEnvCfg):
+    """FLAT Stage1: Siekmann periodic contact + clock + base_height. Reference-free timing -> heel-toe/no-tiptoe/
+    no-limp. Obs 241 (clock) -> train from SCRATCH (no warm-start)."""
+    def __post_init__(self):
+        super().__post_init__()
+        _apply_siekmann(self)
+
+
+@configclass
+class BipedSiekmannEnvCfg_PLAY(BipedSiekmannEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        _play_overrides(self)
+
+
+# ============================================================================================
 # ★ OBS RESTRUCTURING (Menlo/Asimov blog review 2026-06-28, docs/reward_research/2026-06-28_menlo_blog_review).
 #   Asymmetric actor-critic (Pinto 2017 / Lee 2020 / Berkeley 2024): ACTOR = proprioception only — NO base_lin_vel
 #   (deployable; not memoryless-reliant on ground-truth velocity), scoped to ACTUATED_JOINTS so the encoder-less

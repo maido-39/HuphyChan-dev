@@ -389,3 +389,40 @@ def gait_reference_tracking(env, asset_cfg: SceneEntityCfg, sensor_cfg: SceneEnt
     err_l = torch.sum((q[:, 0:3] - ref_l) ** 2, dim=1)                             # [E]
     err_r = torch.sum((q[:, 3:6] - ref_r) ** 2, dim=1)
     return 0.5 * (torch.exp(-k * err_l) + torch.exp(-k * err_r))                   # [E] in (0,1]
+
+
+# ============================================================================================
+# Siekmann periodic contact-schedule (arXiv:2011.01387) — docs/reward_research/2026-06-29_gait_emergence_siekmann
+#   A phase clock legislates the stance<->swing rhythm: during STANCE the foot must be planted (low speed); during
+#   SWING the foot must be off (low force). This fixes heel-strike->toe-off timing, removes the tiptoe shortcut
+#   (a tiptoe foot can't be both planted AND loaded at low speed across stance), and structurally discourages the
+#   L/R limp (both legs share the clock, offset 0.5). The clock must ALSO be in the obs (clock_phase) so the policy
+#   can sync. Reference-free, Cassie sim-to-real verified.
+# ============================================================================================
+def _gait_phi(env, period: float):
+    """Global gait phase in [0,1) from episode time (continuous within an episode)."""
+    return ((env.episode_length_buf.float() * env.step_dt) / period) % 1.0          # [E]
+
+
+def clock_phase(env, period: float = 1.0):
+    """Observation: [sin(2*pi*phi), cos(2*pi*phi)] of the gait clock (+2 obs dims). Policy uses it to time contacts."""
+    ang = 2.0 * torch.pi * _gait_phi(env, period)
+    return torch.stack([torch.sin(ang), torch.cos(ang)], dim=-1)                     # [E,2]
+
+
+def periodic_contact(env, asset_cfg: SceneEntityCfg, sensor_cfg: SceneEntityCfg, period: float = 1.0,
+                     stance_ratio: float = 0.6, k_v: float = 8.0, k_f: float = 0.02, sharp: float = 20.0):
+    """Siekmann periodic contact reward. Per foot (L at phi, R at phi+0.5): STANCE -> reward low foot speed,
+    SWING -> reward low foot force. Smooth (sigmoid) stance/swing indicator, stance window [0, stance_ratio].
+    asset_cfg.body_ids / sensor_cfg.body_ids = [L_foot, R_foot] (preserve_order). Returns [num_envs] in (0,1]."""
+    asset = env.scene[asset_cfg.name]
+    sensor = env.scene.sensors[sensor_cfg.name]
+    phi = _gait_phi(env, period)                                                     # [E]
+    fv = torch.norm(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2], dim=-1)    # [E,2] foot xy speed
+    ff = torch.norm(sensor.data.net_forces_w[:, sensor_cfg.body_ids, :], dim=-1)     # [E,2] foot GRF mag
+    rew = torch.zeros_like(phi)
+    for i, off in enumerate((0.0, 0.5)):
+        ph = (phi + off) % 1.0
+        swing = torch.sigmoid(sharp * (ph - stance_ratio)) * torch.sigmoid(sharp * (1.0 - ph))  # [E] ~1 in swing
+        rew = rew + (1.0 - swing) * torch.exp(-k_v * fv[:, i]) + swing * torch.exp(-k_f * ff[:, i])
+    return 0.5 * rew                                                                 # [E] mean over feet ~[0,1]

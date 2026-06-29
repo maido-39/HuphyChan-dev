@@ -243,6 +243,27 @@ gym.register(
     },
 )
 
+# ★ Stage 1: Siekmann periodic contact-schedule + phase clock (docs/.../2026-06-29_gait_emergence_siekmann)
+gym.register(
+    id="Pygmalion-Velocity-Flat-Siekmann-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedSiekmannEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedFlatPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Pygmalion-Velocity-Flat-Siekmann-Play-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.g1_vanilla_env_cfg:BipedSiekmannEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BipedFlatPPORunnerCfg",
+    },
+)
+
 # ★ obs restructuring (Menlo blog review 2026-06-28): asymmetric actor-critic + base_lin_vel/toe critic-only + history
 gym.register(
     id="Pygmalion-Velocity-Flat-G1ImpactStableAsymObs-v0",
