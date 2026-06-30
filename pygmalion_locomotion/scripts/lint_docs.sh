@@ -17,6 +17,8 @@ dangling=0
 while IFS= read -r raw; do
   src="${raw%%:::*}"; link="${raw##*:::}"; link="${link%%|*}"; link="${link%%#*}"
   case "$link" in *"<"*|*">"*|*"{"*|*"..."*|링크|slug|run) continue ;; esac   # skip template placeholders
+  case "$link" in *.mp4|*.png|*.gif|*.jpg|*.jpeg|*.svg|*.webm) continue ;; esac   # skip media embeds (not pages)
+  link="${link%.md}"   # tolerate [[name.md]] written with extension
   key="$(basename "$link")"
   if [ -n "${EXISTS[$key]:-}" ]; then INBOUND["$key"]=1
   else echo "  ⚠ DANGLING [[$link]]  (in $src)"; dangling=$((dangling + 1)); fi

@@ -1,36 +1,31 @@
 #!/bin/bash
-# ACTIVE run watcher — notifies the agent (by EXITING with a STATUS=... line) when a training run
-# completes, hangs, errors, or diverges, so problems are caught WITHOUT waiting on the process exit
-# (which never fires if the run hangs — e.g. stage-5 hung in atexit). Monitors the LOG FILE only,
-# so there is NO pgrep/pkill -> NO self-kill. The run's own run_in_background still covers clean exit.
+# PERIODIC MID-TRAINING review timer. Sleeps once, emits a metrics SNAPSHOT + classification, then exits
+# -> this WAKES the agent to REVIEW mid-training (instead of blindly waiting for completion). The agent
+# evaluates the snapshot against academic health benchmarks, decides continue / refine / (conservatively)
+# stop, and RE-ARMS this watcher. CONSERVATIVE BY DESIGN: this script only REPORTS; it never kills a run
+# (transient early abnormality often recovers). Monitors the LOG only -> no pgrep/pkill -> no self-kill.
 #
-# Usage: bash scripts/watch_run.sh <logfile> [maxiter=2500] [check_seconds=900]
-# Exits with one of: STATUS=DONE | STATUS=STALL | STATUS=ERROR | STATUS=DIVERGE | STATUS=TIMEOUT | STATUS=NOLOG
+# Usage: bash scripts/watch_run.sh <logfile> [maxiter=2500] [sleep_seconds=1800]
+# Exit line: STATUS=RUNNING|DONE|ERROR|NOLOG  iter=.. reward=.. noise_std=.. error_vel=.. ep_len=.. vloss=..
 set -u
 cd /home/syaro/MikuchanRemote/Human-Pygmalion/pygmalion_locomotion
-LOG="${1:?logfile}"; MAXIT="${2:-2500}"; EVERY="${3:-900}"
-prev=0; stall=0; peak=0; iter="?"; reward=0
+LOG="${1:?logfile}"; MAXIT="${2:-2500}"; EVERY="${3:-1800}"
 
-for _ in $(seq 1 24); do          # up to 24 checks (24 * 15min = 6h ceiling)
-  sleep "$EVERY"
-  [ -f "$LOG" ] || { echo "STATUS=NOLOG $LOG"; exit 0; }
-  lines=$(wc -l < "$LOG")
-  iter=$(grep -aoE "iteration [0-9]+/$MAXIT" "$LOG" | tail -1 | grep -oE "[0-9]+" | head -1); iter="${iter:-?}"
-  reward=$(grep -aE "Mean reward:" "$LOG" | tail -1 | grep -oE "[-0-9.]+" | tail -1); reward="${reward:-0}"
+sleep "$EVERY"
+[ -f "$LOG" ] || { echo "STATUS=NOLOG $LOG"; exit 0; }
 
-  if grep -qaE "Traceback|CUDA out of memory|RuntimeError|Segmentation fault" "$LOG"; then
-    echo "STATUS=ERROR iter=$iter (check $LOG)"; exit 0; fi
-  if grep -qaE "iteration ${MAXIT}/${MAXIT}" "$LOG"; then
-    echo "STATUS=DONE iter=$iter reward=$reward"; exit 0; fi
+last() { grep -aE "$1" "$LOG" | tail -1 | grep -oE "$2" | tail -1; }
+iter=$(grep -aoE "iteration [0-9]+/$MAXIT" "$LOG" | tail -1 | grep -oE "[0-9]+" | head -1); iter="${iter:-?}"
+reward=$(last "Mean reward:" "[-0-9.]+"); reward="${reward:-?}"
+noise=$(last "Mean action noise std:" "[0-9.]+"); noise="${noise:-?}"
+eplen=$(last "Mean episode length:" "[0-9.]+"); eplen="${eplen:-?}"
+errvel=$(grep -aoE "error_vel_xy: [0-9.]+" "$LOG" | tail -1 | grep -oE "[0-9.]+"); errvel="${errvel:-?}"
+vloss=$(last "Value function loss:" "[0-9.]+"); vloss="${vloss:-?}"
 
-  if [ "$lines" -eq "$prev" ]; then stall=$((stall + 1)); else stall=0; fi
-  if [ "$stall" -ge 2 ]; then
-    echo "STATUS=STALL iter=$iter reward=$reward (log frozen ~$((EVERY * 2 / 60))min)"; exit 0; fi
+if grep -qaE "Traceback|CUDA out of memory|RuntimeError|Segmentation fault" "$LOG"; then
+  echo "STATUS=ERROR iter=$iter (check $LOG tail)"; exit 0; fi
+if grep -qaE "iteration ${MAXIT}/${MAXIT}" "$LOG"; then
+  echo "STATUS=DONE iter=$iter reward=$reward noise_std=$noise error_vel=$errvel ep_len=$eplen vloss=$vloss"; exit 0; fi
 
-  peak=$(awk -v r="$reward" -v p="$peak" 'BEGIN{print (r>p)?r:p}')
-  div=$(awk -v r="$reward" -v p="$peak" -v it="$iter" 'BEGIN{print (it+0>150 && p>5 && r<0.5*p)?1:0}')
-  if [ "$div" = "1" ]; then
-    echo "STATUS=DIVERGE iter=$iter reward=$reward peak=$peak"; exit 0; fi
-  prev=$lines
-done
-echo "STATUS=TIMEOUT iter=$iter reward=$reward"; exit 0
+echo "STATUS=RUNNING iter=$iter reward=$reward noise_std=$noise error_vel=$errvel ep_len=$eplen vloss=$vloss"
+exit 0

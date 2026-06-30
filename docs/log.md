@@ -2,6 +2,8 @@
 
 > 형식 `## [YYYY-MM-DD] <kind> | <제목> → <페이지>`. kind = research / experiment / decision / fix. 매 ingest마다 append([[SCHEMA]]). 최신이 위.
 
+## [2026-06-22] research | base reward 과구속 종합 → gaitfix_v6(토우 결합). 판정: **base reward(특히 base_height_l2 −1.0 고정target)가 골반 swing·push-off 과구속 맞음** — 삼중수렴(우리 측정 amp 55%+flat toe / 생체역학 vault=대사최적·push-off↔CoM 86–96% / 필드 RL: IsaacLab G1·H1이 lin_vel_z 죽이고 base_height *뺌*=안티패턴). 제안: base_height **−1.0→0(drop) 또는 비대칭/deadband(δ0.025)**, lin_vel_z **−0.2→−0.05**(2파일), flat_orientation **−1.0 유지**(동시완화 금지=낙상), ang_vel_xy/upright 유지. ★결합: base_height 완화가 골반 bob·토우 롤오버를 *동시에* 푸는 레버(공유 antagonist). ★로깅 정정: base euler/lin_vel은 **이미 wrench_logger.py:82-90에 기록됨** → 할 일은 analyze.py에 골반-swing 통계 추가. 검증: 수직 amp 1.4→~2.5cm(>4=bounce), 골반 ROM, M-shape, 낙상감시 → [[reward_research/2026-06-22_11-30_base_overconstrain_pelvis_swing_gaitfix_v6]]
+## [2026-06-22] research | 사람 골반/CoM 보행 운동학 — base 과rigid 가설. 골반 ROM tilt 2–5°(mean4.3)·obliq 6–11°(7.4)·rot 3–14°(9.5), 수직 CoM amp **3–5cm**(우리 1.4cm=55%), M-shape(midstance vault 최고/DS 최저). ★Ortega&Farley 2005: CoM 평탄화=대사 **+6%**. ★push-off −50%=대사 +50%(Huang/Kuo). 결론: **base_height_l2(−1.0, 고정target)가 vault·push-off·토우를 동시억제** → 완화 제안 → [[reward_research/2026-06-22_10-35_base_rigid_pelvis_com_oscillation]] · [[raw/human-pelvis-com-kinematics]]
 ## [2026-06-21] research | RS03 공식 매뉴얼 T-N·과부하·스톨 곡선 직접 판독(`RS03User Manual260428.pdf` p.9-11) + 5 리셀러/wiki 교차. 헤드라인 20/60·무부하200·Kt2.36·9:1·880g 전부 일치. **T-N: 120rpm=peak60 → 단조감소 → 190rpm~13, corner≤120rpm(저속평탄 잘림)**, 연속정격=20N·m(회전)/13N·m(스톨). ⚠불일치: 정격속도 공식100 vs 리셀러180, 무부하전류 공식2A vs 리셀러0.6A, 전압 24–60 vs 15–60 → [[robstride-datasheet]]. 곡선→`assets/rs03_tn_curve_official.png`·`rs03_overload_thermal_official.png`
 ## [2026-06-21] research | RS04 2차출처 교차검증(OpenELAB·AIFITLAB·Seeed wiki·공식X) — 120/40·200/167rpm·Kt2.1·9:1 전부 일치. ⚠리셀러 T-N "100rpm까지 평탄" 요약은 공식곡선(95rpm peak서 곧장 감소)과 불일치 재확인 → [[robstride-datasheet]]
 ## [2026-06-21] analysis | 무릎 감속비 통합분석 — 토크-속도 분리·RS04 실측 T-N(사다리꼴)·다조건(rough 2배)·박스모델/순환성→sweep → [[35_knee_gear_ratio_analysis]]
@@ -58,3 +60,23 @@
 - ROLL(RS00 14/310g/$125 직결·포화): ★승자 = **DAMIAO DM-J4340** (27 N·m peak / 9 cont / 362g / Φ57 / 40:1 / $155) — 같은 외형·peak 1.9×·+52g·+$30, 디커플드 직결 드롭인. 목표 25-30 N·m 정확 충족. 단 40:1 저속 → roll-rate sim검증 필요. 차점 AK70-10(24.8/610g)·AK80-8(25/570g)=토크는 닿으나 무게·Φ 초과.
 - PITCH/MID(RS03 60/880g/$225): RS03이 가격·토크밀도(66.67 N.m/kg) 챔피언, off-the-shelf로 못 이김. 동급 Φ98 후보 전부 토크 ↓+가격 1.7-3× (DM-J8009 40/$385, AK10-9 48/$699, RMD-X10-40 40/$625). 60 초과는 고감속(AK80-64 120/64:1, RMD-X10 100/35:1)뿐=저속·고가·부적합. → **RS03 유지+링크감속 fix가 정답**.
 - 출처: seeed RS00/RS03 · aifitlab DM-J4340/RMD-X10 · cubemars AK10-9/AK80-64/AK70-10 · dronegearup DM-J8009 · robotshop RMD-X10. 원자료 → [[raw/ankle-qdd-uptorque-survey]].
+
+## [2026-06-22] research | 연구 방법론 — multi-agent 구조 vs 직급 페르소나 → [[42_research_methodology]]
+- 질문: 우리 워크플로(orchestrator→병렬 finder→synthesis)에 학술 직급위계(post-doc/박사/석사)를 프롬프트하면 성능↑? 구조 vs 직급라벨 분리.
+- ★ 증거 방향 정반대: **구조(분해·병렬·격리·검증·종합·effort스케일)=YES**(Anthropic orchestrator-worker BrowseComp +90.2%, 단 분산의 80%는 토큰사용만으로 설명, ~95%=토큰+toolcall+모델; 레버=병렬breadth+컨텍스트격리, 페르소나 수 아님). **직급 라벨 자체=NO**(Zheng EMNLP24: 162페르소나×2410문항, no-persona 못이김·role선택=random; PRISM: expert persona MMLU 71.6→68.0→66.3 정확도 깎음).
+- 깊이: 2-tier 기본(Anthropic 프로덕션도 2-tier). 3-tier는 진짜 broad일 때만 — Silo-Bench k=2에 조정손실 15-49%·tree토폴로지 최악. 검증=단일 구조적 verifier(LLM-as-judge, hallucination −9.7~53.3%), 무차별 debate는 cargo-cult(self-consistency 거의 못이김).
+- cargo-cult: 맨 직급라벨·불필요한 위계깊이·무차별 debate·"에이전트=많을수록 추론↑"·공유컨텍스트 작업에 fan-out.
+- 바꿀점 5: ①직급라벨→기능서술 ②finder 4필드 spec+깊이지정 ③전용 adversarial verify 신설 ④쿼리타입 effort 트리아지 ⑤2-tier 기본·3-tier 예외.
+- ⚠ 일부 arXiv id(2603/2604/2605.xxxxx) 미래표기 → 수치 추정, 결론방향은 verified출처와 정합. 원자료 → [[raw/research-methodology-multiagent]].
+
+## 2026-06-29 · Adversarial verify — ankle normative angles + peak torque (human-gait-data claim)
+- Verdict: PARTIAL (supported=true w/ load-bearing caveat). Torque ~1.5 N·m/kg→~78 N·m + heel→toe rollover = RIGHT (matches our [[41_ankle_pitch_pushoff_rs03_underspec]]). Phase-by-phase ANGLE timeline = WRONG in 3 places: (1) IC is ~neutral not 7-10° DF; (2) ★mid-stance SIGN REVERSED — humans DORSIFLEX ~+5..+10° in mid-stance, claim says plantarflex; (3) omits terminal-stance peak DF ~+10° @~48%, push-off peak is ~15-20° PF @~60-62% not 20-25° @50-60%.
+- REF correction: Huang 2015 PMC4664043 actual title = "Mechanical and energetic consequences of reduced ankle plantar-flexion in human walking" (NOT "Mechanical reduction of internal friction…"); paper does NOT report 1.5 N·m/kg (that's Winter). Cited title fabricated.
+- Action: use torque budget (78 N·m, already in §41/§49) + rollover reward direction; DISCARD prose angle numbers — digitize a real Winter/Perry normative curve before encoding task #11 tracking target. Full note: docs/reward_research/2026-06-29_verify_ankle_normative_angles_torque.md
+
+## 2026-06-29 · ADVERSARIAL VERIFY — biomech-toe-pushoff (Hicks WINDLASS stiffness gain / CoP-progression lever)
+- Verdict: supported=FALSE → use-with-care. CLAIM: windlass +10-20% arch stiffness, fascia strain 2-4%, energy 0.05-0.1J → IMPLICATION: toe-stiffness NOT the lever, ankle 40-60% dominant, cop_progression/forefoot_cop is the only lever.
+- ★ PREMISE refuted by its OWN cited source: claim attributes "+10-20% stiffness" to "Ker JRSI 2009" but that JRSI paper is Welte et al. 2018 (PMC6127178) which found the OPPOSITE — arch MORE flexible when windlass engaged, energy return dorsi 15.6 vs plantar 14.5 mJ/kg (within error). Energy "0.05-0.1J" is a magnitude/unit error (Welte normalizes per body-mass → ~1.1J return for 70kg). Windlass = ~1/3 of rigidity in cadaver, active muscle dominates (Farris, PMC8848977 ~5/6 active).
+- ★ Our robot has NO windlass (linear torsional spring k60, no fascia/arch/intrinsic muscle) → premise is moot; toe bends ONLY from external GRF moment θ=Fz·d_cop/k → CoP-progression is the only physically available lever (premise being weak STRENGTHENS the prescription).
+- IMPLICATION is SOUND but ALREADY ADOPTED: cop_progression weight +1.2 (forefoot_cop static was +0.0251=0.06%, useless). ζ=2.89 verified (armature 0.008 = dominant inertia); M=610N·0.07-0.10m=43-61 N·m verified, but sister-note geometry ceiling (toe 6.5cm, measured Fz 340N → θ_max~21°) overrides claim's 41-58°.
+- Sister note: docs/reward_research/2026-06-29_verify_biomech_toe_pushoff_mtp_angle.md (angle-target variant, also FALSE). Full: docs/reward_research/2026-06-29_verify_biomech_windlass_stiffness_cop.md
