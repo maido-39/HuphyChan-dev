@@ -1,0 +1,196 @@
+<?xml version="1.0" ?>
+<robot name="0.5Scale_HuphyChan_SIM_URDF_nohistory" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+<xacro:include filename="$(find 0.5Scale_HuphyChan_SIM_URDF_nohistory_description)/urdf/materials.xacro" />
+<xacro:include filename="$(find 0.5Scale_HuphyChan_SIM_URDF_nohistory_description)/urdf/0.5Scale_HuphyChan_SIM_URDF_nohistory.trans" />
+<xacro:include filename="$(find 0.5Scale_HuphyChan_SIM_URDF_nohistory_description)/urdf/0.5Scale_HuphyChan_SIM_URDF_nohistory.gazebo" />
+<link name="base_link">
+  <inertial>
+    <origin xyz="0.016255617242816486 0.03495382412659822 0.024459688705265558" rpy="0 0 0"/>
+    <mass value="1.5389933669420943"/>
+    <inertia ixx="0.001367" iyy="0.000823" izz="0.001024" ixy="-1e-06" iyz="-0.0" ixz="1.4e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="hip_roll_link_1">
+  <inertial>
+    <origin xyz="-0.04879378403551401 -0.001119501951797712 0.0005190920546707598" rpy="0 0 0"/>
+    <mass value="1.6187817588614313"/>
+    <inertia ixx="0.000882" iyy="0.001283" izz="0.000953" ixy="3e-06" iyz="0.0" ixz="-1.9e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.0045 -0.035 -0.024" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/hip_roll_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.0045 -0.035 -0.024" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/hip_roll_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="hip_yaw_link_1">
+  <inertial>
+    <origin xyz="-6.97681873656486e-05 0.024087284113940486 -0.06980264790839516" rpy="0 0 0"/>
+    <mass value="1.5692801815144255"/>
+    <inertia ixx="0.00111" iyy="0.001064" izz="0.001141" ixy="-0.0" iyz="3.5e-05" ixz="3e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.055 -0.0108 -0.024" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/hip_yaw_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.055 -0.0108 -0.024" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/hip_yaw_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="thigh_link_1">
+  <inertial>
+    <origin xyz="-0.0010156925343556625 0.01803928675740355 -0.10485390460556972" rpy="0 0 0"/>
+    <mass value="1.6736256823444076"/>
+    <inertia ixx="0.002214" iyy="0.001878" izz="0.000964" ixy="3e-06" iyz="0.000208" ixz="-1.2e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.055 -0.0356 0.072" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/thigh_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.055 -0.0356 0.072" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/thigh_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="shin_link_1">
+  <inertial>
+    <origin xyz="-0.029547191493973435 0.018911190269871897 -0.09991959329260536" rpy="0 0 0"/>
+    <mass value="2.4488729019825826"/>
+    <inertia ixx="0.004616" iyy="0.004882" izz="0.001444" ixy="-1.6e-05" iyz="0.000189" ixz="-6.9e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.0241 -0.0556 0.184" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/shin_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.0241 -0.0556 0.184" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/shin_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="ankle_pitch_link_1">
+  <inertial>
+    <origin xyz="2.538941279439655e-14 1.6375789613221059e-15 1.9118040484045196e-13" rpy="0 0 0"/>
+    <mass value="0.047908875824314155"/>
+    <inertia ixx="5e-06" iyy="9e-06" izz="9e-06" ixy="0.0" iyz="-0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.0536 -0.0743 0.393" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/ankle_pitch_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.0536 -0.0743 0.393" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/ankle_pitch_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="foot_link_1">
+  <inertial>
+    <origin xyz="0.0005242454758638757 -0.0203101247706697 -0.02691121212158487" rpy="0 0 0"/>
+    <mass value="0.21745368932794845"/>
+    <inertia ixx="0.000536" iyy="0.000101" izz="0.000594" ixy="1e-05" iyz="-4.3e-05" ixz="1e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.0536 -0.0743 0.393" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/foot_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.0536 -0.0743 0.393" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://0.5Scale_HuphyChan_SIM_URDF_nohistory_description/meshes/foot_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<joint name="Revolute 9" type="continuous">
+  <origin xyz="-0.0045 0.035 0.024" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="hip_roll_link_1"/>
+  <axis xyz="-1.0 0.0 0.0"/>
+</joint>
+
+<joint name="Revolute 11" type="continuous">
+  <origin xyz="-0.0505 -0.0242 0.0" rpy="0 0 0"/>
+  <parent link="hip_roll_link_1"/>
+  <child link="hip_yaw_link_1"/>
+  <axis xyz="0.0 -1.0 -0.0"/>
+</joint>
+
+<joint name="Revolute 12" type="continuous">
+  <origin xyz="0.0 0.0248 -0.096" rpy="0 0 0"/>
+  <parent link="hip_yaw_link_1"/>
+  <child link="thigh_link_1"/>
+  <axis xyz="-0.0 0.0 -1.0"/>
+</joint>
+
+<joint name="Revolute 13" type="continuous">
+  <origin xyz="0.0309 0.02 -0.112" rpy="0 0 0"/>
+  <parent link="thigh_link_1"/>
+  <child link="shin_link_1"/>
+  <axis xyz="-1.0 0.0 0.0"/>
+</joint>
+
+<joint name="Revolute 14" type="continuous">
+  <origin xyz="-0.0295 0.0187 -0.209" rpy="0 0 0"/>
+  <parent link="shin_link_1"/>
+  <child link="ankle_pitch_link_1"/>
+  <axis xyz="1.0 0.0 0.0"/>
+</joint>
+
+<joint name="Revolute 15" type="continuous">
+  <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+  <parent link="ankle_pitch_link_1"/>
+  <child link="foot_link_1"/>
+  <axis xyz="0.0 -1.0 -0.0"/>
+</joint>
+
+</robot>
