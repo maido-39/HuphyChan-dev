@@ -1,0 +1,141 @@
+<mujoco model="half_huphy">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+
+  <!-- Motor parameters identified in inverse/assets/inverse.xml. -->
+  <default>
+    <default class="half_huphy">
+      <joint damping="0" armature="0.003" frictionloss="0.125"/>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"
+          density="0" material="silver"/>
+      </default>
+      <default class="collision">
+        <geom contype="1" conaffinity="1" group="3" density="0"
+          friction="1.0 0.005 0.0001" rgba="0.2 0.6 0.2 0.3"/>
+      </default>
+    </default>
+  </default>
+
+  <asset>
+    <material name="silver" rgba="0.7 0.7 0.7 1"/>
+    <mesh name="base_link_mesh" file="base_link.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="hip_roll_mesh" file="hip_roll_link_1.stl"
+      scale="0.001 0.001 0.001"/>
+    <mesh name="hip_yaw_mesh" file="hip_yaw_link_1.stl"
+      scale="0.001 0.001 0.001"/>
+    <mesh name="thigh_mesh" file="thigh_link_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="shin_mesh" file="shin_link_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="ankle_pitch_mesh" file="ankle_pitch_link_1.stl"
+      scale="0.001 0.001 0.001"/>
+    <mesh name="foot_mesh" file="foot_link_1.stl" scale="0.001 0.001 0.001"/>
+  </asset>
+
+  <worldbody>
+    <body name="base_link" pos="0 0 0.45" childclass="half_huphy">
+      <inertial pos="0.0162556 0.0349538 0.0244597" mass="1.5389934"
+        fullinertia="0.001367 0.000823 0.001024 -0.000001 0.000014 0"/>
+      <freejoint name="floating_base_joint"/>
+      <geom class="visual" mesh="base_link_mesh"/>
+      <geom name="base_collision" class="collision" type="box"
+        pos="0.0177 0.0350 0.0294" size="0.020 0.075 0.040"/>
+      <site name="imu" pos="0.0162556 0.0349538 0.0244597" size="0.01"
+        group="5"/>
+
+      <body name="hip_roll_link_1" pos="-0.0045 0.035 0.024">
+        <inertial pos="-0.0487938 -0.0011195 0.0005191" mass="1.6187818"
+          fullinertia="0.000882 0.001283 0.000953 0.000003 -0.000019 0"/>
+        <joint name="hip_pitch_joint" axis="-1 0 0"
+          range="-0.523599 2.181662"/>
+        <geom class="visual" mesh="hip_roll_mesh" pos="0.0045 -0.035 -0.024"/>
+        <geom name="hip_roll_collision" class="collision" type="box"
+          pos="-0.0452 0.0033 0.0079" size="0.041 0.025 0.0425"/>
+
+        <body name="hip_yaw_link_1" pos="-0.0505 -0.0242 0">
+          <inertial pos="-0.0000698 0.0240873 -0.0698026" mass="1.5692802"
+            fullinertia="0.001110 0.001064 0.001141 0 0.000003 0.000035"/>
+          <joint name="hip_roll_joint" axis="0 1 0"
+            range="-0.349066 1.483530"/>
+          <geom class="visual" mesh="hip_yaw_mesh" pos="0.055 -0.0108 -0.024"/>
+          <geom name="hip_yaw_collision" class="collision" type="box"
+            pos="0 0.0245 -0.0344" size="0.035 0.035 0.055"/>
+
+          <body name="thigh_link_1" pos="0 0.0248 -0.096">
+            <inertial pos="-0.0010157 0.0180393 -0.1048539" mass="1.6736257"
+              fullinertia="0.002214 0.001878 0.000964 0.000003 -0.000012 0.000208"/>
+            <joint name="hip_yaw_joint" axis="0 0 -1"
+              range="-0.785398 0.785398"/>
+            <geom class="visual" mesh="thigh_mesh" pos="0.055 -0.0356 0.072"/>
+            <geom name="thigh_collision" class="collision" type="box"
+              pos="0.0033 0.0130 -0.0760" size="0.024 0.035 0.070"/>
+
+            <body name="shin_link_1" pos="0.0309 0.02 -0.112">
+              <inertial pos="-0.0295472 0.0189112 -0.0999196" mass="2.4488729"
+                fullinertia="0.004616 0.004882 0.001444 -0.000016 -0.000069 0.000189"/>
+              <joint name="knee_pitch_joint" axis="1 0 0"
+                range="0 2.007129"/>
+              <geom class="visual" mesh="shin_mesh" pos="0.0241 -0.0556 0.184"/>
+              <geom name="shin_collision" class="collision" type="box"
+                pos="-0.0295 0.0163 -0.0979" size="0.039 0.035 0.1125"/>
+
+              <body name="ankle_pitch_link_1" pos="-0.0295 0.0187 -0.209">
+                <inertial pos="0 0 0" mass="0.0479089"
+                  fullinertia="0.000005 0.000009 0.000009 0 0 0"/>
+                <joint name="ankle_pitch_joint" axis="1 0 0"
+                  range="-0.872665 0.872665"/>
+                <geom class="visual" mesh="ankle_pitch_mesh"
+                  pos="0.0536 -0.0743 0.393"/>
+                <geom name="ankle_pitch_collision" class="collision"
+                  type="cylinder" euler="0 1.570796 0" size="0.012 0.029"/>
+
+                <body name="foot_link_1">
+                  <inertial pos="0.0005242 -0.0203101 -0.0269112"
+                    mass="0.2174537"
+                    fullinertia="0.000536 0.000101 0.000594 0.000010 0.000001 -0.000043"/>
+                  <joint name="ankle_roll_joint" axis="0 -1 0"
+                    range="-0.436332 0.436332"/>
+                  <geom class="visual" mesh="foot_mesh"
+                    pos="0.0536 -0.0743 0.393"/>
+                  <geom name="foot_collision" class="collision" type="box"
+                    pos="0 -0.0425 -0.0300" size="0.039 0.080 0.005"
+                    condim="6" priority="1"/>
+                  <site name="foot" pos="0 -0.0425 -0.035" type="box"
+                    size="0.039 0.080 0.002" group="5"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <position name="hip_pitch_actuator" joint="hip_pitch_joint"
+      kp="20.0" kv="0.502" ctrlrange="-0.523599 2.181662"
+      forcelimited="true" forcerange="-17 17"/>
+    <position name="hip_roll_actuator" joint="hip_roll_joint"
+      kp="20.0" kv="0.502" ctrlrange="-0.349066 1.483530"
+      forcelimited="true" forcerange="-17 17"/>
+    <position name="hip_yaw_actuator" joint="hip_yaw_joint"
+      kp="20.0" kv="0.502" ctrlrange="-0.785398 0.785398"
+      forcelimited="true" forcerange="-17 17"/>
+    <position name="knee_pitch_actuator" joint="knee_pitch_joint"
+      kp="20.0" kv="0.502" ctrlrange="0 2.007129"
+      forcelimited="true" forcerange="-17 17"/>
+    <position name="ankle_pitch_actuator" joint="ankle_pitch_joint"
+      kp="20.0" kv="0.502" ctrlrange="-0.872665 0.872665"
+      forcelimited="true" forcerange="-17 17"/>
+    <position name="ankle_roll_actuator" joint="ankle_roll_joint"
+      kp="20.0" kv="0.502" ctrlrange="-0.436332 0.436332"
+      forcelimited="true" forcerange="-17 17"/>
+  </actuator>
+
+  <sensor>
+    <gyro name="imu_ang_vel" site="imu"/>
+    <velocimeter name="imu_lin_vel" site="imu"/>
+    <accelerometer name="imu_lin_acc" site="imu"/>
+    <framezaxis name="imu_upvector" objtype="body" objname="world"
+      reftype="site" refname="imu"/>
+    <subtreeangmom name="root_angmom" body="base_link"/>
+  </sensor>
+</mujoco>
