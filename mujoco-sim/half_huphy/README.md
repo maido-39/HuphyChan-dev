@@ -85,8 +85,13 @@ Jump curriculum(개략): clearance 5→10→15→20 cm, stance 단축, push / mo
 
 ## 체크포인트
 
-학습 weight는 용량 때문에 이 폴더에 넣지 않았다.
-필요하면 돌린 머신에서 `mjlab/logs/rsl_rl/half_huphy_*` 를 따로 공유.
+`weights/` 에 태스크별 핵심 `.pt` 를 넣어 두었다. 목록·play 예시는 [`weights/WEIGHTS.md`](weights/WEIGHTS.md).
+
+```bash
+uv run play Mjlab-JumpKneeAnkle14-HalfHuphy \
+  --checkpoint-file /path/to/HuphyChan-dev/mujoco-sim/half_huphy/weights/jump_knee_ankle14/model_29999.pt \
+  --num-envs 1 --viewer native
+```
 
 ## HuphyChan에서 수정할 때
 

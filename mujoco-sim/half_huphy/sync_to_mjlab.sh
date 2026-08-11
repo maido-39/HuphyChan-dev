@@ -38,10 +38,21 @@ else
   echo "[sync] robot registration already present"
 fi
 
+if [ -d "$HERE/weights" ]; then
+  echo "[sync] weights -> $MJ/weights/half_huphy"
+  mkdir -p "$MJ/weights"
+  rm -rf "$MJ/weights/half_huphy"
+  cp -a "$HERE/weights" "$MJ/weights/half_huphy"
+fi
+
 echo ""
 echo "★ 검증:"
 echo "  (cd $MJ && uv sync && uv run list-envs | grep -E 'HalfHuphy|Balance-Half|Jump')"
 echo "★ 학습 예:"
 echo "  uv run train Mjlab-Balance-HalfHuphy --env.scene.num-envs 4096"
 echo "  uv run train Mjlab-JumpKneeAnkle14-HalfHuphy --env.scene.num-envs 4096"
-echo "  상세: $HERE/README.md"
+echo "★ play 예 (weights sync 후):"
+echo "  uv run play Mjlab-JumpKneeAnkle14-HalfHuphy \\"
+echo "    --checkpoint-file weights/half_huphy/jump_knee_ankle14/model_29999.pt \\"
+echo "    --num-envs 1 --viewer native"
+echo "  상세: $HERE/README.md / $HERE/weights/WEIGHTS.md"
