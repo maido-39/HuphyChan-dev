@@ -1,0 +1,9 @@
+{
+  "source": "Schwartz MH, Rozumalski A, Trost JP (2008). The effect of walking speed on the gait of typically developing children. J Biomech 41(8):1639-1650. Free (self-selected) speed normative curves, mean across subjects, from the author-distributed supplementary spreadsheet (Original- Schwartz2008.xls, author MSchwartz) redistributed in the pyCGM2 open-access normative data collection.",
+  "url": "https://github.com/pyCGM2/pyCGM2/tree/Master/Data/normativeData/openAccessData/schwartz%202008",
+  "n_subjects": 83,
+  "speed_m_s": "self-selected 'Free' speed condition; paper reports speeds as nondimensional (v/sqrt(g*Lleg)); absolute m/s not present in the machine-readable supplement, typically ~1.1-1.3 m/s for TD children",
+  "angle_convention_note": "'Ankle Dorsi/Plantarflexion' angle, Vicon Plug-in-Gait sagittal ankle angle; dorsiflexion positive (deg). Free-speed mean curve, 51 points at 2% gait-cycle increments (0=ipsilateral foot contact).",
+  "moment_convention_note": "'Ankle Dorsi/Plantarflexion' internal joint moment, normalized to body mass (N.m/kg); plantarflexor positive (late-stance push-off peak is positive, ~1.23 N.m/kg at ~48% cycle).",
+  "extraction_note": "Extracted Free-speed 'mean' column (col J) of sheets 'Joint Rotations' and 'Joint Moments' rows labeled 'Ankle Dorsi/Plantarflexion' from Original-Schwartz2008.xls via xlrd; verified identical (atol 1e-3) to FreeMean in Formatted-Schwartz2008.xlsx and to (lower+upper)/2 of pyCGM2 Schwartz2008.json (moments there in N.mm/kg). No sign flips applied; source conventions already dorsiflexion-positive / plantarflexor-positive."
+}

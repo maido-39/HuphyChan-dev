@@ -1,0 +1,33 @@
+{
+  "source": "Camargo, Ramanathan, Flanagan, Young (2021) J Biomech 119:110320 \u2014 A comprehensive, open-source dataset of lower limb biomechanics in multiple conditions of stairs, ramps, and level-ground ambulation and transitions (Georgia Tech EPIC lab)",
+  "url": "https://data.mendeley.com/datasets/k9kvm5tn3f/1 (Part 2 of 3; Part 1: doi:10.17632/fcgm3chfff, Part 3: doi:10.17632/jj3r5f9pnf; mirror: epic.gatech.edu/opensource-biomechanics-camargo-et-al)",
+  "n_subjects": 10,
+  "subjects": [
+    "AB15",
+    "AB16",
+    "AB17",
+    "AB18",
+    "AB19",
+    "AB20",
+    "AB21",
+    "AB23",
+    "AB24",
+    "AB25"
+  ],
+  "n_strides_per_subject": {
+    "AB15": 32,
+    "AB16": 31,
+    "AB17": 30,
+    "AB18": 30,
+    "AB19": 31,
+    "AB20": 32,
+    "AB21": 31,
+    "AB23": 29,
+    "AB24": 30,
+    "AB25": 34
+  },
+  "speed_m_s": 1.2,
+  "angle_convention_note": "OpenSim IK coordinate 'ankle_angle_r' in degrees, dorsiflexion positive (dataset native convention, kept as-is).",
+  "moment_convention_note": "OpenSim ID 'ankle_angle_r_moment' [N.m] is the internal generalized moment about the ankle coordinate (dorsiflexion positive in dataset). Sign flipped so PLANTARFLEXOR moment is positive, then normalized by subject body mass (SubjectInfo.mat Weight, kg).",
+  "extraction_note": "Treadmill level walking at the 1.20 m/s belt plateau (~33 s per subject), the treadmill speed closest to the cohort mean self-selected overground normal speed (1.22 m/s measured from pelvis displacement in the levelground *_normal_* trials of the same subjects). Right leg. Strides segmented with gcRight HeelStrike percent (0-100); kept strides fully on the 1.20 plateau (|belt-1.20|<=0.005 m/s), duration 0.7-1.8 s, finite ik/id samples. Angle and moment interpolated to integer 0..100% grid (101 points), averaged strides->subject, then unweighted mean across subjects (AB15-AB25, Mendeley Part 2 per-subject zips). Files fetched selectively from the zips via HTTP range requests; MATLAB table .mat files parsed with matio (github.com/foreverallama/matio). Raw inputs under refs/human_gait/camargo2021/raw/."
+}

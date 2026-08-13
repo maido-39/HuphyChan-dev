@@ -1,0 +1,9 @@
+{
+  "source": "Fukuchi CA, Fukuchi RK, Duarte M (2018). A public dataset of overground and treadmill walking kinematics and kinetics in healthy individuals. PeerJ 6:e4640. Figshare doi:10.6084/m9.figshare.5722711 (WBDSascii.zip, per-subject gait-cycle-normalized files WBDSxxwalkOCang.txt / WBDSxxwalkOCknt.txt)",
+  "url": "https://doi.org/10.6084/m9.figshare.5722711",
+  "n_subjects": 42,
+  "speed_m_s": 1.271,
+  "angle_convention_note": "AnkleAngleZ column = sagittal ankle angle in deg, dorsiflexion positive (verified empirically: ~+9 deg dorsiflexion peak near 40-45% cycle, ~-13 deg plantarflexion at ~62% push-off; knee AngleZ shows classic flexion pattern confirming Z = sagittal axis). Averaged R and L legs per subject, then averaged across 42 subjects (24 young + 18 older adults), overground self-selected comfortable speed.",
+  "moment_convention_note": "AnkleMomentZ column = sagittal internal ankle moment normalized by body mass (N.m/kg), plantarflexor positive (verified: ~+1.4 N.m/kg peak at ~45% cycle, small negative dorsiflexor moment after heel strike). Averaged R and L, then across subjects.",
+  "extraction_note": "Extracted only walkOCang/walkOCknt members (84 files) from figshare file id 10058986 (WBDSascii.zip, 585MB) via HTTP range-request remote zip read; raw files saved under refs/human_gait/fukuchi2018/OC/. Each file: 101 rows (0-100% gait cycle). Mean overground comfortable gait speed computed from WBDSinfo.xlsx over walkO*C trials of 42 subjects. Within-subject R/L average and across-subject average use nanmean (4 files had a single-NaN sample in one AnkleMomentZ leg: WBDS23/37/38 R, WBDS40 L)."
+}
