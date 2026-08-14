@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ankle 2-RSU CAD Viewer — 실모델 기구·하중 시각화</title>
+<title>Ankle 2-RSU CAD Viewer — real-model kinematics &amp; loads</title>
 <style>
  body{margin:0;font-family:system-ui,'Noto Sans KR',sans-serif;background:#14171c;color:#dde3ea;overflow:hidden}
  #bar{position:fixed;top:0;left:0;right:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
@@ -30,32 +30,32 @@
  <b>Ankle 2-RSU CAD</b>
  <label>pitch <input id="up" type="range" min="-50" max="30" step="0.5" value="0" style="width:130px"><span id="upv" style="display:inline-block;width:44px">0.0°</span></label>
  <label>roll <input id="ur" type="range" min="-20" max="20" step="0.5" value="0" style="width:100px"><span id="urv" style="display:inline-block;width:44px">0.0°</span></label>
- <button id="bneu">중립</button>
+ <button id="bneu">Neutral</button>
  <button class="bpre" data-p="-50" data-r="-20">p−50 r−20</button>
  <button class="bpre" data-p="-50" data-r="20">p−50 r+20</button>
  <button class="bpre" data-p="30" data-r="-20">p+30 r−20</button>
  <button class="bpre" data-p="30" data-r="20">p+30 r+20</button>
- <button class="bpre" data-p="2" data-r="-20" title="foot-side swing max">요동최대</button>
- <button id="banim">ROM 스윕</button>
- <label>표시 <select id="ushow" multiple size="1" style="display:none"></select>
- <button id="bshin" class="on">정강이</button><button id="bfoot" class="on">발</button><button id="barrow" class="on">힘화살표</button><button id="barc" class="on">ROM호</button></label>
- <span class="hint">드래그 회전 · Shift 팬 · 휠 줌</span>
+ <button class="bpre" data-p="2" data-r="-20" title="foot-side swing max">Max swing</button>
+ <button id="banim">ROM sweep</button>
+ <label>Show <select id="ushow" multiple size="1" style="display:none"></select>
+ <button id="bshin" class="on">Shin</button><button id="bfoot" class="on">Foot</button><button id="barrow" class="on">Force arrows</button><button id="barc" class="on">ROM arcs</button></label>
+ <span class="hint">drag rotate · Shift pan · wheel zoom</span>
 </div>
 <canvas id="gl"></canvas>
 <div id="chk"></div>
 <div class="panel" id="hm">
- <b>Roll–Pitch 맵</b> <select id="uhf">
-  <option value="swF_A">요동각 발측 A [°]</option><option value="swF_B">요동각 발측 B [°]</option>
-  <option value="swC_A">요동각 크랭크측 A [°]</option><option value="swC_B">요동각 크랭크측 B [°]</option>
-  <option value="phiA">크랭크각 φA [°]</option><option value="phiB">크랭크각 φB [°]</option>
-  <option value="tqA">실측최악 |τA| [N·m]</option><option value="tqB">실측최악 |τB| [N·m]</option>
-  <option value="rodA">실측최악 로드힘 A [N]</option><option value="rodB">실측최악 로드힘 B [N]</option>
-  <option value="trans">전달비 min [-]</option><option value="cnt">샘플수 [-]</option>
+ <b>Roll–Pitch map</b> <select id="uhf">
+  <option value="swF_A">Foot-side swing A [°]</option><option value="swF_B">Foot-side swing B [°]</option>
+  <option value="swC_A">Crank-side swing A [°]</option><option value="swC_B">Crank-side swing B [°]</option>
+  <option value="phiA">Crank angle φA [°]</option><option value="phiB">Crank angle φB [°]</option>
+  <option value="tqA">Worst measured |τA| [N·m]</option><option value="tqB">Worst measured |τB| [N·m]</option>
+  <option value="rodA">Worst measured rod force A [N]</option><option value="rodB">Worst measured rod force B [N]</option>
+  <option value="trans">Transmission min [-]</option><option value="cnt">Sample count [-]</option>
  </select>
  <canvas id="hmc" width="284" height="160"></canvas>
  <canvas id="hmbar" width="246" height="10"></canvas>
  <div style="display:flex;justify-content:space-between;width:246px" class="hint"><span id="hlo"></span><span id="hhi"></span></div>
- <div class="hint">가로 pitch −50…+30 · 세로 roll −20…+20 · 클릭=자세 이동</div>
+ <div class="hint">x: pitch −50…+30 · y: roll −20…+20 · click = set pose</div>
 </div>
 <div class="panel" id="info"></div>
 <script>
@@ -246,23 +246,23 @@ function buildLines(){
 // ---------- info + badges ----------
 function info(){
  const w=world,L=D.limits,e=D.ext;
- const sw=(v,mx)=>`<b style="color:${v>19?'#ff6b6b':v>15?'#ffc86b':'#8fdc8f'}">${v.toFixed(1)}°</b>/20 (박스최대 ${mx.toFixed(1)})`;
+ const sw=(v,mx)=>`<b style="color:${v>19?'#ff6b6b':v>15?'#ffc86b':'#8fdc8f'}">${v.toFixed(1)}°</b>/20 (box max ${mx.toFixed(1)})`;
  const tq=v=>{const u=Math.abs(v)*L.x125/L.torque;return `<b style="color:${u>1?'#ff6b6b':u>.8?'#ffc86b':'#8fdc8f'}">${v.toFixed(1)}</b>`;};
  document.getElementById('info').innerHTML=
- `<b>자세</b> pitch ${pose.p.toFixed(1)}° · roll ${pose.r.toFixed(1)}°  <span class="hint">폐합오차 ${w.closure.toFixed(3)}mm</span><br>
+ `<b>Pose</b> pitch ${pose.p.toFixed(1)}° · roll ${pose.r.toFixed(1)}°  <span class="hint">closure err ${w.closure.toFixed(3)}mm</span><br>
  <table style="font-size:12px;border-spacing:0">
- <tr><td><b style="color:#ff8c85">모터 A(위)</b></td><td>φ ${(w.phiA/RAD).toFixed(1)}°</td><td class="hint">중립 ${D.cad.phiA0_cad}° · ROM [${e.phiA.min.toFixed(1)}, ${e.phiA.max.toFixed(1)}]</td></tr>
- <tr><td><b style="color:#7fb3ff">모터 B(아래)</b></td><td>φ ${(w.phiB/RAD).toFixed(1)}°</td><td class="hint">중립 ${D.cad.phiB0_cad}° · ROM [${e.phiB.min.toFixed(1)}, ${e.phiB.max.toFixed(1)}]</td></tr>
- <tr><td>요동 발측 A/B</td><td colspan=2>${sw(w.swFA,e.swF_A.max)} · ${sw(w.swFB,e.swF_B.max)}</td></tr>
- <tr><td>요동 크랭크측 A/B</td><td colspan=2>${sw(w.swCA,e.swC_A.max)} · ${sw(w.swCB,e.swC_B.max)}</td></tr>
+ <tr><td><b style="color:#ff8c85">Motor A (up)</b></td><td>φ ${(w.phiA/RAD).toFixed(1)}°</td><td class="hint">neutral ${D.cad.phiA0_cad}° · ROM [${e.phiA.min.toFixed(1)}, ${e.phiA.max.toFixed(1)}]</td></tr>
+ <tr><td><b style="color:#7fb3ff">Motor B (low)</b></td><td>φ ${(w.phiB/RAD).toFixed(1)}°</td><td class="hint">neutral ${D.cad.phiB0_cad}° · ROM [${e.phiB.min.toFixed(1)}, ${e.phiB.max.toFixed(1)}]</td></tr>
+ <tr><td>Foot-side swing A/B</td><td colspan=2>${sw(w.swFA,e.swF_A.max)} · ${sw(w.swFB,e.swF_B.max)}</td></tr>
+ <tr><td>Crank-side swing A/B</td><td colspan=2>${sw(w.swCA,e.swC_A.max)} · ${sw(w.swCB,e.swC_B.max)}</td></tr>
  </table>
  <div style="border-top:1px solid #3a4450;margin:5px 0;padding-top:5px">
- <b>실측 최악수요@이 자세 셀</b> <span class="hint">(v41 풀 2°빈 중심 p${(Math.round((pose.p+50)/2)*2-50)}° r${(Math.round((pose.r+20)/2)*2-20)}°, n=${w.nbin})</span><br>
- ${w.nbin?`τA ${tq(w.tqA)} · τB ${tq(w.tqB)} N·m <span class="hint">(×1.25 대 한계 60)</span><br>
- 로드 A <b style="color:${w.fA>=0?'#ff8c85':'#7fb3ff'}">${w.fA>=0?'+':''}${w.fA.toFixed(0)}N ${w.fA>=0?'인장':'압축'}</b> ·
- B <b style="color:${w.fB>=0?'#ff8c85':'#7fb3ff'}">${w.fB>=0?'+':''}${w.fB.toFixed(0)}N ${w.fB>=0?'인장':'압축'}</b> <span class="hint">(설계한계 P99×1.875≤5000)</span>`
- :'<span class="hint">이 셀에 측정 샘플 없음</span>'}</div>
- <div class="hint">설계: A_r 65 · B_r 62 · RP_B 50.5 · RP_r 43.6 · A_h 41 · B2RP 200 · RP_h 10 · A_L 289 · B_L 195 (CAD 실측일치)</div>`;
+ <b>Worst measured demand @ pose cell</b> <span class="hint">(v41 pool 2° bin, center p${(Math.round((pose.p+50)/2)*2-50)}° r${(Math.round((pose.r+20)/2)*2-20)}°, n=${w.nbin})</span><br>
+ ${w.nbin?`τA ${tq(w.tqA)} · τB ${tq(w.tqB)} N·m <span class="hint">(×1.25 vs limit 60)</span><br>
+ Rod A <b style="color:${w.fA>=0?'#ff8c85':'#7fb3ff'}">${w.fA>=0?'+':''}${w.fA.toFixed(0)}N ${w.fA>=0?'tension':'compression'}</b> ·
+ B <b style="color:${w.fB>=0?'#ff8c85':'#7fb3ff'}">${w.fB>=0?'+':''}${w.fB.toFixed(0)}N ${w.fB>=0?'tension':'compression'}</b> <span class="hint">(design limit P99×1.875≤5000)</span>`
+ :'<span class="hint">no measured samples in this cell</span>'}</div>
+ <div class="hint">Design: A_r 65 · B_r 62 · RP_B 50.5 · RP_r 43.6 · A_h 41 · B2RP 200 · RP_h 10 · A_L 289 · B_L 195 (CAD verified)</div>`;
 }
 const badges={};
 function mkBadge(id){const d=document.createElement('div');d.className='badge';d.id=id;document.body.appendChild(d);badges[id]=d;return d;}
@@ -276,12 +276,12 @@ function updBadges(MVP){
   d.textContent=txt;d.classList.toggle('warn',!!warn);
  };
  const w=world;
- put('bFA',w.ancA,`발측A 요동 ${w.swFA.toFixed(1)}°/20`,w.swFA>19);
- put('bFB',w.ancB,`발측B 요동 ${w.swFB.toFixed(1)}°/20`,w.swFB>19);
- put('bCA',w.pinA,`크랭크측A ${w.swCA.toFixed(1)}°/20`,false);
- put('bCB',w.pinB,`크랭크측B ${w.swCB.toFixed(1)}°/20`,false);
- put('bMA',D.cad.pivA,`모터A φ ${(w.phiA/RAD).toFixed(1)}°`,false);
- put('bMB',D.cad.pivB,`모터B φ ${(w.phiB/RAD).toFixed(1)}°`,false);
+ put('bFA',w.ancA,`foot A swing ${w.swFA.toFixed(1)}°/20`,w.swFA>19);
+ put('bFB',w.ancB,`foot B swing ${w.swFB.toFixed(1)}°/20`,w.swFB>19);
+ put('bCA',w.pinA,`crank A ${w.swCA.toFixed(1)}°/20`,false);
+ put('bCB',w.pinB,`crank B ${w.swCB.toFixed(1)}°/20`,false);
+ put('bMA',D.cad.pivA,`motor A φ ${(w.phiA/RAD).toFixed(1)}°`,false);
+ put('bMB',D.cad.pivB,`motor B φ ${(w.phiB/RAD).toFixed(1)}°`,false);
  put('bRP',D.cad.C,`RP p${pose.p.toFixed(0)}° r${pose.r.toFixed(0)}°`,false);
 }
 // ---------- camera / draw ----------

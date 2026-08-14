@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>FEA Result Viewer — Huphy Ankle</title>
@@ -22,25 +22,25 @@
 <body>
 <div id="bar">
  <b>FEA Viewer</b>
- <label>케이스 <select id="ucase"></select></label>
- <label>필드 <select id="ufield">
-   <option value="vM" selected>von Mises 응력 [MPa]</option>
-   <option value="S1">주응력 S1 (최대) [MPa]</option>
-   <option value="S2">주응력 S2 [MPa]</option>
-   <option value="S3">주응력 S3 (최소) [MPa]</option>
+ <label>Case <select id="ucase"></select></label>
+ <label>Field <select id="ufield">
+   <option value="vM" selected>von Mises stress [MPa]</option>
+   <option value="S1">Principal S1 (max) [MPa]</option>
+   <option value="S2">Principal S2 [MPa]</option>
+   <option value="S3">Principal S3 (min) [MPa]</option>
    <option value="Sxx">Sxx [MPa]</option><option value="Syy">Syy [MPa]</option><option value="Szz">Szz [MPa]</option>
    <option value="Sxy">Sxy [MPa]</option><option value="Syz">Syz [MPa]</option><option value="Szx">Szx [MPa]</option>
-   <option value="eps_vM">등가 변형률 [µε]</option>
-   <option value="U_mag">|변위| [µm]</option>
+   <option value="eps_vM">Eq. von Mises strain [µε]</option>
+   <option value="U_mag">|Displacement| [µm]</option>
    <option value="Ux">Ux [µm]</option><option value="Uy">Uy [µm]</option><option value="Uz">Uz [µm]</option>
  </select></label>
- <label>변형배율 <input id="udef" type="range" min="0" max="500" value="0" style="width:110px;vertical-align:middle"><span id="udefv">0×</span></label>
- <label><input id="uanim" type="checkbox">진동</label>
- <label>범위 <select id="urange"><option value="auto">자동</option><option value="manual">수동</option></select>
+ <label>Deform <input id="udef" type="range" min="0" max="500" value="0" style="width:110px;vertical-align:middle"><span id="udefv">0×</span></label>
+ <label><input id="uanim" type="checkbox">Animate</label>
+ <label>Range <select id="urange"><option value="auto">Auto</option><option value="manual">Manual</option></select>
   <input id="umin" type="number" style="width:64px" step="any" disabled> ~ <input id="umax" type="number" style="width:64px" step="any" disabled></label>
- <label>클립 <select id="uclip"><option value="">없음</option><option value="0">X</option><option value="1">Y</option><option value="2">Z</option></select>
+ <label>Clip <select id="uclip"><option value="">None</option><option value="0">X</option><option value="1">Y</option><option value="2">Z</option></select>
   <input id="uclipv" type="range" min="0" max="100" value="50" style="width:80px;vertical-align:middle" disabled></label>
- <span class="hint">드래그 회전 · Shift/우클릭 팬 · 휠 줌 · 클릭 = 프로브</span>
+ <span class="hint">drag rotate · Shift/right pan · wheel zoom · click = probe</span>
 </div>
 <canvas id="gl"></canvas>
 <div id="legend"><canvas id="lg" width="18" height="220"></canvas><div id="ticks"></div></div>
@@ -149,7 +149,7 @@ function setField(){
  document.getElementById('stats').innerHTML=
   `<b>${curName}</b><br><span class="hint">${cur.desc||''}</span><br>${fld}<br>`+
   `max <b>${st.max.toPrecision(4)}</b> · min ${st.min.toPrecision(4)}<br>P99 ${st.p99.toPrecision(4)} · P95 ${st.p95.toPrecision(4)}<br>`+
-  `절점 ${n.toLocaleString()} · 삼각형 ${nTri.toLocaleString()}`;
+  `nodes ${n.toLocaleString()} · tris ${nTri.toLocaleString()}`;
  updateGeom();
 }
 function updateGeom(){
@@ -219,7 +219,7 @@ cv.addEventListener('pointerup',e=>{
   if(best<12&&bi>=0){
    const f=document.getElementById('ufield').selectedOptions[0].text;
    pr.style.display='block';pr.style.left=(e.clientX+12)+'px';pr.style.top=(e.clientY+8)+'px';
-   pr.innerHTML=`절점 #${bi}<br>${f}: <b>${vals[bi].toPrecision(5)}</b><br>pos (${cur.nodes[bi].map(v=>v.toFixed(1)).join(', ')})`;
+   pr.innerHTML=`node #${bi}<br>${f}: <b>${vals[bi].toPrecision(5)}</b><br>pos (${cur.nodes[bi].map(v=>v.toFixed(1)).join(', ')})`;
   } else pr.style.display='none';
  }
  drag=null;});
