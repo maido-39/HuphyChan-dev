@@ -1,0 +1,4 @@
+num_envs,env_steps_per_s,per_env_step_us,proj_rollout_s_per_iter,peak_vram_gb
+4096,117032,34999.0,0.84,3.05
+8192,167978,48768.2,1.17,6.1
+16384,234930,69740.0,1.674,12.18

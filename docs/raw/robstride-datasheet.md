@@ -113,6 +113,7 @@
 - ⇒ **corner speed ≈ 100rpm** (= 공식 정격부하 속도와 일치!). peak 14N·m는 **저속(<~100rpm)**서만, 고속선 토크 급감. **"14N·m × 315rpm 단순 박스" 가정 틀림.**
 
 **★ 과부하 듀티 (공식 "Max Overload" 곡선, p.2 우측, 부하 vs 工作时间 s, log축)**:
+
 | 부하 N·m | 지속시간 |
 |---|---|
 | **5** | **rated (무한·연속)** |
@@ -120,9 +121,10 @@
 | 10 | 18 s |
 | 12 | 10 s |
 | 14 | 5 s |
-- ⇒ **연속/thermal 정격 = 5 N·m** (= rated 토크). **peak 14 N·m는 단 5초** 듀티. 우리 데이터 ankle_roll이 RMS 기준 151%%rated 포화 = **연속 5N·m 한계를 1.5배 초과** = 바인딩 액추에이터 정합. (10N·m=18s, 12N·m=10s 듀티는 짧은 push-off 트랜지언트만 허용.)
+- ⇒ **연속/thermal 정격 = 5 N·m** (= rated 토크). **peak 14 N·m는 단 5초** 듀티. 우리 데이터 ankle_roll이 RMS 기준 151%\%rated 포화 = **연속 5N·m 한계를 1.5배 초과** = 바인딩 액추에이터 정합. (10N·m=18s, 12N·m=10s 듀티는 짧은 push-off 트랜지언트만 허용.)
 
 **교차검증 (5+ 독립출처)**:
+
 | 출처 | rated/peak | 무부하/정격속도 | Kt | line R | 감속비 | 질량 |
 |---|---|---|---|---|---|---|
 | **공식 PDF(GitHub)** | 5 / 14 | **315 / 100** | 1.48 | **1.5Ω** | 10:1 | 310g |
@@ -153,6 +155,7 @@
 > 출처: **공식 RobStride GitHub `RS03User Manual260428.pdf`** (Product_Information/Product Literature/RS03), §1.3 전기특성+§12 "T-N curve"+§13 "Maximum overload curve"+§14 thermal/stall. `webfetch→pdftoppm`로 p.9-11 렌더 직접 판독. 곡선 이미지: `assets/rs03_tn_curve_official.png`(T-N), `assets/rs03_overload_thermal_official.png`(과부하+스톨 듀티 표).
 
 **공식 RS03 스펙 (매뉴얼 직접 추출)**:
+
 | 항목 | 공식값 | 비고 |
 |---|---|---|
 | rated / peak 토크 | **20 / 60 N·m** | rated CW |
@@ -180,6 +183,7 @@
 - ⇒ **corner speed(전류제한 평탄→전압제한 droop 전이) ≤ ~120rpm**: 120rpm서 이미 peak 60 후 즉시 감소 → **constant-torque 평탄부는 ~120rpm 이하**(그래프 미표시 저속부). peak 60N·m는 저속(<~120rpm)서만, 고속선 토크 급감. **"60N·m × 200rpm 단순 박스" 가정 틀림** — RS04/RS00과 동일 결론. **이산점 아닌 연속 곡선.**
 
 **★ 과부하 듀티 (공식 §13 "Maximum overload curve", 회전 100rpm·풀 방열판 215×220mm, 25℃)** → `assets/rs03_overload_thermal_official.png` 상단표:
+
 | 부하 N·m | 지속시간 |
 |---|---|
 | **60** (peak) | **13 s** |
@@ -190,6 +194,7 @@
 - ⇒ **연속/thermal 정격(회전) = 20 N·m** (= rated 토크). peak 60N·m는 단 13초. 40N·m=67s·30N·m=393s는 짧은 트랜지언트(push-off)만.
 
 **★ 스톨 듀티 (공식 §14 thermal, 스톨, 축소 방열판, 단상발열 1.414×)** → 동 이미지 하단표:
+
 | 부하 N·m | 지속시간 |
 |---|---|
 | 60 | 1 s |
@@ -201,6 +206,7 @@
 - ⇒ 스톨이 훨씬 엄격: **스톨 연속정격 = 13 N·m**(회전 20N·m 대비). 스톨서 60N·m는 1초만. (단상발열 1.414× 때문.)
 
 **교차검증 (공식 매뉴얼 + 4 독립출처)**:
+
 | 출처 | rated/peak | 무부하/정격속도 | Kt | line R | 감속비 | 질량 | 전압범위 |
 |---|---|---|---|---|---|---|---|
 | **공식 매뉴얼(GitHub)** | 20 / 60 | **200 / 100** | 2.36 | (미기재) | 9:1 | 880g | **24–60V** |

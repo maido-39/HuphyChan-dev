@@ -2,6 +2,7 @@
 
 > 모든 학습 run의 **가설 → 변경 → 명령 → 결과(지표) → 판정**을 한 곳에서 관리한다.
 > 새 run을 돌릴 때마다 여기 한 줄 추가 + 중요한 건 `EXP-NNN_*.md` 상세노트. (reward 세부는 [[04_reward_experiments]])
+> ★**계보(era)별 정량 비교 총괄 = [[66_experiment_registry]]** (변인·핵심수치·권위정책·fc/fcp 데이터 대응표) · **그래프 뷰 = [[experiment_map.canvas]]** (2026-07-11 신설. 이 대장=시간순 원장, 레지스트리=비교용 정제본).
 
 ## 규칙 (어떻게 기록)
 - **ID**: `EXP-NNN` 순번. **run**: `logs/rsl_rl/<exp>/<timestamp>_<run_name>`.
@@ -41,3 +42,44 @@
 6. ★ **까치발=발목 과부하** (2026-06-28 g1is_dm4340_flat): 속도추종+저충격 reward만으론 정책이 **까치발-shuffle** 학습 → ankle_roll/pitch RMS **~200%rated 포화**. 모터를 키워도(DM-J4340 27) 정책이 늘어난 토크를 다 씀. **plantigrade heel-toe 쉐이핑(foot-flat+cop_progression+air_time)이 인간형 *그리고* 저하중 둘 다의 열쇠** — 단순 모터 상향 불충분. HW 사이징은 *gait 정상화 후* 재측정해야 유효.
 7. **feet_air_time threshold 함정**: threshold(0.4s)를 못 넘기면 보상이 0으로 미발화 → 발 안 드는 shuffle=짧은 보폭. 보폭엔 threshold↓(~0.25)·weight↑ 필요 (블로그 air_time+0.5의 anti-shuffle 의도와 일치).
 8. ★★ **까치발 근본원인 = base_height 회귀** (2026-06-29, gaitfix↔G1 회귀분석 + 워크플로 wbpisjawi, high-conf): gaitfix(figure-8지만 **평발**)→G1(**까치발**) 전환서 **base_height(-1.0@0.85) 제거**가 주원인(~75%). ★ 시간증거: 첫 까치발 run(g1vanilla)이 gaitfix와 **동일 발(옛 mesh)** → reward 바뀐 순간 발생 = morphology 아님. base_height 없으면 PPO가 속도추종 reach 위해 다리 신전(base 0.95)→발목 plantarflex=까치발; gaitfix는 base 0.80-0.83(굽은 다리)=평발. **FIX = base_height를 `_apply_g1_impact_stable`(전 계통) 복원**. ★ human-ref(gait_reference) **단독**으론 base 0.926(까치발 지속)+불안정(GRF 7045N) → reference도 base_height 없이는 부족 = **근본 제약 복원 > reward 덧칠**(약한 foot_flat -0.5는 증상만 침). [[2026-06-29_tiptoe_regression]]. **§2b reward 테이블 룰**(이름/가중치/무엇/왜) 적용.
+
+
+## 📚 노트 구조 (권위 → 설계 → 실험계보 → 근거)
+
+### ★ 현행 권위 앵커 (설계값은 여기서만)
+- **flat**: [[2026-07-13_gen21_bent_p2]] (`gen21p2_fc/fcp`) — 게이트 전항목 통과. knee 열 114% rated가 worst
+- **rough**: [[2026-07-15_gen21_rough_uneven2_p2b]] (`p2b_v2_fc`, tile 88.6%) — **ankle_roll RS00 126% peak·GRF 1.74BW**가 worst
+- 설계 하중 세트 = **flat∪rough 관절별 max** · SF: 열=RMS×1.15, 순시=P99×1.25 ([[65_design_value_uncertainty]])
+
+### 설계 문서 (하드웨어 의사결정)
+- [[65_design_value_uncertainty]] — 설계값+CI+SF 독트린 · [[64_joint_bearing_design_inputs]] — 베어링/wrench
+- [[67_hip_cant_and_roll_motor_review]] — **캔트/roll-offset 종합**(§10 캔트 하중논의 종결·§11 정량비교표)
+- [[68_hip_geometry_variants_viz]] — 기하변형 회전축·모션·bent init 가시화 · [[69_scaled_test_rig_design]] — 스케일 테스트rig(s=0.50)
+- [[70_sim2real_pd_gains]] — ★sim2real PD게인 판정(현행 유지·모터펌웨어 1kHz 필수·DR범위 권고)
+- [[62_policy_reward_design_review]] — 12 확정원칙+실패카탈로그 · [[66_experiment_registry]] — era별 정량표(전 런)
+
+### Era-9 · 하드웨어 기하 co-design (2026-07-14~, 현행)
+**캔트 계보** (하중논의 종결 — 순이득 없음→패키징 단독):
+- [[2026-07-14_hip_cant30_variant]] → [[2026-07-14_cant30_p1]] → [[2026-07-14_cant30_p2]] (A/B: 재분배 발견) → 발벌림 적발 → [[2026-07-15_cant30fp_p1]] → [[2026-07-15_cant30fp_p2]] (★3-way A/B 종결 + 좌우영상) → [[2026-07-20_cant20fp_p1]](α=20, P2 학습중)
+**roll-offset 계보**: [[2026-07-15_rolloff30_p1]] → [[2026-07-16_rolloff30_p2]] (fc 측정중)
+**rough 소생 계보** (장님×불가지형 진단): [[2026-07-13_gen21_rough_p1]](❌) → [[2026-07-14_gen21_rough_uneven_p1]](부분) → [[2026-07-14_gen21_rough_uneven2_p1]](fell→0) → [[2026-07-15_gen21_rough_uneven2_p2b]](★rough 앵커)
+
+### Era-8 · Gen-2 캠페인 → flat 앵커 (2026-07-10~13)
+- [[2026-07-10_flat25_p1]](freeze) → [[2026-07-10_flat25b_prog_p1]](진행보상) → init A/B([[2026-07-11_bentinit_ab_plan]]·[[2026-07-12_bentinit_ab_result]] bent 승) → [[2026-07-11_flat25b_prog_p2]]/[[2026-07-11_flat25b_bentinit_p2]] → [[2026-07-12_gen2_bent_p1]]/[[2026-07-12_gen2_bent_p2]](creep 기각) → [[2026-07-13_gen21_bent_p1]] → ★[[2026-07-13_gen21_bent_p2]]
+
+### 근거·진단 노트 (WHY — 실험 방향을 바꾼 것들)
+- [[2026-06-29_tiptoe_regression]] 까치발=base_height · [[2026-07-13_stall_relative_threshold]] creep→상대임계
+- [[2026-07-14_rough_p1_blind_stairs_diagnosis]] 장님×계단 · [[2026-07-12_bentinit_ab_result]] init 반전
+- [[53_bc_kd_controlled_ab]] Kd A/B(link-critical 기각) · [[55_init_pose_straight_vs_bent]] 구 init A/B
+- [[2026-06-30to07-07_pre-flat25_backfill]] 익명런 14건 소급
+
+### 이전 Era (5~7 · mjlab 이행/B캠페인/구 rough)
+- Era-5: [[2026-07-02_00-54-07_mjlab_A0a-actionscale]] · [[2026-07-02_03-56-30_mjlab_A0b-resume]] · [[2026-07-02_10-15-49_mjlab_A0-lowbase-term]] · [[2026-07-02_13-43-35_mjlab_A1-gains-knee800]] · [[2026-07-02_23-03-04_mjlab_A1b]] · [[2026-07-03_04-03-01_mjlab_B1]] · [[2026-07-03_05-14-12_mjlab_B1w2]] · [[2026-07-03_06-23-45_mjlab_B2]] · [[2026-07-03_07-34-12_mjlab_B3]]
+- Era-6/7: [[2026-07-07_P2_final_analysis]] · [[2026-07-03_12-54-18_mjlab_R1]] · [[2026-07-03_16-32-57_mjlab_R1b]] · [[2026-07-05_04-29-10_mjlab_R2]] · [[2026-07-09_rough_p2_final]] · [[2026-07-09to10_superseded_runs]]
+
+### 인터랙티브 도구
+- `tools/wrench_studio/` — ★★**Wrench Studio v4 (서버판)**: FastAPI+three.js, 전 30개 측정정책·실메시 모션재생·브라켓하중 벡터·on-demand 집계. `server.py`(:8091) 또는 `docker compose up`
+- `docs/tools/joint_wrench_explorer.html` — ★관절별 wrench 탐색기(4구성×6관절×36레짐, M⊥/Fr/Fa/τ+6성분, 브라우저 로컬 오픈)
+
+### 그래프 뷰
+- [[experiment_map.canvas]] — 계보 트리(WHY 노트 부착) · [[experiment_tree.canvas]] — ★증거 연결판(실험+근거+결과 이미지/영상, 2026-07-20 신설)

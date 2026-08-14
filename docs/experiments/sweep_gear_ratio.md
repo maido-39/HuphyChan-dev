@@ -37,3 +37,37 @@
 **가설**: rough는 무릎 토크 ~2배(다조건 분석 max 184·[[35_knee_gear_ratio_analysis]]) → **직결(120 peak)이 클립될 수 있음** → 고감속 필요성 부상. flat은 저감속 선호였으나 **rough가 뒤집을 수 있음** = 이 sweep의 핵심. + 발목도 rough서 더 포화하는지([[37_ankle_linkage_fidelity]]).
 
 관련: [[35_knee_gear_ratio_analysis]] · [[33_knee_actuator_landscape]] · [[37_ankle_linkage_fidelity]] · [[experiment_queue]]
+
+
+---
+
+## §R. 부하 선도 소급 (2026-07-03 룰: signed + 당시 한계선) — gear 1.0
+
+![[regime_sweep_g1p0.png]]
+
+- signed 3평면×6관절 · 데이터만 ×1.15 · 한계선 실정격(빨강=Peak·주황=Nominal·검정=관절측 TN, env.yaml 파싱·캡션 명기). 생성: batch_regime_notes.py
+
+
+---
+
+## §R. 부하 선도 소급 (2026-07-03 룰: signed + 당시 한계선) — gear 1.5
+
+![[regime_sweep_g1p5.png]]
+
+- signed 3평면×6관절 · 데이터만 ×1.15 · 한계선 실정격(빨강=Peak·주황=Nominal·검정=관절측 TN, env.yaml 파싱·캡션 명기). 생성: batch_regime_notes.py
+
+
+---
+
+## §R. 부하 선도 소급 (2026-07-03 룰: signed + 당시 한계선) — gear 2.0
+
+![[regime_sweep_g2p0.png]]
+
+- signed 3평면×6관절 · 데이터만 ×1.15 · 한계선 실정격(빨강=Peak·주황=Nominal·검정=관절측 TN, env.yaml 파싱·캡션 명기). 생성: batch_regime_notes.py
+
+
+## §R — gear 2.5
+
+![[regime_sweep_g2p5.png]]
+
+- signed 3평면×6관절 · 데이터만 ×1.15 · 한계선 실정격(env.yaml 파싱). 생성: batch_regime_notes.py

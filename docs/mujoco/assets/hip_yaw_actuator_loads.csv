@@ -1,0 +1,9 @@
+dataset,comp,unit,p1,p50,p99,min,max,n
+b3_demo,M_motor,Nm,-15.7,0.3,16.1,-36.9,48.7,2640
+b3_demo,M_bend,Nm,1.9,13.6,51.5,0.4,99.3,2640
+b3_demo,F_axial,N,-100.7,171.6,389.3,-129.1,442.9,2640
+b3_demo,F_radial,N,10.2,80.3,207.0,2.1,262.3,2640
+worstcase_rough,M_motor,Nm,-34.3,0.5,35.7,-340.4,618.4,14400
+worstcase_rough,M_bend,Nm,3.0,23.9,146.5,0.2,1534.2,14400
+worstcase_rough,F_axial,N,-227.5,140.6,661.6,-2978.2,3566.5,14400
+worstcase_rough,F_radial,N,5.4,74.0,378.1,0.3,2686.7,14400

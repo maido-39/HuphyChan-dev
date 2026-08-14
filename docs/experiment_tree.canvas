@@ -1,0 +1,636 @@
+{
+ "nodes": [
+  {
+   "id": "hdr",
+   "type": "text",
+   "x": 0,
+   "y": -1500,
+   "width": 900,
+   "height": 90,
+   "color": "4",
+   "text": "★ Pygmalion 실험 계통 · 증거 연결판 (2026-07-20)\n흐름: 좌→우 시간, 노랑=WHY 근거노트, 초록=앵커, 빨강=실패, 이미지/영상=결과물"
+  },
+  {
+   "id": "t_flat",
+   "type": "text",
+   "x": -880,
+   "y": -160,
+   "width": 300,
+   "height": 80,
+   "color": "6",
+   "text": "■ FLAT 트랙\n(보상 진화 → 앵커)"
+  },
+  {
+   "id": "f1",
+   "type": "file",
+   "x": 0,
+   "y": 0,
+   "width": 380,
+   "height": 100,
+   "color": "1",
+   "file": "experiments/2026-07-10_flat25_p1.md"
+  },
+  {
+   "id": "f1w",
+   "type": "text",
+   "x": 0,
+   "y": -260,
+   "width": 380,
+   "height": 90,
+   "color": "3",
+   "text": "WHY: 고속 얼어붙음(2.0→5%)\n→ 선형 진행보상 추가"
+  },
+  {
+   "id": "f2",
+   "type": "file",
+   "x": 880,
+   "y": 0,
+   "width": 380,
+   "height": 100,
+   "color": "2",
+   "file": "experiments/2026-07-10_flat25b_prog_p1.md"
+  },
+  {
+   "id": "ab1",
+   "type": "file",
+   "x": 880,
+   "y": -260,
+   "width": 380,
+   "height": 100,
+   "color": "3",
+   "file": "experiments/2026-07-12_bentinit_ab_result.md"
+  },
+  {
+   "id": "f3",
+   "type": "file",
+   "x": 1760,
+   "y": 0,
+   "width": 380,
+   "height": 100,
+   "color": "1",
+   "file": "experiments/2026-07-12_gen2_bent_p2.md"
+  },
+  {
+   "id": "f3w",
+   "type": "file",
+   "x": 1760,
+   "y": -260,
+   "width": 380,
+   "height": 100,
+   "color": "3",
+   "file": "reward_research/2026-07-13_stall_relative_threshold.md"
+  },
+  {
+   "id": "f4",
+   "type": "file",
+   "x": 2640,
+   "y": 0,
+   "width": 380,
+   "height": 120,
+   "color": "4",
+   "file": "experiments/2026-07-13_gen21_bent_p2.md"
+  },
+  {
+   "id": "f4l",
+   "type": "text",
+   "x": 2640,
+   "y": -170,
+   "width": 380,
+   "height": 80,
+   "color": "4",
+   "text": "★★ FLAT 설계앵커 (gen21p2_fc)\nknee 열 114% rated = worst"
+  },
+  {
+   "id": "t_rough",
+   "type": "text",
+   "x": -880,
+   "y": 700,
+   "width": 300,
+   "height": 80,
+   "color": "6",
+   "text": "■ ROUGH 트랙\n(지형-관측 정합 → 앵커)"
+  },
+  {
+   "id": "r1",
+   "type": "file",
+   "x": 0,
+   "y": 700,
+   "width": 380,
+   "height": 100,
+   "color": "1",
+   "file": "experiments/2026-07-13_gen21_rough_p1.md"
+  },
+  {
+   "id": "r1w",
+   "type": "file",
+   "x": 0,
+   "y": 940,
+   "width": 380,
+   "height": 100,
+   "color": "3",
+   "file": "reward_research/2026-07-14_rough_p1_blind_stairs_diagnosis.md"
+  },
+  {
+   "id": "r2",
+   "type": "file",
+   "x": 880,
+   "y": 700,
+   "width": 380,
+   "height": 100,
+   "color": "2",
+   "file": "experiments/2026-07-14_gen21_rough_uneven_p1.md"
+  },
+  {
+   "id": "r3",
+   "type": "file",
+   "x": 1760,
+   "y": 700,
+   "width": 380,
+   "height": 100,
+   "color": "2",
+   "file": "experiments/2026-07-14_gen21_rough_uneven2_p1.md"
+  },
+  {
+   "id": "r4",
+   "type": "file",
+   "x": 2640,
+   "y": 700,
+   "width": 380,
+   "height": 120,
+   "color": "4",
+   "file": "experiments/2026-07-15_gen21_rough_uneven2_p2b.md"
+  },
+  {
+   "id": "r4l",
+   "type": "text",
+   "x": 2640,
+   "y": 560,
+   "width": 380,
+   "height": 80,
+   "color": "4",
+   "text": "★ ROUGH 설계앵커 (p2b_v2_fc)\nankle_roll RS00 126% peak = worst"
+  },
+  {
+   "id": "r4img",
+   "type": "file",
+   "x": 3520,
+   "y": 700,
+   "width": 460,
+   "height": 200,
+   "color": "",
+   "file": "mujoco/assets/rough_vs_flat_anchor.png"
+  },
+  {
+   "id": "t_cant",
+   "type": "text",
+   "x": -880,
+   "y": 1450,
+   "width": 300,
+   "height": 100,
+   "color": "6",
+   "text": "■ 캔트 계보 (Era-9)\n하중논의 종결: 순이득 없음\n→ 패키징 단독 정당화"
+  },
+  {
+   "id": "c0",
+   "type": "file",
+   "x": 0,
+   "y": 1450,
+   "width": 380,
+   "height": 100,
+   "color": "2",
+   "file": "experiments/2026-07-14_cant30_p1.md"
+  },
+  {
+   "id": "c0w",
+   "type": "file",
+   "x": 0,
+   "y": 1210,
+   "width": 380,
+   "height": 100,
+   "color": "3",
+   "file": "67_hip_cant_and_roll_motor_review.md"
+  },
+  {
+   "id": "c1",
+   "type": "file",
+   "x": 880,
+   "y": 1450,
+   "width": 380,
+   "height": 100,
+   "color": "2",
+   "file": "experiments/2026-07-14_cant30_p2.md"
+  },
+  {
+   "id": "c1img",
+   "type": "file",
+   "x": 880,
+   "y": 1730,
+   "width": 460,
+   "height": 190,
+   "color": "",
+   "file": "mujoco/assets/cant30_vs_baseline_ab.png"
+  },
+  {
+   "id": "c2",
+   "type": "file",
+   "x": 1760,
+   "y": 1450,
+   "width": 380,
+   "height": 100,
+   "color": "2",
+   "file": "experiments/2026-07-15_cant30fp_p1.md"
+  },
+  {
+   "id": "c2w",
+   "type": "text",
+   "x": 1760,
+   "y": 1210,
+   "width": 380,
+   "height": 100,
+   "color": "3",
+   "text": "WHY: 발 ±9° toe-out 적발(사용자)\n→ hip_yaw init 보정 = feet-parallel\n근거: [[68_hip_geometry_variants_viz]]"
+  },
+  {
+   "id": "c2img",
+   "type": "file",
+   "x": 1760,
+   "y": 1730,
+   "width": 420,
+   "height": 250,
+   "color": "",
+   "file": "mujoco/assets/init_pose_home_vs_bent.png"
+  },
+  {
+   "id": "c3",
+   "type": "file",
+   "x": 2640,
+   "y": 1450,
+   "width": 380,
+   "height": 120,
+   "color": "4",
+   "file": "experiments/2026-07-15_cant30fp_p2.md"
+  },
+  {
+   "id": "c3img",
+   "type": "file",
+   "x": 2640,
+   "y": 1730,
+   "width": 480,
+   "height": 190,
+   "color": "",
+   "file": "mujoco/assets/cant_3way_ab.png"
+  },
+  {
+   "id": "c3vid",
+   "type": "file",
+   "x": 3520,
+   "y": 1450,
+   "width": 460,
+   "height": 200,
+   "color": "",
+   "file": "mujoco/assets/ab_nocant_vs_cant30fp.mp4"
+  },
+  {
+   "id": "c4",
+   "type": "text",
+   "x": 3520,
+   "y": 1210,
+   "width": 380,
+   "height": 90,
+   "color": "5",
+   "text": "cant20fp_p1 (학습중)\nα=20: ankle_pitch 100%peak 회복?"
+  },
+  {
+   "id": "t_roll",
+   "type": "text",
+   "x": -880,
+   "y": 2350,
+   "width": 300,
+   "height": 80,
+   "color": "6",
+   "text": "■ roll-offset 계보 + 기하 가시화"
+  },
+  {
+   "id": "o1",
+   "type": "file",
+   "x": 0,
+   "y": 2350,
+   "width": 380,
+   "height": 100,
+   "color": "2",
+   "file": "experiments/2026-07-15_rolloff30_p1.md"
+  },
+  {
+   "id": "o2",
+   "type": "file",
+   "x": 880,
+   "y": 2350,
+   "width": 380,
+   "height": 100,
+   "color": "2",
+   "file": "experiments/2026-07-16_rolloff30_p2.md"
+  },
+  {
+   "id": "viz",
+   "type": "file",
+   "x": 1760,
+   "y": 2350,
+   "width": 380,
+   "height": 100,
+   "color": "2",
+   "file": "68_hip_geometry_variants_viz.md"
+  },
+  {
+   "id": "vimg",
+   "type": "file",
+   "x": 2640,
+   "y": 2250,
+   "width": 420,
+   "height": 420,
+   "color": "",
+   "file": "mujoco/assets/axis_variants_compare.png"
+  },
+  {
+   "id": "vvid",
+   "type": "file",
+   "x": 2640,
+   "y": 2730,
+   "width": 420,
+   "height": 200,
+   "color": "",
+   "file": "mujoco/assets/joint_motion_rolloff30.mp4"
+  },
+  {
+   "id": "t_out",
+   "type": "text",
+   "x": 4400,
+   "y": -1500,
+   "width": 380,
+   "height": 70,
+   "color": "4",
+   "text": "■ 설계 산출물 (여기로 수렴)"
+  },
+  {
+   "id": "d65",
+   "type": "file",
+   "x": 4400,
+   "y": -1300,
+   "width": 380,
+   "height": 100,
+   "color": "4",
+   "file": "65_design_value_uncertainty.md"
+  },
+  {
+   "id": "d69",
+   "type": "file",
+   "x": 4400,
+   "y": -1050,
+   "width": 380,
+   "height": 100,
+   "color": "4",
+   "file": "69_scaled_test_rig_design.md"
+  },
+  {
+   "id": "d67",
+   "type": "file",
+   "x": 4400,
+   "y": -800,
+   "width": 380,
+   "height": 100,
+   "color": "4",
+   "file": "67_hip_cant_and_roll_motor_review.md"
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0_f1_f2",
+   "fromNode": "f1",
+   "toNode": "f2",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "freeze→진행보상"
+  },
+  {
+   "id": "e1_f1w_f2",
+   "fromNode": "f1w",
+   "toNode": "f2",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "e2_f2_f3",
+   "fromNode": "f2",
+   "toNode": "f3",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "Gen-2 번들(bent init 등)"
+  },
+  {
+   "id": "e3_ab1_f3",
+   "fromNode": "ab1",
+   "toNode": "f3",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "bent 승"
+  },
+  {
+   "id": "e4_f3_f4",
+   "fromNode": "f3",
+   "toNode": "f4",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "creep→상대임계"
+  },
+  {
+   "id": "e5_f3w_f4",
+   "fromNode": "f3w",
+   "toNode": "f4",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "근거"
+  },
+  {
+   "id": "e6_f4_r1",
+   "fromNode": "f4",
+   "toNode": "r1",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "warm-start"
+  },
+  {
+   "id": "e7_r1_r2",
+   "fromNode": "r1",
+   "toNode": "r2",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "계단 제거"
+  },
+  {
+   "id": "e8_r1w_r2",
+   "fromNode": "r1w",
+   "toNode": "r2",
+   "fromSide": "top",
+   "toSide": "left",
+   "label": "장님×계단40%"
+  },
+  {
+   "id": "e9_r2_r3",
+   "fromNode": "r2",
+   "toNode": "r3",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "슬로프 45°→17°"
+  },
+  {
+   "id": "e10_r3_r4",
+   "fromNode": "r3",
+   "toNode": "r4",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "P2 (dr override 버그수정)"
+  },
+  {
+   "id": "e11_r4_r4img",
+   "fromNode": "r4",
+   "toNode": "r4img",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "부하 비교"
+  },
+  {
+   "id": "e12_f4_c0",
+   "fromNode": "f4",
+   "toNode": "c0",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "기하 co-design 분기"
+  },
+  {
+   "id": "e13_c0w_c0",
+   "fromNode": "c0w",
+   "toNode": "c0",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "CAD 검토 §3"
+  },
+  {
+   "id": "e14_c0_c1",
+   "fromNode": "c0",
+   "toNode": "c1",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "P1→P2 + A/B"
+  },
+  {
+   "id": "e15_c1_c1img",
+   "fromNode": "c1",
+   "toNode": "c1img",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "재분배 발견"
+  },
+  {
+   "id": "e16_c1_c2",
+   "fromNode": "c1",
+   "toNode": "c2",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "발벌림→보정"
+  },
+  {
+   "id": "e17_c2w_c2",
+   "fromNode": "c2w",
+   "toNode": "c2",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "e18_c2_c3",
+   "fromNode": "c2",
+   "toNode": "c3",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "P2"
+  },
+  {
+   "id": "e19_c3_c3img",
+   "fromNode": "c3",
+   "toNode": "c3img",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "★3-way 종결"
+  },
+  {
+   "id": "e20_c3_c3vid",
+   "fromNode": "c3",
+   "toNode": "c3vid",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "좌우 비교영상"
+  },
+  {
+   "id": "e21_c3_c4",
+   "fromNode": "c3",
+   "toNode": "c4",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "α 축소 검증"
+  },
+  {
+   "id": "e22_f4_o1",
+   "fromNode": "f4",
+   "toNode": "o1",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "기하 분기(roll +30mm)"
+  },
+  {
+   "id": "e23_o1_o2",
+   "fromNode": "o1",
+   "toNode": "o2",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "P2 (fc 측정중)"
+  },
+  {
+   "id": "e24_viz_vimg",
+   "fromNode": "viz",
+   "toNode": "vimg",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "회전축 3모델"
+  },
+  {
+   "id": "e25_viz_vvid",
+   "fromNode": "viz",
+   "toNode": "vvid",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "관절 모션"
+  },
+  {
+   "id": "e26_f4_d65",
+   "fromNode": "f4",
+   "toNode": "d65",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "flat 하중"
+  },
+  {
+   "id": "e27_r4_d65",
+   "fromNode": "r4",
+   "toNode": "d65",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "rough 하중"
+  },
+  {
+   "id": "e28_c3_d67",
+   "fromNode": "c3",
+   "toNode": "d67",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "§10-11 종결"
+  }
+ ]
+}

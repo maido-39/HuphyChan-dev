@@ -4,16 +4,16 @@ share_updated: 2026-07-01T02:19:01+09:00
 ---
 # mjlab Pygmalion 부하 분석 — flat run `2026-06-30_20-12-31` (+ rough 배포)
 
-| 항목 | 값 |
-|---|---|
-| 프레임워크 | **mjlab** (MuJoCo-Warp) — IsaacLab 계통과 별개 |
-| Task / run | `Mjlab-Velocity-Flat-Pygmalion` / `2026-06-30_20-12-31` |
-| 학습 명령 | `uv run train Mjlab-Velocity-Flat-Pygmalion --env.scene.num-envs 8192 --video True --video-length 400 --video-interval 128` |
-| Checkpoint | 측정 시점 최신 settled `model_*.pt` (iter ~14k / 30001 — **학습 진행 중 중간본**) |
-| 측정 방식 | **CPU 분리 rollout** (`CUDA_VISIBLE_DEVICES=""`) → 학습 GPU 무중단 (측정 중 GPU 메모리 불변, ckpt 계속 증가 확인) |
-| 측정량 | 관절 토크/속도(RMS·p95·max·포화%), 토크-RPM scatter, 6-DoF 반력 wrench(`cfrc_int`) |
-| 모델 | base + 12 구동관절(L/R × hip_pitch/roll/yaw, knee, ankle_pitch/roll), **toe 없음(강체 발)** |
-| 측정일 | 2026-07-01 · 방법/도구: [README](README.md) |
+| 항목         | 값                                                                                                                           |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 프레임워크      | **mjlab** (MuJoCo-Warp) — IsaacLab 계통과 별개                                                                                   |
+| Task / run | `Mjlab-Velocity-Flat-Pygmalion` / `2026-06-30_20-12-31`                                                                     |
+| 학습 명령      | `uv run train Mjlab-Velocity-Flat-Pygmalion --env.scene.num-envs 8192 --video True --video-length 400 --video-interval 128` |
+| Checkpoint | 측정 시점 최신 settled `model_*.pt` (iter ~14k / 30001 — **학습 진행 중 중간본**)                                                         |
+| 측정 방식      | **CPU 분리 rollout** (`CUDA_VISIBLE_DEVICES=""`) → 학습 GPU 무중단 (측정 중 GPU 메모리 불변, ckpt 계속 증가 확인)                                |
+| 측정량        | 관절 토크/속도(RMS·p95·max·포화%), 토크-RPM scatter, 6-DoF 반력 wrench(`cfrc_int`)                                                      |
+| 모델         | base + 12 구동관절(L/R × hip_pitch/roll/yaw, knee, ankle_pitch/roll), **toe 없음(강체 발)**                                          |
+| 측정일        | 2026-07-01 · 방법/도구: [README](README.md)                                                                                     |
 
 ---
 
@@ -76,12 +76,12 @@ vx∈[−2,3], vy∈[−1,1], yaw∈[−0.7,0.7](커리큘럼 상한 포함) + �
 **측정(취득) 방법:** CPU 1-env rollout(`CUDA_VISIBLE_DEVICES=""`로 학습 GPU 격리 = 무중단).
 위 DR 범위를 커버하는 **18-명령 다방향 스케줄**(§0)로 구동하며, 매 control step `sim.data`에서
 취득: 토크=`qfrc_actuator`[관절], 속도=`qvel`[관절], 6-DoF 반력=`cfrc_int`[바디], GRF=`cfrc_ext`[발],
-power=τ·ω, 관절각=`qpos`. 저장 npz는 IsaacLab measure 포맷과 동일 키 → 동일 양식 플롯.
+power=$\tau\cdot\omega$, 관절각=`qpos`. 저장 npz는 IsaacLab measure 포맷과 동일 키 → 동일 양식 플롯.
 
 ## 1. 관절별 토크 / 속도 (RMS·p95·max + 포화%)
 
-![flat torque](assets/flat_torque.png)
-![flat speed](assets/flat_speed.png)
+![[flat_torque.png]]
+![[flat_speed.png]]
 
 **Flat** (다방향 스윕, L/R). %pk=max토크/peak · %rt=RMS토크/rated(연속/열) · %spd=max속도/한계.
 
@@ -102,7 +102,7 @@ power=τ·ω, 관절각=`qpos`. 저장 npz는 IsaacLab measure 포맷과 동일 
 
 ## 2. 토크-RPM 작동점 scatter (설계용, flat vs rough)
 
-![torque-speed scatter](assets/cmp_torque_speed_scatter.png)
+![[cmp_torque_speed_scatter.png]]
 
 관절족별 (|speed| rpm, |torque| N·m) 운용점. 빨강 점선 = (속도한계 × peak토크) box = 모터
 T-N 엔벨로프 근사. **box 밖(우/상)의 점 = 실제 모터가 못 내는 영역**.
@@ -112,7 +112,7 @@ T-N 엔벨로프 근사. **box 밖(우/상)의 점 = 실제 모터가 못 내는
 
 ## 2b. 관절각(q) - 토크 scatter (작동 영역, flat vs rough)
 
-![q-torque scatter](assets/cmp_q_torque_scatter.png)
+![[cmp_q_torque_scatter.png]]
 
 관절족별 (관절각 deg, 토크 N·m) 운용점. 빨강 점선=±peak, 주황 점선=±rated.
 - `ankle_pitch`: 점들이 **±60(peak)선에 수평 clustering = 토크 포화**가 특정 각도대(주로 dorsiflex 쪽)에서 발생.
@@ -120,7 +120,7 @@ T-N 엔벨로프 근사. **box 밖(우/상)의 점 = 실제 모터가 못 내는
 
 ## 3. 관절 위치별 6-DoF 반력 Wrench (구조설계, flat vs rough)
 
-![per-body wrench](assets/cmp_link_force.png)
+![[cmp_link_force.png]]
 
 **6-DoF 성분별 peak [N, N·m]** (다리 주요 바디, flat / rough). 전체(L/R 전 바디·peak+RMS)는
 [wrench_6dof.csv](assets/wrench_6dof.csv).
@@ -176,7 +176,7 @@ T-N 엔벨로프 근사. **box 밖(우/상)의 점 = 실제 모터가 못 내는
 
 ## 3c. 지면반력(GRF) 분석 (별도)
 
-![GRF analysis](assets/cmp_grf.png)
+![[cmp_grf.png]]
 
 발 GRF |F|의 **분포(상)** + 발별 peak/p95/RMS(하), HW 파손역(1.5–2.7 kN)·BW배수 표시. (넓은 DR
 7200-step 데이터, audit에서 cfrc_ext가 접촉 포함·정확 확인: live footFz warp 401 ~ CPU 401 N.)
@@ -187,8 +187,8 @@ T-N 엔벨로프 근사. **box 밖(우/상)의 점 = 실제 모터가 못 내는
 
 ## 4. Flat vs Rough 비교 (rough = flat 정책 blind 배포, 균일 거친지형)
 
-![saturation flat vs rough](assets/cmp_saturation.png)
-![rough torque](assets/rough_torque.png)
+![[cmp_saturation.png]]
+![[rough_torque.png]]
 
 rough는 **rough-학습 정책이 없어** flat 정책을 height_scan 없이 **균일 거친지형**(random_rough
 0.03–0.08 + wave + 박스, flat 타일 無; `--rough-terrain`)에 올린 **blind 강건성 배포**(정식 rough
@@ -210,8 +210,8 @@ gait 아님). base z **0.71–0.91**(0.2m 출렁)=실제 굴곡 위 보행.
 
 ## 5. 시계열 (명령 변화에 따른 토크/속도 사용)
 
-![flat torque ts](assets/flat_torque_ts.png)
-![flat speed ts](assets/flat_speed_ts.png)
+![[flat_torque_ts.png]]
+![[flat_speed_ts.png]]
 
 명령 스케줄(전진→후진→측방→회전→대각→정지)에 따른 L/R 토크·속도 추이. ankle_pitch가 구간
 전반에서 peak선(빨강)에 반복적으로 닿음 = 상시 포화.

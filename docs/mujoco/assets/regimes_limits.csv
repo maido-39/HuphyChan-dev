@@ -1,0 +1,61 @@
+regime,joint,effort_peak_joint_side_Nm,rated_joint_side_Nm,vel_limit_rpm,motor(gear)
+gaitfix_v7,hip_pitch,120.0,40.0,200,RS04
+gaitfix_v7,hip_roll,120.0,40.0,200,RS04
+gaitfix_v7,hip_yaw,60.0,20.0,200,RS03
+gaitfix_v7,knee,120.0,40.0,200,RS04
+gaitfix_v7,ankle_pitch,60.0,20.0,200,RS03
+gaitfix_v7,ankle_roll,14.0,5.0,315,RS00
+g1vanilla,hip_pitch,120.0,40.0,200,RS04
+g1vanilla,hip_roll,120.0,40.0,200,RS04
+g1vanilla,hip_yaw,60.0,20.0,200,RS03
+g1vanilla,knee,120.0,40.0,200,RS04
+g1vanilla,ankle_pitch,60.0,20.0,200,RS03
+g1vanilla,ankle_roll,14.0,5.0,315,RS00
+g1is_tiptoe,hip_pitch,120.0,40.0,200,RS04
+g1is_tiptoe,hip_roll,120.0,40.0,200,RS04
+g1is_tiptoe,hip_yaw,60.0,20.0,200,RS03
+g1is_tiptoe,knee,216.0,72.0,111,RS04 x1.8 gear
+g1is_tiptoe,ankle_pitch,60.0,20.0,200,RS03
+g1is_tiptoe,ankle_roll,27.0,9.0,100,DM-J4340-2EC
+humanref_v7,hip_pitch,120.0,40.0,200,RS04
+humanref_v7,hip_roll,120.0,40.0,200,RS04
+humanref_v7,hip_yaw,60.0,20.0,200,RS03
+humanref_v7,knee,216.0,72.0,111,RS04 x1.8 gear
+humanref_v7,ankle_pitch,60.0,20.0,200,RS03
+humanref_v7,ankle_roll,27.0,9.0,100,DM-J4340-2EC
+siekmann_v8,hip_pitch,120.0,40.0,200,RS04
+siekmann_v8,hip_roll,120.0,40.0,200,RS04
+siekmann_v8,hip_yaw,60.0,20.0,200,RS03
+siekmann_v8,knee,216.0,72.0,111,RS04 x1.8 gear
+siekmann_v8,ankle_pitch,60.0,20.0,200,RS03
+siekmann_v8,ankle_roll,27.0,9.0,100,DM-J4340-2EC
+pushoff_v9,hip_pitch,120.0,40.0,200,RS04
+pushoff_v9,hip_roll,120.0,40.0,200,RS04
+pushoff_v9,hip_yaw,60.0,20.0,200,RS03
+pushoff_v9,knee,216.0,72.0,111,RS04 x1.8 gear
+pushoff_v9,ankle_pitch,60.0,20.0,200,RS03
+pushoff_v9,ankle_roll,27.0,9.0,100,DM-J4340-2EC
+FINAL_B3_mjlab,hip_pitch,120.0,40.0,143,RS04
+FINAL_B3_mjlab,hip_roll,120.0,40.0,143,RS04
+FINAL_B3_mjlab,hip_yaw,60.0,20.0,191,RS03
+FINAL_B3_mjlab,knee,120.0,40.0,143,RS04
+FINAL_B3_mjlab,ankle_pitch,60.0,20.0,191,RS03
+FINAL_B3_mjlab,ankle_roll,14.0,5.0,315,RS00
+stage4_rough,hip_pitch,120.0,40.0,200,RS04
+stage4_rough,hip_roll,120.0,40.0,200,RS04
+stage4_rough,hip_yaw,60.0,20.0,220,RS03
+stage4_rough,knee,360.0,120.0,67,RS04 x3.0 gear
+stage4_rough,ankle_pitch,60.0,20.0,220,RS03
+stage4_rough,ankle_roll,14.0,5.0,315,RS00
+B3_blind_rough,hip_pitch,120.0,40.0,143,RS04
+B3_blind_rough,hip_roll,120.0,40.0,143,RS04
+B3_blind_rough,hip_yaw,60.0,20.0,191,RS03
+B3_blind_rough,knee,120.0,40.0,143,RS04
+B3_blind_rough,ankle_pitch,60.0,20.0,191,RS03
+B3_blind_rough,ankle_roll,14.0,5.0,315,RS00
+R1_rough_3k,hip_pitch,120.0,40.0,143,RS04
+R1_rough_3k,hip_roll,120.0,40.0,143,RS04
+R1_rough_3k,hip_yaw,60.0,20.0,191,RS03
+R1_rough_3k,knee,120.0,40.0,143,RS04
+R1_rough_3k,ankle_pitch,60.0,20.0,191,RS03
+R1_rough_3k,ankle_roll,14.0,5.0,315,RS00

@@ -1,0 +1,17 @@
+group,metric,B_kd6,C_kd14,C_over_B
+GRF,grf_peak_N,1063.6,3061.6,2.879
+GRF,grf_p95_N,537.3,615.9,1.146
+GRF,grf_peak_BW,2.1,6.1,2.879
+GRF,grf_p95_BW,1.1,1.2,1.146
+tau_p95,hip_pitch,44.7,102.1,2.284
+tau_peak,hip_pitch,119.6,120.0,1.003
+tau_p95,hip_roll,42.9,72.3,1.685
+tau_peak,hip_roll,82.6,120.0,1.452
+tau_p95,hip_yaw,15.6,34.8,2.23
+tau_peak,hip_yaw,46.5,60.0,1.29
+tau_p95,knee,27.8,96.0,3.45
+tau_peak,knee,120.0,120.0,1.0
+tau_p95,ankle_pitch,30.9,45.2,1.464
+tau_peak,ankle_pitch,88.8,90.0,1.014
+tau_p95,ankle_roll,6.9,11.3,1.629
+tau_peak,ankle_roll,17.6,50.0,2.836

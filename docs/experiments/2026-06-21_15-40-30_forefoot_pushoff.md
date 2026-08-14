@@ -15,6 +15,48 @@
   - rsl_rl_ppo_cfg.py  <-  pygmalion_locomotion/source/pygmalion_locomotion/tasks/locomotion/agents/rsl_rl_ppo_cfg.py
 - **체크포인트**: `pygmalion_locomotion/logs/rsl_rl/pygmalion_flat/2026-06-21_15-40-30_forefoot_pushoff/model_300.pt`
 
+
+## 1b. forefoot_pushoff Reward & Gains (config에서 파싱 — 재현용)
+
+**Reward 항목** (weight·왜·어떻게):
+
+| reward | weight | 왜 | 어떻게 |
+|---|--:|---|---|
+| termination_penalty | **-200** | - | - |
+| feet_distance | **-2** | - | - |
+| ankle_pushoff | **+1** | - | - |
+| base_height | **-1** | - | - |
+| dof_pos_limits | **-1** | 관절범위 한계 벌점 | 한계초과 L1 |
+| flat_orientation_l2 | **-1** | 몸통 수평 유지 | -|proj_g_xy|² |
+| track_ang_vel_z_exp | **+1** | 명령 회전속도 추종 | exp(-err²) |
+| track_lin_vel_xy_exp | **+1** | 명령 전진/측방 속도 추종 | exp(-err²) |
+| feet_air_time | **+0.75** | 체공시간 보상(성큼걸음) | +air_time |
+| forefoot_cop | **+0.5** | - | - |
+| no_flight | **-0.5** | - | - |
+| upright | **+0.5** | 몸통 직립 유지(넘어짐 방지) | exp 자세 |
+| power_cot | +0.4 | - | - |
+| lin_vel_z_l2 | -0.2 | 수직속도 벌점(상하 튐 억제) | -vz² |
+| feet_slide | -0.1 | 접지발 미끄러짐 벌점 | -|v_contact| |
+| joint_deviation_hip | -0.1 | - | - |
+| ang_vel_xy_l2 | -0.05 | 롤/피치 각속도 벌점 | -|ωxy|² |
+| torque_soft_limit_ankle | -0.01 | - | - |
+| action_rate_l2 | -0.005 | 액션 급변 벌점 | -|Δa|² |
+| torque_soft_limit | -0.0025 | - | - |
+| dof_torques_l2 | -2e-06 | 관절토크 벌점(에너지/열) | -Στ² |
+| dof_acc_l2 | -1e-07 | 관절가속 벌점(부드러움) | -Σα² |
+
+**관절별 Kp/Kd** (position-PD, effort=관절측 peak):
+
+| 관절 | 모터 | Kp(stiffness) | Kd(damping) | effort [N·m] |
+|---|---|--:|--:|--:|
+| hip_pitch | RS04 | 200 | 5 | 120 |
+| hip_roll | RS04 | 200 | 5 | 120 |
+| hip_yaw | RS03 | 150 | 5 | 60 |
+| knee | RS04 | 200 | 5 | 360 |
+| ankle_pitch | RS03 | 80 | 3 | 60 |
+| ankle_roll | RS00 | 40 | 2 | 14 |
+
+
 ## 2. 지표 (Metrics)
 
 ## 2b. Reward (무엇을 · 왜)
@@ -26,7 +68,7 @@
 - `forefoot_cop` w0.5·`power_cot` w0.4 등 나머지는 부모 forefoot_cop과 동일(여기선 ankle_pushoff 과대가 전부를 가림).
 
 ## 2c. 학습 건강도 (TensorBoard: loss·수렴·낙상·보상항)
-![tb](assets/2026-06-21_15-40-30_forefoot_pushoff_tensorboard.png)
+![[2026-06-21_15-40-30_forefoot_pushoff_tensorboard.png]]
 
 - **수렴(noise_std)**: 0.27 → **0.34** (미수렴·탐색↑ ⚠️ (std 증가))
 - **mean_reward**: 0.7 → **484.5**, ep_len 최종 **975**

@@ -15,13 +15,52 @@
   - rsl_rl_ppo_cfg.py  <-  pygmalion_locomotion/source/pygmalion_locomotion/tasks/locomotion/agents/rsl_rl_ppo_cfg.py
 - **체크포인트**: `pygmalion_locomotion/logs/rsl_rl/pygmalion_flat/2026-06-21_03-46-50_stage3_ankle_offload/model_2499.pt`
 
+
+## 1b. stage3_ankle_offload Reward & Gains (config에서 파싱 — 재현용)
+
+**Reward 항목** (weight·왜·어떻게):
+
+| reward | weight | 왜 | 어떻게 |
+|---|--:|---|---|
+| termination_penalty | **-200** | - | - |
+| feet_distance | **-2** | - | - |
+| base_height | **-1** | - | - |
+| dof_pos_limits | **-1** | 관절범위 한계 벌점 | 한계초과 L1 |
+| flat_orientation_l2 | **-1** | 몸통 수평 유지 | -|proj_g_xy|² |
+| track_ang_vel_z_exp | **+1** | 명령 회전속도 추종 | exp(-err²) |
+| track_lin_vel_xy_exp | **+1** | 명령 전진/측방 속도 추종 | exp(-err²) |
+| feet_air_time | **+0.75** | 체공시간 보상(성큼걸음) | +air_time |
+| no_flight | **-0.5** | - | - |
+| upright | **+0.5** | 몸통 직립 유지(넘어짐 방지) | exp 자세 |
+| lin_vel_z_l2 | -0.2 | 수직속도 벌점(상하 튐 억제) | -vz² |
+| feet_slide | -0.1 | 접지발 미끄러짐 벌점 | -|v_contact| |
+| joint_deviation_hip | -0.1 | - | - |
+| ang_vel_xy_l2 | -0.05 | 롤/피치 각속도 벌점 | -|ωxy|² |
+| torque_soft_limit_ankle | -0.01 | - | - |
+| action_rate_l2 | -0.005 | 액션 급변 벌점 | -|Δa|² |
+| torque_soft_limit | -0.0025 | - | - |
+| dof_torques_l2 | -2e-06 | 관절토크 벌점(에너지/열) | -Στ² |
+| dof_acc_l2 | -1e-07 | 관절가속 벌점(부드러움) | -Σα² |
+
+**관절별 Kp/Kd** (position-PD, effort=관절측 peak):
+
+| 관절 | 모터 | Kp(stiffness) | Kd(damping) | effort [N·m] |
+|---|---|--:|--:|--:|
+| hip_pitch | RS04 | 200 | 5 | 120 |
+| hip_roll | RS04 | 200 | 5 | 120 |
+| hip_yaw | RS03 | 150 | 5 | 60 |
+| knee | RS04 | 200 | 5 | 360 |
+| ankle_pitch | RS03 | 80 | 3 | 60 |
+| ankle_roll | RS00 | 40 | 2 | 14 |
+
+
 ## 2. 지표 (Metrics)
 - **최종 Mean reward**: 36.21 (iter 2499), max 36.91
 - **error_vel_xy**: 0.5024
 - **error_vel_yaw**: 0.5072
 - **curriculum_vel_x**: 2.0000
 
-![reward curve](assets/2026-06-21_03-46-50_stage3_ankle_offload_reward.png)
+![[2026-06-21_03-46-50_stage3_ankle_offload_reward.png]]
 
 ## 2b. Reward (이름 · 값 · 무엇 · 왜)
 활성 보상 항과 **최종 기여**는 아래. 각 항의 **의미 · 가중치 · 왜**는 → [[04_reward_experiments]] ("현재 활성 Reward 전체" 표) 참조 (재도출 금지, 링크로 추적).
@@ -101,11 +140,22 @@
 > `bash scripts/analyze_run.sh`가 생성(이후 리포트는 자동 임베드). 전체 해석 [[24_training_health_analysis]].
 
 **토크** (avg/max + rated/peak 가로선 + 포화%): ankle_roll L/R **100%(빨강)**, 나머지 여유.
-![s3-tq](../assets/stage3_motor_torque.png)
+![[stage3_motor_torque.png]]
 **속도** (avg/max + 속도한계 + 포화%): knee L/R **102-106%(속도병목)**.
-![s3-sp](../assets/stage3_motor_speed.png)
+![[stage3_motor_speed.png]]
 **토크 시계열 · 속도 시계열** (시간에 따른 관절별 활용, L파랑/R주황):
-![s3-tqts](../assets/stage3_motor_torque_ts.png)
-![s3-spts](../assets/stage3_motor_speed_ts.png)
+![[stage3_motor_torque_ts.png]]
+![[stage3_motor_speed_ts.png]]
 - **HW**: ankle_roll 상향 · knee 감속비 1:3→**1:2**(속도 시계열이 병목을 직관 확인).
 
+
+
+---
+
+## §R. 부하 선도 소급 (2026-07-03 룰: signed + 당시 한계선)
+
+![[regime_stage3_clip.png]]
+
+- 3평면(속도-토크/각도-토크/각도-속도) × 6관절, **signed**. contour 실선(굵음=50% 코어·얇음=99%).
+- ★데이터만 ×1.15(sim→real 마찰·기어효율 보정), 한계선은 실정격 그대로(클립 데이터가 peak선 ~15% 위 = 실기 필요토크). 빨강=±Peak(토크·속도)·주황=±Nominal(rated×기어)·검정=관절측 TN(토크×기어, 속도÷기어) — 이 run의 `params/env.yaml` 파싱값, 관절별 모터·기어는 그림 캡션 명기.
+- 생성: `mjlab/analysis/batch_regime_notes.py` · 총론: [8-레짐 인사이트](../mujoco/2026-07-03_design_insights_all_regimes.md)

@@ -57,8 +57,8 @@
 - 출처: arxiv 2506.15132(Booster) · 2503.08349(LiPS) · 2507.00273(BRUCE) · 2507.10164(TopA) · G1 dev guide · github booster_gym/unitree_rl_gym. 원자료 → [[raw/parallel-ankle-sim2real]].
 
 ## [2026-06-22] research | 발목 상향-토크 QDD 시장조사 (RS00/RS03 대체) → [[39_ankle_qdd_uptorque_survey]]
-- ROLL(RS00 14/310g/$125 직결·포화): ★승자 = **DAMIAO DM-J4340** (27 N·m peak / 9 cont / 362g / Φ57 / 40:1 / $155) — 같은 외형·peak 1.9×·+52g·+$30, 디커플드 직결 드롭인. 목표 25-30 N·m 정확 충족. 단 40:1 저속 → roll-rate sim검증 필요. 차점 AK70-10(24.8/610g)·AK80-8(25/570g)=토크는 닿으나 무게·Φ 초과.
-- PITCH/MID(RS03 60/880g/$225): RS03이 가격·토크밀도(66.67 N.m/kg) 챔피언, off-the-shelf로 못 이김. 동급 Φ98 후보 전부 토크 ↓+가격 1.7-3× (DM-J8009 40/$385, AK10-9 48/$699, RMD-X10-40 40/$625). 60 초과는 고감속(AK80-64 120/64:1, RMD-X10 100/35:1)뿐=저속·고가·부적합. → **RS03 유지+링크감속 fix가 정답**.
+- ROLL(RS00 14/310g/\$125 직결·포화): ★승자 = **DAMIAO DM-J4340** (27 N·m peak / 9 cont / 362g / Φ57 / 40:1 / \$155) — 같은 외형·peak 1.9×·+52g·+\$30, 디커플드 직결 드롭인. 목표 25-30 N·m 정확 충족. 단 40:1 저속 → roll-rate sim검증 필요. 차점 AK70-10(24.8/610g)·AK80-8(25/570g)=토크는 닿으나 무게·Φ 초과.
+- PITCH/MID(RS03 60/880g/\$225): RS03이 가격·토크밀도(66.67 N.m/kg) 챔피언, off-the-shelf로 못 이김. 동급 Φ98 후보 전부 토크 ↓+가격 1.7-3× (DM-J8009 40/\$385, AK10-9 48/\$699, RMD-X10-40 40/\$625). 60 초과는 고감속(AK80-64 120/64:1, RMD-X10 100/35:1)뿐=저속·고가·부적합. → **RS03 유지+링크감속 fix가 정답**.
 - 출처: seeed RS00/RS03 · aifitlab DM-J4340/RMD-X10 · cubemars AK10-9/AK80-64/AK70-10 · dronegearup DM-J8009 · robotshop RMD-X10. 원자료 → [[raw/ankle-qdd-uptorque-survey]].
 
 ## [2026-06-22] research | 연구 방법론 — multi-agent 구조 vs 직급 페르소나 → [[42_research_methodology]]

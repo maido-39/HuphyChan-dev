@@ -6,8 +6,8 @@
 
 | 우리 모터 | 역할 | peak/cont (N·m) | 무게 | 프레임 | 감속 | 가격 |
 |---|---|---|---|---|---|---|
-| RobStride RS00 | ankle_roll (직결, **포화** 100%peak·RMS 114%cont) | 14 / 5 | 310 g | Φ57×51 | 10:1 | $125 (Seeed; $119 ×10) |
-| RobStride RS03 | ankle_pitch (링크, 포화·링크감속으로 fix가능) | 60 / 20 | 880 g | Φ106×56 | 9:1 | $225 (Seeed; $214 ×10) |
+| RobStride RS00 | ankle_roll (직결, **포화** 100%peak·RMS 114%cont) | 14 / 5 | 310 g | Φ57×51 | 10:1 | 125 (Seeed119 ×10) |
+| RobStride RS03 | ankle_pitch (링크, 포화·링크감속으로 fix가능) | 60 / 20 | 880 g | Φ106×56 | 9:1 | 225 (Seeed214 ×10) |
 
 - 목표 roll: ~25-30 N·m peak를 ~300-450g, Φ60-70 프레임에. 디커플드 roll-직결 유지.
 - 목표 mid: 50-100 N·m peak를 700-1100g, Φ90-110.

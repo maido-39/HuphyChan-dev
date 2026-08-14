@@ -4,8 +4,8 @@
 > 도구: `analysis/progression.sh`(측정) + `analysis/progression_analyze.py`(추세/노트). 재실행 시 새 체크포인트 자동 추가.
 > 커버 iter: [3000, 6000, 9000, 12000, 15000, 18000, 21000, 24000, 27000, 30000, 33000, 36000, 39000, 42000, 45000, 48000, 51000]  ·  각 2400 step wide-DR (vx[-2,3]·vy±1·yaw±0.7).
 
-![progression trends (p95)](assets/progression_trends.png)
-![progression trends (p99)](assets/progression_trends_p99.png)
+![[progression_trends.png]]
+![[progression_trends_p99.png]]
 
 > 위=p95판, 아래=**p99판**(상위 1%, max에 더 근접·스파이크에 민감하나 단일 max보다 robust).
 
@@ -74,7 +74,7 @@ p95/RMS가 신뢰 지표.**
 
 ## 영상 — 체크포인트별 로봇 움직임 (montage)
 
-![](assets/progression_montage.mp4)
+![[progression_montage.mp4]]
 [assets/progression_montage.mp4](assets/progression_montage.mp4) — 이 값들이 나온 **각 체크포인트
 로봇이 실제로 걷는 영상**. 6개 체크포인트(3000~39000 균등)를 격자로, **동일 명령(seed 고정)으로 동기화**
 재생 + 부하-색 관절 구(회색<rated·노랑≥nominal·주황≥70%peak·빨강≥peak). 같은 t에 다른 gait =

@@ -1,7 +1,7 @@
 # 학습 리포트 — 2026-06-29_22-48-47_siekmann_pushoff_v9_flat
 
-- **task/run**: `2026-06-29_22-48-47_siekmann_pushoff_v9_flat`  ·  **명령**: `(미기록)`
-- **의도/변경점**: **[작성 필요]**
+- **task/run**: `2026-06-29_22-48-47_siekmann_pushoff_v9_flat`  ·  **명령**: `bash scripts/run_training.sh Pygmalion-Velocity-Flat-SiekmannPushoff-v0 siekmann_pushoff_v9_flat 1500 8192 --init_checkpoint logs/rsl_rl/pygmalion_flat/2026-06-29_13-00-01_siekmann_v8_flat/model_1499.pt`
+- **의도/변경점**: **v9 = Stage4 toe-use stack**. v8(Siekmann periodic_contact) 백본 위에 **`ankle_pushoff_work`(+0.5)** + **`cop_progression`(+1.2)** 추가 (v8에서 warm-start, obs 241 동일). 목표 = toe를 **직접 보상하지 않고**(|τ_toe| 금지) **원인(terminal-stance forefoot CoP + 발목 push-off power)을 보상**해 windlass·toe-off가 emergent하게. 근거: [[2026-06-29_toe_use_reward]] (Hicks 1954·Kuo 2002). **결과 = 부분 회귀**(§5): GRF 악화, toe-timing 미해결.
 
 ## 1. 재현성 (Reproducibility)
 - **OBS**: base_lin_vel(3)+base_ang_vel(3)+projected_gravity(3)+velocity_commands(3)+joint_pos(14)+joint_vel(14)+last_action(12)+height_scan(187) = 239 dims; enable_corruption=obs noise
@@ -15,12 +15,52 @@
   - rsl_rl_ppo_cfg.py  <-  pygmalion_locomotion/source/pygmalion_locomotion/tasks/locomotion/agents/rsl_rl_ppo_cfg.py
 - **체크포인트**: `pygmalion_locomotion/logs/rsl_rl/pygmalion_flat/2026-06-29_22-48-47_siekmann_pushoff_v9_flat/model_1499.pt`
 
+
+## 1b. siekmann_pushoff_v9_flat Reward & Gains (config에서 파싱 — 재현용)
+
+**Reward 항목** (weight·왜·어떻게):
+
+| reward | weight | 왜 | 어떻게 |
+|---|--:|---|---|
+| termination_penalty | **-200** | - | - |
+| knee_straight | **-5** | - | - |
+| track_ang_vel_z_exp | **+2** | 명령 회전속도 추종 | exp(-err²) |
+| periodic_contact | **+1.5** | ★Siekmann 위상접촉(대칭 주기보행) | stance:발속도↓ swing:발힘↓ |
+| cop_progression | **+1.2** | - | - |
+| base_height | **-1** | - | - |
+| dof_pos_limits | **-1** | 관절범위 한계 벌점 | 한계초과 L1 |
+| flat_orientation_l2 | **-1** | 몸통 수평 유지 | -|proj_g_xy|² |
+| foot_landing_vel | **-1** | - | - |
+| track_lin_vel_xy_exp | **+1** | 명령 전진/측방 속도 추종 | exp(-err²) |
+| ankle_pushoff_work | **+0.5** | - | - |
+| feet_slide | -0.1 | 접지발 미끄러짐 벌점 | -|v_contact| |
+| joint_deviation_hip | -0.1 | - | - |
+| ang_vel_xy_l2 | -0.05 | 롤/피치 각속도 벌점 | -|ωxy|² |
+| action_rate_l2 | -0.01 | 액션 급변 벌점 | -|Δa|² |
+| foot_impact_force | -0.005 | - | - |
+| dof_acc_l2 | -3e-07 | 관절가속 벌점(부드러움) | -Σα² |
+| dof_torques_l2 | -1.5e-07 | 관절토크 벌점(에너지/열) | -Στ² |
+| feet_air_time | +0 | 체공시간 보상(성큼걸음) | +air_time |
+| lin_vel_z_l2 | +0 | 수직속도 벌점(상하 튐 억제) | -vz² |
+
+**관절별 Kp/Kd** (position-PD, effort=관절측 peak):
+
+| 관절 | 모터 | Kp(stiffness) | Kd(damping) | effort [N·m] |
+|---|---|--:|--:|--:|
+| hip_pitch | RS04 | 200 | 24 | 120 |
+| hip_roll | RS04 | 200 | 24 | 120 |
+| hip_yaw | RS03 | 150 | 6.5 | 60 |
+| knee | RS04 | 200 | 11 | 216 |
+| ankle_pitch | RS03 | 80 | 3 | 60 |
+| ankle_roll | RS00 | 40 | 3 | 27 |
+
+
 ## 2. 지표 (Metrics)
 - **최종 Mean reward**: 84.05 (iter 1499), max 84.62
 - **error_vel_xy**: 0.2991
 - **error_vel_yaw**: 0.2237
 
-![reward curve](assets/2026-06-29_22-48-47_siekmann_pushoff_v9_flat_reward.png)
+![[2026-06-29_22-48-47_siekmann_pushoff_v9_flat_reward.png]]
 
 ## 2b. Reward (이름 · 값 · 무엇 · 왜)
 이 run의 **활성 보상 항 전체** — 이름 · 가중치(값) · 최종 기여 · 무엇인지 · 왜 줬는지 (규칙, user 2026-06-29). 의미 누적 추적: [[04_reward_experiments]].
@@ -30,7 +70,7 @@
 | `track_ang_vel_z_exp` | +2 | +1.8834 | 명령 각속도(yaw) 추종 exp | 작업 목표: 방향 전환 추종 |
 | `periodic_contact` | +1.5 | +1.2268 | Siekmann 주기 contact-schedule: stance엔 발 정지·swing엔 발 이지(공유 clock) | ★ heel→toe-off 리듬 legislate = 까치발·절뚝·충격 동시해결(reference-free) |
 | `track_lin_vel_xy_exp` | +1 | +0.9025 | 명령 선속도(x,y) 추종 exp | 작업 목표: 원하는 속도로 보행 |
-| `ankle_pushoff_work` | +0.5 | +0.3752 | [작성 필요] | [작성 필요] |
+| `ankle_pushoff_work` | +0.5 | +0.3752 | terminal-stance 발목 plantarflexion power(τ·ω) clamp(0,80W)·gate 보상 | ★ CoP를 앞으로 미는 push-off 엔진(Kuo 2002) → toe-off 추진 + windlass 유발 (원인보상) |
 | `joint_deviation_hip` | -0.1 | -0.1135 | hip 중립 이탈 penalty | hip 자세 안정(과회전 억제) |
 | `cop_progression` | +1.2 | +0.1052 | CoP heel→toe 진행 보상 | 인간 heel-toe rollover 인코딩 |
 | `foot_landing_vel` | -1 | -0.0681 | 착지 순간 수직속도 penalty | 부드러운 착지(충격 저감) |
@@ -48,10 +88,10 @@
 | `feet_air_time` | +0 | +0.0000 | 발 공중(또는 single-stance) 시간 보상 | 보폭/스텝 유도(threshold 미달 시 dead) |
 | `termination_penalty` | -200 | +0.0000 | 조기 종료(낙상) penalty | 넘어짐 회피 |
 
-**이번 run 중요/신규 reward + 왜**: **[작성 필요]** — 추가·변경한 항과 그 이유 (어떤 측정/[[Paperreview/...]]·docs 연구가 근거인지). 예: `torque_soft_limit_ankle` 추가 → 포화 발목 offload(docs/17·22).
+**이번 run 중요/신규 reward + 왜**: **신규 2항 = toe-use stack** ([[2026-06-29_toe_use_reward]] 근거). ① `ankle_pushoff_work`(+0.5): terminal single-support의 발목 plantarflex power = CoP 전진 엔진(Kuo 2002, Adamczyk-Kuo 2013). ② `cop_progression`(+1.2): forefoot 하중분율 `Fz_fore/(Fz_foot+Fz_fore)`가 stance 통해 상승 시 보상(인간 heel→toe rollover). **핵심 설계철학 = passive windlass(Hicks 1954)는 toe 직접보상(|τ_toe|, v5 실패)이 아니라 하중(CoP)·push-off power를 보상해 emergent**. 단 이번엔 impact cap 없이 얹어 power-farming 발생(§5).
 
 ## 2c. 학습 건강도 (TensorBoard: loss·수렴·낙상·보상항)
-![tb](assets/2026-06-29_22-48-47_siekmann_pushoff_v9_flat_tensorboard.png)
+![[2026-06-29_22-48-47_siekmann_pushoff_v9_flat_tensorboard.png]]
 
 - **수렴(noise_std)**: 0.15 → **0.11** (수렴 ✅)
 - **mean_reward**: 0.9 → **84.0**, ep_len 최종 **1000**
@@ -59,7 +99,7 @@
 - **안정성 낙상률 0%** (base_contact 0.00 / time_out 11.12) (안정 ✅)
 - **value loss 최종** 0.003, entropy -11.800, LR 1.1e-04
 - **커리큘럼 vx 상한 최종** nan
-- 정성 해석 **[작성 필요]**: noise_std 추세(↓수렴/↑탐색)·value loss·낙상률·error_vel로 *학습이 잘 됐나* + *다음 튜닝*(예: 미수렴이면 iter↑/지형커리큘럼/명령범위↓).
+- 정성 해석: **학습 자체는 건강하게 수렴** — noise_std 0.15→0.11(↓ 수렴), value loss 0.003, 낙상 0%(base_contact 0.00), ep_len 1000 만기, error_vel_xy 0.299. **그러나 mean_reward 84로 높아도 gait 품질(GRF·human-likeness)은 악화**(§5) = 신규 항이 **reward를 farming**(보상↑·실제목표↓). 다음 튜닝: ankle_pushoff에 **impact/GRF cap** + Siekmann clock terminal-stance window(phase 0.45–0.6)로 **gate 재설계**, 그 후 재학습.
 
 ## 3. 영상 / 이미지
 - 학습 영상 24개: `pygmalion_locomotion/logs/rsl_rl/pygmalion_flat/2026-06-29_22-48-47_siekmann_pushoff_v9_flat/videos/train/` (예: rl-video-step-0.mp4 … rl-video-step-9000.mp4)
@@ -70,31 +110,58 @@
 ## 4. 부모 학습 대비 비교
 - **부모**: `2026-06-29_13-00-01_siekmann_v8_flat`
 - **변경된 설정(velocity_env_cfg diff)**:
-  - (부모 repro 백업 없음 → 수동 기재 **[작성 필요]**)
-- reward 곡선 비교: 위 그래프(부모 점선). **정량 비교 [작성 필요]**: 무엇이 좋아졌나/나빠졌나.
+  - 부모 v8(Siekmann) 대비 **추가만**: `ankle_pushoff_work`(+0.5), `cop_progression`(+1.2). 그 외 reward/obs/DR/액추에이터 동일 (warm-start이므로 obs 241 불변).
+- reward 곡선 비교: 위 그래프(부모 점선). **정량 비교**: mean_reward는 신규 양(+)항으로 ↑(ankle_pushoff +0.375, cop +0.105 기여)지만 **실제 목표는 악화** — GRF peak 3.1×BW→**11.5×BW**, human-likeness 0.14→**0.05**, toe-timing 미개선. 유일한 개선은 GRF L/R asym 0.18→**0.13**(대칭성 소폭↑). = 전형적 reward-gaming 신호.
 
-## 5. 분석 (정성/정량)  **[작성 필요]**
-- 정량 (★표준 모터분석 `bash scripts/analyze_run.sh <tag> <clip.npz> [unclip.npz]`): **토크 활용률(% 정격/peak)** + **최대회전 속도(% 속도한계)·토크-속도 작동점** + **연결부 구조하중(|F|/|M|)** + gait(추종·CoT)·toe 사용도·진동(>5Hz)·낙상.
-- 정성: 보행 자연스러움·실패모드·의도한 변경의 효과.
+## 5. 분석 (정성/정량)
 
-## 6. 관련 학습 / 연구 링크  **[작성 필요]**
-- 관련 run: [[experiments/<run>]] — *어떤 관계, 무엇을 바꿨고 왜*.
-- 활용 연구: [[Paperreview/<slug>]] / docs/16·17·18 — *어떤 결정에 썼는지*.
+**정량 (toe-use 평가):**
+| 지표 | v8(부모) | **v9** | 판정 |
+|---|--:|--:|---|
+| base_height | 0.85 | 0.853 | = 유지(까치발 없음) |
+| GRF peak | 3.1×BW | **11.5×BW (5822 N)** | ✗ **크게 악화** |
+| GRF L/R asym | 0.18 | 0.13 | ✓ 소폭 개선 |
+| human-likeness | 0.14 | **0.05** | ✗ 악화 |
+| toe 최대굽힘 위상 | — | L 77% / R 71% (목표 ~60%) | ✗ push-off 시점 아님 |
+| toe 굽힘량 | — | L 0.145 / **R 0.034 rad** | ✗ R 거의 안 굽음 |
+| CoT | 1.22 | 1.66 (344 W) | ✗ 효율 악화 |
+
+**정성 / 근본원인:**
+- ★ **`ankle_pushoff_work`가 power(τ·ω)를 farming** → 정책이 **공격적 push-off**로 보상을 챙김 → GRF 충격 스파이크(11.5×BW). [[2026-06-29_toe_use_reward]]가 경고한 **power-farming 위험이 현실화**.
+- **`cop_progression` 기여 0.105로 약함** — contact-time proxy가 Siekmann clock과 미정렬 + toe sole flush(forefoot 신호 약함, 연구노트 §주의)로 gradient 부족 → toe-timing 미교정(R toe 0.034 rad = 거의 정지).
+- ★ **순서 위반**: 연구노트의 hard 전제는 "foot-roll(v8) → push-off → CoP"이나, **impact cap(Stage3) 없이** push-off를 얹어 충격을 키움.
+- **다음 액션**: (a) `ankle_pushoff_work`에 GRF/impact cap 또는 power 상한, (b) gate를 Siekmann terminal-stance window(phase 0.45–0.6)로 좁힘, (c) `cop_progression`을 clock-gate로 재설계 + toe를 forefoot-distinct하게, (d) GRF soft-limit 강화 후 재학습. **v8을 Stage3(impact cap)으로 먼저 다지고 push-off는 그 위에.**
+
+## 6. 관련 학습 / 연구 링크
+- 부모/백본: [[experiments/2026-06-29_13-00-01_siekmann_v8_flat]] — Siekmann periodic_contact 재설계 성공(까치발·절뚝·충격 동시해결). v9는 그 위에 toe-use 2항 추가.
+- 활용 연구: [[2026-06-29_toe_use_reward]] (설계 근거: 원인보상·|τ_toe| 금지·power-farming 경고 ← 이번에 현실화) · [[2026-06-29_gait_emergence_siekmann]] · docs/17(toe geometry)·docs/23(cop/forefoot).
+- 선행 실패: v5 `toe_load_stance`(직접 toe 보상 → 굽힘 magnitude만↑, timing 그대로) = v9가 피하려던 안티패턴.
 
 ## 7. 모터 활용 시각화 (사후 — 토크·속도 RMS/p95/peak·스펙선·포화%·시계열)
 *스펙선(rated/peak/velocity-limit)은 이 run의 config(감속비·effort/vel)에서 자동.*
 
 **관절 토크 RMS/p95/MAX vs rated(연속/열)·peak 가로선 + 포화%**
-![torque](assets/2026-06-29_22-48-47_siekmann_pushoff_v9_flat_torque.png)
+![[2026-06-29_22-48-47_siekmann_pushoff_v9_flat_torque.png]]
 
 **관절 속도 RMS/p95/MAX(rpm) vs 속도한계 가로선 + 포화%**
-![speed](assets/2026-06-29_22-48-47_siekmann_pushoff_v9_flat_speed.png)
+![[2026-06-29_22-48-47_siekmann_pushoff_v9_flat_speed.png]]
 
 **관절 토크 시계열 (시간에 따른 토크 활용, peak/rated 선)**
-![torque_ts](assets/2026-06-29_22-48-47_siekmann_pushoff_v9_flat_torque_ts.png)
+![[2026-06-29_22-48-47_siekmann_pushoff_v9_flat_torque_ts.png]]
 
 **관절 속도 시계열 (시간에 따른 속도 활용, limit 선)**
-![speed_ts](assets/2026-06-29_22-48-47_siekmann_pushoff_v9_flat_speed_ts.png)
+![[2026-06-29_22-48-47_siekmann_pushoff_v9_flat_speed_ts.png]]
 
-- 정량 해석 **[작성 필요]**: 포화 top 관절(토크/속도 %) — ★ **RMS%rated(연속/열) · p95%peak(지속) · max%peak(순시) 따로** 판정 + 시계열 피크 타이밍·L/R 비대칭 → 어느 모터 키우고/감속비 바꿀지(HW 사이징).
+- 정량 해석: **knee가 순시 포화** — L/R_knee peak **216 N·m = effort 한계에 clipping**(고정), RMS 34/42 N·m. **hip_pitch/hip_roll도 peak 120 N·m로 한계 고정**. push-off 보상이 무릎·고관절 토크를 한계까지 끌어올림(GRF 5822 N과 동반). 속도: **R_hip_roll peak 20.5 rad/s**(가장 빠름), knee ~11.7 rad/s. **L/R 비대칭**: R측 토크/속도가 전반적으로 높음(R_knee RMS 42 vs L 34) = §5의 절뚝과 일치. **HW 시사**: 무릎·고관절이 순시 토크한계에 물려 clipping → push-off 보상을 cap하지 않으면 무릎 모터 상향 필요. 단 이는 **reward-farming의 결과**이므로 §5 재튜닝(impact cap) 후 재측정이 우선.
 
+
+
+---
+
+## §R. 부하 선도 소급 (2026-07-03 룰: signed + 당시 한계선)
+
+![[regime_pushoff_v9.png]]
+
+- 3평면(속도-토크/각도-토크/각도-속도) × 6관절, **signed**(사분면=제동/방향성), contour 실선(굵음=50% 코어·얇음=99%).
+- **한계선 산출**: 이 run의 `params/env.yaml`의 `effort_limit_sim`/`velocity_limit_sim`(**관절측 = 감속비 반영값**)을 파싱. ★데이터만 ×1.15(sim→real 마찰·기어효율 보정), 한계선은 실정격 그대로(클립 데이터가 peak선 ~15% 위 = 실기 필요토크). 빨강=±Peak(토크·속도)·주황=±Nominal(rated×기어)·검정=관절측 TN(토크×기어, 속도÷기어). 관절별 모터·기어는 그림 상단 캡션 명기. 전 레짐 표: `docs/mujoco/assets/regimes_limits.csv`.
+- 생성: `mjlab/analysis/regime_compare.py` · 비교 총론: [8-레짐 인사이트](../mujoco/2026-07-03_design_insights_all_regimes.md)

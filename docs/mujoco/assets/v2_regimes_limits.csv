@@ -1,0 +1,49 @@
+regime,joint,effort_peak_joint_side_Nm,rated_joint_side_Nm,vel_limit_rpm,motor(gear)
+g1vanilla,hip_pitch,120.0,40.0,200,RS04
+g1vanilla,hip_roll,120.0,40.0,200,RS04
+g1vanilla,hip_yaw,60.0,20.0,200,RS03
+g1vanilla,knee,120.0,40.0,200,RS04
+g1vanilla,ankle_pitch,60.0,20.0,200,RS03
+g1vanilla,ankle_roll,14.0,5.0,315,RS00
+pushoff_v9,hip_pitch,120.0,40.0,200,RS04
+pushoff_v9,hip_roll,120.0,40.0,200,RS04
+pushoff_v9,hip_yaw,60.0,20.0,200,RS03
+pushoff_v9,knee,216.0,72.0,111,RS04 x1.8 gear
+pushoff_v9,ankle_pitch,60.0,20.0,200,RS03
+pushoff_v9,ankle_roll,27.0,9.0,100,DM-J4340-2EC
+P2_final_flat,hip_pitch,120.0,40.0,143,RS04
+P2_final_flat,hip_roll,120.0,40.0,143,RS04
+P2_final_flat,hip_yaw,60.0,20.0,191,RS03
+P2_final_flat,knee,120.0,40.0,143,RS04
+P2_final_flat,ankle_pitch,90.0,40.0,191,2xRS03 2-RSU co-act
+P2_final_flat,ankle_roll,50.0,10.0,315,2xRS00 2-RSU
+bent_kd6,hip_pitch,120.0,40.0,143,RS04
+bent_kd6,hip_roll,120.0,40.0,143,RS04
+bent_kd6,hip_yaw,60.0,20.0,191,RS03
+bent_kd6,knee,120.0,40.0,143,RS04
+bent_kd6,ankle_pitch,90.0,40.0,191,2xRS03 2-RSU co-act
+bent_kd6,ankle_roll,50.0,10.0,315,2xRS00 2-RSU
+knee220,hip_pitch,120.0,40.0,143,RS04
+knee220,hip_roll,120.0,40.0,143,RS04
+knee220,hip_yaw,60.0,20.0,191,RS03
+knee220,knee,120.0,40.0,143,RS04
+knee220,ankle_pitch,90.0,40.0,191,2xRS03 2-RSU co-act
+knee220,ankle_roll,50.0,10.0,315,2xRS00 2-RSU
+stage4_rough,hip_pitch,120.0,40.0,200,RS04
+stage4_rough,hip_roll,120.0,40.0,200,RS04
+stage4_rough,hip_yaw,60.0,20.0,220,RS03
+stage4_rough,knee,360.0,120.0,67,RS04 x3.0 gear
+stage4_rough,ankle_pitch,60.0,20.0,220,RS03
+stage4_rough,ankle_roll,14.0,5.0,315,RS00
+R2_rough_40k,hip_pitch,120.0,40.0,143,RS04
+R2_rough_40k,hip_roll,120.0,40.0,143,RS04
+R2_rough_40k,hip_yaw,60.0,20.0,191,RS03
+R2_rough_40k,knee,120.0,40.0,143,RS04
+R2_rough_40k,ankle_pitch,90.0,40.0,191,2xRS03 2-RSU co-act
+R2_rough_40k,ankle_roll,50.0,10.0,315,2xRS00 2-RSU
+roughP2_final,hip_pitch,120.0,40.0,143,RS04
+roughP2_final,hip_roll,120.0,40.0,143,RS04
+roughP2_final,hip_yaw,60.0,20.0,191,RS03
+roughP2_final,knee,120.0,40.0,143,RS04
+roughP2_final,ankle_pitch,90.0,40.0,191,2xRS03 2-RSU co-act
+roughP2_final,ankle_roll,50.0,10.0,315,2xRS00 2-RSU

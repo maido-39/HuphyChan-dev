@@ -15,13 +15,61 @@
   - rsl_rl_ppo_cfg.py  <-  pygmalion_locomotion/source/pygmalion_locomotion/tasks/locomotion/agents/rsl_rl_ppo_cfg.py
 - **체크포인트**: `pygmalion_locomotion/logs/rsl_rl/pygmalion_flat/2026-06-22_02-36-09_gaitfix_collisiontest/model_39.pt`
 
+
+## 1b. gaitfix_collisiontest Reward & Gains (config에서 파싱 — 재현용)
+
+**Reward 항목** (weight·왜·어떻게):
+
+| reward | weight | 왜 | 어떻게 |
+|---|--:|---|---|
+| termination_penalty | **-200** | - | - |
+| knee_straight | **-5** | - | - |
+| feet_distance | **-3** | - | - |
+| feet_lateral_sep | **-3** | - | - |
+| base_height | **-1** | - | - |
+| dof_pos_limits | **-1** | 관절범위 한계 벌점 | 한계초과 L1 |
+| flat_orientation_l2 | **-1** | 몸통 수평 유지 | -|proj_g_xy|² |
+| foot_landing_vel | **-1** | - | - |
+| track_ang_vel_z_exp | **+1** | 명령 회전속도 추종 | exp(-err²) |
+| track_lin_vel_xy_exp | **+1** | 명령 전진/측방 속도 추종 | exp(-err²) |
+| undesired_contacts | **-1** | 비정상 접촉 벌점 | -접촉수 |
+| feet_air_time | **+0.75** | 체공시간 보상(성큼걸음) | +air_time |
+| ankle_pushoff | **+0.5** | - | - |
+| foot_roll_flat | **-0.5** | - | - |
+| forefoot_cop | **+0.5** | - | - |
+| no_flight | **-0.5** | - | - |
+| upright | **+0.5** | 몸통 직립 유지(넘어짐 방지) | exp 자세 |
+| power_cot | +0.4 | - | - |
+| lin_vel_z_l2 | -0.2 | 수직속도 벌점(상하 튐 억제) | -vz² |
+| feet_slide | -0.1 | 접지발 미끄러짐 벌점 | -|v_contact| |
+| joint_deviation_hip | -0.1 | - | - |
+| ang_vel_xy_l2 | -0.05 | 롤/피치 각속도 벌점 | -|ωxy|² |
+| torque_soft_limit_ankle | -0.01 | - | - |
+| action_rate_l2 | -0.005 | 액션 급변 벌점 | -|Δa|² |
+| foot_impact_force | -0.005 | - | - |
+| torque_soft_limit | -0.0025 | - | - |
+| dof_torques_l2 | -2e-06 | 관절토크 벌점(에너지/열) | -Στ² |
+| dof_acc_l2 | -1e-07 | 관절가속 벌점(부드러움) | -Σα² |
+
+**관절별 Kp/Kd** (position-PD, effort=관절측 peak):
+
+| 관절 | 모터 | Kp(stiffness) | Kd(damping) | effort [N·m] |
+|---|---|--:|--:|--:|
+| hip_pitch | RS04 | 200 | 24 | 120 |
+| hip_roll | RS04 | 200 | 24 | 120 |
+| hip_yaw | RS03 | 150 | 6.5 | 60 |
+| knee | RS04 | 200 | 11 | 120 |
+| ankle_pitch | RS03 | 80 | 3 | 60 |
+| ankle_roll | RS00 | 40 | 2 | 14 |
+
+
 ## 2. 지표 (Metrics)
 - **최종 Mean reward**: 14.00 (iter 39), max 14.00
 - **error_vel_xy**: 0.6473
 - **error_vel_yaw**: 0.5802
 - **curriculum_vel_x**: 1.0632
 
-![reward curve](assets/2026-06-22_02-36-09_gaitfix_collisiontest_reward.png)
+![[2026-06-22_02-36-09_gaitfix_collisiontest_reward.png]]
 
 ## 2b. Reward (이름 · 값 · 무엇 · 왜)
 활성 보상 항과 **최종 기여**는 아래. 각 항의 **의미 · 가중치 · 왜**는 → [[04_reward_experiments]] ("현재 활성 Reward 전체" 표) 참조 (재도출 금지, 링크로 추적).
@@ -60,7 +108,7 @@
 **이번 run 중요/신규 reward + 왜**: 보상 *변경 없음*(이전 gait-fix 보상 그대로). 이 run의 변경점은 **USD 충돌**(robot.xml conaffinity bitmask). `knee_straight` 기여 −0.249(큼)·`foot_impact` −0.159 = warm-start 직선무릎/충격을 강하게 교정 중(초기 불안정 정상).
 
 ## 2c. 학습 건강도 (TensorBoard: loss·수렴·낙상·보상항)
-![tb](assets/2026-06-22_02-36-09_gaitfix_collisiontest_tensorboard.png)
+![[2026-06-22_02-36-09_gaitfix_collisiontest_tensorboard.png]]
 
 - **수렴(noise_std)**: 0.28 → **0.31** (미수렴·탐색↑ ⚠️ (std 증가))
 - **mean_reward**: 0.1 → **14.0**, ep_len 최종 **819**
@@ -78,7 +126,7 @@
 
 ## 5. 분석 (정성/정량) — config-test (검증 전용)
 **결과: ✅ targeted L-R 충돌 = 안전**(crash 없음·iter 39/40 완주). conaffinity=1(전체 geom 충돌) spawn 폭발과 대조 → 같은-세그먼트만 충돌하는 bitmask 설계가 옳음 확인. 정면 클로즈업서 다리 비교차.
-![collision close-up](assets/gait_diag/col_0.65.png)
+![[col_0.65.png]]
 표준 모터분석/측정은 **gaitfix_v3(본 학습, 수렴)**서 수행 — 이 run은 충돌 *crash 검증*만 목적(40iter).
 
 ## 6. 관련 학습 / 연구 링크

@@ -15,12 +15,50 @@
   - rsl_rl_ppo_cfg.py  <-  pygmalion_locomotion/source/pygmalion_locomotion/tasks/locomotion/agents/rsl_rl_ppo_cfg.py
 - **체크포인트**: `pygmalion_locomotion/logs/rsl_rl/pygmalion_flat/2026-06-29_07-02-04_humanref_v6sym_flat/model_1499.pt`
 
+
+## 1b. humanref_v6sym_flat Reward & Gains (config에서 파싱 — 재현용)
+
+**Reward 항목** (weight·왜·어떻게):
+
+| reward | weight | 왜 | 어떻게 |
+|---|--:|---|---|
+| termination_penalty | **-200** | - | - |
+| track_ang_vel_z_exp | **+2** | 명령 회전속도 추종 | exp(-err²) |
+| base_height | **-1** | - | - |
+| dof_pos_limits | **-1** | 관절범위 한계 벌점 | 한계초과 L1 |
+| flat_orientation_l2 | **-1** | 몸통 수평 유지 | -|proj_g_xy|² |
+| foot_landing_vel | **-1** | - | - |
+| gait_reference_tracking | **+1** | - | - |
+| track_lin_vel_xy_exp | **+1** | 명령 전진/측방 속도 추종 | exp(-err²) |
+| toe_load_stance | **+0.5** | - | - |
+| feet_slide | -0.1 | 접지발 미끄러짐 벌점 | -|v_contact| |
+| joint_deviation_hip | -0.1 | - | - |
+| ang_vel_xy_l2 | -0.05 | 롤/피치 각속도 벌점 | -|ωxy|² |
+| action_rate_l2 | -0.01 | 액션 급변 벌점 | -|Δa|² |
+| foot_impact_force | -0.005 | - | - |
+| dof_acc_l2 | -3e-07 | 관절가속 벌점(부드러움) | -Σα² |
+| dof_torques_l2 | -1.5e-07 | 관절토크 벌점(에너지/열) | -Στ² |
+| feet_air_time | +0 | 체공시간 보상(성큼걸음) | +air_time |
+| lin_vel_z_l2 | +0 | 수직속도 벌점(상하 튐 억제) | -vz² |
+
+**관절별 Kp/Kd** (position-PD, effort=관절측 peak):
+
+| 관절 | 모터 | Kp(stiffness) | Kd(damping) | effort [N·m] |
+|---|---|--:|--:|--:|
+| hip_pitch | RS04 | 200 | 24 | 120 |
+| hip_roll | RS04 | 200 | 24 | 120 |
+| hip_yaw | RS03 | 150 | 6.5 | 60 |
+| knee | RS04 | 200 | 11 | 216 |
+| ankle_pitch | RS03 | 80 | 3 | 60 |
+| ankle_roll | RS00 | 40 | 3 | 27 |
+
+
 ## 2. 지표 (Metrics)
 - **최종 Mean reward**: 59.81 (iter 1499), max 61.87
 - **error_vel_xy**: 0.2815
 - **error_vel_yaw**: 0.3152
 
-![reward curve](assets/2026-06-29_07-02-04_humanref_v6sym_flat_reward.png)
+![[2026-06-29_07-02-04_humanref_v6sym_flat_reward.png]]
 
 ## 2b. Reward (이름 · 값 · 무엇 · 왜)
 이 run의 **활성 보상 항 전체** — 이름 · 가중치(값) · 최종 기여 · 무엇인지 · 왜 줬는지 (규칙, user 2026-06-29). 의미 누적 추적: [[04_reward_experiments]].
@@ -49,7 +87,7 @@
 **이번 run 중요/신규 reward + 왜**: reward는 v5(HumanRefToe)와 **동일** — 변경은 **warm-start 소스만**(v4 → g1is_dm4340 대칭소스). ★ 결과: toe_load_stance **+0.0000(미발화)**·base_height **-0.0075**(v4 -0.0003보다 큼 = base 0.85서 더 벗어남) = 한발 degenerate gait(§5). reward 변경 없음.
 
 ## 2c. 학습 건강도 (TensorBoard: loss·수렴·낙상·보상항)
-![tb](assets/2026-06-29_07-02-04_humanref_v6sym_flat_tensorboard.png)
+![[2026-06-29_07-02-04_humanref_v6sym_flat_tensorboard.png]]
 
 - **수렴(noise_std)**: 0.32 → **0.35** (미수렴·탐색↑ ⚠️ (std 증가))
 - **mean_reward**: 0.8 → **59.8**, ep_len 최종 **974**
@@ -86,16 +124,27 @@
 *스펙선(rated/peak/velocity-limit)은 이 run의 config(감속비·effort/vel)에서 자동.*
 
 **관절 토크 RMS/p95/MAX vs rated(연속/열)·peak 가로선 + 포화%**
-![torque](assets/2026-06-29_07-02-04_humanref_v6sym_flat_torque.png)
+![[2026-06-29_07-02-04_humanref_v6sym_flat_torque.png]]
 
 **관절 속도 RMS/p95/MAX(rpm) vs 속도한계 가로선 + 포화%**
-![speed](assets/2026-06-29_07-02-04_humanref_v6sym_flat_speed.png)
+![[2026-06-29_07-02-04_humanref_v6sym_flat_speed.png]]
 
 **관절 토크 시계열 (시간에 따른 토크 활용, peak/rated 선)**
-![torque_ts](assets/2026-06-29_07-02-04_humanref_v6sym_flat_torque_ts.png)
+![[2026-06-29_07-02-04_humanref_v6sym_flat_torque_ts.png]]
 
 **관절 속도 시계열 (시간에 따른 속도 활용, limit 선)**
-![speed_ts](assets/2026-06-29_07-02-04_humanref_v6sym_flat_speed_ts.png)
+![[2026-06-29_07-02-04_humanref_v6sym_flat_speed_ts.png]]
 
 - 정량 해석: base 0.930·**한발 degenerate gait**(R GRF 0) = 붕괴 run → 모터 사이징 분석 무의미. 유효 사이징은 정상 gait(v4 계열) 기준. cross-robot warm-start 실패의 기록.
 
+
+
+---
+
+## §R. 부하 선도 소급 (2026-07-03 룰: signed + 당시 한계선)
+
+![[regime_humanref_v6sym_flat.png]]
+
+- 3평면(속도-토크/각도-토크/각도-속도) × 6관절, **signed**. contour 실선(굵음=50% 코어·얇음=99%).
+- ★데이터만 ×1.15(sim→real 마찰·기어효율 보정), 한계선은 실정격 그대로(클립 데이터가 peak선 ~15% 위 = 실기 필요토크). 빨강=±Peak(토크·속도)·주황=±Nominal(rated×기어)·검정=관절측 TN(토크×기어, 속도÷기어) — 이 run의 `params/env.yaml` 파싱값, 관절별 모터·기어는 그림 캡션 명기.
+- 생성: `mjlab/analysis/batch_regime_notes.py` · 총론: [8-레짐 인사이트](../mujoco/2026-07-03_design_insights_all_regimes.md)

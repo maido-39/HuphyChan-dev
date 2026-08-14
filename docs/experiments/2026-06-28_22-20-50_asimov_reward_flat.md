@@ -15,12 +15,47 @@
   - rsl_rl_ppo_cfg.py  <-  pygmalion_locomotion/source/pygmalion_locomotion/tasks/locomotion/agents/rsl_rl_ppo_cfg.py
 - **체크포인트**: `pygmalion_locomotion/logs/rsl_rl/pygmalion_flat/2026-06-28_22-20-50_asimov_reward_flat/model_1499.pt`
 
+
+## 1b. asimov_reward_flat Reward & Gains (config에서 파싱 — 재현용)
+
+**Reward 항목** (weight·왜·어떻게):
+
+| reward | weight | 왜 | 어떻게 |
+|---|--:|---|---|
+| termination_penalty | **-200** | - | - |
+| track_ang_vel_z_exp | **+2** | 명령 회전속도 추종 | exp(-err²) |
+| dof_pos_limits | **-1** | 관절범위 한계 벌점 | 한계초과 L1 |
+| flat_orientation_l2 | **-1** | 몸통 수평 유지 | -|proj_g_xy|² |
+| track_lin_vel_xy_exp | **+1** | 명령 전진/측방 속도 추종 | exp(-err²) |
+| feet_air_time | **+0.5** | 체공시간 보상(성큼걸음) | +air_time |
+| joint_deviation_ankle | **-0.5** | - | - |
+| feet_slide | -0.1 | 접지발 미끄러짐 벌점 | -|v_contact| |
+| joint_deviation_hip | -0.1 | - | - |
+| ang_vel_xy_l2 | -0.08 | 롤/피치 각속도 벌점 | -|ωxy|² |
+| action_rate_l2 | -0.005 | 액션 급변 벌점 | -|Δa|² |
+| foot_impact_force | -0.005 | - | - |
+| dof_torques_l2 | -1.5e-07 | 관절토크 벌점(에너지/열) | -Στ² |
+| dof_acc_l2 | -1.25e-07 | 관절가속 벌점(부드러움) | -Σα² |
+| lin_vel_z_l2 | +0 | 수직속도 벌점(상하 튐 억제) | -vz² |
+
+**관절별 Kp/Kd** (position-PD, effort=관절측 peak):
+
+| 관절 | 모터 | Kp(stiffness) | Kd(damping) | effort [N·m] |
+|---|---|--:|--:|--:|
+| hip_pitch | RS04 | 200 | 24 | 120 |
+| hip_roll | RS04 | 200 | 24 | 120 |
+| hip_yaw | RS03 | 150 | 6.5 | 60 |
+| knee | RS04 | 200 | 11 | 216 |
+| ankle_pitch | RS03 | 80 | 3 | 60 |
+| ankle_roll | RS00 | 40 | 3 | 27 |
+
+
 ## 2. 지표 (Metrics)
 - **최종 Mean reward**: 50.65 (iter 1499), max 51.86
 - **error_vel_xy**: 0.2170
 - **error_vel_yaw**: 0.2278
 
-![reward curve](assets/2026-06-28_22-20-50_asimov_reward_flat_reward.png)
+![[2026-06-28_22-20-50_asimov_reward_flat_reward.png]]
 
 ## 2b. Reward (이름 · 값 · 무엇 · 왜)
 활성 보상 항과 **최종 기여**는 아래. 각 항의 **의미 · 가중치 · 왜**는 → [[04_reward_experiments]] ("현재 활성 Reward 전체" 표) 참조 (재도출 금지, 링크로 추적).
@@ -46,7 +81,7 @@
 **이번 run 중요/신규 reward + 왜**: 블로그 핵심 = **feet_air_time +0.5**(actual air-time=flight 보상) + **joint_deviation_ankle -0.5**(ankle을 neutral 근처로 tight). 결과: ★ **air_time 기여 -0.0164 = DEAD** — 51.8kg 로봇은 flight 거의 못 만듦(flight 1.3%) → 블로그 시그니처 레버가 무거운 로봇엔 무력(연구 [[2026-06-28_menlo_blog_review]] 예측: air_time=flight=경량 로봇용, 확증). ★ **joint_deviation_ankle -0.0853**(2번째 큰 penalty) = ankle을 neutral로 당기며 추종과 충돌 → §5·§7 ankle_pitch 과부하의 직접 원인.
 
 ## 2c. 학습 건강도 (TensorBoard: loss·수렴·낙상·보상항)
-![tb](assets/2026-06-28_22-20-50_asimov_reward_flat_tensorboard.png)
+![[2026-06-28_22-20-50_asimov_reward_flat_tensorboard.png]]
 
 - **수렴(noise_std)**: 0.99 → **0.26** (수렴 ✅)
 - **mean_reward**: -0.3 → **50.6**, ep_len 최종 **982**
@@ -90,16 +125,27 @@
 *스펙선(rated/peak/velocity-limit)은 이 run의 config(감속비·effort/vel)에서 자동.*
 
 **관절 토크 RMS/p95/MAX vs rated(연속/열)·peak 가로선 + 포화%**
-![torque](assets/2026-06-28_22-20-50_asimov_reward_flat_torque.png)
+![[2026-06-28_22-20-50_asimov_reward_flat_torque.png]]
 
 **관절 속도 RMS/p95/MAX(rpm) vs 속도한계 가로선 + 포화%**
-![speed](assets/2026-06-28_22-20-50_asimov_reward_flat_speed.png)
+![[2026-06-28_22-20-50_asimov_reward_flat_speed.png]]
 
 **관절 토크 시계열 (시간에 따른 토크 활용, peak/rated 선)**
-![torque_ts](assets/2026-06-28_22-20-50_asimov_reward_flat_torque_ts.png)
+![[2026-06-28_22-20-50_asimov_reward_flat_torque_ts.png]]
 
 **관절 속도 시계열 (시간에 따른 속도 활용, limit 선)**
-![speed_ts](assets/2026-06-28_22-20-50_asimov_reward_flat_speed_ts.png)
+![[2026-06-28_22-20-50_asimov_reward_flat_speed_ts.png]]
 
 - 정량 해석: ★ **ankle_pitch 243%rated 과부하**(블로그 tight ankle deviation 구동) — g1is_dm4340(191%)보다 심함. **ankle_roll 77%**(g1is 215%보다 낮음 — tight tol이 측방 shuffle 억제). knee/hip 여유. → 블로그 reward는 ankle_roll은 덜 쓰지만 **ankle_pitch를 더 과부하 + peak 충격 2배(1991N)**. = 블로그 air_time/tight-ankle은 우리 목표에 부적합. HW 사이징은 v2(plantigrade·저충격) 후 재측정해야 유효.
 
+
+
+---
+
+## §R. 부하 선도 소급 (2026-07-03 룰: signed + 당시 한계선)
+
+![[regime_asimov_reward_flat.png]]
+
+- 3평면(속도-토크/각도-토크/각도-속도) × 6관절, **signed**. contour 실선(굵음=50% 코어·얇음=99%).
+- ★데이터만 ×1.15(sim→real 마찰·기어효율 보정), 한계선은 실정격 그대로(클립 데이터가 peak선 ~15% 위 = 실기 필요토크). 빨강=±Peak(토크·속도)·주황=±Nominal(rated×기어)·검정=관절측 TN(토크×기어, 속도÷기어) — 이 run의 `params/env.yaml` 파싱값, 관절별 모터·기어는 그림 캡션 명기.
+- 생성: `mjlab/analysis/batch_regime_notes.py` · 총론: [8-레짐 인사이트](../mujoco/2026-07-03_design_insights_all_regimes.md)

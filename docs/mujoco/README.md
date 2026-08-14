@@ -4,6 +4,18 @@ IsaacLab 계통(`pygmalion_locomotion/`)과 별개로, **mjlab**(MuJoCo-Warp, `m
 에서 학습한 Pygmalion 정책의 **HW 설계용 부하** 분석을 모으는 곳.
 
 ## 노트
+- [2026-07-10_design_insights_updated.md](2026-07-10_design_insights_updated.md) — ★★★ **v2 갱신(모던 권위 데이터)**: P2-final flat·R2·rough P2-final·bent A/B로 07-03 그래프 갱신. ankle_pitch 클립 해소(2-RSU 90 헤드룸 실측)·knee ω peak 262rpm sim-real 갭·wrench FEA 3단 갱신. 원본 무결.
+- [2026-07-03_design_insights_all_regimes.md](2026-07-03_design_insights_all_regimes.md) — ★★★ **8개 리워드 체계 통합 인사이트**: ankle=정책지배(6~30× 변동)·knee 신전 단방향 불변·"리워드 설계=사이징" 정량증명·B-스택 전제/강건 이중 설계 엔벨로프
+- [2026-07-03_final_design_point.md](2026-07-03_final_design_point.md) — ★★★ **최종 설계점(판정 v3)**: B3@12k worst-case — ankle_pitch 47%·ankle_roll 14%(스토리 반전), knee 112%만 잔존(링크 레버로 75%). HW 권고 확정
+- [2026-07-03_knee_ankle_mechanism_design.md](2026-07-03_knee_ankle_mechanism_design.md) — ★ knee 링크·ankle 2-RSU 설계 **v2(그림판)**: 다이어그램·파이프라인·★DR 커버리지 검증(worst-case의 OOD 오염 발견→in-DR 보정 수치)·contour 선도 3종·벨트 판정·검증 레퍼런스 9건
+- [2026-07-02_training_plan_v2.md](2026-07-02_training_plan_v2.md) — ★★ **학습·Reward 계획 v2**(게이트 기반): Day-0 chirp→A1 gains→B1 GRF(→Siekmann)→B2 hip분산→B3 보폭→C HW. 비평 반영(Kp800 기각→200-480, torque_limit pre-clip 지뢰, soft_landing −5e-4)
+- [2026-07-02_analysis_reward_audit_critique.md](2026-07-02_analysis_reward_audit_critique.md) — 계획 v2의 **분석 원본 기록**: mjlab reward 전 인벤토리(꺼진 3항 포함, file:line)·soft_landing/torque_limit/air_time 함수형태·Siekmann 이식 배관·계보 금지목록·적대적 비평 전문
+- [2026-07-02_gait_analysis_and_wobble.md](2026-07-02_gait_analysis_and_wobble.md) — ★ 보행데이터 분석: 속도-ROM polar·오버로드·GRF trend·**wobble 근본원인=Kp/Kd(hip 300×물렁)**
+- [2026-07-02_action_scale_and_gains.md](2026-07-02_action_scale_and_gains.md) — action_scale 0.25 재학습 + Kp/Kd 가이드
+- [2026-07-01_actuator_evaluation.md](2026-07-01_actuator_evaluation.md) — ★ **액추에이터 선정 판정(v2)**:
+  worst-case(vx 2.5·yaw 1.0·rough) 관절부하 vs RobStride TN곡선/발열 스펙 + 열RC·마찰보정·독립 정적검산. flat서 **ankle_pitch(RS03) binding**.
+- [2026-07-01_ankle_dm4340_swap.md](2026-07-01_ankle_dm4340_swap.md) — Ankle→DM-J4340-2EC 스왑 판정:
+  **ankle_roll ✅**(RS00 부족 해결) / **ankle_pitch ❌**(27<60, 정반대). "ankle을 DM으로"는 roll만.
 - [2026-07-01_load_analysis_flat_rough.md](2026-07-01_load_analysis_flat_rough.md) — flat run
   `2026-06-30_20-12-31`의 다방향 부하 측정 + rough 지형 배포 비교 (토크/속도/wrench/scatter/GRF).
 - [2026-07-01_training_progression.md](2026-07-01_training_progression.md) — **6000 iter마다 검증**해
@@ -84,4 +96,11 @@ uv run python analysis/play_loadviz.py --run-dir "$RUN" --viewer native
 ### 측정량
 1. **관절 토크/속도** RMS·p95·max + 모터 peak/rated/속도한계 대비 포화% (`<tag>_torque.png`/`_speed.png`/`_torque_ts.png`/`_speed_ts.png`)
 2. **토크-RPM scatter** (관절족별, L+R, peak×maxspeed box, flat/rough 오버레이) (`cmp_torque_speed_scatter.png`)
+2b. ★ **룰(2026-07-02, 소급적용): q(관절각)-토크 · q-속도(rpm) scatter를 전 관절에 대해 한계선과 함께** —
+   q-토크는 rated(초록점선)·±peak(빨강파선)·관절범위(보라 1점쇄선), q-속도는 속도한계(빨강)·관절범위(보라).
+   `actuator_eval.py`가 매 측정 npz(`<tag>_model.mjb`서 관절범위 자동)마다 `q_torque_<tag>.png`/`q_speed_<tag>.png` 생성.
+   스트로크 어디서 토크/속도 수요가 몰리는지 + 관절범위 사용률까지 한 그림에.
+2c. ★ **룰(2026-07-03): 설계용 contour 선도 + DR 커버리지** — `design_plots.py`가 (i) 명령 커버리지 vs 학습DR
+   (OOD ×표 분리), (ii) 각도-토크/각도-속도/속도-토크 3평면에 flat(파랑)/rough(주황) 색분리 + 밀도 contour
+   (실선 50% 코어·파선 99%≈P99·점선 99.9%≈peak) + OOD 회색 + 한계선/TN을 생성. **설계 수치는 in-DR 기준**.
 3. **관절위치별 6-DoF 반력 wrench** `cfrc_int`=[moment;force], 전역·바디 CoM 기준 (`cmp_link_force.png`)
