@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ankle 2-RSU CAD Viewer — 실모델 기구·하중 시각화</title>
+<style>
+ body{margin:0;font-family:system-ui,'Noto Sans KR',sans-serif;background:#14171c;color:#dde3ea;overflow:hidden}
+ #bar{position:fixed;top:0;left:0;right:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+      padding:7px 12px;background:#20262e;border-bottom:1px solid #333;font-size:12.5px;z-index:5}
+ select,button,input[type=number]{background:#14171c;color:#dde3ea;border:1px solid #445;border-radius:6px;padding:3px 7px;font-size:12px}
+ button{cursor:pointer} button:hover{background:#2a3340} button.on{background:#2563a8;border-color:#4a90d9}
+ label{color:#9aa7b5}
+ input[type=range]{vertical-align:middle}
+ #gl{position:fixed;left:0;top:44px;width:100vw;height:calc(100vh - 44px);display:block}
+ .panel{position:fixed;background:#20262ecc;border:1px solid #333;border-radius:8px;padding:9px 11px;font-size:12px;z-index:4;line-height:1.55}
+ #info{left:12px;bottom:12px;min-width:250px}
+ #hm{right:12px;top:58px;width:308px}
+ #hm canvas{display:block;border:1px solid #444;cursor:crosshair}
+ #hmbar{height:10px;width:246px;margin:6px 0 2px}
+ .badge{position:fixed;z-index:4;pointer-events:none;font-size:10.5px;font-weight:600;color:#fff;
+        background:#0d1117d8;border:1px solid #556;border-radius:5px;padding:2px 6px;white-space:pre;line-height:1.35}
+ .warn{border-color:#e05555;background:#5a1717ee}
+ .hint{color:#788595;font-size:11px}
+ td{padding:0 7px 0 0}
+ #chk{position:fixed;left:12px;top:56px;font-size:11px;color:#7fc97f;z-index:4}
+</style>
+</head>
+<body>
+<div id="bar">
+ <b>Ankle 2-RSU CAD</b>
+ <label>pitch <input id="up" type="range" min="-50" max="30" step="0.5" value="0" style="width:130px"><span id="upv" style="display:inline-block;width:44px">0.0°</span></label>
+ <label>roll <input id="ur" type="range" min="-20" max="20" step="0.5" value="0" style="width:100px"><span id="urv" style="display:inline-block;width:44px">0.0°</span></label>
+ <button id="bneu">중립</button>
+ <button class="bpre" data-p="-50" data-r="-20">p−50 r−20</button>
+ <button class="bpre" data-p="-50" data-r="20">p−50 r+20</button>
+ <button class="bpre" data-p="30" data-r="-20">p+30 r−20</button>
+ <button class="bpre" data-p="30" data-r="20">p+30 r+20</button>
+ <button class="bpre" data-p="2" data-r="-20" title="foot-side swing max">요동최대</button>
+ <button id="banim">ROM 스윕</button>
+ <label>표시 <select id="ushow" multiple size="1" style="display:none"></select>
+ <button id="bshin" class="on">정강이</button><button id="bfoot" class="on">발</button><button id="barrow" class="on">힘화살표</button><button id="barc" class="on">ROM호</button></label>
+ <span class="hint">드래그 회전 · Shift 팬 · 휠 줌</span>
+</div>
+<canvas id="gl"></canvas>
+<div id="chk"></div>
+<div class="panel" id="hm">
+ <b>Roll–Pitch 맵</b> <select id="uhf">
+  <option value="swF_A">요동각 발측 A [°]</option><option value="swF_B">요동각 발측 B [°]</option>
+  <option value="swC_A">요동각 크랭크측 A [°]</option><option value="swC_B">요동각 크랭크측 B [°]</option>
+  <option value="phiA">크랭크각 φA [°]</option><option value="phiB">크랭크각 φB [°]</option>
+  <option value="tqA">실측최악 |τA| [N·m]</option><option value="tqB">실측최악 |τB| [N·m]</option>
+  <option value="rodA">실측최악 로드힘 A [N]</option><option value="rodB">실측최악 로드힘 B [N]</option>
+  <option value="trans">전달비 min [-]</option><option value="cnt">샘플수 [-]</option>
+ </select>
+ <canvas id="hmc" width="284" height="160"></canvas>
+ <canvas id="hmbar" width="246" height="10"></canvas>
+ <div style="display:flex;justify-content:space-between;width:246px" class="hint"><span id="hlo"></span><span id="hhi"></span></div>
+ <div class="hint">가로 pitch −50…+30 · 세로 roll −20…+20 · 클릭=자세 이동</div>
+</div>
+<div class="panel" id="info"></div>
+<script>
+const RAD=Math.PI/180;
+let D=null, M=null;   // data json, meshes json
+const cv=document.getElementById('gl');
+const gl=cv.getContext('webgl',{antialias:true});
+gl.getExtension('OES_element_index_uint');
+const VS=`attribute vec3 p;attribute vec3 n;attribute vec3 c;
+uniform mat4 mvp;uniform mat4 mv;uniform vec3 tint;varying vec3 vc;varying vec3 vn;
+void main(){gl_Position=mvp*vec4(p,1.0);vc=c*tint;vn=mat3(mv)*n;}`;
+const FS=`precision mediump float;varying vec3 vc;varying vec3 vn;
+void main(){vec3 N=normalize(vn);float l=0.42+0.58*abs(N.z);gl_FragColor=vec4(vc*l,1.0);}`;
+function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+ if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(o);return o;}
+const prog=gl.createProgram();
+gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(prog);gl.useProgram(prog);
+const loc={p:gl.getAttribLocation(prog,'p'),n:gl.getAttribLocation(prog,'n'),c:gl.getAttribLocation(prog,'c'),
+ mvp:gl.getUniformLocation(prog,'mvp'),mv:gl.getUniformLocation(prog,'mv'),tint:gl.getUniformLocation(prog,'tint')};
+
+// ---------- matrix helpers (column-major arrays; mul(A,B) = B*A math) ----------
+function mul(A,B){const R=new Array(16).fill(0);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)R[i*4+j]+=A[i*4+k]*B[k*4+j];return R;}
+const I4=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+const T=(x,y,z)=>[1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1];
+function m3to4(R){return [R[0],R[3],R[6],0, R[1],R[4],R[7],0, R[2],R[5],R[8],0, 0,0,0,1];}
+// ^R given row-major 3x3 -> column-major 4x4
+function Rx3(t){const c=Math.cos(t),s=Math.sin(t);return [1,0,0, 0,c,s, 0,-s,c];}   // row-major, matches design Rx
+function Rpr3(p,r){const cp=Math.cos(p),sp=Math.sin(p),cr=Math.cos(r),sr=Math.sin(r);
+ return [cr,0,sr, -sp*sr,cp,sp*cr, -cp*sr,-sp,cp*cr];}
+function rotFromTo(a,b){ // unit vecs, row-major 3x3 (Rodrigues)
+ const cx=a[1]*b[2]-a[2]*b[1],cy=a[2]*b[0]-a[0]*b[2],cz=a[0]*b[1]-a[1]*b[0];
+ const s=Math.hypot(cx,cy,cz),c=a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+ if(s<1e-12)return c>0?[1,0,0,0,1,0,0,0,1]:[-1,0,0,0,-1,0,0,0,1];
+ const x=cx/s,y=cy/s,z=cz/s,C=1-c;
+ return [c+x*x*C,x*y*C-z*s,x*z*C+y*s, y*x*C+z*s,c+y*y*C,y*z*C-x*s, z*x*C-y*s,z*y*C+x*s,c+z*z*C];}
+function about(pt,R3,pt0){return mul(mul(T(-pt0[0],-pt0[1],-pt0[2]),m3to4(R3)),T(pt[0],pt[1],pt[2]));}
+function apply(Mx,v){return [Mx[0]*v[0]+Mx[4]*v[1]+Mx[8]*v[2]+Mx[12],
+ Mx[1]*v[0]+Mx[5]*v[1]+Mx[9]*v[2]+Mx[13], Mx[2]*v[0]+Mx[6]*v[1]+Mx[10]*v[2]+Mx[14]];}
+
+// ---------- closed-form IK (verified vs optimizer, err 3e-14 deg) ----------
+function phiIK(up,p,r){ // radians in/out; motor B = mirror: side+1 params(B) at (p,-r)
+ const P=D.P, rc=up?P.A_r:P.B_r, L=up?P.A_L:P.B_L, Az=P.B2RP+(up?D.A2B:0), rr=up?r:-r;
+ const ax=P.RP_r, ay=P.RP_B, az=-P.RP_h;
+ const cp=Math.cos(p),sp=Math.sin(p),cr=Math.cos(rr),sr=Math.sin(rr);
+ const wx=cr*ax+sr*az, wy=-sp*sr*ax+cp*ay+sp*cr*az, wz=-cp*sr*ax-sp*ay+cp*cr*az;
+ const Dx=wx-P.A_h, Ey=wy, Ez=wz-Az;
+ const k=(Ey*Ey+Ez*Ez+rc*rc-(L*L-Dx*Dx))/(2*rc);
+ return Math.atan2(Ez,Ey)+Math.acos(Math.min(1,Math.max(-1,k/Math.hypot(Ey,Ez))));}
+
+// ---------- scene state ----------
+let view={yaw:-0.55,pitch:0.32,dist:1.15,tx:0.05,ty:0.02};
+let ctr=[-123.7,150,-680], rad=380;
+let pose={p:0,r:0};
+let groups={};   // name -> {vbo,nbo,cbo,ibo,n, M(model), tint}
+let lineBuf=null, lineN=0;
+let world={};    // posed key points for badges
+let anim=false, t0=performance.now();
+
+function buildGroup(name,parts,colHex){
+ const col=[parseInt(colHex.slice(1,3),16)/255,parseInt(colHex.slice(3,5),16)/255,parseInt(colHex.slice(5,7),16)/255];
+ let nv=0,nt=0;
+ for(const p of parts){nv+=p.v.length/3;nt+=p.t.length/3;}
+ const V=new Float32Array(nv*3),C=new Float32Array(nv*3),Tr=new Uint32Array(nt*3);
+ let ov=0,ot=0;
+ parts.forEach((p,pi)=>{
+  const shade=0.82+0.18*((pi*2654435761)%97)/97;
+  for(let i=0;i<p.v.length;i++)V[ov*3+i]=p.v[i];
+  for(let i=0;i<p.v.length/3;i++){C[(ov+i)*3]=col[0]*shade;C[(ov+i)*3+1]=col[1]*shade;C[(ov+i)*3+2]=col[2]*shade;}
+  for(let i=0;i<p.t.length;i++)Tr[ot*3+i]=p.t[i]+ov;
+  ov+=p.v.length/3; ot+=p.t.length/3;
+ });
+ const N=new Float32Array(nv*3);
+ for(let t=0;t<nt;t++){
+  const a=Tr[t*3],b=Tr[t*3+1],c=Tr[t*3+2];
+  const ux=V[b*3]-V[a*3],uy=V[b*3+1]-V[a*3+1],uz=V[b*3+2]-V[a*3+2];
+  const vx=V[c*3]-V[a*3],vy=V[c*3+1]-V[a*3+1],vz=V[c*3+2]-V[a*3+2];
+  const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+  for(const i of[a,b,c]){N[i*3]+=nx;N[i*3+1]+=ny;N[i*3+2]+=nz;}
+ }
+ const g={n:nt*3,M:I4.slice(),tint:[1,1,1],vis:true};
+ g.vbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,g.vbo);gl.bufferData(gl.ARRAY_BUFFER,V,gl.STATIC_DRAW);
+ g.nbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,g.nbo);gl.bufferData(gl.ARRAY_BUFFER,N,gl.STATIC_DRAW);
+ g.cbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,g.cbo);gl.bufferData(gl.ARRAY_BUFFER,C,gl.STATIC_DRAW);
+ g.ibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,g.ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,Tr,gl.STATIC_DRAW);
+ return g;
+}
+
+// ---------- pose update ----------
+function binVal(field){
+ const np=D.grid.pit.length,nr=D.grid.rol.length;
+ const ip=Math.max(0,Math.min(np-1,Math.round((pose.p+50)/2)));
+ const ir=Math.max(0,Math.min(nr-1,Math.round((pose.r+20)/2)));
+ return D.grid[field][ip*nr+ir];
+}
+function setPose(p,r,fromUI){
+ pose.p=Math.max(-50,Math.min(30,p)); pose.r=Math.max(-20,Math.min(20,r));
+ if(!fromUI){document.getElementById('up').value=pose.p;document.getElementById('ur').value=pose.r;}
+ document.getElementById('upv').textContent=pose.p.toFixed(1)+'°';
+ document.getElementById('urv').textContent=pose.r.toFixed(1)+'°';
+ const pr=pose.p*RAD, rr=pose.r*RAD, cad=D.cad;
+ const phiA=phiIK(true,pr,rr), phiB=phiIK(false,pr,rr);
+ const MF=about(cad.C,Rpr3(pr,rr),cad.C);
+ const MG=about(cad.C,Rx3(pr),cad.C);
+ // crank pin (y,z)=(r cos phi, r sin phi) is CCW in (y,z); Rx3 is the foot-pitch
+ // (CW) convention, so cranks rotate by the NEGATED delta.
+ const MA=about(cad.pivA,Rx3(-(phiA-cad.phiA0_cad*RAD)),cad.pivA);
+ const MB=about(cad.pivB,Rx3(-(phiB-cad.phiB0_cad*RAD)),cad.pivB);
+ const pinA=apply(MA,cad.pinA0), pinB=apply(MB,cad.pinB0);
+ const ancA=apply(MF,cad.ancA0), ancB=apply(MF,cad.ancB0);
+ function rodM(pin0,anc0,pin1,anc1){
+  const L0=Math.hypot(anc0[0]-pin0[0],anc0[1]-pin0[1],anc0[2]-pin0[2]);
+  const L1=Math.hypot(anc1[0]-pin1[0],anc1[1]-pin1[1],anc1[2]-pin1[2]);
+  const u0=[(anc0[0]-pin0[0])/L0,(anc0[1]-pin0[1])/L0,(anc0[2]-pin0[2])/L0];
+  const u1=[(anc1[0]-pin1[0])/L1,(anc1[1]-pin1[1])/L1,(anc1[2]-pin1[2])/L1];
+  return {M:mul(mul(T(-pin0[0],-pin0[1],-pin0[2]),m3to4(rotFromTo(u0,u1))),T(pin1[0],pin1[1],pin1[2])),u:u1,closure:Math.abs(L1-L0)};
+ }
+ const rA=rodM(cad.pinA0,cad.ancA0,pinA,ancA), rB=rodM(cad.pinB0,cad.ancB0,pinB,ancB);
+ groups.foot.M=MF; groups.gimbal.M=MG; groups.crankA.M=MA; groups.crankB.M=MB;
+ groups.rodA.M=rA.M; groups.rodB.M=rB.M;
+ // swings
+ const cp=Math.cos(pr),sp=Math.sin(pr),cr=Math.cos(rr),sr=Math.sin(rr);
+ const xf=[cr,-sp*sr,-cp*sr];
+ const swF=u=>Math.asin(Math.min(1,Math.abs(u[0]*xf[0]+u[1]*xf[1]+u[2]*xf[2])))/RAD;
+ const swC=u=>Math.asin(Math.min(1,Math.abs(u[0])))/RAD;
+ // rod force tint (bin worst)
+ const fA=binVal('rodA'), fB=binVal('rodB'), n=binVal('cnt');
+ const tintF=f=>{const a=Math.min(1,Math.abs(f)/1500);
+  return f>=0?[1,1-0.55*a,1-0.55*a]:[1-0.45*a,1-0.45*a,1];};
+ groups.rodA.tint=n?tintF(fA):[1,1,1]; groups.rodB.tint=n?tintF(fB):[1,1,1];
+ world={pinA,pinB,ancA,ancB,phiA,phiB,
+  swFA:swF(rA.u),swFB:swF(rB.u),swCA:swC(rA.u),swCB:swC(rB.u),
+  closure:Math.max(rA.closure,rB.closure),
+  midA:[(pinA[0]+ancA[0])/2,(pinA[1]+ancA[1])/2,(pinA[2]+ancA[2])/2],
+  midB:[(pinB[0]+ancB[0])/2,(pinB[1]+ancB[1])/2,(pinB[2]+ancB[2])/2],
+  fA,fB,nbin:n,tqA:binVal('tqA'),tqB:binVal('tqB')};
+ buildLines();
+ drawHeat();
+ info();
+}
+// ---------- overlay lines: ROM arcs + crank ticks + force arrows ----------
+function buildLines(){
+ const V=[],C=[],cad=D.cad,P=D.P;
+ const push=(a,b,col)=>{V.push(...a,...b);C.push(...col,...col);};
+ if(document.getElementById('barc').classList.contains('on')){
+  for(const [piv,r0,lo,hi,phi,col] of [
+    [cad.pivA,P.A_r,D.ext.phiA.min,D.ext.phiA.max,world.phiA,[1,.45,.4]],
+    [cad.pivB,P.B_r,D.ext.phiB.min,D.ext.phiB.max,world.phiB,[.4,.65,1]]]){
+   let prev=null;
+   for(let a=lo;a<=hi+0.01;a+=2){
+    const q=[piv[0],piv[1]+r0*Math.cos(a*RAD),piv[2]+r0*Math.sin(a*RAD)];
+    if(prev)push(prev,q,col); prev=q;
+   }
+   const tick=[piv[0],piv[1]+r0*Math.cos(phi),piv[2]+r0*Math.sin(phi)];
+   push(piv,tick,[1,1,.3]);
+   for(const a of[lo,hi]){
+    const q=[piv[0],piv[1]+r0*Math.cos(a*RAD),piv[2]+r0*Math.sin(a*RAD)];
+    push(piv,q,[col[0]*.6,col[1]*.6,col[2]*.6]);
+   }
+  }
+ }
+ if(document.getElementById('barrow').classList.contains('on')&&world.nbin){
+  for(const [mid,pin,anc,f] of [[world.midA,world.pinA,world.ancA,world.fA],
+                                 [world.midB,world.pinB,world.ancB,world.fB]]){
+   const L=Math.hypot(anc[0]-pin[0],anc[1]-pin[1],anc[2]-pin[2]);
+   const u=[(anc[0]-pin[0])/L,(anc[1]-pin[1])/L,(anc[2]-pin[2])/L];
+   const s=(f>=0?1:-1), len=18+62*Math.min(1,Math.abs(f)/1500);
+   const col=f>=0?[1,.35,.3]:[.35,.55,1];
+   const A=[mid[0]+14-u[0]*len/2*s,mid[1]-u[1]*len/2*s,mid[2]-u[2]*len/2*s];
+   const B=[mid[0]+14+u[0]*len/2*s,mid[1]+u[1]*len/2*s,mid[2]+u[2]*len/2*s];
+   push(A,B,col);
+   // arrowhead at B
+   const w1=[-u[1],u[0],0];
+   for(const w of [w1,[0,-u[2],u[1]]]){
+    const nw=Math.hypot(...w)||1;
+    push(B,[B[0]-u[0]*10*s+w[0]/nw*5,B[1]-u[1]*10*s+w[1]/nw*5,B[2]-u[2]*10*s+w[2]/nw*5],col);
+    push(B,[B[0]-u[0]*10*s-w[0]/nw*5,B[1]-u[1]*10*s-w[1]/nw*5,B[2]-u[2]*10*s-w[2]/nw*5],col);
+   }
+  }
+ }
+ lineN=V.length/3;
+ if(!lineBuf)lineBuf={v:gl.createBuffer(),c:gl.createBuffer(),n:gl.createBuffer()};
+ gl.bindBuffer(gl.ARRAY_BUFFER,lineBuf.v);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.DYNAMIC_DRAW);
+ gl.bindBuffer(gl.ARRAY_BUFFER,lineBuf.c);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(C),gl.DYNAMIC_DRAW);
+ const N=new Float32Array(V.length);for(let i=0;i<lineN;i++)N[i*3+2]=1;
+ gl.bindBuffer(gl.ARRAY_BUFFER,lineBuf.n);gl.bufferData(gl.ARRAY_BUFFER,N,gl.DYNAMIC_DRAW);
+}
+// ---------- info + badges ----------
+function info(){
+ const w=world,L=D.limits,e=D.ext;
+ const sw=(v,mx)=>`<b style="color:${v>19?'#ff6b6b':v>15?'#ffc86b':'#8fdc8f'}">${v.toFixed(1)}°</b>/20 (박스최대 ${mx.toFixed(1)})`;
+ const tq=v=>{const u=Math.abs(v)*L.x125/L.torque;return `<b style="color:${u>1?'#ff6b6b':u>.8?'#ffc86b':'#8fdc8f'}">${v.toFixed(1)}</b>`;};
+ document.getElementById('info').innerHTML=
+ `<b>자세</b> pitch ${pose.p.toFixed(1)}° · roll ${pose.r.toFixed(1)}°  <span class="hint">폐합오차 ${w.closure.toFixed(3)}mm</span><br>
+ <table style="font-size:12px;border-spacing:0">
+ <tr><td><b style="color:#ff8c85">모터 A(위)</b></td><td>φ ${(w.phiA/RAD).toFixed(1)}°</td><td class="hint">중립 ${D.cad.phiA0_cad}° · ROM [${e.phiA.min.toFixed(1)}, ${e.phiA.max.toFixed(1)}]</td></tr>
+ <tr><td><b style="color:#7fb3ff">모터 B(아래)</b></td><td>φ ${(w.phiB/RAD).toFixed(1)}°</td><td class="hint">중립 ${D.cad.phiB0_cad}° · ROM [${e.phiB.min.toFixed(1)}, ${e.phiB.max.toFixed(1)}]</td></tr>
+ <tr><td>요동 발측 A/B</td><td colspan=2>${sw(w.swFA,e.swF_A.max)} · ${sw(w.swFB,e.swF_B.max)}</td></tr>
+ <tr><td>요동 크랭크측 A/B</td><td colspan=2>${sw(w.swCA,e.swC_A.max)} · ${sw(w.swCB,e.swC_B.max)}</td></tr>
+ </table>
+ <div style="border-top:1px solid #3a4450;margin:5px 0;padding-top:5px">
+ <b>실측 최악수요@이 자세 셀</b> <span class="hint">(v41 풀 2°빈, n=${w.nbin})</span><br>
+ ${w.nbin?`τA ${tq(w.tqA)} · τB ${tq(w.tqB)} N·m <span class="hint">(×1.25 대 한계 60)</span><br>
+ 로드 A <b style="color:${w.fA>=0?'#ff8c85':'#7fb3ff'}">${w.fA>=0?'+':''}${w.fA.toFixed(0)}N ${w.fA>=0?'인장':'압축'}</b> ·
+ B <b style="color:${w.fB>=0?'#ff8c85':'#7fb3ff'}">${w.fB>=0?'+':''}${w.fB.toFixed(0)}N ${w.fB>=0?'인장':'압축'}</b> <span class="hint">(설계한계 P99×1.875≤5000)</span>`
+ :'<span class="hint">이 셀에 측정 샘플 없음</span>'}</div>
+ <div class="hint">설계: A_r 65 · B_r 62 · RP_B 50.5 · RP_r 43.6 · A_h 41 · B2RP 200 · RP_h 10 · A_L 289 · B_L 195 (CAD 실측일치)</div>`;
+}
+const badges={};
+function mkBadge(id){const d=document.createElement('div');d.className='badge';d.id=id;document.body.appendChild(d);badges[id]=d;return d;}
+['bFA','bFB','bCA','bCB','bMA','bMB','bRP'].forEach(mkBadge);
+function updBadges(MVP){
+ if(!world.pinA)return;
+ const put=(id,pos,txt,warn)=>{
+  const d=badges[id],s=project(pos,MVP);
+  if(!s){d.style.display='none';return;}
+  d.style.display='block';d.style.left=(s[0]+10)+'px';d.style.top=(s[1]-10)+'px';
+  d.textContent=txt;d.classList.toggle('warn',!!warn);
+ };
+ const w=world;
+ put('bFA',w.ancA,`발측A 요동 ${w.swFA.toFixed(1)}°/20`,w.swFA>19);
+ put('bFB',w.ancB,`발측B 요동 ${w.swFB.toFixed(1)}°/20`,w.swFB>19);
+ put('bCA',w.pinA,`크랭크측A ${w.swCA.toFixed(1)}°/20`,false);
+ put('bCB',w.pinB,`크랭크측B ${w.swCB.toFixed(1)}°/20`,false);
+ put('bMA',D.cad.pivA,`모터A φ ${(w.phiA/RAD).toFixed(1)}°`,false);
+ put('bMB',D.cad.pivB,`모터B φ ${(w.phiB/RAD).toFixed(1)}°`,false);
+ put('bRP',D.cad.C,`RP p${pose.p.toFixed(0)}° r${pose.r.toFixed(0)}°`,false);
+}
+// ---------- camera / draw ----------
+function mats(){
+ const a=cv.width/cv.height,f=1/Math.tan(0.38),zn=rad*0.02,zf=rad*40;
+ const cy=Math.cos(view.yaw),sy=Math.sin(view.yaw),cp=Math.cos(view.pitch),sp=Math.sin(view.pitch);
+ const d=view.dist*rad*2.2;
+ const T1=T(-ctr[0],-ctr[1],-ctr[2]);
+ const Rz=[cy,sy,0,0,-sy,cy,0,0,0,0,1,0,0,0,0,1];
+ const Rx=[1,0,0,0,0,cp,sp,0,0,-sp,cp,0,0,0,0,1];
+ // CAD z-up -> screen: first rotate so z is up on screen (rot -90 about x: z->y)
+ const Zup=[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1];
+ const T2=T(view.tx*rad,view.ty*rad,-d);
+ const MV=mul(mul(mul(mul(T1,Rz),Zup),Rx),T2);
+ const P=[f/a,0,0,0, 0,f,0,0, 0,0,(zf+zn)/(zn-zf),-1, 0,0,2*zf*zn/(zn-zf),0];
+ return {MV,MVP:mul(MV,P)};
+}
+function project(v,MVP){
+ const w=MVP[3]*v[0]+MVP[7]*v[1]+MVP[11]*v[2]+MVP[15];
+ if(w<=0)return null;
+ const x=(MVP[0]*v[0]+MVP[4]*v[1]+MVP[8]*v[2]+MVP[12])/w;
+ const y=(MVP[1]*v[0]+MVP[5]*v[1]+MVP[9]*v[2]+MVP[13])/w;
+ return [(x*0.5+0.5)*cv.clientWidth,(1-(y*0.5+0.5))*cv.clientHeight+44];
+}
+function draw(){
+ const dpr=window.devicePixelRatio||1;
+ if(cv.width!==Math.round(cv.clientWidth*dpr)){cv.width=cv.clientWidth*dpr;cv.height=cv.clientHeight*dpr;}
+ gl.viewport(0,0,cv.width,cv.height);
+ gl.clearColor(0.078,0.09,0.11,1);gl.enable(gl.DEPTH_TEST);
+ gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ if(M&&D){
+  if(anim){
+   const t=(performance.now()-t0)/1000;
+   setPose(-10-40*Math.sin(t*0.7),20*Math.sin(t*1.7),false);
+  }
+  const {MV,MVP}=mats();
+  for(const[name,g]of Object.entries(groups)){
+   if(!g.vis)continue;
+   const MVg=mul(g.M,MV), MVPg=mul(g.M,MVP);
+   gl.uniformMatrix4fv(loc.mvp,false,new Float32Array(MVPg));
+   gl.uniformMatrix4fv(loc.mv,false,new Float32Array(MVg));
+   gl.uniform3fv(loc.tint,g.tint);
+   for(const[b,l]of[[g.vbo,loc.p],[g.nbo,loc.n],[g.cbo,loc.c]]){
+    gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,3,gl.FLOAT,false,0,0);}
+   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,g.ibo);
+   gl.drawElements(gl.TRIANGLES,g.n,gl.UNSIGNED_INT,0);
+  }
+  if(lineN){
+   gl.uniformMatrix4fv(loc.mvp,false,new Float32Array(MVP));
+   gl.uniformMatrix4fv(loc.mv,false,new Float32Array(MV));
+   gl.uniform3fv(loc.tint,[1,1,1]);
+   for(const[b,l]of[[lineBuf.v,loc.p],[lineBuf.n,loc.n],[lineBuf.c,loc.c]]){
+    gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,3,gl.FLOAT,false,0,0);}
+   gl.drawArrays(gl.LINES,0,lineN);
+  }
+  updBadges(MVP);
+ }
+ requestAnimationFrame(draw);
+}
+// ---------- heatmap ----------
+function turbo(t){t=Math.min(1,Math.max(0,t));
+ const r=Math.max(0,Math.min(255,34.61+t*(1172.33+t*(-10793.56+t*(33300.12+t*(-38394.49+t*14825.05))))));
+ const g=Math.max(0,Math.min(255,23.31+t*(557.33+t*(1225.33+t*(-3574.96+t*(1073.77+t*707.56))))));
+ const b=Math.max(0,Math.min(255,27.2+t*(3211.1+t*(-15327.97+t*(27814.0+t*(-22569.18+t*6838.66))))));
+ return [r|0,g|0,b|0];}
+function drawHeat(){
+ if(!D)return;
+ const f=document.getElementById('uhf').value;
+ const g=D.grid, np=g.pit.length, nr=g.rol.length;
+ let arr=g[f].slice();
+ const abs=['tqA','tqB','rodA','rodB'].includes(f);
+ if(abs)arr=arr.map(Math.abs);
+ const valid=arr.filter((v,i)=>!['tqA','tqB','rodA','rodB'].includes(f)||g.cnt[i]>0);
+ const lo=Math.min(...valid), hi=Math.max(...valid);
+ const c2=document.getElementById('hmc').getContext('2d');
+ const W=284,H=160,cw=W/np,ch=H/nr;
+ c2.fillStyle='#111';c2.fillRect(0,0,W,H);
+ for(let i=0;i<np;i++)for(let j=0;j<nr;j++){
+  const v=arr[i*nr+j];
+  if(['tqA','tqB','rodA','rodB','cnt'].includes(f)&&!g.cnt[i*nr+j]){c2.fillStyle='#222';}
+  else{const c=turbo((v-lo)/Math.max(1e-9,hi-lo));c2.fillStyle=`rgb(${c[0]},${c[1]},${c[2]})`;}
+  c2.fillRect(i*cw,H-(j+1)*ch,Math.ceil(cw),Math.ceil(ch));
+ }
+ // crosshair
+ const xi=(pose.p+50)/80*W, yi=H-(pose.r+20)/40*H;
+ c2.strokeStyle='#fff';c2.lineWidth=1.2;
+ c2.beginPath();c2.moveTo(xi-6,yi);c2.lineTo(xi+6,yi);c2.moveTo(xi,yi-6);c2.lineTo(xi,yi+6);c2.stroke();
+ c2.strokeStyle='#000';c2.strokeRect(xi-7,yi-7,14,14);
+ const cb=document.getElementById('hmbar').getContext('2d');
+ for(let x=0;x<246;x++){const c=turbo(x/245);cb.fillStyle=`rgb(${c[0]},${c[1]},${c[2]})`;cb.fillRect(x,0,1,10);}
+ document.getElementById('hlo').textContent=lo.toPrecision(3);
+ document.getElementById('hhi').textContent=hi.toPrecision(3);
+}
+document.getElementById('hmc').addEventListener('click',e=>{
+ const r=e.target.getBoundingClientRect();
+ const p=-50+(e.clientX-r.left)/r.width*80, rr=-20+(1-(e.clientY-r.top)/r.height)*40;
+ setPose(Math.round(p*2)/2,Math.round(rr*2)/2,false);
+});
+// ---------- interaction ----------
+let drag=null;
+cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,pan:e.shiftKey||e.button===2};cv.setPointerCapture(e.pointerId);});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('pointermove',e=>{if(!drag)return;
+ const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+ if(drag.pan){view.tx+=dx*0.0018*view.dist;view.ty-=dy*0.0018*view.dist;}
+ else{view.yaw+=dx*0.006;view.pitch=Math.max(-1.5,Math.min(1.5,view.pitch+dy*0.006));}
+ drag.x=e.clientX;drag.y=e.clientY;});
+cv.addEventListener('pointerup',()=>drag=null);
+cv.addEventListener('wheel',e=>{e.preventDefault();view.dist*=Math.exp(e.deltaY*0.001);view.dist=Math.max(0.25,Math.min(6,view.dist));},{passive:false});
+document.getElementById('up').addEventListener('input',e=>setPose(+e.target.value,pose.r,true));
+document.getElementById('ur').addEventListener('input',e=>setPose(pose.p,+e.target.value,true));
+document.getElementById('bneu').addEventListener('click',()=>{anim=false;abtn();setPose(0,0,false);});
+document.querySelectorAll('.bpre').forEach(b=>b.addEventListener('click',()=>{anim=false;abtn();setPose(+b.dataset.p,+b.dataset.r,false);}));
+function abtn(){document.getElementById('banim').classList.toggle('on',anim);}
+document.getElementById('banim').addEventListener('click',()=>{anim=!anim;t0=performance.now();abtn();});
+for(const[id,gn]of[['bshin',['shin']],['bfoot',['foot']]]){
+ document.getElementById(id).addEventListener('click',e=>{
+  e.target.classList.toggle('on');
+  for(const g of gn)groups[g].vis=e.target.classList.contains('on');});
+}
+for(const id of['barrow','barc'])
+ document.getElementById(id).addEventListener('click',e=>{e.target.classList.toggle('on');buildLines();});
+document.getElementById('uhf').addEventListener('input',drawHeat);
+// ---------- load ----------
+Promise.all([fetch('ankle_cad_data.json').then(r=>r.json()),fetch('ankle_cad_meshes.json').then(r=>r.json())])
+.then(([d,m])=>{
+ D=d;M=m;
+ for(const[name,parts]of Object.entries(m.groups))groups[name]=buildGroup(name,parts,m.color[name]);
+ // self-check: JS closed-form vs python grid
+ let err=0;
+ const g=d.grid,nr=g.rol.length;
+ for(let i=0;i<g.pit.length;i+=5)for(let j=0;j<nr;j+=5){
+  err=Math.max(err,Math.abs(phiIK(true,g.pit[i]*RAD,g.rol[j]*RAD)/RAD-g.phiA[i*nr+j]),
+                   Math.abs(phiIK(false,g.pit[i]*RAD,g.rol[j]*RAD)/RAD-g.phiB[i*nr+j]));
+ }
+ document.getElementById('chk').textContent=`IK self-check: JS vs Python max ${err.toFixed(3)}° ${err<0.02?'✓':'✗ MISMATCH'}`;
+ if(err>=0.02)document.getElementById('chk').style.color='#ff6b6b';
+ setPose(0,0,false);
+});
+draw();
+</script>
+</body>
+</html>
