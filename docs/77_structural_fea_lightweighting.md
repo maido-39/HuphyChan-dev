@@ -145,3 +145,11 @@ Wrench Studio 서버(포트 8091)에 WebGL 결과 뷰어 추가 — 표준 FEA �
 | 5 | 렌치 추출 | — | v41 리플레이 → 링크 인터페이스 P99 렌치×1.875 + 동시최악프레임 (cfrc_int, docs/62) | — | 대기 |
 
 주: 링크 1~4는 사용자 링크별 STEP 익스포트가 오면 즉시 착수 가능(FullBody에서 XCAF 추출도 가능하나 이름 신뢰도 낮음).
+
+### §11d 캠페인 실행 개시 (2026-08-14 밤)
+
+**XCAF 트리 파싱 성공** — §11b의 이름 문제 해소: 인스턴스 경로·트랜스폼 완전 복원. 발견: ①구조 파스너 = **ISO 4762 M4×25/30 Steel 4.6급** ×다수 + JIS B1176 M4×16 (**4.6급 = 항복 240MPa 저강도 — Berkeley Humanoid 낙상시 "파손은 파스너뿐" 선례와 결합 시 8.8급 승급 검토 권장**) ②베어링: 6810ZZ(무릎·힙롤 계열)·6814ZZ(힙요)·CRBS808AUUU(크로스롤러, 힙피치) ③액추에이터 명명 확인(RS03 Hip_Y — 힙요가 RS03임을 CAD로 확인, RS04 Hip_P/R).
+**링크별 STEP 추출 완료**: L1_foot(35솔리드)·L2_shin(13+모터)·L3_thigh(66)·L4_hip(63)·L5_pelvis(35, 이번 라운드 제외). 빌더 `scratchpad/fullbody_xcaf.py`, 인벤토리 `fullbody_links.json`.
+**하중**: docs/64 §7b 링크로컬 XYZ 실측 렌치(P99 ×1.25 주케이스 / peak 참조케이스, M열 보수상한 명기) + GRF(P99 1.48BW/피크 6.39BW) + 로드 LC3 → `scratchpad/link_loads.json`.
+**실행**: 워크플로 wf_c47b0a84(4 에이전트 병렬 — L1 sole고정 스탠스/힐스트라이크, L2 무릎고정+발목렌치+모터반력 ±60N·m, L3 힙요고정+무릎렌치+120N·m, L4 골반고정+힙피치/힙요 캔틸레버 3LC) — 본디드 어셈블리(fragment 컨포멀) 스크리닝, 볼트 프리텐션 정밀화는 파일럿(§11a, 실행 중) 패턴으로 핫스팟에 후속. 메시/솔브는 flock 직렬화(8코어 15GB 보호).
+**Windows GPU**: 터널 다운(port 2222 닫힘 — Windows sshd 미복구)으로 이번 라운드 미활용. 복구 시 활용처 = 병렬 CCX CPU 솔브+PrePoMax(CalculiX는 GPU 가속 없음 — PaStiX4CalculiX 빌드는 비실용 판정).
