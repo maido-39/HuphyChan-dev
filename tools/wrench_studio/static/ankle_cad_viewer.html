@@ -257,7 +257,7 @@ function info(){
  <tr><td>요동 크랭크측 A/B</td><td colspan=2>${sw(w.swCA,e.swC_A.max)} · ${sw(w.swCB,e.swC_B.max)}</td></tr>
  </table>
  <div style="border-top:1px solid #3a4450;margin:5px 0;padding-top:5px">
- <b>실측 최악수요@이 자세 셀</b> <span class="hint">(v41 풀 2°빈, n=${w.nbin})</span><br>
+ <b>실측 최악수요@이 자세 셀</b> <span class="hint">(v41 풀 2°빈 중심 p${(Math.round((pose.p+50)/2)*2-50)}° r${(Math.round((pose.r+20)/2)*2-20)}°, n=${w.nbin})</span><br>
  ${w.nbin?`τA ${tq(w.tqA)} · τB ${tq(w.tqB)} N·m <span class="hint">(×1.25 대 한계 60)</span><br>
  로드 A <b style="color:${w.fA>=0?'#ff8c85':'#7fb3ff'}">${w.fA>=0?'+':''}${w.fA.toFixed(0)}N ${w.fA>=0?'인장':'압축'}</b> ·
  B <b style="color:${w.fB>=0?'#ff8c85':'#7fb3ff'}">${w.fB>=0?'+':''}${w.fB.toFixed(0)}N ${w.fB>=0?'인장':'압축'}</b> <span class="hint">(설계한계 P99×1.875≤5000)</span>`
@@ -417,8 +417,8 @@ Promise.all([fetch('ankle_cad_data.json').then(r=>r.json()),fetch('ankle_cad_mes
   err=Math.max(err,Math.abs(phiIK(true,g.pit[i]*RAD,g.rol[j]*RAD)/RAD-g.phiA[i*nr+j]),
                    Math.abs(phiIK(false,g.pit[i]*RAD,g.rol[j]*RAD)/RAD-g.phiB[i*nr+j]));
  }
- document.getElementById('chk').textContent=`IK self-check: JS vs Python max ${err.toFixed(3)}° ${err<0.02?'✓':'✗ MISMATCH'}`;
- if(err>=0.02)document.getElementById('chk').style.color='#ff6b6b';
+ document.getElementById('chk').textContent=`IK self-check: JS vs Python max ${err.toExponential(1)}° ${err<0.002?'✓':'✗ MISMATCH'}`;
+ if(err>=0.002)document.getElementById('chk').style.color='#ff6b6b';
  setPose(0,0,false);
 });
 draw();
