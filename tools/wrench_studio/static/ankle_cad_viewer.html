@@ -14,7 +14,8 @@
  #gl{position:fixed;left:0;top:44px;width:100vw;height:calc(100vh - 44px);display:block}
  .panel{position:fixed;background:#20262ecc;border:1px solid #333;border-radius:8px;padding:9px 11px;font-size:12px;z-index:4;line-height:1.55}
  #info{left:12px;bottom:12px;min-width:250px}
- #hm{right:12px;top:58px;width:308px}
+ #hm{right:12px;top:58px;width:366px}
+ .chip{font-size:11px;padding:2px 6px;border-radius:5px;margin-right:3px}
  #hm canvas{display:block;border:1px solid #444;cursor:crosshair}
  #hmbar{height:10px;width:246px;margin:6px 0 2px}
  .badge{position:fixed;z-index:4;pointer-events:none;font-size:10.5px;font-weight:600;color:#fff;
@@ -45,17 +46,28 @@
 <div id="chk"></div>
 <div class="panel" id="hm">
  <b>Roll–Pitch map</b> <select id="uhf">
+  <option value="tqA_pk">|τA| Peak [N·m]</option><option value="tqA_p99">|τA| P99 [N·m]</option><option value="tqA_rms">|τA| RMS [N·m]</option>
+  <option value="tqB_pk">|τB| Peak [N·m]</option><option value="tqB_p99">|τB| P99 [N·m]</option><option value="tqB_rms">|τB| RMS [N·m]</option>
+  <option value="tnA_pk">T–N util A Peak [-]</option><option value="tnA_p99">T–N util A P99 [-]</option>
+  <option value="tnB_pk">T–N util B Peak [-]</option><option value="tnB_p99">T–N util B P99 [-]</option>
+  <option value="rodA">Rod force A Peak [N]</option><option value="rodB">Rod force B Peak [N]</option>
   <option value="swF_A">Foot-side swing A [°]</option><option value="swF_B">Foot-side swing B [°]</option>
   <option value="swC_A">Crank-side swing A [°]</option><option value="swC_B">Crank-side swing B [°]</option>
   <option value="phiA">Crank angle φA [°]</option><option value="phiB">Crank angle φB [°]</option>
-  <option value="tqA">Worst measured |τA| [N·m]</option><option value="tqB">Worst measured |τB| [N·m]</option>
-  <option value="rodA">Worst measured rod force A [N]</option><option value="rodB">Worst measured rod force B [N]</option>
   <option value="trans">Transmission min [-]</option><option value="cnt">Sample count [-]</option>
  </select>
- <canvas id="hmc" width="284" height="160"></canvas>
- <canvas id="hmbar" width="246" height="10"></canvas>
- <div style="display:flex;justify-content:space-between;width:246px" class="hint"><span id="hlo"></span><span id="hhi"></span></div>
- <div class="hint">x: pitch −50…+30 · y: roll −20…+20 · click = set pose</div>
+ <div style="margin:4px 0">
+  <button id="bsc" class="on chip">Scatter</button>
+  <button id="bg0" class="on chip" style="color:#4fc3f7">flat-fc</button>
+  <button id="bg1" class="on chip" style="color:#82b1ff">flat-push</button>
+  <button id="bg2" class="on chip" style="color:#ffd54f">rough-fc</button>
+  <button id="bg3" class="on chip" style="color:#ff8a65">rough-push</button>
+ </div>
+ <canvas id="hmc" width="340" height="190"></canvas>
+ <canvas id="hmbar" width="300" height="10"></canvas>
+ <div style="display:flex;justify-content:space-between;width:300px" class="hint"><span id="hlo"></span><span id="hhi"></span></div>
+ <div class="hint" id="hleg"></div>
+ <div class="hint">x: pitch −50…+30 · y: roll −20…+20 · click = set pose · ◎ = frame >48 N·m or T–N util >1</div>
 </div>
 <div class="panel" id="info"></div>
 <script>
@@ -191,7 +203,10 @@ function setPose(p,r,fromUI){
   closure:Math.max(rA.closure,rB.closure),
   midA:[(pinA[0]+ancA[0])/2,(pinA[1]+ancA[1])/2,(pinA[2]+ancA[2])/2],
   midB:[(pinB[0]+ancB[0])/2,(pinB[1]+ancB[1])/2,(pinB[2]+ancB[2])/2],
-  fA,fB,nbin:n,tqA:binVal('tqA'),tqB:binVal('tqB')};
+  fA,fB,nbin:n,tqA:binVal('tqA_pk'),tqB:binVal('tqB_pk'),
+  tqA99:binVal('tqA_p99'),tqB99:binVal('tqB_p99'),
+  tqArms:binVal('tqA_rms'),tqBrms:binVal('tqB_rms'),
+  tnA:binVal('tnA_pk'),tnB:binVal('tnB_pk')};
  buildLines();
  drawHeat();
  info();
@@ -258,7 +273,8 @@ function info(){
  </table>
  <div style="border-top:1px solid #3a4450;margin:5px 0;padding-top:5px">
  <b>Worst measured demand @ pose cell</b> <span class="hint">(v41 pool 2° bin, center p${(Math.round((pose.p+50)/2)*2-50)}° r${(Math.round((pose.r+20)/2)*2-20)}°, n=${w.nbin})</span><br>
- ${w.nbin?`τA ${tq(w.tqA)} · τB ${tq(w.tqB)} N·m <span class="hint">(×1.25 vs limit 60)</span><br>
+ ${w.nbin?`τA pk ${tq(w.tqA)} · τB pk ${tq(w.tqB)} N·m <span class="hint">(×1.25 vs limit 60)</span><br>
+ <span class="hint">P99 ${w.tqA99.toFixed(1)}/${w.tqB99.toFixed(1)} · RMS ${w.tqArms.toFixed(1)}/${w.tqBrms.toFixed(1)} (rated 20) · T–N util pk ${w.tnA.toFixed(2)}/${w.tnB.toFixed(2)}</span><br>
  Rod A <b style="color:${w.fA>=0?'#ff8c85':'#7fb3ff'}">${w.fA>=0?'+':''}${w.fA.toFixed(0)}N ${w.fA>=0?'tension':'compression'}</b> ·
  B <b style="color:${w.fB>=0?'#ff8c85':'#7fb3ff'}">${w.fB>=0?'+':''}${w.fB.toFixed(0)}N ${w.fB>=0?'tension':'compression'}</b> <span class="hint">(design limit P99×1.875≤5000)</span>`
  :'<span class="hint">no measured samples in this cell</span>'}</div>
@@ -347,23 +363,61 @@ function turbo(t){t=Math.min(1,Math.max(0,t));
  const g=Math.max(0,Math.min(255,23.31+t*(557.33+t*(1225.33+t*(-3574.96+t*(1073.77+t*707.56))))));
  const b=Math.max(0,Math.min(255,27.2+t*(3211.1+t*(-15327.97+t*(27814.0+t*(-22569.18+t*6838.66))))));
  return [r|0,g|0,b|0];}
+const GCOL=['#4fc3f7','#82b1ff','#ffd54f','#ff8a65'];
 function drawHeat(){
  if(!D)return;
  const f=document.getElementById('uhf').value;
  const g=D.grid, np=g.pit.length, nr=g.rol.length;
+ const isDemand=/^(tq|tn|rod)/.test(f);
  let arr=g[f].slice();
- const abs=['tqA','tqB','rodA','rodB'].includes(f);
- if(abs)arr=arr.map(Math.abs);
- const valid=arr.filter((v,i)=>!['tqA','tqB','rodA','rodB'].includes(f)||g.cnt[i]>0);
+ if(f.startsWith('rod'))arr=arr.map(Math.abs);
+ const valid=arr.filter((v,i)=>!isDemand||g.cnt[i]>0);
  const lo=Math.min(...valid), hi=Math.max(...valid);
  const c2=document.getElementById('hmc').getContext('2d');
- const W=284,H=160,cw=W/np,ch=H/nr;
+ const W=340,H=190,cw=W/np,ch=H/nr;
  c2.fillStyle='#111';c2.fillRect(0,0,W,H);
  for(let i=0;i<np;i++)for(let j=0;j<nr;j++){
   const v=arr[i*nr+j];
-  if(['tqA','tqB','rodA','rodB','cnt'].includes(f)&&!g.cnt[i*nr+j]){c2.fillStyle='#222';}
+  if(isDemand&&!g.cnt[i*nr+j]){c2.fillStyle='#222';}
+  else if(f==='cnt'&&!v){c2.fillStyle='#222';}
   else{const c=turbo((v-lo)/Math.max(1e-9,hi-lo));c2.fillStyle=`rgb(${c[0]},${c[1]},${c[2]})`;}
   c2.fillRect(i*cw,H-(j+1)*ch,Math.ceil(cw),Math.ceil(ch));
+ }
+ // motor limit outlines (design-margin line 48 = 60/1.25, hard peak 60; T-N util 0.8/1.0)
+ const lim=f.startsWith('tq')?[48,60]:f.startsWith('tn')?[0.8,1.0]:null;
+ if(lim){
+  for(let i=0;i<np;i++)for(let j=0;j<nr;j++){
+   if(!g.cnt[i*nr+j])continue;
+   const v=arr[i*nr+j];
+   if(v>=lim[0]){
+    c2.strokeStyle=v>=lim[1]?'#ff1744':'#ff9100';c2.lineWidth=v>=lim[1]?1.6:1.1;
+    c2.strokeRect(i*cw+0.5,H-(j+1)*ch+0.5,cw-1,ch-1);
+   }
+  }
+ }
+ document.getElementById('hleg').textContent=
+  f.startsWith('tq')?'outline: orange ≥48 N·m (=60/1.25 design line) · red ≥60 (RS03 peak)':
+  f.startsWith('tn')?'outline: orange util ≥0.8 · red ≥1.0 (T–N curve exceeded)':'';
+ // demand scatter by group + exceed rings
+ if(D.scat&&document.getElementById('bsc').classList.contains('on')){
+  const mA=f.startsWith('tqB')||f.startsWith('tnB')?'B':'A';
+  D.groups.forEach((gn,gi)=>{
+   if(!document.getElementById('bg'+gi).classList.contains('on'))return;
+   const s=D.scat[gn];
+   c2.fillStyle=GCOL[gi];c2.globalAlpha=0.5;
+   for(let k=0;k<s.p.length;k++){
+    const x=(s.p[k]+50)/80*W, y=H-(s.r[k]+20)/40*H;
+    c2.fillRect(x-0.8,y-0.8,1.6,1.6);
+   }
+   c2.globalAlpha=1;
+  });
+  for(const e of D.exceed){
+   if(!document.getElementById('bg'+e.g).classList.contains('on'))continue;
+   const x=(e.p+50)/80*W, y=H-(e.r+20)/40*H;
+   const hard=Math.max(Math.abs(e.tA),Math.abs(e.tB))>=60||e.u>=1;
+   c2.strokeStyle=hard?'#ff1744':'#ffab40';c2.lineWidth=hard?1.6:1;
+   c2.beginPath();c2.arc(x,y,hard?3.2:2.2,0,6.284);c2.stroke();
+  }
  }
  // crosshair
  const xi=(pose.p+50)/80*W, yi=H-(pose.r+20)/40*H;
@@ -371,10 +425,12 @@ function drawHeat(){
  c2.beginPath();c2.moveTo(xi-6,yi);c2.lineTo(xi+6,yi);c2.moveTo(xi,yi-6);c2.lineTo(xi,yi+6);c2.stroke();
  c2.strokeStyle='#000';c2.strokeRect(xi-7,yi-7,14,14);
  const cb=document.getElementById('hmbar').getContext('2d');
- for(let x=0;x<246;x++){const c=turbo(x/245);cb.fillStyle=`rgb(${c[0]},${c[1]},${c[2]})`;cb.fillRect(x,0,1,10);}
+ for(let x=0;x<300;x++){const c=turbo(x/299);cb.fillStyle=`rgb(${c[0]},${c[1]},${c[2]})`;cb.fillRect(x,0,1,10);}
  document.getElementById('hlo').textContent=lo.toPrecision(3);
  document.getElementById('hhi').textContent=hi.toPrecision(3);
 }
+for(const id of['bsc','bg0','bg1','bg2','bg3'])
+ document.getElementById(id).addEventListener('click',e=>{e.target.classList.toggle('on');drawHeat();});
 document.getElementById('hmc').addEventListener('click',e=>{
  const r=e.target.getBoundingClientRect();
  const p=-50+(e.clientX-r.left)/r.width*80, rr=-20+(1-(e.clientY-r.top)/r.height)*40;
