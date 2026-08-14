@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FEA Result Viewer — Huphy Ankle</title>
+<style>
+ body{margin:0;font-family:system-ui,'Noto Sans KR',sans-serif;background:#181c22;color:#dde3ea;overflow:hidden}
+ #bar{position:fixed;top:0;left:0;right:0;display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+      padding:8px 12px;background:#232a33;border-bottom:1px solid #333;font-size:12.5px;z-index:5}
+ select,input[type=number]{background:#181c22;color:#dde3ea;border:1px solid #445;border-radius:6px;padding:3px 6px;font-size:12.5px}
+ label{color:#9aa7b5}
+ #gl{position:fixed;left:0;top:46px;width:100vw;height:calc(100vh - 46px);display:block}
+ #legend{position:fixed;right:14px;top:70px;width:64px;background:#232a33cc;border:1px solid #333;border-radius:8px;padding:8px;z-index:4}
+ #legend canvas{width:18px;height:220px;display:block;margin:0 auto}
+ #ticks{font-size:10.5px;color:#cfd8e2;position:relative;height:220px;margin-top:-220px;margin-left:34px}
+ #stats{position:fixed;left:14px;bottom:14px;background:#232a33cc;border:1px solid #333;border-radius:8px;padding:9px 12px;font-size:12px;z-index:4;line-height:1.7}
+ #probe{position:fixed;display:none;background:#0d1117ee;border:1px solid #4a90d9;border-radius:6px;padding:6px 9px;font-size:12px;z-index:6;pointer-events:none}
+ #maxlab{position:fixed;display:none;color:#fff;font-size:11px;font-weight:600;z-index:4;pointer-events:none;text-shadow:0 0 4px #000}
+ .hint{color:#788595;font-size:11px}
+</style>
+</head>
+<body>
+<div id="bar">
+ <b>FEA Viewer</b>
+ <label>케이스 <select id="ucase"></select></label>
+ <label>필드 <select id="ufield">
+   <option value="vM" selected>von Mises 응력 [MPa]</option>
+   <option value="S1">주응력 S1 (최대) [MPa]</option>
+   <option value="S2">주응력 S2 [MPa]</option>
+   <option value="S3">주응력 S3 (최소) [MPa]</option>
+   <option value="Sxx">Sxx [MPa]</option><option value="Syy">Syy [MPa]</option><option value="Szz">Szz [MPa]</option>
+   <option value="Sxy">Sxy [MPa]</option><option value="Syz">Syz [MPa]</option><option value="Szx">Szx [MPa]</option>
+   <option value="eps_vM">등가 변형률 [µε]</option>
+   <option value="U_mag">|변위| [µm]</option>
+   <option value="Ux">Ux [µm]</option><option value="Uy">Uy [µm]</option><option value="Uz">Uz [µm]</option>
+ </select></label>
+ <label>변형배율 <input id="udef" type="range" min="0" max="500" value="0" style="width:110px;vertical-align:middle"><span id="udefv">0×</span></label>
+ <label><input id="uanim" type="checkbox">진동</label>
+ <label>범위 <select id="urange"><option value="auto">자동</option><option value="manual">수동</option></select>
+  <input id="umin" type="number" style="width:64px" step="any" disabled> ~ <input id="umax" type="number" style="width:64px" step="any" disabled></label>
+ <label>클립 <select id="uclip"><option value="">없음</option><option value="0">X</option><option value="1">Y</option><option value="2">Z</option></select>
+  <input id="uclipv" type="range" min="0" max="100" value="50" style="width:80px;vertical-align:middle" disabled></label>
+ <span class="hint">드래그 회전 · Shift/우클릭 팬 · 휠 줌 · 클릭 = 프로브</span>
+</div>
+<canvas id="gl"></canvas>
+<div id="legend"><canvas id="lg" width="18" height="220"></canvas><div id="ticks"></div></div>
+<div id="stats"></div>
+<div id="probe"></div>
+<div id="maxlab">▼ max</div>
+<script>
+let DATA=null, cur=null, curName='';
+const cv=document.getElementById('gl');
+const gl=cv.getContext('webgl',{antialias:true});
+const ext=gl.getExtension('OES_element_index_uint');
+const VS=`attribute vec3 p;attribute vec3 n;attribute vec3 c;
+uniform mat4 mvp;uniform mat4 mv;varying vec3 vc;varying vec3 vn;varying vec3 vw;
+void main(){gl_Position=mvp*vec4(p,1.0);vc=c;vn=mat3(mv)*n;vw=p;}`;
+const FS=`precision mediump float;varying vec3 vc;varying vec3 vn;varying vec3 vw;
+uniform vec4 clip;uniform float useClip;
+void main(){
+ if(useClip>0.5 && dot(vw,clip.xyz)-clip.w>0.0) discard;
+ vec3 N=normalize(vn);
+ float l=0.45+0.55*abs(N.z);
+ gl_FragColor=vec4(vc*l,1.0);}`;
+function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+ if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(o);return o;}
+const prog=gl.createProgram();
+gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(prog);gl.useProgram(prog);
+const loc={p:gl.getAttribLocation(prog,'p'),n:gl.getAttribLocation(prog,'n'),c:gl.getAttribLocation(prog,'c'),
+ mvp:gl.getUniformLocation(prog,'mvp'),mv:gl.getUniformLocation(prog,'mv'),
+ clip:gl.getUniformLocation(prog,'clip'),useClip:gl.getUniformLocation(prog,'useClip')};
+let buf={p:gl.createBuffer(),n:gl.createBuffer(),c:gl.createBuffer(),i:gl.createBuffer()};
+let view={yaw:-0.9,pitch:0.35,dist:1.9,tx:0,ty:0};
+let basePos=null,disp=null,tris=null,nTri=0,ctr=[0,0,0],rad=1,vals=null,maxIdx=0;
+function turbo(t){t=Math.min(1,Math.max(0,t));
+ const r=Math.max(0,Math.min(255,34.61+t*(1172.33+t*(-10793.56+t*(33300.12+t*(-38394.49+t*14825.05))))));
+ const g=Math.max(0,Math.min(255,23.31+t*(557.33+t*(1225.33+t*(-3574.96+t*(1073.77+t*707.56))))));
+ const b=Math.max(0,Math.min(255,27.2+t*(3211.1+t*(-15327.97+t*(27814.0+t*(-22569.18+t*6838.66))))));
+ return [r/255,g/255,b/255];}
+function mat(){
+ const a=cv.width/cv.height, f=1.0/Math.tan(0.4), zn=rad*0.02, zf=rad*40;
+ const cy=Math.cos(view.yaw),sy=Math.sin(view.yaw),cp=Math.cos(view.pitch),sp=Math.sin(view.pitch);
+ // model->view: translate(-ctr) rotZ(yaw) rotX(pitch) translate(pan, -dist)
+ const d=view.dist*rad;
+ function mul(A,B){const R=new Array(16).fill(0);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)R[i*4+j]+=A[i*4+k]*B[k*4+j];return R;}
+ const T1=[1,0,0,0, 0,1,0,0, 0,0,1,0, -ctr[0],-ctr[1],-ctr[2],1];
+ const Rz=[cy,sy,0,0, -sy,cy,0,0, 0,0,1,0, 0,0,0,1];
+ const Rx=[1,0,0,0, 0,cp,sp,0, 0,-sp,cp,0, 0,0,0,1];
+ const T2=[1,0,0,0, 0,1,0,0, 0,0,1,0, view.tx*rad,view.ty*rad,-d,1];
+ const MV=mul(mul(mul(T1,Rz),Rx),T2);
+ const P=[f/a,0,0,0, 0,f,0,0, 0,0,(zf+zn)/(zn-zf),-1, 0,0,2*zf*zn/(zn-zf),0];
+ return {mv:MV,mvp:mul(MV,P)};
+}
+function computeNormals(pos){
+ const N=new Float32Array(pos.length);
+ for(let t=0;t<nTri;t++){
+  const a=tris[t*3],b=tris[t*3+1],c=tris[t*3+2];
+  const ax=pos[a*3],ay=pos[a*3+1],az=pos[a*3+2];
+  const ux=pos[b*3]-ax,uy=pos[b*3+1]-ay,uz=pos[b*3+2]-az;
+  const vx=pos[c*3]-ax,vy=pos[c*3+1]-ay,vz=pos[c*3+2]-az;
+  const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+  for(const i of [a,b,c]){N[i*3]+=nx;N[i*3+1]+=ny;N[i*3+2]+=nz;}
+ }
+ return N;
+}
+function setCase(name){
+ curName=name; cur=DATA[name];
+ const n=cur.nodes.length;
+ basePos=new Float32Array(n*3); disp=new Float32Array(n*3);
+ for(let i=0;i<n;i++){for(let k=0;k<3;k++){basePos[i*3+k]=cur.nodes[i][k];disp[i*3+k]=cur.disp[i][k];}}
+ tris=new Uint32Array(cur.tris.flat()); nTri=cur.tris.length;
+ let mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9];
+ for(let i=0;i<n;i++)for(let k=0;k<3;k++){mn[k]=Math.min(mn[k],basePos[i*3+k]);mx[k]=Math.max(mx[k],basePos[i*3+k]);}
+ ctr=[(mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2];
+ rad=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2]);
+ gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,buf.i);
+ gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,tris,gl.STATIC_DRAW);
+ bounds=[mn,mx];
+ setField();
+}
+let bounds=null, defScale=0;
+function fieldStats(v){
+ const s=[...v].sort((a,b)=>a-b), n=s.length;
+ return {min:s[0],max:s[n-1],p95:s[Math.floor(0.95*n)],p99:s[Math.floor(0.99*n)]};}
+function setField(){
+ const f=document.getElementById('ufield').value;
+ vals=cur.fields[f]; const st=fieldStats(vals);
+ let lo=st.min,hi=st.max;
+ if(document.getElementById('urange').value==='manual'){
+  lo=parseFloat(document.getElementById('umin').value); hi=parseFloat(document.getElementById('umax').value);
+  if(!isFinite(lo)||!isFinite(hi)||hi<=lo){lo=st.min;hi=st.max;}
+ } else {document.getElementById('umin').value=st.min.toPrecision(4);document.getElementById('umax').value=st.max.toPrecision(4);}
+ const n=vals.length, C=new Float32Array(n*3);
+ maxIdx=0; let best=-1e30;
+ for(let i=0;i<n;i++){
+  const t=(vals[i]-lo)/Math.max(1e-12,hi-lo);
+  const c=turbo(t); C[i*3]=c[0];C[i*3+1]=c[1];C[i*3+2]=c[2];
+  if(vals[i]>best){best=vals[i];maxIdx=i;}
+ }
+ gl.bindBuffer(gl.ARRAY_BUFFER,buf.c); gl.bufferData(gl.ARRAY_BUFFER,C,gl.STATIC_DRAW);
+ // legend
+ const lg=document.getElementById('lg').getContext('2d');
+ for(let y=0;y<220;y++){const c=turbo(1-y/219);lg.fillStyle=`rgb(${c[0]*255|0},${c[1]*255|0},${c[2]*255|0})`;lg.fillRect(0,y,18,1);}
+ const tk=document.getElementById('ticks'); tk.innerHTML='';
+ for(let k=0;k<=4;k++){const v=hi-(hi-lo)*k/4;const d=document.createElement('div');
+  d.style.position='absolute';d.style.top=(k/4*212)+'px';d.textContent=v.toPrecision(3);tk.appendChild(d);}
+ const fld=document.getElementById('ufield').selectedOptions[0].text;
+ document.getElementById('stats').innerHTML=
+  `<b>${curName}</b><br><span class="hint">${cur.desc||''}</span><br>${fld}<br>`+
+  `max <b>${st.max.toPrecision(4)}</b> · min ${st.min.toPrecision(4)}<br>P99 ${st.p99.toPrecision(4)} · P95 ${st.p95.toPrecision(4)}<br>`+
+  `절점 ${n.toLocaleString()} · 삼각형 ${nTri.toLocaleString()}`;
+ updateGeom();
+}
+function updateGeom(){
+ const n=basePos.length/3, P=new Float32Array(n*3);
+ for(let i=0;i<n*3;i++)P[i]=basePos[i]+defScale*disp[i];
+ gl.bindBuffer(gl.ARRAY_BUFFER,buf.p); gl.bufferData(gl.ARRAY_BUFFER,P,gl.STATIC_DRAW);
+ const N=computeNormals(P);
+ gl.bindBuffer(gl.ARRAY_BUFFER,buf.n); gl.bufferData(gl.ARRAY_BUFFER,N,gl.STATIC_DRAW);
+ curPos=P;
+}
+let curPos=null, probeIdx=-1;
+function draw(){
+ const dpr=window.devicePixelRatio||1;
+ if(cv.width!==cv.clientWidth*dpr){cv.width=cv.clientWidth*dpr;cv.height=cv.clientHeight*dpr;}
+ gl.viewport(0,0,cv.width,cv.height);
+ gl.clearColor(0.094,0.11,0.133,1); gl.enable(gl.DEPTH_TEST);
+ gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ if(!cur){requestAnimationFrame(draw);return;}
+ const m=mat();
+ gl.uniformMatrix4fv(loc.mvp,false,new Float32Array(m.mvp));
+ gl.uniformMatrix4fv(loc.mv,false,new Float32Array(m.mv));
+ const ax=document.getElementById('uclip').value;
+ if(ax!==''){
+  const i=+ax, t=+document.getElementById('uclipv').value/100;
+  const d=bounds[0][i]+(bounds[1][i]-bounds[0][i])*t;
+  const nvec=[0,0,0]; nvec[i]=1;
+  gl.uniform4f(loc.clip,nvec[0],nvec[1],nvec[2],d); gl.uniform1f(loc.useClip,1);
+ } else gl.uniform1f(loc.useClip,0);
+ for(const [b,l,sz] of [[buf.p,loc.p,3],[buf.n,loc.n,3],[buf.c,loc.c,3]]){
+  gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l,sz,gl.FLOAT,false,0,0);}
+ gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,buf.i);
+ gl.drawElements(gl.TRIANGLES,nTri*3,gl.UNSIGNED_INT,0);
+ // overlay labels (max + probe)
+ for(const [idx,el,txt] of [[maxIdx,document.getElementById('maxlab'),'▼ max '+(vals?vals[maxIdx].toPrecision(4):'')]]){
+  const s=project(idx,m.mvp);
+  if(s){el.style.display='block';el.style.left=(s[0])+'px';el.style.top=(s[1]-18)+'px';el.textContent=txt;}
+  else el.style.display='none';
+ }
+ requestAnimationFrame(draw);
+}
+function project(i,MVP){
+ const x=curPos[i*3],y=curPos[i*3+1],z=curPos[i*3+2];
+ const w=MVP[3]*x+MVP[7]*y+MVP[11]*z+MVP[15];
+ if(w<=0)return null;
+ const cxn=(MVP[0]*x+MVP[4]*y+MVP[8]*z+MVP[12])/w, cyn=(MVP[1]*x+MVP[5]*y+MVP[9]*z+MVP[13])/w;
+ return [(cxn*0.5+0.5)*cv.clientWidth,(1-(cyn*0.5+0.5))*cv.clientHeight+46];
+}
+// interaction
+let drag=null;
+cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,pan:e.shiftKey||e.button===2,moved:false};cv.setPointerCapture(e.pointerId);});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('pointermove',e=>{if(!drag)return;
+ const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+ if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;
+ if(drag.pan){view.tx+=dx*0.0018*view.dist;view.ty-=dy*0.0018*view.dist;}
+ else{view.yaw+=dx*0.006;view.pitch=Math.max(-1.5,Math.min(1.5,view.pitch+dy*0.006));}
+ drag.x=e.clientX;drag.y=e.clientY;});
+cv.addEventListener('pointerup',e=>{
+ if(drag&&!drag.moved){ // probe
+  const m=mat(); let best=1e9,bi=-1;
+  for(let i=0;i<curPos.length/3;i++){
+   const s=project(i,m.mvp); if(!s)continue;
+   const d=Math.hypot(s[0]-e.clientX,s[1]-e.clientY);
+   if(d<best){best=d;bi=i;}
+  }
+  const pr=document.getElementById('probe');
+  if(best<12&&bi>=0){
+   const f=document.getElementById('ufield').selectedOptions[0].text;
+   pr.style.display='block';pr.style.left=(e.clientX+12)+'px';pr.style.top=(e.clientY+8)+'px';
+   pr.innerHTML=`절점 #${bi}<br>${f}: <b>${vals[bi].toPrecision(5)}</b><br>pos (${cur.nodes[bi].map(v=>v.toFixed(1)).join(', ')})`;
+  } else pr.style.display='none';
+ }
+ drag=null;});
+cv.addEventListener('wheel',e=>{e.preventDefault();view.dist*=Math.exp(e.deltaY*0.001);view.dist=Math.max(0.3,Math.min(8,view.dist));},{passive:false});
+// UI wiring
+document.getElementById('ucase').addEventListener('input',e=>setCase(e.target.value));
+document.getElementById('ufield').addEventListener('input',setField);
+document.getElementById('urange').addEventListener('input',e=>{
+ const man=e.target.value==='manual';
+ document.getElementById('umin').disabled=!man;document.getElementById('umax').disabled=!man;setField();});
+document.getElementById('umin').addEventListener('change',setField);
+document.getElementById('umax').addEventListener('change',setField);
+document.getElementById('udef').addEventListener('input',e=>{defScale=+e.target.value;document.getElementById('udefv').textContent=defScale+'×';updateGeom();});
+document.getElementById('uclip').addEventListener('input',e=>{document.getElementById('uclipv').disabled=e.target.value==='';});
+let t0=performance.now();
+setInterval(()=>{
+ if(document.getElementById('uanim').checked){
+  const base=+document.getElementById('udef').value;
+  defScale=base*0.5*(1+Math.sin((performance.now()-t0)*0.004));
+  updateGeom();
+ }
+},50);
+fetch('fea_data.json').then(r=>r.json()).then(d=>{
+ DATA=d;
+ const sel=document.getElementById('ucase');
+ for(const k of Object.keys(d)){const o=document.createElement('option');o.value=k;o.textContent=k;sel.appendChild(o);}
+ setCase(Object.keys(d)[0]);
+});
+draw();
+</script>
+</body>
+</html>
