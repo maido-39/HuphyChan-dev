@@ -283,13 +283,19 @@ function info(){
 const badges={};
 function mkBadge(id){const d=document.createElement('div');d.className='badge';d.id=id;document.body.appendChild(d);badges[id]=d;return d;}
 ['bFA','bFB','bCA','bCB','bMA','bMB','bRP'].forEach(mkBadge);
+const leadSvg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+leadSvg.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:3;width:100vw;height:100vh';
+document.body.appendChild(leadSvg);
 function updBadges(MVP){
  if(!world.pinA)return;
+ const items=[];
  const put=(id,pos,txt,warn)=>{
   const d=badges[id],s=project(pos,MVP);
   if(!s){d.style.display='none';return;}
-  d.style.display='block';d.style.left=(s[0]+10)+'px';d.style.top=(s[1]-10)+'px';
-  d.textContent=txt;d.classList.toggle('warn',!!warn);
+  d.style.display='block';
+  if(d.textContent!==txt)d.textContent=txt;
+  d.classList.toggle('warn',!!warn);
+  items.push({d,ax:s[0],ay:s[1]});
  };
  const w=world;
  put('bFA',w.ancA,`foot A swing ${w.swFA.toFixed(1)}°/20`,w.swFA>19);
@@ -299,6 +305,44 @@ function updBadges(MVP){
  put('bMA',D.cad.pivA,`motor A φ ${(w.phiA/RAD).toFixed(1)}°`,false);
  put('bMB',D.cad.pivB,`motor B φ ${(w.phiB/RAD).toFixed(1)}°`,false);
  put('bRP',D.cad.C,`RP p${pose.p.toFixed(0)}° r${pose.r.toFixed(0)}°`,false);
+ // desired positions, then AABB overlap resolution (greedy pairwise separation)
+ for(const it of items){
+  const r=it.d.getBoundingClientRect();
+  it.w=r.width; it.h=r.height;
+  it.x=it.ax+12; it.y=it.ay-10-it.h;
+ }
+ const PAD=3, vw=window.innerWidth, vh=window.innerHeight;
+ for(let pass=0;pass<8;pass++){
+  let moved=false;
+  for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){
+   const a=items[i],b=items[j];
+   const ox=Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x)+PAD;
+   const oy=Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y)+PAD;
+   if(ox<=0||oy<=0)continue;
+   moved=true;
+   if(oy<=ox){ // push apart vertically (labels read better stacked)
+    const s=(a.y+a.h/2<=b.y+b.h/2)?1:-1;
+    a.y-=s*oy/2; b.y+=s*oy/2;
+   }else{
+    const s=(a.x+a.w/2<=b.x+b.w/2)?1:-1;
+    a.x-=s*ox/2; b.x+=s*ox/2;
+   }
+  }
+  if(!moved)break;
+ }
+ let lines='';
+ for(const it of items){
+  it.x=Math.max(4,Math.min(vw-it.w-4,it.x));
+  it.y=Math.max(48,Math.min(vh-it.h-4,it.y));
+  it.d.style.left=it.x+'px'; it.d.style.top=it.y+'px';
+  // leader line from anchor to nearest point on the badge box (when displaced)
+  const nx=Math.max(it.x,Math.min(it.x+it.w,it.ax));
+  const ny=Math.max(it.y,Math.min(it.y+it.h,it.ay));
+  if(Math.hypot(nx-it.ax,ny-it.ay)>6)
+   lines+=`<line x1="${it.ax.toFixed(0)}" y1="${it.ay.toFixed(0)}" x2="${nx.toFixed(0)}" y2="${ny.toFixed(0)}" stroke="#93a4b8" stroke-width="1" opacity="0.75"/>`
+        +`<circle cx="${it.ax.toFixed(0)}" cy="${it.ay.toFixed(0)}" r="1.8" fill="#93a4b8"/>`;
+ }
+ leadSvg.innerHTML=lines;
 }
 // ---------- camera / draw ----------
 function mats(){
