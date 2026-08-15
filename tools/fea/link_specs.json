@@ -2,35 +2,35 @@
  "_doc": "Per-link FEA specs. Seats/bores are MEASURED (tools/fea/assign_bearings.py output in ~/pyg_fea/steps/link_*_joints.json). Loads reference tools/fea/loads.json (RL-policy measured wrenches); factor 1.25 = design case, 1.0 on 'peak' = reference case. Bearing seats carry the joint load over the loaded arc; sole/ground and mating seats are the supports.",
  "L1_ankle_foot": {
   "mesh": {
-   "size_far": 4.5,
+   "size_far": 6.5,
    "refine": [
     [
      -123.7,
      160,
      -800,
-     20,
-     1.3
+     18,
+     1.8
     ],
     [
      -123.7,
      130,
      -800,
-     20,
-     1.3
+     18,
+     1.8
     ],
     [
      -86.2,
      195,
      -810,
-     16,
-     1.0
+     14,
+     1.4
     ],
     [
      -161.2,
      195,
      -810,
-     16,
-     1.0
+     14,
+     1.4
     ]
    ]
   },
@@ -231,25 +231,71 @@
     24
    ],
    "_doc": "FEET sole + AnkleFeetPillowAB/A/B. The UJ core, shin plates, cranks and rod ends belong to other links; the foot connects upward ONLY through the two roll-axis 6900 seats in the pillows."
+  },
+  "envelope": {
+   "joint": "ankle_roll",
+   "fix_desc": "sole bottom face z=-843 (ground contact patch)",
+   "fix": [
+    {
+     "type": "plane",
+     "axis": "z",
+     "value": -843.0,
+     "tol": 0.3
+    }
+   ],
+   "points": [
+    {
+     "name": "roll seat +y (6900)",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      160.0,
+      -800.0
+     ],
+     "r": 11.01,
+     "span": [
+      155.0,
+      166.5
+     ],
+     "rtol": 0.8,
+     "share": 0.5
+    },
+    {
+     "name": "roll seat -y (6900)",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      130.0,
+      -800.0
+     ],
+     "r": 11.01,
+     "span": [
+      123.5,
+      135.0
+     ],
+     "rtol": 0.8,
+     "share": 0.5
+    }
+   ]
   }
  },
  "L2_shin": {
   "mesh": {
-   "size_far": 5.0,
+   "size_far": 7.0,
    "refine": [
-    [
-     -97.45,
-     115.0,
-     -310.0,
-     26,
-     1.6
-    ],
     [
      -123.7,
      145.0,
-     -520.0,
-     24,
-     1.8
+     -550.0,
+     45,
+     2.6
+    ],
+    [
+     -123.7,
+     115.0,
+     -332.0,
+     45,
+     2.6
     ]
    ]
   },
@@ -319,25 +365,53 @@
      }
     ]
    }
-  ]
+  ],
+  "envelope": {
+   "joint": "ankle_pitch",
+   "fix_desc": "knee end of the Knee2Ankle module (z >= -337, the knee-actuator mounting fittings)",
+   "fix": [
+    {
+     "type": "plane",
+     "axis": "z",
+     "value": -329.2,
+     "tol": 8.0
+    }
+   ],
+   "points": [
+    {
+     "name": "ankle end interface (z=-550 fittings)",
+     "type": "plane",
+     "axis": "z",
+     "value": -550.1,
+     "tol": 6.0,
+     "ctr": [
+      -123.7,
+      145.0,
+      -550.0
+     ],
+     "axis_disp": "z",
+     "r": 40
+    }
+   ]
+  }
  },
  "L3_thigh": {
   "mesh": {
-   "size_far": 5.0,
+   "size_far": 8.0,
    "refine": [
     [
      -123.7,
      70.0,
-     -97.0,
-     55,
-     2.0
+     -100.0,
+     45,
+     3.0
     ],
     [
-     -97.45,
+     -123.7,
      115.0,
      -310.0,
-     30,
-     1.6
+     45,
+     3.0
     ]
    ]
   },
@@ -466,25 +540,78 @@
      }
     ]
    }
-  ]
+  ],
+  "envelope": {
+   "joint": "hip_yaw",
+   "fix_desc": "knee-actuator housing seats (x-axis r60 at +-, z=-310) - the thigh hangs from the yaw bearing and is reacted at the knee",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -97.45,
+      115.0,
+      -310.0
+     ],
+     "r": 60.0,
+     "span": [
+      -104.0,
+      -90.0
+     ],
+     "rtol": 1.2
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -149.95,
+      115.0,
+      -310.0
+     ],
+     "r": 60.0,
+     "span": [
+      -157.0,
+      -143.0
+     ],
+     "rtol": 1.2
+    }
+   ],
+   "points": [
+    {
+     "name": "hip_yaw bearing seat (6814, z-axis r45)",
+     "axis": "z",
+     "ctr": [
+      -123.7,
+      70.0,
+      -97.0
+     ],
+     "r": 45.01,
+     "span": [
+      -112.0,
+      -86.0
+     ],
+     "rtol": 1.2
+    }
+   ]
+  }
  },
  "L5_hip_pitchroll": {
   "mesh": {
-   "size_far": 5.0,
+   "size_far": 6.0,
    "refine": [
     [
      -52.7,
      70.0,
      60.0,
-     55,
-     2.0
+     50,
+     2.4
     ],
     [
      -123.7,
      96.25,
      60.0,
-     40,
-     1.8
+     36,
+     2.0
     ]
    ]
   },
@@ -572,6 +699,44 @@
      }
     ]
    }
-  ]
+  ],
+  "envelope": {
+   "joint": "hip_pitch",
+   "fix_desc": "hip roll bearing seat (6810, y-axis r32.5)",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      96.25,
+      60.0
+     ],
+     "r": 32.51,
+     "span": [
+      90.0,
+      103.0
+     ],
+     "rtol": 0.9
+    }
+   ],
+   "points": [
+    {
+     "name": "hip_pitch seat (CRBS808, x-axis)",
+     "axis": "x",
+     "ctr": [
+      -52.7,
+      70.0,
+      60.0
+     ],
+     "r": 48.02,
+     "span": [
+      -60.0,
+      -45.0
+     ],
+     "rtol": 1.0
+    }
+   ]
+  }
  }
 }

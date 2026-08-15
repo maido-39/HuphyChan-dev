@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Link FEA Setup — BCs, loads, fasteners</title>
+<style>
+ body{margin:0;font-family:system-ui,'Noto Sans KR',sans-serif;background:#14171c;color:#dde3ea;overflow:hidden}
+ #bar{position:fixed;top:0;left:0;right:0;display:flex;gap:9px;align-items:center;flex-wrap:wrap;
+      padding:7px 12px;background:#20262e;border-bottom:1px solid #333;font-size:12.5px;z-index:5}
+ select,button{background:#14171c;color:#dde3ea;border:1px solid #445;border-radius:6px;padding:3px 7px;font-size:12px;cursor:pointer}
+ button:hover{background:#2a3340} button.on{background:#2563a8;border-color:#4a90d9}
+ #gl{position:fixed;left:0;top:44px;width:100vw;height:calc(100vh - 44px);display:block}
+ .panel{position:fixed;background:#20262ed9;border:1px solid #333;border-radius:8px;padding:9px 12px;font-size:12px;z-index:4;line-height:1.55}
+ #info{left:12px;bottom:12px;max-width:430px}
+ #leg{right:12px;top:56px;width:210px}
+ .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+ .hint{color:#7d8b9a;font-size:11px}
+ table{border-spacing:0} td{padding:0 8px 1px 0}
+ .badge{position:fixed;z-index:4;pointer-events:none;font-size:10.5px;font-weight:600;color:#fff;
+        background:#0d1117dd;border:1px solid #4a5568;border-radius:5px;padding:2px 6px;white-space:pre}
+</style>
+</head>
+<body>
+<div id="bar">
+ <b>Link FEA Setup</b>
+ <label>Link <select id="ulink"></select></label>
+ <label>Case <select id="ucase"><option value="P99">P99 x1.25 (design)</option><option value="peak">peak (reference)</option></select></label>
+ <button id="bmesh" class="on">Mesh</button>
+ <button id="bfix" class="on">Fixed BC</button>
+ <button id="bload" class="on">Loads</button>
+ <button id="bscrew" class="on">Screws</button>
+ <button id="bbrg" class="on">Bearings</button>
+ <button id="bres">Result (envelope vM)</button>
+ <button id="bspin">Spin</button>
+ <span class="hint">drag rotate · Shift pan · wheel zoom</span>
+</div>
+<canvas id="gl"></canvas>
+<div class="panel" id="leg"></div>
+<div class="panel" id="info"></div>
+<script>
+const RAD=Math.PI/180;
+let D=null, cur=null, res=null;
+const cv=document.getElementById('gl');
+const gl=cv.getContext('webgl',{antialias:true});
+gl.getExtension('OES_element_index_uint');
+const VS=`attribute vec3 p;attribute vec3 n;attribute vec3 c;uniform mat4 mvp;uniform mat4 mv;
+varying vec3 vc;varying vec3 vn;void main(){gl_Position=mvp*vec4(p,1.0);vc=c;vn=mat3(mv)*n;}`;
+const FS=`precision mediump float;varying vec3 vc;varying vec3 vn;uniform float flat_;
+void main(){vec3 N=normalize(vn);float l=flat_>0.5?1.0:(0.42+0.58*abs(N.z));gl_FragColor=vec4(vc*l,1.0);}`;
+function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+ if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(o);return o;}
+const prog=gl.createProgram();
+gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(prog);gl.useProgram(prog);
+const loc={p:gl.getAttribLocation(prog,'p'),n:gl.getAttribLocation(prog,'n'),c:gl.getAttribLocation(prog,'c'),
+ mvp:gl.getUniformLocation(prog,'mvp'),mv:gl.getUniformLocation(prog,'mv'),flat:gl.getUniformLocation(prog,'flat_')};
+function mkbuf(){return {v:gl.createBuffer(),n:gl.createBuffer(),c:gl.createBuffer(),i:gl.createBuffer(),count:0};}
+const B={mesh:mkbuf(),fix:mkbuf(),load:mkbuf(),screw:mkbuf(),brg:mkbuf()};
+function fill(b,V,N,C,I){
+ gl.bindBuffer(gl.ARRAY_BUFFER,b.v);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
+ gl.bindBuffer(gl.ARRAY_BUFFER,b.n);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(N),gl.STATIC_DRAW);
+ gl.bindBuffer(gl.ARRAY_BUFFER,b.c);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(C),gl.STATIC_DRAW);
+ if(I){gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,b.i);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(I),gl.STATIC_DRAW);b.count=I.length;b.indexed=true;}
+ else {b.count=V.length/3;b.indexed=false;}
+}
+// ---------- geometry helpers ----------
+function axisVec(a){return a==='x'?[1,0,0]:a==='y'?[0,1,0]:[0,0,1];}
+function perp(u){const a=Math.abs(u[0])<0.9?[1,0,0]:[0,1,0];
+ let v=[u[1]*a[2]-u[2]*a[1],u[2]*a[0]-u[0]*a[2],u[0]*a[1]-u[1]*a[0]];
+ const n=Math.hypot(...v);return v.map(x=>x/n);}
+function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+function pushTri(o,p1,p2,p3,col){
+ const u=[p2[0]-p1[0],p2[1]-p1[1],p2[2]-p1[2]],v=[p3[0]-p1[0],p3[1]-p1[1],p3[2]-p1[2]];
+ const n=cross(u,v);const L=Math.hypot(...n)||1;const nn=n.map(x=>x/L);
+ for(const p of [p1,p2,p3]){o.V.push(...p);o.N.push(...nn);o.C.push(...col);}
+}
+function cylinder(o,ctr,axis,len,rad,col,seg=16){
+ const u=axis,a=perp(u),b=cross(u,a);
+ const p0=ctr.map((c,i)=>c-u[i]*len/2), p1=ctr.map((c,i)=>c+u[i]*len/2);
+ for(let k=0;k<seg;k++){
+  const t0=k/seg*2*Math.PI,t1=(k+1)/seg*2*Math.PI;
+  const q=(p,t)=>p.map((c,i)=>c+rad*(Math.cos(t)*a[i]+Math.sin(t)*b[i]));
+  pushTri(o,q(p0,t0),q(p1,t0),q(p1,t1),col); pushTri(o,q(p0,t0),q(p1,t1),q(p0,t1),col);
+  pushTri(o,p1,q(p1,t0),q(p1,t1),col); pushTri(o,p0,q(p0,t1),q(p0,t0),col);
+ }
+}
+function ring(o,ctr,axis,r_in,r_out,width,col,seg=28){
+ const u=axis,a=perp(u),b=cross(u,a);
+ for(let k=0;k<seg;k++){
+  const t0=k/seg*2*Math.PI,t1=(k+1)/seg*2*Math.PI;
+  for(const s of [-1,1]){
+   const off=ctr.map((c,i)=>c+u[i]*s*width/2);
+   const q=(t,r)=>off.map((c,i)=>c+r*(Math.cos(t)*a[i]+Math.sin(t)*b[i]));
+   pushTri(o,q(t0,r_in),q(t0,r_out),q(t1,r_out),col);
+   pushTri(o,q(t0,r_in),q(t1,r_out),q(t1,r_in),col);
+  }
+  const qo=(t,s)=>ctr.map((c,i)=>c+u[i]*s*width/2+r_out*(Math.cos(t)*a[i]+Math.sin(t)*b[i]));
+  pushTri(o,qo(t0,-1),qo(t0,1),qo(t1,1),col); pushTri(o,qo(t0,-1),qo(t1,1),qo(t1,-1),col);
+ }
+}
+function arrow(o,tip,dir,len,rad,col){
+ const u=dir, base=tip.map((c,i)=>c-u[i]*len);
+ cylinder(o,base.map((c,i)=>c+u[i]*len*0.35),u,len*0.7,rad,col);
+ // head
+ const a=perp(u),b=cross(u,a),hb=tip.map((c,i)=>c-u[i]*len*0.3);
+ for(let k=0;k<12;k++){
+  const t0=k/12*2*Math.PI,t1=(k+1)/12*2*Math.PI;
+  const q=t=>hb.map((c,i)=>c+rad*2.2*(Math.cos(t)*a[i]+Math.sin(t)*b[i]));
+  pushTri(o,q(t0),q(t1),tip,col); pushTri(o,hb,q(t1),q(t0),col);
+ }
+}
+function momentArc(o,ctr,axis,r,col,turns=0.75){
+ const u=axis,a=perp(u),b=cross(u,a),seg=26,tot=turns*2*Math.PI;
+ let prev=null;
+ for(let k=0;k<=seg;k++){
+  const t=tot*k/seg;
+  const p=ctr.map((c,i)=>c+r*(Math.cos(t)*a[i]+Math.sin(t)*b[i]));
+  if(prev){const d=[p[0]-prev[0],p[1]-prev[1],p[2]-prev[2]];const L=Math.hypot(...d)||1;
+   cylinder(o,prev.map((c,i)=>c+d[i]/2),d.map(x=>x/L),L,r*0.045,col,6);}
+  prev=p;
+ }
+ const t=tot,tan=[-Math.sin(t),Math.cos(t)];
+ const dir=[a[0]*tan[0]+b[0]*tan[1],a[1]*tan[0]+b[1]*tan[1],a[2]*tan[0]+b[2]*tan[1]];
+ arrow(o,prev,dir,r*0.5,r*0.055,col);
+}
+// ---------- build scene for a link ----------
+let ctr=[0,0,0],rad=300;
+const COL={mesh:[0.55,0.60,0.66],fix:[0.20,0.55,1.0],F:[1.0,0.30,0.25],M:[1.0,0.72,0.15],
+           screw:[0.85,0.85,0.30],screw5:[1.0,0.55,0.15],brg:[0.35,0.95,0.75],res:null};
+function build(){
+ const s=cur;
+ const P=s.nodes;
+ // mesh
+ {
+  const V=[],N=[],C=[],I=[];
+  const nn=new Float32Array(P.length*3);
+  for(const t of s.tris){
+   const a=P[t[0]],b=P[t[1]],c=P[t[2]];
+   const u=[b[0]-a[0],b[1]-a[1],b[2]-a[2]],v=[c[0]-a[0],c[1]-a[1],c[2]-a[2]];
+   const n=cross(u,v);
+   for(const i of t){nn[i*3]+=n[0];nn[i*3+1]+=n[1];nn[i*3+2]+=n[2];}
+  }
+  const fixed=new Set(s.fixed);
+  const loadN=new Set(); for(const lp of s.load_points) for(const i of lp.nids) loadN.add(i);
+  const useRes=res&&document.getElementById('bres').classList.contains('on');
+  let lo=0,hi=1;
+  if(useRes){lo=Math.min(...res);hi=Math.max(...res);}
+  for(let i=0;i<P.length;i++){
+   V.push(...P[i]); N.push(nn[i*3],nn[i*3+1],nn[i*3+2]);
+   let col=COL.mesh;
+   if(useRes){const t=(res[i]-lo)/Math.max(1e-9,hi-lo);col=turbo(t);}
+   else if(fixed.has(i))col=COL.fix;
+   else if(loadN.has(i))col=COL.F;
+   C.push(...col);
+  }
+  for(const t of s.tris)I.push(t[0],t[1],t[2]);
+  fill(B.mesh,V,N,C,I);
+ }
+ // load arrows: all six components, both signs (the envelope covers sign combos)
+ {
+  const o={V:[],N:[],C:[]};
+  const mg=s.magnitudes, mx=Math.max(mg.Fx,mg.Fy,mg.Fz), mxM=Math.max(mg.Mx,mg.My,mg.Mz);
+  for(const lp of s.load_points){
+   const c=lp.ctr;
+   [['Fx',[1,0,0]],['Fy',[0,1,0]],['Fz',[0,0,1]]].forEach(([k,d])=>{
+    const len=25+55*(mg[k]/Math.max(1,mx));
+    for(const sgn of [1,-1]){
+     const dir=d.map(v=>v*sgn);
+     const tip=c.map((v,i)=>v+dir[i]*(len+10));
+     arrow(o,tip,dir,len,2.2,COL.F);
+    }
+   });
+   [['Mx',[1,0,0]],['My',[0,1,0]],['Mz',[0,0,1]]].forEach(([k,d])=>{
+    const r=14+16*(mg[k]/Math.max(1,mxM));
+    momentArc(o,c,d,r,COL.M);
+   });
+  }
+  fill(B.load,o.V,o.N,o.C,null);
+ }
+ // screws
+ {
+  const o={V:[],N:[],C:[]};
+  for(const sc of s.screws||[]){
+   if(!sc.axis)continue;
+   const d=sc.d||4, L=sc.L||16;
+   const col=d>=5?COL.screw5:COL.screw;
+   cylinder(o,sc.com,sc.axis,L,d/2,col,10);
+   const head=sc.com.map((v,i)=>v+sc.axis[i]*L/2);
+   cylinder(o,head,sc.axis,d*0.8,d*0.8,col,10);
+  }
+  fill(B.screw,o.V,o.N,o.C,null);
+ }
+ // bearings at their measured seats
+ {
+  const o={V:[],N:[],C:[]};
+  for(const b of s.bearings||[]){
+   const cat=b.catalog||{}; const seats=b.seats||[];
+   const seat=seats[0];
+   const ax=seat?axisVec(seat.axis):[0,0,1];
+   const c=seat?[seat.loc[0],seat.loc[1],seat.loc[2]]:b.centre;
+   const ctrB=b.centre.map((v,i)=>seat?(Math.abs(ax[i])>0.5?b.centre[i]:c[i]):v);
+   ring(o,ctrB,ax,(cat.bore||10)/2,(cat.OD||22)/2,cat.width||6,COL.brg);
+  }
+  fill(B.brg,o.V,o.N,o.C,null);
+ }
+ // fixed markers (small cubes) for visibility even when mesh is hidden
+ {
+  const o={V:[],N:[],C:[]};
+  const step=Math.max(1,Math.floor(s.fixed.length/900));
+  for(let k=0;k<s.fixed.length;k+=step){
+   const p=P[s.fixed[k]]; const h=1.6;
+   const c=[[1,0,0],[0,1,0],[0,0,1]];
+   for(const d of c){
+    const a=perp(d),b=cross(d,a);
+    const q=(sx,sy)=>[p[0]+a[0]*sx*h+b[0]*sy*h,p[1]+a[1]*sx*h+b[1]*sy*h,p[2]+a[2]*sx*h+b[2]*sy*h];
+    pushTri(o,q(-1,-1),q(1,-1),q(1,1),COL.fix); pushTri(o,q(-1,-1),q(1,1),q(-1,1),COL.fix);
+   }
+  }
+  fill(B.fix,o.V,o.N,o.C,null);
+ }
+ // camera framing
+ let mn=[1e9,1e9,1e9],mx2=[-1e9,-1e9,-1e9];
+ for(const p of P)for(let k=0;k<3;k++){mn[k]=Math.min(mn[k],p[k]);mx2[k]=Math.max(mx2[k],p[k]);}
+ ctr=[(mn[0]+mx2[0])/2,(mn[1]+mx2[1])/2,(mn[2]+mx2[2])/2];
+ rad=Math.max(mx2[0]-mn[0],mx2[1]-mn[1],mx2[2]-mn[2]);
+ info();
+}
+function turbo(t){t=Math.min(1,Math.max(0,t));
+ const r=Math.max(0,Math.min(255,34.61+t*(1172.33+t*(-10793.56+t*(33300.12+t*(-38394.49+t*14825.05))))));
+ const g=Math.max(0,Math.min(255,23.31+t*(557.33+t*(1225.33+t*(-3574.96+t*(1073.77+t*707.56))))));
+ const b=Math.max(0,Math.min(255,27.2+t*(3211.1+t*(-15327.97+t*(27814.0+t*(-22569.18+t*6838.66))))));
+ return [r/255,g/255,b/255];}
+function info(){
+ const s=cur,e=s.envelope||{},m=s.magnitudes;
+ const scr={};
+ for(const sc of s.screws||[]) scr[sc.size]=(scr[sc.size]||0)+1;
+ document.getElementById('info').innerHTML=
+  `<b>${s.link}</b> — joint <b>${s.joint}</b>, ${s.stat} × ${s.factor}<br>
+   <span class="hint">${s.fix_desc}</span><br>
+   <table><tr><td>load magnitudes</td><td>F ${m.Fx}/${m.Fy}/${m.Fz} N · M ${m.Mx}/${m.My}/${m.Mz} N·m</td></tr>
+   <tr><td>load points</td><td>${s.load_points.map(p=>p.name+` (${p.nids.length}n)`).join(' · ')}</td></tr>
+   <tr><td>fixed nodes</td><td>${s.fixed.length}</td></tr>
+   <tr><td>screws</td><td>${Object.entries(scr).map(([k,v])=>k+'×'+v).join(', ')||'—'}</td></tr>
+   <tr><td>bearings</td><td>${(s.bearings||[]).map(b=>b.type).join(', ')||'—'}</td></tr></table>
+   ${e.max_vM?`<b>envelope (64 sign combos)</b>: max ${e.max_vM.toFixed(1)} MPa (SF ${e.SF.toFixed(2)})
+    · filtered ${e.max_vM_filtered?e.max_vM_filtered.toFixed(1):'—'} MPa (SF ${e.SF_filtered?e.SF_filtered.toFixed(2):'—'})<br>
+    <span class="hint">governing signs ${Object.entries(e.governing_signs||{}).map(([k,v])=>k+(v>0?'+':'−')).join(' ')} · worst at ${(e.argmax_xyz||[]).join(', ')}</span>`:''}`;
+ document.getElementById('leg').innerHTML=
+  `<b>Legend</b><br>
+   <span class="sw" style="background:#8c99a8"></span>structure (meshed)<br>
+   <span class="sw" style="background:#3389ff"></span>fixed BC nodes<br>
+   <span class="sw" style="background:#ff4d40"></span>load application nodes / force arrows (±)<br>
+   <span class="sw" style="background:#ffb827"></span>moment arcs (Mx, My, Mz)<br>
+   <span class="sw" style="background:#d9d94d"></span>M4 screws &nbsp; <span class="sw" style="background:#ff8c26"></span>M5<br>
+   <span class="sw" style="background:#59f2bf"></span>bearings (catalog size at measured seat)<br>
+   <span class="hint">arrows drawn both ways: the envelope takes the worst of all 2⁶ sign combinations</span>`;
+}
+// ---------- camera ----------
+let view={yaw:-0.6,pitch:0.3,dist:1.25,tx:0,ty:0},spin=false;
+function mul(A,Bm){const R=new Array(16).fill(0);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)R[i*4+j]+=A[i*4+k]*Bm[k*4+j];return R;}
+const T=(x,y,z)=>[1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1];
+function mats(){
+ const a=cv.width/cv.height,f=1/Math.tan(0.38),zn=rad*0.02,zf=rad*40;
+ const cy=Math.cos(view.yaw),sy=Math.sin(view.yaw),cp=Math.cos(view.pitch),sp=Math.sin(view.pitch);
+ const d=view.dist*rad*2.2;
+ const Rz=[cy,sy,0,0,-sy,cy,0,0,0,0,1,0,0,0,0,1];
+ const Rx=[1,0,0,0,0,cp,sp,0,0,-sp,cp,0,0,0,0,1];
+ const Zup=[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1];
+ const MV=mul(mul(mul(mul(T(-ctr[0],-ctr[1],-ctr[2]),Rz),Zup),Rx),T(view.tx*rad,view.ty*rad,-d));
+ const P=[f/a,0,0,0,0,f,0,0,0,0,(zf+zn)/(zn-zf),-1,0,0,2*zf*zn/(zn-zf),0];
+ return {MV,MVP:mul(MV,P)};
+}
+function drawBuf(b,flat){
+ if(!b.count)return;
+ gl.uniform1f(loc.flat,flat?1:0);
+ for(const [buf,l] of [[b.v,loc.p],[b.n,loc.n],[b.c,loc.c]]){
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,3,gl.FLOAT,false,0,0);}
+ if(b.indexed){gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,b.i);gl.drawElements(gl.TRIANGLES,b.count,gl.UNSIGNED_INT,0);}
+ else gl.drawArrays(gl.TRIANGLES,0,b.count);
+}
+function draw(){
+ const dpr=window.devicePixelRatio||1;
+ if(cv.width!==Math.round(cv.clientWidth*dpr)){cv.width=cv.clientWidth*dpr;cv.height=cv.clientHeight*dpr;}
+ gl.viewport(0,0,cv.width,cv.height);
+ gl.clearColor(0.078,0.09,0.11,1);gl.enable(gl.DEPTH_TEST);
+ gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ if(cur){
+  if(spin)view.yaw+=0.004;
+  const {MV,MVP}=mats();
+  gl.uniformMatrix4fv(loc.mvp,false,new Float32Array(MVP));
+  gl.uniformMatrix4fv(loc.mv,false,new Float32Array(MV));
+  if(document.getElementById('bmesh').classList.contains('on'))drawBuf(B.mesh,false);
+  if(document.getElementById('bfix').classList.contains('on'))drawBuf(B.fix,true);
+  if(document.getElementById('bload').classList.contains('on'))drawBuf(B.load,false);
+  if(document.getElementById('bscrew').classList.contains('on'))drawBuf(B.screw,false);
+  if(document.getElementById('bbrg').classList.contains('on'))drawBuf(B.brg,false);
+ }
+ requestAnimationFrame(draw);
+}
+let drag=null;
+cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,pan:e.shiftKey||e.button===2};cv.setPointerCapture(e.pointerId);});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('pointermove',e=>{if(!drag)return;
+ const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+ if(drag.pan){view.tx+=dx*0.0018*view.dist;view.ty-=dy*0.0018*view.dist;}
+ else{view.yaw+=dx*0.006;view.pitch=Math.max(-1.5,Math.min(1.5,view.pitch+dy*0.006));}
+ drag.x=e.clientX;drag.y=e.clientY;});
+cv.addEventListener('pointerup',()=>drag=null);
+cv.addEventListener('wheel',e=>{e.preventDefault();view.dist*=Math.exp(e.deltaY*0.001);view.dist=Math.max(0.25,Math.min(6,view.dist));},{passive:false});
+for(const id of ['bmesh','bfix','bload','bscrew','bbrg'])
+ document.getElementById(id).addEventListener('click',e=>{e.target.classList.toggle('on');});
+document.getElementById('bres').addEventListener('click',e=>{e.target.classList.toggle('on');build();});
+document.getElementById('bspin').addEventListener('click',e=>{spin=!spin;e.target.classList.toggle('on',spin);});
+document.getElementById('ulink').addEventListener('input',e=>load(e.target.value));
+document.getElementById('ucase').addEventListener('input',()=>load(document.getElementById('ulink').value));
+function load(link){
+ const st=document.getElementById('ucase').value;
+ cur=D.links[link][st]||D.links[link].P99;
+ res=cur.result_vM||null;
+ build();
+}
+fetch('link_setup_data.json').then(r=>r.json()).then(d=>{
+ D=d;
+ const sel=document.getElementById('ulink');
+ for(const k of Object.keys(d.links)){const o=document.createElement('option');o.value=k;o.textContent=k;sel.appendChild(o);}
+ load(Object.keys(d.links)[0]);
+});
+draw();
+</script>
+</body>
+</html>
