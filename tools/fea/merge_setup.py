@@ -43,6 +43,11 @@ def main():
     for f in sorted(glob.glob(f'{WORK}/*/setup_*.json')):
         s = json.load(open(f))
         link, stat = s['link'], s.get('stat', 'P99')
+        jf = f'/home/syaro/pyg_fea/steps/link_{link}_joints.json'
+        if os.path.exists(jf):
+            j = json.load(open(jf))
+            s['bolts'] = j.get('detected_bolts', [])
+            s['bearings'] = j.get('bearings', s.get('bearings', []))
         env = f'{os.path.dirname(f)}/envelope_{stat}.json'
         if os.path.exists(env):
             s['envelope'] = json.load(open(env))
@@ -56,7 +61,8 @@ def main():
         links.setdefault(link, {})[stat] = s
         print(f"{link:18s} {stat:5s} tris {len(s['tris']):6d} fixed {len(s['fixed']):5d} "
               f"loaded {sum(len(p['nids']) for p in s['load_points']):5d} "
-              f"screws {len(s.get('screws', [])):3d} bearings {len(s.get('bearings', [])):2d} "
+              f"screws {len(s.get('screws', [])):3d} bolts {len(s.get('bolts', [])):3d} "
+              f"bearings {len(s.get('bearings', [])):2d} "
               f"{'RESULT' if s.get('result_vM') else 'setup-only'}"
               f"{' (decimated x%d)' % s['_decimated'] if s.get('_decimated') else ''}")
     json.dump(dict(links=links), open(TARGET, 'w'), separators=(',', ':'))

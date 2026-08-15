@@ -28,7 +28,8 @@
  <button id="bmesh" class="on">Mesh</button>
  <button id="bfix" class="on">Fixed BC</button>
  <button id="bload" class="on">Loads</button>
- <button id="bscrew" class="on">Screws</button>
+ <button id="bscrew" class="on">Screws (CAD)</button>
+ <button id="bbolt" class="on">Bolts (detected)</button>
  <button id="bbrg" class="on">Bearings</button>
  <button id="bres">Result (envelope vM)</button>
  <button id="bspin">Spin</button>
@@ -55,7 +56,7 @@ gl.linkProgram(prog);gl.useProgram(prog);
 const loc={p:gl.getAttribLocation(prog,'p'),n:gl.getAttribLocation(prog,'n'),c:gl.getAttribLocation(prog,'c'),
  mvp:gl.getUniformLocation(prog,'mvp'),mv:gl.getUniformLocation(prog,'mv'),flat:gl.getUniformLocation(prog,'flat_')};
 function mkbuf(){return {v:gl.createBuffer(),n:gl.createBuffer(),c:gl.createBuffer(),i:gl.createBuffer(),count:0};}
-const B={mesh:mkbuf(),fix:mkbuf(),load:mkbuf(),screw:mkbuf(),brg:mkbuf()};
+const B={mesh:mkbuf(),fix:mkbuf(),load:mkbuf(),screw:mkbuf(),brg:mkbuf(),bolt:mkbuf()};
 function fill(b,V,N,C,I){
  gl.bindBuffer(gl.ARRAY_BUFFER,b.v);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
  gl.bindBuffer(gl.ARRAY_BUFFER,b.n);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(N),gl.STATIC_DRAW);
@@ -126,7 +127,9 @@ function momentArc(o,ctr,axis,r,col,turns=0.75){
 // ---------- build scene for a link ----------
 let ctr=[0,0,0],rad=300;
 const COL={mesh:[0.55,0.60,0.66],fix:[0.20,0.55,1.0],F:[1.0,0.30,0.25],M:[1.0,0.72,0.15],
-           screw:[0.85,0.85,0.30],screw5:[1.0,0.55,0.15],brg:[0.35,0.95,0.75],res:null};
+           screw:[0.85,0.85,0.30],screw5:[1.0,0.55,0.15],brg:[0.35,0.95,0.75],
+           boltM4:[0.95,0.80,0.25],boltM5:[1.0,0.50,0.10],boltM3:[0.75,0.85,0.95],
+           lowhead:[1.0,0.25,0.85],thread:[0.55,0.45,0.20],res:null};
 function build(){
  const s=cur;
  const P=s.nodes;
@@ -203,6 +206,30 @@ function build(){
   }
   fill(B.brg,o.V,o.N,o.C,null);
  }
+ // detected bolts: shank through the grip + thread engagement + head disc
+ {
+  const o={V:[],N:[],C:[]};
+  for(const b of s.bolts||[]){
+   const ax=b.axis, hp=b.head_point, d=b.nominal||4;
+   const low=b.head_type&&b.head_type.indexOf('LOW-HEAD')>=0;
+   const grip=b.grip_mm||8, eng=b.engagement_mm||0;
+   // orientation: the shank runs from the head into the material; pick the
+   // sign that goes towards the tapped hole when we know it
+   const dir=b.shank_dir||ax;
+   const col=d>=5?COL.boltM5:(d<=3?COL.boltM3:COL.boltM4);
+   const shankC=hp.map((v,i)=>v+dir[i]*grip/2);
+   cylinder(o,shankC,dir,grip,d/2,col,10);
+   if(eng>0){
+    const tc=hp.map((v,i)=>v+dir[i]*(grip+eng/2));
+    cylinder(o,tc,dir,eng,d*0.42,COL.thread,10);
+   }
+   const cb=b.counterbore;
+   const hd=cb?cb.d:(d*1.75), hh=low?(d*0.7):(cb?cb.depth:d);
+   const hc=hp.map((v,i)=>v-dir[i]*hh/2);
+   cylinder(o,hc,dir,hh,hd/2,low?COL.lowhead:col,12);
+  }
+  fill(B.bolt,o.V,o.N,o.C,null);
+ }
  // fixed markers (small cubes) for visibility even when mesh is hidden
  {
   const o={V:[],N:[],C:[]};
@@ -230,6 +257,14 @@ function turbo(t){t=Math.min(1,Math.max(0,t));
  const g=Math.max(0,Math.min(255,23.31+t*(557.33+t*(1225.33+t*(-3574.96+t*(1073.77+t*707.56))))));
  const b=Math.max(0,Math.min(255,27.2+t*(3211.1+t*(-15327.97+t*(27814.0+t*(-22569.18+t*6838.66))))));
  return [r/255,g/255,b/255];}
+function boltSummary(s){
+ const b=s.bolts||[]; if(!b.length)return '—';
+ const c={},lh=b.filter(x=>x.head_type&&x.head_type.indexOf('LOW-HEAD')>=0).length;
+ for(const x of b){const k=x.size+(x.tap_d?'':'*');c[k]=(c[k]||0)+1;}
+ return Object.entries(c).map(([k,v])=>k+'×'+v).join(', ')+
+        (lh?` · <b style="color:#ff7fdf">low-head 소두 ×${lh}</b>`:'')+
+        ' <span class="hint">(* = mating tap outside this part set)</span>';
+}
 function info(){
  const s=cur,e=s.envelope||{},m=s.magnitudes;
  const scr={};
@@ -240,7 +275,8 @@ function info(){
    <table><tr><td>load magnitudes</td><td>F ${m.Fx}/${m.Fy}/${m.Fz} N · M ${m.Mx}/${m.My}/${m.Mz} N·m</td></tr>
    <tr><td>load points</td><td>${s.load_points.map(p=>p.name+` (${p.nids.length}n)`).join(' · ')}</td></tr>
    <tr><td>fixed nodes</td><td>${s.fixed.length}</td></tr>
-   <tr><td>screws</td><td>${Object.entries(scr).map(([k,v])=>k+'×'+v).join(', ')||'—'}</td></tr>
+   <tr><td>screws (CAD)</td><td>${Object.entries(scr).map(([k,v])=>k+'×'+v).join(', ')||'—'}</td></tr>
+   <tr><td>bolts (detected)</td><td>${boltSummary(s)}</td></tr>
    <tr><td>bearings</td><td>${(s.bearings||[]).map(b=>b.type).join(', ')||'—'}</td></tr></table>
    ${e.max_vM?`<b>envelope (64 sign combos)</b>: max ${e.max_vM.toFixed(1)} MPa (SF ${e.SF.toFixed(2)})
     · filtered ${e.max_vM_filtered?e.max_vM_filtered.toFixed(1):'—'} MPa (SF ${e.SF_filtered?e.SF_filtered.toFixed(2):'—'})<br>
@@ -251,7 +287,9 @@ function info(){
    <span class="sw" style="background:#3389ff"></span>fixed BC nodes<br>
    <span class="sw" style="background:#ff4d40"></span>load application nodes / force arrows (±)<br>
    <span class="sw" style="background:#ffb827"></span>moment arcs (Mx, My, Mz)<br>
-   <span class="sw" style="background:#d9d94d"></span>M4 screws &nbsp; <span class="sw" style="background:#ff8c26"></span>M5<br>
+   <span class="sw" style="background:#d9d94d"></span>CAD screw solids<br>
+   <span class="sw" style="background:#f2cc40"></span>detected bolt M4 &nbsp;<span class="sw" style="background:#ff801a"></span>M5 &nbsp;<span class="sw" style="background:#bfd9f2"></span>M3<br>
+   <span class="sw" style="background:#ff40d9"></span>LOW-HEAD 소두 &nbsp;<span class="sw" style="background:#8c7333"></span>thread engagement<br>
    <span class="sw" style="background:#59f2bf"></span>bearings (catalog size at measured seat)<br>
    <span class="hint">arrows drawn both ways: the envelope takes the worst of all 2⁶ sign combinations</span>`;
 }
@@ -293,6 +331,7 @@ function draw(){
   if(document.getElementById('bfix').classList.contains('on'))drawBuf(B.fix,true);
   if(document.getElementById('bload').classList.contains('on'))drawBuf(B.load,false);
   if(document.getElementById('bscrew').classList.contains('on'))drawBuf(B.screw,false);
+  if(document.getElementById('bbolt').classList.contains('on'))drawBuf(B.bolt,false);
   if(document.getElementById('bbrg').classList.contains('on'))drawBuf(B.brg,false);
  }
  requestAnimationFrame(draw);
@@ -307,7 +346,7 @@ cv.addEventListener('pointermove',e=>{if(!drag)return;
  drag.x=e.clientX;drag.y=e.clientY;});
 cv.addEventListener('pointerup',()=>drag=null);
 cv.addEventListener('wheel',e=>{e.preventDefault();view.dist*=Math.exp(e.deltaY*0.001);view.dist=Math.max(0.25,Math.min(6,view.dist));},{passive:false});
-for(const id of ['bmesh','bfix','bload','bscrew','bbrg'])
+for(const id of ['bmesh','bfix','bload','bscrew','bbolt','bbrg'])
  document.getElementById(id).addEventListener('click',e=>{e.target.classList.toggle('on');});
 document.getElementById('bres').addEventListener('click',e=>{e.target.classList.toggle('on');build();});
 document.getElementById('bspin').addEventListener('click',e=>{spin=!spin;e.target.classList.toggle('on',spin);});
