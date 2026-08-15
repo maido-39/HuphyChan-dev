@@ -60,6 +60,7 @@
  <button id="bscrew" class="on">Screws (CAD)</button>
  <button id="bbolt" class="on">Bolts (detected)</button>
  <button id="bbrg" class="on">Bearings</button>
+ <button id="bmot" class="on">Motors</button>
  <button id="bres">Result (envelope vM)</button>
  <button id="bspin">Spin</button>
  <button id="bfit">Fit</button>
@@ -90,7 +91,7 @@ gl.linkProgram(prog);gl.useProgram(prog);
 const loc={p:gl.getAttribLocation(prog,'p'),n:gl.getAttribLocation(prog,'n'),c:gl.getAttribLocation(prog,'c'),
  mvp:gl.getUniformLocation(prog,'mvp'),mv:gl.getUniformLocation(prog,'mv'),flat:gl.getUniformLocation(prog,'flat_')};
 function mkbuf(){return {v:gl.createBuffer(),n:gl.createBuffer(),c:gl.createBuffer(),i:gl.createBuffer(),count:0};}
-const B={mesh:mkbuf(),fix:mkbuf(),load:mkbuf(),screw:mkbuf(),brg:mkbuf(),bolt:mkbuf()};
+const B={mesh:mkbuf(),fix:mkbuf(),load:mkbuf(),screw:mkbuf(),brg:mkbuf(),bolt:mkbuf(),mot:mkbuf()};
 function fill(b,V,N,C,I){
  gl.bindBuffer(gl.ARRAY_BUFFER,b.v);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
  gl.bindBuffer(gl.ARRAY_BUFFER,b.n);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(N),gl.STATIC_DRAW);
@@ -163,7 +164,8 @@ let ctr=[0,0,0],rad=300;
 const COL={mesh:[0.55,0.60,0.66],fix:[0.20,0.55,1.0],F:[1.0,0.30,0.25],M:[1.0,0.72,0.15],
            screw:[0.85,0.85,0.30],screw5:[1.0,0.55,0.15],brg:[0.35,0.95,0.75],
            boltM4:[0.95,0.80,0.25],boltM5:[1.0,0.50,0.10],boltM3:[0.75,0.85,0.95],
-           lowhead:[1.0,0.25,0.85],thread:[0.55,0.45,0.20],res:null};
+           lowhead:[1.0,0.25,0.85],thread:[0.55,0.45,0.20],
+           motor:[0.30,0.42,0.62],motorRim:[0.55,0.68,0.90],res:null};
 function build(){
  const s=cur;
  const P=s.nodes;
@@ -264,6 +266,21 @@ function build(){
   }
   fill(B.bolt,o.V,o.N,o.C,null);
  }
+ // motors (RobStride actuators) at their measured envelopes
+ {
+  const o={V:[],N:[],C:[]};
+  for(const m of s.actuators||[]){
+   const ax=axisVec(m.axis);
+   cylinder(o,m.ctr,ax,m.len,m.r,COL.motor,26);
+   // rim rings so the housing reads as a motor, not a blank puck
+   for(const sgn of [-1,1]){
+    const c=m.ctr.map((v,i)=>v+ax[i]*sgn*m.len*0.5);
+    ring(o,c,ax,m.r*0.55,m.r*0.98,m.len*0.06,COL.motorRim,26);
+   }
+   ring(o,m.ctr,ax,m.r*0.99,m.r*1.02,m.len*0.9,COL.motorRim,26);
+  }
+  fill(B.mot,o.V,o.N,o.C,null);
+ }
  // fixed markers (small cubes) for visibility even when mesh is hidden
  {
   const o={V:[],N:[],C:[]};
@@ -321,7 +338,8 @@ function info(){
    <tr><td>fixed nodes</td><td>${s.fixed.length}</td></tr>
    <tr><td>screws (CAD)</td><td>${Object.entries(scr).map(([k,v])=>k+'×'+v).join(', ')||'—'}</td></tr>
    <tr><td>bolts (detected)</td><td>${boltSummary(s)}</td></tr>
-   <tr><td>bearings</td><td>${(s.bearings||[]).map(b=>b.type).join(', ')||'—'}</td></tr></table>
+   <tr><td>bearings</td><td>${(s.bearings||[]).map(b=>b.type).join(', ')||'—'}</td></tr>
+   <tr><td>motors</td><td>${(s.actuators||[]).map(m=>m.name.replace('robstride_','')+` (r${m.r}×${m.len})`).join(', ')||'—'}</td></tr></table>
    ${e.max_vM?`<b>envelope (${Math.pow(2,(e.comps||['Fx','Fy','Fz','Mx','My','Mz']).length)} sign combos over ${(e.comps||[]).join(', ')||'6 components'})</b>: max ${e.max_vM.toFixed(1)} MPa (SF ${e.SF.toFixed(2)})
     · filtered ${e.max_vM_filtered?e.max_vM_filtered.toFixed(1):'—'} MPa (SF ${e.SF_filtered?e.SF_filtered.toFixed(2):'—'})<br>
     <span class="hint">governing signs ${Object.entries(e.governing_signs||{}).map(([k,v])=>k+(v>0?'+':'−')).join(' ')} · worst at ${(e.argmax_xyz||[]).join(', ')}</span>`:''}`;
@@ -335,6 +353,7 @@ function info(){
    <span class="sw" style="background:#f2cc40"></span>detected bolt M4 &nbsp;<span class="sw" style="background:#ff801a"></span>M5 &nbsp;<span class="sw" style="background:#bfd9f2"></span>M3<br>
    <span class="sw" style="background:#ff40d9"></span>LOW-HEAD 소두 &nbsp;<span class="sw" style="background:#8c7333"></span>thread engagement<br>
    <span class="sw" style="background:#59f2bf"></span>bearings (catalog size at measured seat)<br>
+   <span class="sw" style="background:#4d6b9e"></span>motors (RobStride RS03/RS04, measured envelope)<br>
    <span class="hint">arrows drawn both ways: the envelope takes the worst of all
    2<sup>${(s.envelope&&s.envelope.comps?s.envelope.comps.length:(Object.keys(s.magnitudes||{}).length||6))}</sup>
    sign combinations</span>`;
@@ -379,6 +398,7 @@ function draw(){
   if(document.getElementById('bscrew').classList.contains('on'))drawBuf(B.screw,false);
   if(document.getElementById('bbolt').classList.contains('on'))drawBuf(B.bolt,false);
   if(document.getElementById('bbrg').classList.contains('on'))drawBuf(B.brg,false);
+  if(document.getElementById('bmot').classList.contains('on'))drawBuf(B.mot,false);
  }
  requestAnimationFrame(draw);
 }
@@ -426,7 +446,7 @@ for(const [b,el] of [['btoginfo','info'],['btogleg','leg']])
  document.getElementById(b).addEventListener('click',e=>{
   document.getElementById(el).classList.toggle('hide');
   e.target.classList.toggle('on');});
-for(const id of ['bmesh','bfix','bload','bscrew','bbolt','bbrg'])
+for(const id of ['bmesh','bfix','bload','bscrew','bbolt','bbrg','bmot'])
  document.getElementById(id).addEventListener('click',e=>{e.target.classList.toggle('on');});
 document.getElementById('bres').addEventListener('click',e=>{e.target.classList.toggle('on');build();});
 document.getElementById('bspin').addEventListener('click',e=>{spin=!spin;e.target.classList.toggle('on',spin);});

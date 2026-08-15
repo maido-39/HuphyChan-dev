@@ -46,6 +46,25 @@ def main():
     for f in sorted(glob.glob(f'{WORK}/*/setup_*.json')):
         s = json.load(open(f))
         link, stat = s['link'], s.get('stat', 'P99')
+        # motors: the actuators that belong to this link (spec list first, then
+        # any proxy whose envelope falls inside the link's bounding box)
+        try:
+            specs = json.load(open('/home/syaro/MikuchanRemote/Human-Pygmalion/'
+                                   'tools/fea/link_specs.json'))
+            prox = json.load(open('/home/syaro/pyg_fea/steps/actuator_proxies.json'))
+            want = list(specs.get(link, {}).get('actuators', []))
+            P0 = np.array(s['nodes'], float)
+            lo0, hi0 = P0.min(0) - 90.0, P0.max(0) + 90.0
+            for k, v in prox.items():
+                if k in want:
+                    continue
+                c = np.asarray(v['ctr'], float)
+                if np.all(c >= lo0) and np.all(c <= hi0):
+                    want.append(k)
+            s['actuators'] = [dict(prox[k], name=k) for k in want if k in prox]
+        except Exception as e:              # never let the viewer payload fail on this
+            s['actuators'] = []
+            print('   (actuator attach skipped:', e, ')')
         jf = f'/home/syaro/pyg_fea/steps/link_{link}_joints.json'
         if os.path.exists(jf):
             j = json.load(open(jf))
@@ -78,7 +97,7 @@ def main():
         print(f"{link:18s} {stat:5s} tris {len(s['tris']):6d} fixed {len(s['fixed']):5d} "
               f"loaded {sum(len(p['nids']) for p in s['load_points']):5d} "
               f"screws {len(s.get('screws', [])):3d} bolts {len(s.get('bolts', [])):3d} "
-              f"bearings {len(s.get('bearings', [])):2d} "
+              f"bearings {len(s.get('bearings', [])):2d} motors {len(s.get('actuators', [])):1d} "
               f"{'RESULT' if s.get('result_vM') else 'setup-only'}"
               f"{' (decimated x%d)' % s['_decimated'] if s.get('_decimated') else ''}")
     json.dump(dict(links=links), open(TARGET, 'w'), separators=(',', ':'))

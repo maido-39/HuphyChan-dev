@@ -153,7 +153,7 @@ def probe_features(step_path, kind='cyl', axis=None, near=None, tol=25.,
 
 # ------------------------------------------------------------------ mesh
 def _mesh_once(step_paths, out_inp, size_far, refine, fragment, order2, verbose,
-               algo3d, heal, tol, curv=0, size_min=0.0):
+               algo3d, heal, tol, curv=0, size_min=0.0, cylinders=None):
     """One meshing attempt (see mesh_assembly for the retry ladder)."""
     import gmsh
     gmsh.initialize()
@@ -176,6 +176,13 @@ def _mesh_once(step_paths, out_inp, size_far, refine, fragment, order2, verbose,
     if fragment and len(vols) > 1:
         frag, _ = gmsh.model.occ.fragment([(3, vols[0])], [(3, v) for v in vols[1:]])
         vols = [t[1] for t in frag if t[0] == 3]
+    # proxies are added AFTER the fragment: intersecting them with the real
+    # geometry produced sliver elements (ccx: "nonpositive jacobian"). They stay
+    # separate bodies and are joined by the flange proximity tie instead.
+    for c in (cylinders or []):
+        ax = {'x': (1, 0, 0), 'y': (0, 1, 0), 'z': (0, 0, 1)}[c['axis']]
+        base = [c['ctr'][i] - ax[i] * c['len'] / 2 for i in range(3)]
+        vols.append(gmsh.model.occ.addCylinder(*base, *[a * c['len'] for a in ax], c['r']))
     gmsh.model.occ.synchronize()
     if heal:
         gmsh.model.mesh.removeDuplicateNodes()
@@ -209,17 +216,55 @@ def _mesh_once(step_paths, out_inp, size_far, refine, fragment, order2, verbose,
             gmsh.model.mesh.setOrder(2)
         gmsh.write(out_inp)
         nn = len(gmsh.model.mesh.getNodes()[0])
-        ne = len(gmsh.model.mesh.getElementsByType(11)[0])   # 11 = 10-node tet
+        etags, enodes = gmsh.model.mesh.getElementsByType(11)   # 11 = 10-node tet
+        ne = len(etags)
         if ne == 0:
             raise RuntimeError('no C3D10 volume elements were generated '
                                '(surface-only mesh -- check healing options)')
+        # CalculiX evaluates the C3D10 jacobian AT THE NODES (stress
+        # extrapolation), where a badly distorted tet can be negative even
+        # though every Gauss point is positive -- that is the "nonpositive
+        # jacobian" abort, after which ccx writes displacements but no stress.
+        # Gate on the nodal jacobian so the ladder can try another algorithm.
+        nt, nc, _ = gmsh.model.mesh.getNodes()
+        pos = {int(v): nc[3 * i:3 * i + 3] for i, v in enumerate(nt)}
+        # gmsh tet10 order is n0..n3, e01,e12,e02,e03,e23,e13 -- the last two are
+        # swapped versus Abaqus/CalculiX C3D10 (e13,e23), which the .inp writer
+        # fixes on export. Permute here so the jacobian is evaluated in the same
+        # convention the solver will use.
+        conn = np.array(enodes, dtype=np.int64).reshape(ne, 10)[:, [0, 1, 2, 3, 4, 5, 6, 7, 9, 8]]
+        P = np.array([[pos[n] for n in row] for row in conn])
+
+        def dN(r, s, u_t):
+            u = 1 - r - s - u_t
+            d = np.zeros((10, 3))
+            d[0] = [-(4 * u - 1)] * 3
+            d[1] = [4 * r - 1, 0, 0]
+            d[2] = [0, 4 * s - 1, 0]
+            d[3] = [0, 0, 4 * u_t - 1]
+            d[4] = [4 * (u - r), -4 * r, -4 * r]
+            d[5] = [4 * s, 4 * r, 0]
+            d[6] = [-4 * s, 4 * (u - s), -4 * s]
+            d[7] = [-4 * u_t, -4 * u_t, 4 * (u - u_t)]
+            d[8] = [4 * u_t, 0, 4 * r]
+            d[9] = [0, 4 * u_t, 4 * s]
+            return d
+        worst = np.full(ne, np.inf)
+        for (r, s, u_t) in [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1),
+                            (.5, 0, 0), (0, .5, 0), (0, 0, .5)]:
+            J = np.einsum('nki,kj->nij', P, dN(r, s, u_t))
+            worst = np.minimum(worst, np.linalg.det(J))
+        bad = int((worst <= 0).sum())
+        if bad:
+            raise RuntimeError(f'{bad}/{ne} elements have a non-positive NODAL jacobian '
+                               f'(min {worst.min():.3g})')
     finally:
         gmsh.finalize()
     return dict(inp=out_inp, nodes=nn, volumes=vols)
 
 
 def mesh_assembly(step_paths, out_inp, size_far=4.0, refine=None, fragment=True,
-                  order2=True, verbose=False, ladder=True):
+                  order2=True, verbose=False, ladder=True, cylinders=None):
     """Mesh with a retry ladder over the usual imported-assembly failures.
 
     Attempts: Delaunay+healing -> HXT+healing -> HXT, coarser, healing+bigger
@@ -243,7 +288,7 @@ def mesh_assembly(step_paths, out_inp, size_far=4.0, refine=None, fragment=True,
         try:
             m = _mesh_once(step_paths, out_inp, a['size_far'], a['refine'], fragment,
                            order2, verbose, a['algo3d'], a['heal'], a['tol'],
-                           a.get('curv', 0), a.get('size_min', 0.0))
+                           a.get('curv', 0), a.get('size_min', 0.0), cylinders)
             if i:
                 print(f'  (mesh succeeded on attempt {i + 1}: algo3d={a["algo3d"]}, '
                       f'size_far={a["size_far"]}, curv={a.get("curv")}, tol={a["tol"]})')
@@ -551,6 +596,107 @@ def annulus_between_rings(gmsh_mod, axis, ctr, r_in, r_out, width):
     inner = gmsh_mod.occ.addCylinder(*base, *[a * width for a in ax], r_in)
     cut, _ = gmsh_mod.occ.cut([(3, outer)], [(3, inner)])
     return [t[1] for t in cut if t[0] == 3]
+
+
+def components(elems):
+    """Connected components of the element graph -> [set(eid), ...] (largest first)."""
+    adj = {}
+    for e, c in elems.items():
+        for n in c[:4]:
+            adj.setdefault(n, []).append(e)
+    seen, out = set(), []
+    for e0 in elems:
+        if e0 in seen:
+            continue
+        stack, comp = [e0], set()
+        seen.add(e0)
+        while stack:
+            e = stack.pop()
+            comp.add(e)
+            for n in elems[e][:4]:
+                for e2 in adj[n]:
+                    if e2 not in seen:
+                        seen.add(e2)
+                        stack.append(e2)
+        out.append(comp)
+    return sorted(out, key=len, reverse=True)
+
+
+def proximity_tie(nodes, elems, comp_a, comp_b, gap=2.5, name='T_ASM'):
+    """*TIE surfaces joining two mesh components that are bolted in reality.
+
+    A bolted flange leaves the parts as separate mesh components (they only
+    touch through the screws), and a floating body makes the solve singular.
+    Tie the boundary faces sitting within `gap` of the other body -- that is
+    the clamped flange contact. Returns (deck_text, n_slave_faces).
+    """
+    ba, bb = boundary_faces(elems, comp_a), boundary_faces(elems, comp_b)
+
+    def cen(bf):
+        return [(sum(nodes[n] for n in tri) / 3.0, e, f) for (e, f, tri) in bf.values()]
+    ca, cb = cen(ba), cen(bb)
+    if not ca or not cb:
+        return '', 0
+    PA = np.array([c for c, _, _ in ca])
+    PB = np.array([c for c, _, _ in cb])
+    keep_a, keep_b = [], []
+    for k in range(0, len(PA), 1500):
+        d = np.linalg.norm(PA[k:k + 1500, None, :] - PB[None, :, :], axis=2).min(1)
+        keep_a += [ca[k + i] for i in np.where(d <= gap)[0]]
+    for k in range(0, len(PB), 1500):
+        d = np.linalg.norm(PB[k:k + 1500, None, :] - PA[None, :, :], axis=2).min(1)
+        keep_b += [cb[k + i] for i in np.where(d <= gap)[0]]
+    if not keep_a or not keep_b:
+        return '', 0
+    txt = [f'*SURFACE, NAME={name}_S, TYPE=ELEMENT']
+    txt += [f'{e}, S{f}' for _, e, f in keep_a]
+    txt += [f'*SURFACE, NAME={name}_M, TYPE=ELEMENT']
+    txt += [f'{e}, S{f}' for _, e, f in keep_b]
+    txt += [f'*TIE, NAME={name}, POSITION TOLERANCE={gap * 1.5:.2f}', f'{name}_S, {name}_M', '']
+    return '\n'.join(txt), len(keep_a)
+
+
+def node_pair_equations(nodes, elems, comp_a, comp_b, gap=3.0, max_pairs=400,
+                        exclude=()):
+    """*EQUATION MPCs joining two bolted mesh components.
+
+    Preferred over *TIE for this campaign: the flange surfaces of a proxy body
+    and a machined housing are curved and offset, and CalculiX's tie machinery
+    then generates ill-shaped contact elements ("nonpositive jacobian" on
+    perfectly healthy tets). Direct node-to-node equations are unconditionally
+    stable and represent the clamped bolted joint well enough for screening.
+    Returns (deck_text, n_pairs).
+    """
+    # a node that already carries a *BOUNDARY cannot also appear in an MPC
+    # (CalculiX: "*ERROR in cascade: the DOF corresponding to ...")
+    ex = set(exclude)
+    sa = sorted({n for tri in boundary_faces(elems, comp_a) for n in tri} - ex)
+    sb = sorted({n for tri in boundary_faces(elems, comp_b) for n in tri} - ex)
+    PA = np.array([nodes[n] for n in sa])
+    PB = np.array([nodes[n] for n in sb])
+    pairs = []
+    for k in range(0, len(PB), 1000):
+        d = np.linalg.norm(PB[k:k + 1000, None, :] - PA[None, :, :], axis=2)
+        j = d.argmin(1)
+        dmin = d.min(1)
+        for i in np.where(dmin <= gap)[0]:
+            pairs.append((sb[k + i], sa[j[i]], float(dmin[i])))
+    if not pairs:
+        return '', 0
+    pairs.sort(key=lambda p: p[2])
+    # spread the constraints over the interface instead of clustering
+    step = max(1, len(pairs) // max_pairs)
+    pairs = pairs[::step][:max_pairs]
+    used = set()
+    txt = []
+    for nb, na, _ in pairs:
+        if nb in used:
+            continue
+        used.add(nb)
+        for dof in (1, 2, 3):
+            txt.append('*EQUATION\n2')
+            txt.append(f'{nb}, {dof}, 1.0, {na}, {dof}, -1.0')
+    return '\n'.join(txt) + '\n', len(used)
 
 
 # ------------------------------------------------------------------ deck

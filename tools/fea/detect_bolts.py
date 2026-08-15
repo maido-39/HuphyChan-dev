@@ -180,15 +180,18 @@ def detect(step_paths, min_vol_cm3=0.05, verbose=False):
 
             if t is None:
                 # no tapped counterpart in this set: still a real bolt location
-                cb0 = cbore_of(c['s0'], True) or cbore_of(c['s1'], False)
+                cb_lo, cb_hi = cbore_of(c['s0'], True), cbore_of(c['s1'], False)
+                cb0 = cb_lo or cb_hi
+                head_lo = cb_lo is not None or cb_hi is None   # default: enter from -s
+                head_s0 = c['s0'] if head_lo else c['s1']
                 bolts.append(dict(
                     size=f"M{c['nominal']}", nominal=c['nominal'],
                     axis=[round(float(v), 4) for v in ax],
                     head_point=[round(float(v), 2) for v in
-                                (c['p0'] - (c['p0'] @ ax) * ax + c['s0'] * ax)],
+                                (c['p0'] - (c['p0'] @ ax) * ax + head_s0 * ax)],
                     clearance_d=round(2 * c['r'], 2), tap_d=None,
                     grip_mm=round(float(c['s1'] - c['s0']), 2), engagement_mm=None,
-                    shank_dir=[round(float(v), 4) for v in ax],
+                    shank_dir=[round(float(v), 4) for v in (ax if head_lo else -ax)],
                     counterbore=None if not cb0 else dict(d=round(2 * cb0['r'], 2),
                                                           depth=round(float(cb0['length']), 2)),
                     head_type=head_kind(cb0, c['nominal']) + ' | tap not in set',
@@ -218,6 +221,15 @@ def detect(step_paths, min_vol_cm3=0.05, verbose=False):
                     grip += c2['length']
                     head_s = min(head_s, c2['s0']) if head_dir[0] == -ax[0] else max(head_s, c2['s1'])
             cb = cbore_of(head_s, head_dir @ ax < 0)
+            # a counterbore is machined on the HEAD side: if it turned up on the
+            # opposite end, the head/shank orientation was inferred backwards
+            if cb is None:
+                other_s = c['s1'] if head_dir @ ax < 0 else c['s0']
+                cb_other = cbore_of(other_s, head_dir @ ax > 0)
+                if cb_other is not None:
+                    head_dir = -head_dir
+                    head_s = other_s
+                    cb = cb_other
             head_type = head_kind(cb, c['nominal'])
             bolts.append(dict(
                 size=f"M{c['nominal']}",

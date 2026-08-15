@@ -311,11 +311,12 @@
     -800.0
    ],
    "pattern": true,
-   "_note": "the foot attaches to the rest of the robot at FOUR points: two roll bearings and the two pushrod ball joints. The measured ankle_roll wrench is the total transmitted across that interface, so it is distributed over all four (pattern span ~90 mm), not forced through the 30 mm bearing pair alone. Loads: measured joint forces (valid) + ankle roll motor torque 60 N*m about the roll axis; bending comes from the 4-point attachment geometry.",
+   "_note": "foot free-body: the 4 attachments to the shin (2x 6900 roll seats + 2 JS6 rod anchors) are the PROXIMAL side. Primary case holds the sole (stance, ground reaction) - the alternative 'grf' case holds the attachments and loads the sole with the measured GRF.",
    "moment_mode": "geometry",
    "joint_axis": "y",
    "axial_torque_Nm": 60.0
-  }
+  },
+  "extra_steps": []
  },
  "L2_shin": {
   "mesh": {
@@ -439,26 +440,36 @@
     -123.7,
     145.0,
     -550.0
-   ]
-  }
+   ],
+   "_note": "knee end (proximal) fixed, ankle-end interface loaded - already in the correct sense"
+  },
+  "extra_steps": [
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_ankle_a.step",
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_ankle_b.step"
+  ],
+  "actuators": [
+   "robstride_rs03_ankle_a",
+   "robstride_rs03_ankle_b",
+   "robstride_rs04_knee_p"
+  ]
  },
  "L3_thigh": {
   "mesh": {
-   "size_far": 12.0,
+   "size_far": 10.0,
    "refine": [
     [
      -123.7,
      70.0,
      -100.0,
      45,
-     4.0
+     3.4
     ],
     [
      -123.7,
      115.0,
      -310.0,
-     45,
-     4.0
+     50,
+     3.4
     ]
    ]
   },
@@ -589,43 +600,20 @@
    }
   ],
   "envelope": {
-   "joint": "hip_yaw",
-   "fix_desc": "knee-actuator housing seats (x-axis r60 at +-, z=-310) - the thigh hangs from the yaw bearing and is reacted at the knee",
+   "joint": "knee",
+   "moment_mode": "geometry",
+   "joint_axis": "x",
+   "axial_torque_Nm": 120.0,
+   "pattern": true,
+   "joint_centre": [
+    -123.7,
+    115.0,
+    -310.0
+   ],
+   "fix_desc": "PROXIMAL: hip_yaw interface - 6814 seat (z-axis r45) at the top of the thigh",
    "fix": [
     {
      "type": "bore",
-     "axis": "x",
-     "ctr": [
-      -97.45,
-      115.0,
-      -310.0
-     ],
-     "r": 60.0,
-     "span": [
-      -104.0,
-      -90.0
-     ],
-     "rtol": 1.2
-    },
-    {
-     "type": "bore",
-     "axis": "x",
-     "ctr": [
-      -149.95,
-      115.0,
-      -310.0
-     ],
-     "r": 60.0,
-     "span": [
-      -157.0,
-      -143.0
-     ],
-     "rtol": 1.2
-    }
-   ],
-   "points": [
-    {
-     "name": "hip_yaw bearing seat (6814, z-axis r45)",
      "axis": "z",
      "ctr": [
       -123.7,
@@ -640,17 +628,48 @@
      "rtol": 1.2
     }
    ],
-   "_caveat": "single bearing seat: transverse moments are applied locally at the 6814 seat, which is conservative - in reality the actuator flange bolts share them",
-   "moment_mode": "geometry",
-   "joint_axis": "z",
-   "axial_torque_Nm": 60.0,
-   "pattern": true,
-   "joint_centre": [
-    -123.7,
-    70.0,
-    -97.0
-   ]
-  }
+   "points": [
+    {
+     "name": "DISTAL knee seat +x (RS04 knee_P housing r60)",
+     "axis": "x",
+     "ctr": [
+      -97.45,
+      115.0,
+      -310.0
+     ],
+     "r": 60.0,
+     "span": [
+      -106.0,
+      -88.0
+     ],
+     "rtol": 1.4
+    },
+    {
+     "name": "DISTAL knee seat -x (r60)",
+     "axis": "x",
+     "ctr": [
+      -149.95,
+      115.0,
+      -310.0
+     ],
+     "r": 60.0,
+     "span": [
+      -159.0,
+      -141.0
+     ],
+     "rtol": 1.4
+    }
+   ],
+   "_note": "thigh hangs from the yaw bearing; the knee wrench from the shin enters at the knee housing seats"
+  },
+  "extra_steps": [
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_hip_y.step",
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs04_knee_p.step"
+  ],
+  "actuators": [
+   "robstride_rs03_hip_y",
+   "robstride_rs04_knee_p"
+  ]
  },
  "L5_hip_pitchroll": {
   "mesh": {
@@ -667,7 +686,7 @@
      -123.7,
      96.25,
      60.0,
-     36,
+     40,
      2.0
     ]
    ]
@@ -758,28 +777,20 @@
    }
   ],
   "envelope": {
-   "joint": "hip_pitch",
-   "fix_desc": "hip roll bearing seat (6810, y-axis r32.5)",
+   "joint": "hip_roll",
+   "moment_mode": "geometry",
+   "joint_axis": "y",
+   "axial_torque_Nm": 120.0,
+   "pattern": true,
+   "joint_centre": [
+    -123.7,
+    96.25,
+    60.0
+   ],
+   "fix_desc": "PROXIMAL: hip-pitch interface to the pelvis - CRBS808 crossed-roller seat (x-axis r48) plus the RS04 hip_P mounting flange",
    "fix": [
     {
      "type": "bore",
-     "axis": "y",
-     "ctr": [
-      -123.7,
-      96.25,
-      60.0
-     ],
-     "r": 32.51,
-     "span": [
-      90.0,
-      103.0
-     ],
-     "rtol": 0.9
-    }
-   ],
-   "points": [
-    {
-     "name": "hip_pitch seat (CRBS808, x-axis)",
      "axis": "x",
      "ctr": [
       -52.7,
@@ -788,22 +799,38 @@
      ],
      "r": 48.02,
      "span": [
-      -60.0,
-      -45.0
+      -62.0,
+      -43.0
+     ],
+     "rtol": 1.2
+    }
+   ],
+   "points": [
+    {
+     "name": "DISTAL hip_roll seat (6810, y-axis r32.5) -> L4",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      96.25,
+      60.0
+     ],
+     "r": 32.51,
+     "span": [
+      88.0,
+      105.0
      ],
      "rtol": 1.0
     }
    ],
-   "_caveat": "single seat per case; the CRBS808 crossed roller genuinely carries moment, so local application is appropriate here",
-   "moment_mode": "geometry",
-   "joint_axis": "x",
-   "axial_torque_Nm": 120.0,
-   "pattern": true,
-   "joint_centre": [
-    -52.7,
-    70.0,
-    60.0
-   ]
-  }
+   "_note": "upper (pelvis-side) interface is held; the wrench enters at the next link's joint"
+  },
+  "extra_steps": [
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs04_hip_p.step",
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs04_hip_r.step"
+  ],
+  "actuators": [
+   "robstride_rs04_hip_p",
+   "robstride_rs04_hip_r"
+  ]
  }
 }

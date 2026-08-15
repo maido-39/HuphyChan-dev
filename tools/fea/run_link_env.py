@@ -60,10 +60,29 @@ def main():
         keep = [s for i, s in enumerate(sols) if i in set(spec['subset']['indices'])]
         step = F.write_step(keep, f'{W}/{link}_subset.step')
     mesh_inp = f'{W}/{link}_mesh.inp'
+    # actuator bodies are structural members of the link: their housings are
+    # bolted into the load path, so they must be meshed with it
+    steps = [step]
+    # Actuators are structural: their housings close the load path between links.
+    # The real RS03/RS04 solids carry ~3600 faces each and take >15 min just to
+    # tessellate, so they enter as measured-envelope CYLINDER PROXIES (same OD,
+    # length and position; aluminium stiffness = the softer, load-shedding
+    # choice, so the link itself is judged conservatively). Bolt-level detail at
+    # the flange is a separate submodel, not part of the screening.
+    prox = []
+    PJ = f'{STEPS}/actuator_proxies.json'
+    if spec.get('actuators') and os.path.exists(PJ):
+        allp = json.load(open(PJ))
+        for a in spec['actuators']:
+            prox.append(allp[a])
+        print('actuator proxies: ' + ', '.join(
+            f"{a} ({allp[a]['axis']}-axis r{allp[a]['r']} L{allp[a]['len']})"
+            for a in spec['actuators']), flush=True)
     if not os.path.exists(mesh_inp):
         t0 = time.time()
-        m = F.mesh_assembly(step, mesh_inp, size_far=spec['mesh']['size_far'],
-                            refine=[tuple(r) for r in spec['mesh'].get('refine', [])])
+        m = F.mesh_assembly(steps, mesh_inp, size_far=spec['mesh']['size_far'],
+                            refine=[tuple(r) for r in spec['mesh'].get('refine', [])],
+                            cylinders=prox)
         print(f"mesh {m['nodes']} nodes in {time.time() - t0:.0f}s", flush=True)
     nodes, elems, elsets = F.parse_inp(mesh_inp)
     elsets = {k: v for k, v in elsets.items() if v}
@@ -71,7 +90,6 @@ def main():
     tris = [t for (_, _, t) in bf.values()]
     surf = sorted({n for tri in bf for n in tri})
     print(f'{len(nodes)} nodes / {len(elems)} elems / {len(surf)} surface nodes', flush=True)
-
     env_spec = spec['envelope']
     # ---- fixed set
     fix = []
@@ -84,6 +102,20 @@ def main():
             fix += sel_bore(nodes, surf, B)
     fix = sorted(set(fix))
     print(f'fixed nodes {len(fix)} ({env_spec["fix_desc"]})', flush=True)
+
+    # bolted bodies come out as separate mesh components -> tie them at the
+    # flange contact, otherwise the floating body makes the solve singular
+    comps_e = F.components(elems)
+    tie_txt = ''
+    print(f'mesh connectivity: {len(comps_e)} component(s) {[len(c) for c in comps_e[:4]]}',
+          flush=True)
+    for i, c in enumerate(comps_e[1:], 1):
+        txt, n = F.node_pair_equations(nodes, elems, comps_e[0], c, gap=3.0, exclude=fix)
+        if not n:
+            raise SystemExit(f'component {i} ({len(c)} elems) has no face within 2.5 mm of '
+                             'the main body - check the actuator proxy placement')
+        tie_txt += txt
+        print(f'   tied component {i} ({len(c)} elems) with {n} node-pair MPCs', flush=True)
 
     # ---- load points and their node sets
     pts = env_spec['points']
@@ -161,11 +193,16 @@ def main():
                 Mv[axmap[env_spec['joint_axis']]] = E.UNIT_M * 1000.0
             else:
                 Mv['xyz'.index(comp[1])] = E.UNIT_M * 1000.0
-            fs = F.distribute_wrench([p['ctr'] for p in pts], jc_p, Fv, Mv)
-            for p, fv in zip(pts, fs):
-                d = F.bearing_load(nodes, p['nids'], p['axis'], p['ctr'], fv)
+            if len(pts) == 1 and np.linalg.norm(Mv) > 0:
+                d = F.moment_load(nodes, pts[0]['nids'], pts[0]['ctr'], Mv)  # one seat: it carries the torque
                 for n, f in d.items():
                     cl[n] = cl.get(n, np.zeros(3)) + f
+            else:
+                fs = F.distribute_wrench([p['ctr'] for p in pts], jc_p, Fv, Mv)
+                for p, fv in zip(pts, fs):
+                    d = F.bearing_load(nodes, p['nids'], p['axis'], p['ctr'], fv)
+                    for n, f in d.items():
+                        cl[n] = cl.get(n, np.zeros(3)) + f
         elif pair and k >= 3:
             mi = k - 3
             if mi == ai:
@@ -204,7 +241,7 @@ def main():
                     cl[n] = cl.get(n, np.zeros(3)) + f
         if not os.path.exists(f'{W}/{job}.frd'):
             F.write_deck(f'{W}/{job}.inp', nodes, elems, elsets,
-                         {e: F.AL for e in elsets}, fix, cl)
+                         {e: F.AL for e in elsets}, fix, cl, extra=tie_txt)
             t0 = time.time()
             r = F.run_ccx(W, job, threads=spec.get('threads', 6))
             print(f'  unit {comp}: solve ok={r["ok"]} in {time.time() - t0:.0f}s '

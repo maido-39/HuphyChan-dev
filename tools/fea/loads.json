@@ -179,5 +179,11 @@
    "grade_8.8_upgrade": "20 M4 locations at exactly 1.5xD (L_e 6.0 mm, RS04 hip_R flange <-> pelvis) would exceed the aluminium allowable (3.7 vs 3.6 kN) - deepen the tap to 8 mm, torque-limit, or fit thread inserts",
    "head_seating_max": "164 MPa (M5) / 146 MPa (M4) / 126 MPa (low-head M3) at 8.8 preload - all below 248"
   }
+ },
+ "_decisions_2026_08_16": {
+  "material": "6061-T6 everywhere (yield 276 MPa)",
+  "boundary_conditions": "hold a link only at REAL interfaces: screw seats bolting it to the neighbouring link/actuator AND the joint bearing faces. No arbitrary cut planes.",
+  "sf_criteria": "measured P99 already contains impact content -> report SF>1, SF>1.5, SF>2; optimisation evaluated at the same three levels.",
+  "load_convention": "fix the PROXIMAL (pelvis-side) interface; the DISTAL joint's measured wrench enters at the distal interface."
  }
 }
