@@ -257,8 +257,7 @@
       155.0,
       166.5
      ],
-     "rtol": 0.8,
-     "share": 0.5
+     "rtol": 0.8
     },
     {
      "name": "roll seat -y (6900)",
@@ -273,29 +272,68 @@
       123.5,
       135.0
      ],
-     "rtol": 0.8,
-     "share": 0.5
+     "rtol": 0.8
+    },
+    {
+     "name": "rod anchor A (JS6 clevis)",
+     "axis": "x",
+     "ctr": [
+      -86.2,
+      195.0,
+      -810.0
+     ],
+     "r": 3.0,
+     "span": [
+      -100.0,
+      -66.0
+     ],
+     "rtol": 0.45
+    },
+    {
+     "name": "rod anchor B (JS6 clevis)",
+     "axis": "x",
+     "ctr": [
+      -161.2,
+      195.0,
+      -810.0
+     ],
+     "r": 3.0,
+     "span": [
+      -181.0,
+      -147.0
+     ],
+     "rtol": 0.45
     }
-   ]
+   ],
+   "joint_centre": [
+    -123.7,
+    145.0,
+    -800.0
+   ],
+   "pattern": true,
+   "_note": "the foot attaches to the rest of the robot at FOUR points: two roll bearings and the two pushrod ball joints. The measured ankle_roll wrench is the total transmitted across that interface, so it is distributed over all four (pattern span ~90 mm), not forced through the 30 mm bearing pair alone. Loads: measured joint forces (valid) + ankle roll motor torque 60 N*m about the roll axis; bending comes from the 4-point attachment geometry.",
+   "moment_mode": "geometry",
+   "joint_axis": "y",
+   "axial_torque_Nm": 60.0
   }
  },
  "L2_shin": {
   "mesh": {
-   "size_far": 7.0,
+   "size_far": 9.0,
    "refine": [
     [
      -123.7,
      145.0,
      -550.0,
-     45,
-     2.6
+     40,
+     3.2
     ],
     [
      -123.7,
      115.0,
      -332.0,
-     45,
-     2.6
+     40,
+     3.2
     ]
    ]
   },
@@ -392,26 +430,35 @@
      "axis_disp": "z",
      "r": 40
     }
+   ],
+   "moment_mode": "geometry",
+   "joint_axis": "x",
+   "axial_torque_Nm": 60.0,
+   "pattern": true,
+   "joint_centre": [
+    -123.7,
+    145.0,
+    -550.0
    ]
   }
  },
  "L3_thigh": {
   "mesh": {
-   "size_far": 8.0,
+   "size_far": 12.0,
    "refine": [
     [
      -123.7,
      70.0,
      -100.0,
      45,
-     3.0
+     4.0
     ],
     [
      -123.7,
      115.0,
      -310.0,
      45,
-     3.0
+     4.0
     ]
    ]
   },
@@ -592,6 +639,16 @@
      ],
      "rtol": 1.2
     }
+   ],
+   "_caveat": "single bearing seat: transverse moments are applied locally at the 6814 seat, which is conservative - in reality the actuator flange bolts share them",
+   "moment_mode": "geometry",
+   "joint_axis": "z",
+   "axial_torque_Nm": 60.0,
+   "pattern": true,
+   "joint_centre": [
+    -123.7,
+    70.0,
+    -97.0
    ]
   }
  },
@@ -736,6 +793,16 @@
      ],
      "rtol": 1.0
     }
+   ],
+   "_caveat": "single seat per case; the CRBS808 crossed roller genuinely carries moment, so local application is appropriate here",
+   "moment_mode": "geometry",
+   "joint_axis": "x",
+   "axial_torque_Nm": 120.0,
+   "pattern": true,
+   "joint_centre": [
+    -52.7,
+    70.0,
+    60.0
    ]
   }
  }

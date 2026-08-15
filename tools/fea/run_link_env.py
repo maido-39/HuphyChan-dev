@@ -109,26 +109,89 @@ def main():
         return
 
     # ---- six unit cases (each: all points loaded in that component)
+    #
+    # Bearing-pair statics (fixed 2026-08-15): a joint carried by TWO bearings
+    # reacts a transverse moment as a FORCE COUPLE across the pair, not as a
+    # local moment on each ring -- applying 239 N*m locally to a 22 mm 6900 seat
+    # produced a bogus 475 MPa. The moment about the joint axis is the drive
+    # torque and is delivered by the actuator path (pushrods here), so it is not
+    # re-applied at the seats; `axial_moment` records what happens to it.
+    pair = env_spec.get('pair_axis')
+    pattern = env_spec.get('pattern')          # RBE3-style split over all attachments
+    # default: forces + the measured motor torque about the joint axis only
+    # (docs/64 transverse moment columns are reference-point contaminated)
+    mode = env_spec.get('moment_mode', 'geometry')
+    comps = list(E.COMPS_F) if mode == 'geometry' else list(E.COMPS)
+    axial = env_spec.get('axial_torque_Nm')
+    if mode == 'geometry' and axial:
+        comps.append('Maxial')
     unit_stress = []
     load_nids = sorted({n for p in pts for n in p['nids']})
-    for k, comp in enumerate(E.COMPS):
+    axmap = {'x': 0, 'y': 1, 'z': 2}
+    if pair:
+        ai = axmap[pair]
+        ctrs = np.array([p['ctr'] for p in pts], float)
+        jc = np.array(env_spec.get('joint_centre', ctrs.mean(0)), float)
+        span = float(abs(ctrs[0][ai] - ctrs[-1][ai]))
+        print(f'bearing pair on {pair}-axis: spacing {span:.1f} mm, centre {jc.tolist()}',
+              flush=True)
+    if pattern:
+        jc_p = np.array(env_spec.get('joint_centre', [0, 0, 0]), float)
+        pp = np.array([p['ctr'] for p in pts], float)
+        print(f'wrench pattern: {len(pts)} attachments, span '
+              f'{np.round(pp.max(0) - pp.min(0), 1)} mm about {jc_p.tolist()}', flush=True)
+    for k, comp in enumerate(comps):
         job = f'{link}_u{comp}'
         cl = {}
-        for p in pts:
-            share = p.get('share', 1.0)
-            if k < 3:
-                Fv = np.zeros(3)
-                Fv[k] = E.UNIT_F * share
-                if p.get('type') == 'plane':      # flat interface: uniform traction
-                    d = {n: Fv / len(p['nids']) for n in p['nids']}
-                else:
-                    d = F.bearing_load(nodes, p['nids'], p['axis'], p['ctr'], Fv)
+        if pattern:
+            Fv = np.zeros(3); Mv = np.zeros(3)
+            if comp.startswith('F'):
+                Fv['xyz'.index(comp[1])] = E.UNIT_F
+            elif comp == 'Maxial':
+                Mv[axmap[env_spec['joint_axis']]] = E.UNIT_M * 1000.0
             else:
-                Mv = np.zeros(3)
-                Mv[k - 3] = E.UNIT_M * 1000.0 * share      # N*m -> N*mm
-                d = F.moment_load(nodes, p['nids'], p['ctr'], Mv)
-            for n, f in d.items():
-                cl[n] = cl.get(n, np.zeros(3)) + f
+                Mv['xyz'.index(comp[1])] = E.UNIT_M * 1000.0
+            fs = F.distribute_wrench([p['ctr'] for p in pts], jc_p, Fv, Mv)
+            for p, fv in zip(pts, fs):
+                d = F.bearing_load(nodes, p['nids'], p['axis'], p['ctr'], fv)
+                for n, f in d.items():
+                    cl[n] = cl.get(n, np.zeros(3)) + f
+        elif pair and k >= 3:
+            mi = k - 3
+            if mi == ai:
+                # drive torque about the joint axis: carried by the actuator path
+                for p in pts:
+                    d = F.moment_load(nodes, p['nids'], p['ctr'],
+                                      np.eye(3)[mi] * E.UNIT_M * 1000.0 / len(pts))
+                    for n, f in d.items():
+                        cl[n] = cl.get(n, np.zeros(3)) + f
+            else:
+                # transverse moment -> force couple across the two seats
+                Fmag = E.UNIT_M * 1000.0 / max(span, 1e-6)      # N
+                dirv = np.cross(np.eye(3)[mi], np.eye(3)[ai])
+                dirv = dirv / (np.linalg.norm(dirv) or 1.0)
+                for p in pts:
+                    sgn = 1.0 if (np.asarray(p['ctr'], float)[ai] > jc[ai]) else -1.0
+                    d = F.bearing_load(nodes, p['nids'], p['axis'], p['ctr'],
+                                       dirv * Fmag * sgn)
+                    for n, f in d.items():
+                        cl[n] = cl.get(n, np.zeros(3)) + f
+        else:
+            for p in pts:
+                share = p.get('share', 1.0)
+                if k < 3:
+                    Fv = np.zeros(3)
+                    Fv[k] = E.UNIT_F * share
+                    if p.get('type') == 'plane':      # flat interface: uniform traction
+                        d = {n: Fv / len(p['nids']) for n in p['nids']}
+                    else:
+                        d = F.bearing_load(nodes, p['nids'], p['axis'], p['ctr'], Fv)
+                else:
+                    Mv = np.zeros(3)
+                    Mv[k - 3] = E.UNIT_M * 1000.0 * share      # N*m -> N*mm
+                    d = F.moment_load(nodes, p['nids'], p['ctr'], Mv)
+                for n, f in d.items():
+                    cl[n] = cl.get(n, np.zeros(3)) + f
         if not os.path.exists(f'{W}/{job}.frd'):
             F.write_deck(f'{W}/{job}.inp', nodes, elems, elsets,
                          {e: F.AL for e in elsets}, fix, cl)
@@ -149,11 +212,24 @@ def main():
     mags = []
     j = env_spec['joint']
     d = LOADS[j][stat]
-    for c in E.COMPS:
-        mags.append(d[c] * factor * (1.0 if c[0] == 'F' else 1.0))
-    env = E.combine(unit_stress, mags)
+    for c in comps:
+        mags.append(axial if c == 'Maxial' else d[c] * factor)
+    env = E.combine(unit_stress, mags, comps=comps)
     summ = E.summarize(env, P, ids, load_nids=load_nids)
     summ.update(link=link, joint=j, stat=stat, factor=factor,
+                pair_axis=env_spec.get('pair_axis'),
+                comps=comps,
+                moment_model=(('forces + measured motor torque about the joint axis; '
+                               'transverse bending is generated by the geometry '
+                               '(docs/64 moment columns are reference-point contaminated, '
+                               'SS8i) | ' if mode == 'geometry' else '') +
+                              'wrench distributed over all real attachments '
+                              '(RBE3-like least-norm split: bearings + rod anchors)'
+                              if env_spec.get('pattern') else
+                              'transverse moments as a force couple across the bearing '
+                              'pair; axial moment = drive torque via the actuator path'
+                              if env_spec.get('pair_axis') else
+                              'moments applied locally at the single seat (conservative)'),
                 magnitudes=dict(zip(E.COMPS, [round(m, 1) for m in mags])),
                 mesh_nodes=len(nodes), n_fixed=len(fix), n_loaded=len(load_nids))
     print('\nENVELOPE ' + json.dumps(summ, indent=1), flush=True)

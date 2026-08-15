@@ -423,6 +423,38 @@ def bearing_load(nodes, nids, axis, ctr, F):
     return {i: F * (v / tot) for i, v in w.items()}
 
 
+def distribute_wrench(points, centre, Fv, Mv):
+    """Split a joint wrench over the link's REAL attachment points (RBE3-like).
+
+    points: [(x,y,z)] of each attachment (bearing seat centre, rod anchor, bolt
+    pattern centroid). Returns [(fx,fy,fz)] per point such that
+        sum f_i = Fv          and      sum (p_i - centre) x f_i = Mv
+    with minimum norm (pseudo-inverse) -- i.e. the moment is reacted by the
+    whole attachment pattern, not by one seat.
+
+    Why this exists (2026-08-15): applying a joint moment locally at a single
+    small bearing seat, or as a couple across only the closest pair, produced
+    physically impossible loads (239 N*m on a 22 mm 6900 seat -> 8 kN couple,
+    and a bogus 475-634 MPa). The foot, for instance, hangs on two 6900 seats
+    AND two pushrod anchors; the real lever arm of the pattern is ~90 mm.
+    """
+    P = np.asarray(points, float)
+    c = np.asarray(centre, float)
+    R = P - c
+    n = len(P)
+    A = np.zeros((6, 3 * n))
+    for i in range(n):
+        A[0:3, 3 * i:3 * i + 3] = np.eye(3)
+        rx, ry, rz = R[i]
+        A[3:6, 3 * i:3 * i + 3] = np.array([[0, -rz, ry], [rz, 0, -rx], [-ry, rx, 0]])
+    b = np.concatenate([np.asarray(Fv, float), np.asarray(Mv, float)])
+    f, *_ = np.linalg.lstsq(A, b, rcond=None)
+    res = A @ f - b
+    if np.linalg.norm(res) > 1e-6 * max(1.0, np.linalg.norm(b)):
+        raise ValueError(f'wrench not representable by this pattern (residual {res})')
+    return f.reshape(n, 3)
+
+
 def moment_load(nodes, nids, ctr, M):
     """Distribute a pure moment M about `ctr` as a tangential nodal force field.
 
