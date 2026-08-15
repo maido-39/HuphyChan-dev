@@ -30,6 +30,11 @@ BALL_C = np.array([-80.10, AXY, AXZ])
 BALL_R = 6.364
 F_LC3 = np.array([-169.8, -481.8, 1116.2])       # measured worst-frame rod force
 DT = float(sys.argv[1]) if len(sys.argv) > 1 else -235.0   # bolt cooldown -> preload
+# Preload ceiling: this design taps straight into 6061-T6 (no nuts), so the
+# aluminium internal thread - not the screw - sets the limit.
+#   F_strip = 0.6*pi*D*L_e*0.577*sigma_y ;  usable = F_strip / 2
+# M6 x 15 mm engagement here: 0.6*pi*6*15*159 = 27.0 kN -> 13.5 kN usable,
+# so the ~7 kN target used below is inside the aluminium capacity.
 
 PARTS = {'pillow': 'AnkleFeetPillowAB', 'ball': 'Inner Ball',
          'flangeA': '20deg_flangeA', 'flangeB': '20deg_flangeB'}

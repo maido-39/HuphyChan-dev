@@ -1,25 +1,183 @@
 {
-  "_provenance": "docs/64 §7b link-local XYZ wrench from RL-policy replay (flat=bentp2_fc gen21, rough=p2r_v2_fc teleport-protocol authority). Component-wise worst-of(flat,rough). Units N, N·m. M columns are CONSERVATIVE UPPER BOUNDS (moment reference-point bug, docs/64 §8i, overstated 11-57%); F columns are valid. Design rule (docs/62): structure = P99 x 1.25 for the primary case, peak = reference case only (single-frame impacts are covered by the layered stack, not by static sizing).",
-  "_grf": {"BW_N": 505, "rms_BW": 0.70, "p99_BW": 1.48, "peak_BW": 6.39,
-           "p99_N": 748, "peak_N": 3227},
-  "_rod_lc3_worst_frame": {"note": "measured simultaneous rod forces at the two foot ball joints, CAD frame (docs/77 §7)",
-                           "ballA_xyz_mm": [-80.1, 195.5, -810.0], "ballA_N": [-169.8, -481.8, 1116.2],
-                           "ballB_xyz_mm": [-167.3, 195.5, -810.0], "ballB_N": [-103.7, -320.9, 805.4]},
-  "_motor_peak_Nm": {"ankle_pitch_each": 60, "ankle_roll_each": 60, "knee": 120, "hip_pitch": 120, "hip_roll": 120, "hip_yaw": 60},
-  "hip_pitch":   {"P99": {"Fx": 110, "Fy": 321, "Fz": 527, "Mx": 99,  "My": 80,  "Mz": 47},
-                  "peak": {"Fx": 231, "Fy": 532, "Fz": 2356, "Mx": 176, "My": 375, "Mz": 90}},
-  "hip_roll":    {"P99": {"Fx": 107, "Fy": 331, "Fz": 542, "Mx": 107, "My": 76,  "Mz": 36},
-                  "peak": {"Fx": 219, "Fy": 570, "Fz": 2430, "Mx": 155, "My": 296, "Mz": 76}},
-  "hip_yaw":     {"P99": {"Fx": 111, "Fy": 338, "Fz": 566, "Mx": 121, "My": 82,  "Mz": 36},
-                  "peak": {"Fx": 227, "Fy": 599, "Fz": 2560, "Mx": 242, "My": 270, "Mz": 76}},
-  "knee":        {"P99": {"Fx": 91,  "Fy": 256, "Fz": 672, "Mx": 139, "My": 83,  "Mz": 46},
-                  "peak": {"Fx": 154, "Fy": 452, "Fz": 3018, "Mx": 299, "My": 385, "Mz": 83}},
-  "ankle_pitch": {"P99": {"Fx": 99,  "Fy": 266, "Fz": 725, "Mx": 148, "My": 97,  "Mz": 47},
-                  "peak": {"Fx": 471, "Fy": 2052, "Fz": 3022, "Mx": 833, "My": 435, "Mz": 233}},
-  "ankle_roll":  {"P99": {"Fx": 148, "Fy": 259, "Fz": 722, "Mx": 191, "My": 104, "Mz": 47},
-                  "peak": {"Fx": 747, "Fy": 2070, "Fz": 3021, "Mx": 1101, "My": 461, "Mz": 243}},
-  "_materials": {"alu_6061T6": {"E": 68900, "nu": 0.33, "yield": 276},
-                 "alu_7075T6": {"E": 71700, "nu": 0.33, "yield": 503},
-                 "steel_4.6_fastener": {"E": 210000, "nu": 0.30, "yield": 240,
-                                        "note": "ISO 4762 M4 class 4.6 found in CAD - low grade, upgrade to 8.8 recommended"}}
+ "_provenance": "docs/64 \u00a77b link-local XYZ wrench from RL-policy replay (flat=bentp2_fc gen21, rough=p2r_v2_fc teleport-protocol authority). Component-wise worst-of(flat,rough). Units N, N\u00b7m. M columns are CONSERVATIVE UPPER BOUNDS (moment reference-point bug, docs/64 \u00a78i, overstated 11-57%); F columns are valid. Design rule (docs/62): structure = P99 x 1.25 for the primary case, peak = reference case only (single-frame impacts are covered by the layered stack, not by static sizing).",
+ "_grf": {
+  "BW_N": 505,
+  "rms_BW": 0.7,
+  "p99_BW": 1.48,
+  "peak_BW": 6.39,
+  "p99_N": 748,
+  "peak_N": 3227
+ },
+ "_rod_lc3_worst_frame": {
+  "note": "measured simultaneous rod forces at the two foot ball joints, CAD frame (docs/77 \u00a77)",
+  "ballA_xyz_mm": [
+   -80.1,
+   195.5,
+   -810.0
+  ],
+  "ballA_N": [
+   -169.8,
+   -481.8,
+   1116.2
+  ],
+  "ballB_xyz_mm": [
+   -167.3,
+   195.5,
+   -810.0
+  ],
+  "ballB_N": [
+   -103.7,
+   -320.9,
+   805.4
+  ]
+ },
+ "_motor_peak_Nm": {
+  "ankle_pitch_each": 60,
+  "ankle_roll_each": 60,
+  "knee": 120,
+  "hip_pitch": 120,
+  "hip_roll": 120,
+  "hip_yaw": 60
+ },
+ "hip_pitch": {
+  "P99": {
+   "Fx": 110,
+   "Fy": 321,
+   "Fz": 527,
+   "Mx": 99,
+   "My": 80,
+   "Mz": 47
+  },
+  "peak": {
+   "Fx": 231,
+   "Fy": 532,
+   "Fz": 2356,
+   "Mx": 176,
+   "My": 375,
+   "Mz": 90
+  }
+ },
+ "hip_roll": {
+  "P99": {
+   "Fx": 107,
+   "Fy": 331,
+   "Fz": 542,
+   "Mx": 107,
+   "My": 76,
+   "Mz": 36
+  },
+  "peak": {
+   "Fx": 219,
+   "Fy": 570,
+   "Fz": 2430,
+   "Mx": 155,
+   "My": 296,
+   "Mz": 76
+  }
+ },
+ "hip_yaw": {
+  "P99": {
+   "Fx": 111,
+   "Fy": 338,
+   "Fz": 566,
+   "Mx": 121,
+   "My": 82,
+   "Mz": 36
+  },
+  "peak": {
+   "Fx": 227,
+   "Fy": 599,
+   "Fz": 2560,
+   "Mx": 242,
+   "My": 270,
+   "Mz": 76
+  }
+ },
+ "knee": {
+  "P99": {
+   "Fx": 91,
+   "Fy": 256,
+   "Fz": 672,
+   "Mx": 139,
+   "My": 83,
+   "Mz": 46
+  },
+  "peak": {
+   "Fx": 154,
+   "Fy": 452,
+   "Fz": 3018,
+   "Mx": 299,
+   "My": 385,
+   "Mz": 83
+  }
+ },
+ "ankle_pitch": {
+  "P99": {
+   "Fx": 99,
+   "Fy": 266,
+   "Fz": 725,
+   "Mx": 148,
+   "My": 97,
+   "Mz": 47
+  },
+  "peak": {
+   "Fx": 471,
+   "Fy": 2052,
+   "Fz": 3022,
+   "Mx": 833,
+   "My": 435,
+   "Mz": 233
+  }
+ },
+ "ankle_roll": {
+  "P99": {
+   "Fx": 148,
+   "Fy": 259,
+   "Fz": 722,
+   "Mx": 191,
+   "My": 104,
+   "Mz": 47
+  },
+  "peak": {
+   "Fx": 747,
+   "Fy": 2070,
+   "Fz": 3021,
+   "Mx": 1101,
+   "My": 461,
+   "Mz": 243
+  }
+ },
+ "_materials": {
+  "alu_6061T6": {
+   "E": 68900,
+   "nu": 0.33,
+   "yield": 276
+  },
+  "alu_7075T6": {
+   "E": 71700,
+   "nu": 0.33,
+   "yield": 503
+  },
+  "steel_4.6_fastener": {
+   "E": 210000,
+   "nu": 0.3,
+   "yield": 240,
+   "note": "ISO 4762 M4 class 4.6 found in CAD - low grade, upgrade to 8.8 recommended"
+  }
+ },
+ "_fastening": {
+  "topology": "ALL fasteners thread directly into tapped aluminium (6061-T6). NO nuts anywhere in this design - never model a nut face; the internal thread is the load path and the weak link.",
+  "engagement_rule": "steel screw into aluminium needs L_e >= 2xD (1.5xD marginal); the 1xD rule is for steel nuts/steel tapping and must NOT be used here.",
+  "strip_model": "F_strip = 0.6*pi*D*L_e * tau_y, tau_y = 0.577*276 = 159 MPa (6061-T6); usable preload = F_strip / 2.",
+  "head_seating": "preload / head bearing area <= ~0.9*sigma_y = 248 MPa (embedment); matters most for low-head \uc18c\ub450 screws.",
+  "measured_status_2026_08_15": {
+   "bolts_with_tap": 234,
+   "L_e>=2D": 191,
+   "L_e 1.5-2D": 43,
+   "L_e<1.5D": 0,
+   "grade_4.6_preload_vs_alu_thread": "OK at every location (1.4 kN M4 vs 3.6-23.7 kN allowable)",
+   "grade_8.8_upgrade": "20 M4 locations at exactly 1.5xD (L_e 6.0 mm, RS04 hip_R flange <-> pelvis) would exceed the aluminium allowable (3.7 vs 3.6 kN) - deepen the tap to 8 mm, torque-limit, or fit thread inserts",
+   "head_seating_max": "164 MPa (M5) / 146 MPa (M4) / 126 MPa (low-head M3) at 8.8 preload - all below 248"
+  }
+ }
 }
