@@ -1,0 +1,56 @@
+{
+ "links": {
+  "L1_ankle_foot": {
+   "file": "link_setup_L1_ankle_foot.json",
+   "stats": [
+    "P99"
+   ],
+   "joint": "ankle_roll",
+   "tris": 55518,
+   "nodes": 27695,
+   "bolts": 19,
+   "bearings": 4,
+   "size_mb": 1.9,
+   "solved": true
+  },
+  "L2_shin": {
+   "file": "link_setup_L2_shin.json",
+   "stats": [
+    "P99"
+   ],
+   "joint": "ankle_pitch",
+   "tris": 52489,
+   "nodes": 51434,
+   "bolts": 60,
+   "bearings": 2,
+   "size_mb": 2.32,
+   "solved": false
+  },
+  "L3_thigh": {
+   "file": "link_setup_L3_thigh.json",
+   "stats": [
+    "P99"
+   ],
+   "joint": "hip_yaw",
+   "tris": 79389,
+   "nodes": 78342,
+   "bolts": 58,
+   "bearings": 2,
+   "size_mb": 3.44,
+   "solved": false
+  },
+  "L5_hip_pitchroll": {
+   "file": "link_setup_L5_hip_pitchroll.json",
+   "stats": [
+    "P99"
+   ],
+   "joint": "hip_pitch",
+   "tris": 48420,
+   "nodes": 24126,
+   "bolts": 38,
+   "bearings": 4,
+   "size_mb": 1.44,
+   "solved": false
+  }
+ }
+}

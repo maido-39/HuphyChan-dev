@@ -1,0 +1,383 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ankle Demand 3D Explorer</title>
+<script src="/vendor/three.min.js"></script>
+<script src="/vendor/OrbitControls.js"></script>
+<style>
+  html,body{margin:0;height:100%;background:#12151a;color:#e8eaed;font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}
+  #app{display:flex;height:100%}
+  #view{flex:1;position:relative}
+  #view canvas{display:block}
+  #panel{width:320px;background:#181c22;border-left:1px solid #2a2f38;padding:14px;overflow-y:auto;box-sizing:border-box}
+  #panel h2{font-size:14px;margin:0 0 10px;color:#9fb4d4}
+  .sec{margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #262b33}
+  .sec h3{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#7d8896;margin:0 0 8px}
+  label{display:flex;align-items:center;gap:6px;margin-bottom:5px;cursor:pointer;font-size:12.5px}
+  input[type=number]{width:56px;background:#0f1216;border:1px solid #333a45;color:#e8eaed;border-radius:4px;padding:3px 5px;font-size:12px}
+  input[type=radio],input[type=checkbox]{accent-color:#5b8def}
+  .row{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+  .btn{background:#232833;border:1px solid #3a4150;color:#dbe1ea;border-radius:5px;padding:6px 9px;cursor:pointer;font-size:12px}
+  .btn:hover{background:#2c323f}
+  .btn.active{background:#3a5ba0;border-color:#5b8def}
+  .swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
+  #info{background:#0f1216;border:1px solid #2a2f38;border-radius:6px;padding:10px;font-size:12px;min-height:40px}
+  #info .k{color:#8d97a5}
+  #info table{width:100%;border-collapse:collapse}
+  #info td{padding:2px 0}
+  #info td.v{text-align:right;font-variant-numeric:tabular-nums;color:#e8eaed}
+  #legend-grad{height:12px;border-radius:3px;margin:4px 0;background:linear-gradient(to right,#2b3fd6,#22b573,#e8d21a,#e0451c)}
+  #stat{position:absolute;left:10px;bottom:10px;color:#6d7683;font-size:11px;background:#12151acc;padding:4px 8px;border-radius:4px}
+  #axlbl{position:absolute;left:10px;top:10px;color:#8d97a5;font-size:11px;background:#12151acc;padding:6px 9px;border-radius:4px;line-height:1.6}
+  small{color:#6d7683}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="view">
+    <div id="axlbl">
+      <span style="color:#e05c5c">━</span> Roll [X, deg]<br>
+      <span style="color:#5cd68a">━</span> Pitch [Y, deg]<br>
+      <span style="color:#5c9ee0">━</span> Torque |τ| [Z, N·m]
+    </div>
+    <div id="stat">loading…</div>
+  </div>
+  <div id="panel">
+    <h2>Ankle Demand 3D Explorer</h2>
+
+    <div class="sec">
+      <h3>View</h3>
+      <div class="row">
+        <button class="btn" data-view="free">Free (perspective)</button>
+        <button class="btn" data-view="roll">⟂ Roll axis</button>
+      </div>
+      <div class="row">
+        <button class="btn" data-view="pitch">⟂ Pitch axis</button>
+        <button class="btn" data-view="torque">⟂ Torque axis (top)</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>Color by</h3>
+      <label><input type="radio" name="colormode" value="policy" checked> Policy</label>
+      <label><input type="radio" name="colormode" value="velocity"> Ankle velocity |ω|</label>
+      <div id="legend-grad" style="display:none"></div>
+      <small id="legend-range" style="display:none"></small>
+    </div>
+
+    <div class="sec">
+      <h3>Policy visibility</h3>
+      <label><input type="checkbox" id="pol0" checked> <span class="swatch" style="background:#5b8def"></span>gen21p2_fc <small>(flat-anchored)</small></label>
+      <label><input type="checkbox" id="pol1" checked> <span class="swatch" style="background:#e0a25c"></span>p2b_v2_fc <small>(rough-anchored)</small></label>
+    </div>
+
+    <div class="sec">
+      <h3>Design joint limits</h3>
+      <div class="row">Pitch <input type="number" id="pmin" value="-50">–<input type="number" id="pmax" value="30">°</div>
+      <div class="row">Roll <input type="number" id="rmin" value="-20">–<input type="number" id="rmax" value="20">°</div>
+      <label><input type="checkbox" id="limOn" checked> highlight out-of-limit</label>
+      <div class="row">
+        <label style="margin:0"><input type="radio" name="limstyle" value="red" checked> red</label>
+        <label style="margin:0"><input type="radio" name="limstyle" value="gray"> grayed out</label>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>Point size</h3>
+      <input type="range" id="psize" min="1" max="8" step="0.5" value="2.5" style="width:100%">
+    </div>
+
+    <div class="sec">
+      <h3>Selected sample</h3>
+      <div id="info"><span class="k">click a point in the 3D view</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLORS = {0:[0.357,0.557,0.933], 1:[0.878,0.635,0.361]};   // policy 0/1 base colors (matches swatches)
+const RED = [0.88,0.25,0.25], GRAY = [0.35,0.37,0.4];
+let Zscale = 0.55; // visual compression of the torque axis relative to roll/pitch (equal X/Y scale preserved)
+
+let scene, renderer, viewEl;
+let camPersp, camOrtho, activeCam, controls;
+let pointsObjs = {};   // {0: THREE.Points, 1: THREE.Points}
+let rawData = {0: null, 1: null};  // {0: {pos:Float32Array(Nx3-in-world), pitch,roll,tp,tr,wp,wr}, ...}
+let velMax = 1;
+
+function turbo(t){
+  // simple 4-stop blue->green->yellow->red gradient, t in [0,1]
+  const stops = [[0.169,0.247,0.839],[0.133,0.71,0.451],[0.91,0.824,0.102],[0.878,0.271,0.11]];
+  const n = stops.length-1; const f = Math.min(Math.max(t,0),1)*n;
+  const i = Math.min(Math.floor(f), n-1); const u = f-i;
+  const a = stops[i], b = stops[i+1];
+  return [a[0]+(b[0]-a[0])*u, a[1]+(b[1]-a[1])*u, a[2]+(b[2]-a[2])*u];
+}
+
+function makeTextSprite(text, color){
+  const c = document.createElement('canvas'); c.width=256; c.height=64;
+  const ctx = c.getContext('2d');
+  ctx.font = '600 40px sans-serif'; ctx.fillStyle = color || '#cfd6e0';
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText(text, 4, 32);
+  const tex = new THREE.Texture(c); tex.needsUpdate = true;
+  const mat = new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false});
+  const spr = new THREE.Sprite(mat);
+  spr.scale.set(text.length*2.2+4, 5, 1);
+  return spr;
+}
+
+function buildAxes(bx){
+  const g = new THREE.Group();
+  const mk = (p0,p1,col)=>{
+    const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...p0), new THREE.Vector3(...p1)]);
+    return new THREE.Line(geo, new THREE.LineBasicMaterial({color:col}));
+  };
+  // box edges (wireframe of the data bounding box, in world coords)
+  const {x0,x1,y0,y1,z0,z1} = bx;
+  const corners = [
+    [x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0],
+    [x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]];
+  const edges = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+  edges.forEach(([a,b])=>g.add(mk(corners[a],corners[b],0x333a45)));
+  // axis lines through origin-ish (roll=0,pitch=0 plane at z0) colored
+  g.add(mk([x0,0,z0],[x1,0,z0],0xe05c5c));   // roll axis
+  g.add(mk([0,y0,z0],[0,y1,z0],0x5cd68a));   // pitch axis
+  g.add(mk([0,0,z0],[0,0,z1],0x5c9ee0));     // torque axis (at roll=pitch=0)
+  // tick labels
+  for (const v of [-40,-20,0,20,40]){ if(v<x0||v>x1) continue; const s=makeTextSprite(v+'°','#e0a0a0'); s.position.set(v,y0-4,z0); g.add(s);}
+  for (const v of [-40,-20,0,20,40]){ if(v<y0||v>y1) continue; const s=makeTextSprite(v+'°','#a0e0b8'); s.position.set(x0-6,v,z0); g.add(s);}
+  for (const v of [0,20,40,60,80]){ const zz=v*Zscale; if(zz<z0||zz>z1) continue; const s=makeTextSprite(v+'','#a0c0e0'); s.position.set(x0-6,y0-4,zz); g.add(s);}
+  return g;
+}
+
+function computeColors(src){
+  const d = rawData[src]; const n = d.pitch.length;
+  const colors = new Float32Array(n*3);
+  const mode = document.querySelector('input[name=colormode]:checked').value;
+  const limOn = document.getElementById('limOn').checked;
+  const limStyle = document.querySelector('input[name=limstyle]:checked').value;
+  const pmin=+document.getElementById('pmin').value, pmax=+document.getElementById('pmax').value;
+  const rmin=+document.getElementById('rmin').value, rmax=+document.getElementById('rmax').value;
+  for(let i=0;i<n;i++){
+    let c;
+    if (mode==='policy') c = COLORS[src];
+    else c = turbo(Math.sqrt(d.wp[i]**2+d.wr[i]**2)/velMax);
+    const out = limOn && (d.pitch[i]<pmin||d.pitch[i]>pmax||d.roll[i]<rmin||d.roll[i]>rmax);
+    if (out) c = limStyle==='red' ? RED : GRAY;
+    colors[i*3]=c[0]; colors[i*3+1]=c[1]; colors[i*3+2]=c[2];
+  }
+  return colors;
+}
+
+function refreshColors(){
+  for (const src of [0,1]){
+    const obj = pointsObjs[src]; if(!obj) continue;
+    obj.geometry.attributes.color.array.set(computeColors(src));
+    obj.geometry.attributes.color.needsUpdate = true;
+  }
+  const mode = document.querySelector('input[name=colormode]:checked').value;
+  document.getElementById('legend-grad').style.display = mode==='velocity' ? 'block' : 'none';
+  const lr = document.getElementById('legend-range');
+  lr.style.display = mode==='velocity' ? 'block' : 'none';
+  if (mode==='velocity') lr.textContent = `0 — ${velMax.toFixed(1)} rad/s`;
+}
+
+async function loadData(){
+  const res = await fetch('/api/ankle_demand?ds=20');
+  const j = await res.json();
+  const bySrc = {0:{pitch:[],roll:[],tp:[],tr:[],wp:[],wr:[]}, 1:{pitch:[],roll:[],tp:[],tr:[],wp:[],wr:[]}};
+  for (const p of j.pts){
+    const [pitch,roll,tp,tr,wp,wr,src] = p;
+    const b = bySrc[src];
+    b.pitch.push(pitch); b.roll.push(roll); b.tp.push(tp); b.tr.push(tr); b.wp.push(wp); b.wr.push(wr);
+  }
+  let vmax=0;
+  for (const src of [0,1]) for (let i=0;i<bySrc[src].wp.length;i++) vmax=Math.max(vmax, Math.hypot(bySrc[src].wp[i],bySrc[src].wr[i]));
+  velMax = vmax;
+  rawData = bySrc;
+
+  let xlo=1e9,xhi=-1e9,ylo=1e9,yhi=-1e9,zlo=1e9,zhi=-1e9;
+  for (const src of [0,1]){
+    const d = bySrc[src]; const n = d.pitch.length;
+    const pos = new Float32Array(n*3);
+    for (let i=0;i<n;i++){
+      const x=d.roll[i], y=d.pitch[i], z=Math.hypot(d.tp[i],d.tr[i])*Zscale;
+      pos[i*3]=x; pos[i*3+1]=y; pos[i*3+2]=z;
+      xlo=Math.min(xlo,x);xhi=Math.max(xhi,x);ylo=Math.min(ylo,y);yhi=Math.max(yhi,y);zlo=Math.min(zlo,0);zhi=Math.max(zhi,z);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+    geo.setAttribute('color', new THREE.BufferAttribute(computeColors(src),3));
+    const mat = new THREE.PointsMaterial({size:2.5, vertexColors:true, sizeAttenuation:true, transparent:true, opacity:0.85});
+    const pts = new THREE.Points(geo, mat);
+    pts.userData.src = src;
+    scene.add(pts);
+    pointsObjs[src] = pts;
+  }
+  refreshColors();
+  const bx = {x0:xlo,x1:xhi,y0:ylo,y1:yhi,z0:0,z1:zhi};
+  scene.add(buildAxes(bx));
+  const cx=(xlo+xhi)/2, cy=(ylo+yhi)/2, cz=(zlo+zhi)/2;
+  controls.target.set(cx,cy,cz);
+  const R = Math.max(xhi-xlo, yhi-ylo, zhi-zlo);
+  camPersp.position.set(cx+R*1.1, cy+R*0.8, cz+R*1.3);
+  setOrthoBounds(bx);
+  controls.update();
+  document.getElementById('stat').textContent = `${j.pts.length.toLocaleString()} samples  (${bySrc[0].pitch.length} gen21p2_fc + ${bySrc[1].pitch.length} p2b_v2_fc)`;
+}
+
+function setOrthoBounds(bx){
+  const R = Math.max(bx.x1-bx.x0, bx.y1-bx.y0, bx.z1-bx.z0)*0.65;
+  camOrtho.left=-R; camOrtho.right=R; camOrtho.top=R; camOrtho.bottom=-R;
+  camOrtho.near=-1000; camOrtho.far=1000;
+  camOrtho.updateProjectionMatrix();
+  camOrtho.userData.center = [(bx.x0+bx.x1)/2,(bx.y0+bx.y1)/2,(bx.z0+bx.z1)/2];
+}
+
+function setView(name){
+  document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view===name));
+  const c = camOrtho.userData.center || [0,0,0];
+  if (name==='free'){
+    activeCam = camPersp; controls.object = camPersp; controls.enableRotate = true;
+  } else {
+    activeCam = camOrtho; controls.object = camOrtho; controls.enableRotate = false;
+    const D = 200;
+    if (name==='roll')   { camOrtho.position.set(c[0]+D,c[1],c[2]); camOrtho.up.set(0,0,1); }
+    if (name==='pitch')  { camOrtho.position.set(c[0],c[1]+D,c[2]); camOrtho.up.set(1,0,0); }
+    if (name==='torque') { camOrtho.position.set(c[0],c[1],c[2]+D); camOrtho.up.set(0,1,0); }
+    camOrtho.lookAt(c[0],c[1],c[2]);
+    controls.target.set(c[0],c[1],c[2]);
+  }
+  controls.update();
+}
+
+// picture-in-picture mini pose inset (renders foot plate tilted by pitch/roll,
+// using the SAME rotation convention verified against the real robot: docs/71 SS10a
+// R(tp,tr) = R_pitch(tp) @ R_roll(tr), local Y=-toe/+heel, X=lateral, Z=up)
+let insetScene, insetCam, footMesh, toeMesh;
+function buildInset(){
+  insetScene = new THREE.Scene();
+  insetScene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.8); dl.position.set(2,3,4); insetScene.add(dl);
+  insetCam = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+  insetCam.position.set(2.2,-2.6,1.8); insetCam.up.set(0,0,1); insetCam.lookAt(0,0,0);
+  footMesh = new THREE.Mesh(new THREE.BoxGeometry(1.0,1.8,0.12), new THREE.MeshStandardMaterial({color:0x5b8def}));
+  insetScene.add(footMesh);
+  toeMesh = new THREE.Mesh(new THREE.ConeGeometry(0.14,0.5,12), new THREE.MeshStandardMaterial({color:0xe0a25c}));
+  toeMesh.rotation.x = Math.PI/2; toeMesh.position.set(0,-1.15,0);
+  insetScene.add(toeMesh);
+  const grid = new THREE.GridHelper(4,8,0x333a45,0x252a33); grid.rotation.x=Math.PI/2; grid.position.z=-0.5;
+  insetScene.add(grid);
+}
+function setFootPose(pitchDeg, rollDeg){
+  // R = R_pitch(tp) @ R_roll(tr); THREE Euler order 'XZY' with these signs reproduces
+  // the same composed matrix we derived/verified against MuJoCo FK this session.
+  const tp = THREE.MathUtils.degToRad(pitchDeg), tr = THREE.MathUtils.degToRad(rollDeg);
+  // three.js makeRotationX(a) = [[1,0,0],[0,cos,-sin],[0,sin,cos]] -- the TRANSPOSE of our
+  // verified R_pitch(tp) (rotation about the robot's local -X). Negate tp to match (docs/71 SS10a).
+  const Rp = new THREE.Matrix4().makeRotationX(-tp);
+  const Rr = new THREE.Matrix4().makeRotationY(tr);   // matches R_roll(tr) sign exactly, no negation needed
+  const m = new THREE.Matrix4().multiplyMatrices(Rp, Rr);
+  footMesh.setRotationFromMatrix(m);
+  toeMesh.setRotationFromMatrix(m);
+  const off = new THREE.Vector3(0,-1.15,0).applyMatrix4(m);
+  toeMesh.position.copy(off);
+}
+
+function onResize(){
+  const w = viewEl.clientWidth, h = viewEl.clientHeight;
+  renderer.setSize(w,h);
+  camPersp.aspect = w/h; camPersp.updateProjectionMatrix();
+  // keep vertical half-extent (top) fixed, recompute left/right from the new aspect ratio
+  camOrtho.left = -camOrtho.top * (w/h); camOrtho.right = camOrtho.top * (w/h);
+  camOrtho.updateProjectionMatrix();
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.setViewport(0,0,viewEl.clientWidth,viewEl.clientHeight);
+  renderer.setScissorTest(false);
+  renderer.render(scene, activeCam);
+  // inset (bottom-right, only when a point is selected)
+  if (insetVisible){
+    const w=160,h=160, pad=14;
+    const vw=viewEl.clientWidth, vh=viewEl.clientHeight;
+    renderer.setViewport(vw-w-pad, pad, w, h);
+    renderer.setScissor(vw-w-pad, pad, w, h);
+    renderer.setScissorTest(true);
+    renderer.clearDepth();
+    insetCam.aspect = 1; insetCam.updateProjectionMatrix();
+    renderer.render(insetScene, insetCam);
+    renderer.setScissorTest(false);
+  }
+}
+
+let insetVisible = false;
+function showInfo(src, idx){
+  const d = rawData[src];
+  const pol = src===0 ? 'gen21p2_fc (flat-anchored)' : 'p2b_v2_fc (rough-anchored)';
+  const tau = Math.hypot(d.tp[idx], d.tr[idx]);
+  const om = Math.hypot(d.wp[idx], d.wr[idx]);
+  document.getElementById('info').innerHTML = `<table>
+    <tr><td class="k">policy</td><td class="v">${pol}</td></tr>
+    <tr><td class="k">pitch</td><td class="v">${d.pitch[idx].toFixed(1)}°</td></tr>
+    <tr><td class="k">roll</td><td class="v">${d.roll[idx].toFixed(1)}°</td></tr>
+    <tr><td class="k">τ_pitch</td><td class="v">${d.tp[idx].toFixed(1)} N·m</td></tr>
+    <tr><td class="k">τ_roll</td><td class="v">${d.tr[idx].toFixed(1)} N·m</td></tr>
+    <tr><td class="k">|τ|</td><td class="v">${tau.toFixed(1)} N·m</td></tr>
+    <tr><td class="k">ω_pitch</td><td class="v">${d.wp[idx].toFixed(2)} rad/s</td></tr>
+    <tr><td class="k">ω_roll</td><td class="v">${d.wr[idx].toFixed(2)} rad/s</td></tr>
+    <tr><td class="k">|ω|</td><td class="v">${om.toFixed(2)} rad/s</td></tr>
+  </table>`;
+  setFootPose(d.pitch[idx], d.roll[idx]);
+  insetVisible = true;
+}
+
+function init(){
+  viewEl = document.getElementById('view');
+  scene = new THREE.Scene(); scene.background = new THREE.Color(0x12151a);
+  renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  viewEl.appendChild(renderer.domElement);
+
+  camPersp = new THREE.PerspectiveCamera(50, 1, 0.1, 5000);
+  camOrtho = new THREE.OrthographicCamera(-100,100,100,-100,-1000,1000);
+  activeCam = camPersp;
+  controls = new THREE.OrbitControls(camPersp, renderer.domElement);
+  controls.enableDamping = true; controls.dampingFactor = 0.08;
+
+  buildInset();
+  onResize();
+  window.addEventListener('resize', onResize);
+
+  document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+  document.querySelectorAll('input[name=colormode]').forEach(r=>r.addEventListener('change', refreshColors));
+  document.querySelectorAll('input[name=limstyle]').forEach(r=>r.addEventListener('change', refreshColors));
+  ['limOn','pmin','pmax','rmin','rmax'].forEach(id=>document.getElementById(id).addEventListener('input', refreshColors));
+  document.getElementById('pol0').addEventListener('change', e=>{ if(pointsObjs[0]) pointsObjs[0].visible = e.target.checked; });
+  document.getElementById('pol1').addEventListener('change', e=>{ if(pointsObjs[1]) pointsObjs[1].visible = e.target.checked; });
+  document.getElementById('psize').addEventListener('input', e=>{
+    for (const src of [0,1]) if(pointsObjs[src]) pointsObjs[src].material.size = +e.target.value;
+  });
+
+  const raycaster = new THREE.Raycaster(); raycaster.params.Points.threshold = 1.2;
+  renderer.domElement.addEventListener('click', (ev)=>{
+    const rect = renderer.domElement.getBoundingClientRect();
+    const mouse = new THREE.Vector2(((ev.clientX-rect.left)/rect.width)*2-1, -((ev.clientY-rect.top)/rect.height)*2+1);
+    raycaster.setFromCamera(mouse, activeCam);
+    const objs = [0,1].filter(s=>pointsObjs[s] && pointsObjs[s].visible).map(s=>pointsObjs[s]);
+    const hits = raycaster.intersectObjects(objs);
+    if (hits.length){ showInfo(hits[0].object.userData.src, hits[0].index); }
+  });
+
+  loadData();
+  setView('free');
+  animate();
+}
+init();
+</script>
+</body>
+</html>

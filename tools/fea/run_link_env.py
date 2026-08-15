@@ -230,7 +230,7 @@ def main():
                               'pair; axial moment = drive torque via the actuator path'
                               if env_spec.get('pair_axis') else
                               'moments applied locally at the single seat (conservative)'),
-                magnitudes=dict(zip(E.COMPS, [round(m, 1) for m in mags])),
+                magnitudes=dict(zip(comps, [round(m, 1) for m in mags])),
                 mesh_nodes=len(nodes), n_fixed=len(fix), n_loaded=len(load_nids))
     print('\nENVELOPE ' + json.dumps(summ, indent=1), flush=True)
     json.dump(summ, open(f'{W}/envelope_{stat}.json', 'w'), indent=1)

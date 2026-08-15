@@ -11,8 +11,11 @@ import glob
 import json
 import os
 
-TARGET = ('/home/syaro/MikuchanRemote/Human-Pygmalion/tools/wrench_studio/'
-          'static/link_setup_data.json')
+import numpy as np
+
+STATIC = '/home/syaro/MikuchanRemote/Human-Pygmalion/tools/wrench_studio/static'
+TARGET = f'{STATIC}/link_setup_data.json'          # legacy single payload
+INDEX = f'{STATIC}/link_setup_index.json'          # index + per-link files (mobile)
 WORK = '/home/syaro/pyg_fea/work'
 MAX_TRIS = 90_000
 
@@ -57,6 +60,19 @@ def main():
             k = next(iter(c))
             if len(c[k]['nodes']) == len(s['nodes']):
                 s['result_vM'] = c[k]['fields']['vM']
+        # only show fasteners/bearings that belong to the ANALYSED geometry: a
+        # CAD sub-assembly can be wider than the link subset that was meshed
+        P = np.array(s['nodes'], float)
+        lo, hi = P.min(0) - 25.0, P.max(0) + 25.0
+        def inside(pt):
+            q = np.asarray(pt, float)
+            return bool(np.all(q >= lo) and np.all(q <= hi))
+        nb = len(s.get('bolts', []))
+        s['bolts'] = [b for b in s.get('bolts', []) if inside(b['head_point'])]
+        s['bolts_outside_subset'] = nb - len(s['bolts'])
+        nr = len(s.get('bearings', []))
+        s['bearings'] = [b for b in s.get('bearings', []) if inside(b['centre'])]
+        s['bearings_outside_subset'] = nr - len(s['bearings'])
         s = decimate(s)
         links.setdefault(link, {})[stat] = s
         print(f"{link:18s} {stat:5s} tris {len(s['tris']):6d} fixed {len(s['fixed']):5d} "
@@ -67,6 +83,23 @@ def main():
               f"{' (decimated x%d)' % s['_decimated'] if s.get('_decimated') else ''}")
     json.dump(dict(links=links), open(TARGET, 'w'), separators=(',', ':'))
     print(f'\n{len(links)} links -> {TARGET} ({os.path.getsize(TARGET)/1e6:.1f} MB)')
+
+    # per-link files + index: a phone should not parse the whole body at once
+    idx = {}
+    for link, stats in links.items():
+        f = f'link_setup_{link}.json'
+        json.dump(stats, open(f'{STATIC}/{f}', 'w'), separators=(',', ':'))
+        any_s = next(iter(stats.values()))
+        idx[link] = dict(file=f, stats=sorted(stats),
+                         joint=any_s.get('joint'), tris=len(any_s['tris']),
+                         nodes=len(any_s['nodes']),
+                         bolts=len(any_s.get('bolts', [])),
+                         bearings=len(any_s.get('bearings', [])),
+                         size_mb=round(os.path.getsize(f'{STATIC}/{f}') / 1e6, 2),
+                         solved=bool(any_s.get('result_vM')))
+        print(f'   {f}: {idx[link]["size_mb"]} MB')
+    json.dump(dict(links=idx), open(INDEX, 'w'), indent=1)
+    print(f'index -> {INDEX}')
 
 
 if __name__ == '__main__':

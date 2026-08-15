@@ -1,0 +1,579 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
+<title>Wrench Studio v5</title>
+<script src="/vendor/three.min.js"></script>
+<script src="/vendor/OrbitControls.js"></script>
+<style>
+body{background:#14161a;color:#dde1e6;font-family:'Segoe UI',sans-serif;margin:0;display:flex;height:100vh;overflow:hidden}
+#side{width:330px;min-width:200px;padding:12px;overflow-y:auto;background:#1b1e24;border-right:1px solid #2a2f38}
+#dragV{width:6px;cursor:col-resize;background:#22262e}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#view{flex:1;position:relative;min-height:120px}#view canvas{display:block}
+#dragH{height:6px;cursor:row-resize;background:#22262e}
+#chart{height:300px;background:#171a1f}
+h1{font-size:15px;margin:0 0 8px}h2{font-size:11px;color:#8a929c;margin:12px 0 4px;text-transform:uppercase}
+select,button,input[type=text]{background:#242830;color:#cfd4da;border:1px solid #3a404a;border-radius:6px;padding:4px;font-size:12px;width:100%;margin-bottom:4px}
+button.on{background:#3564c0;color:#fff}
+.hrow{display:flex;gap:5px}.hrow>*{flex:1}
+label{font-size:10px;color:#8a929c}
+input[type=range]{width:100%}
+#hud{position:absolute;top:8px;left:10px;font-size:12px;color:#aab2bc;background:#14161acc;padding:5px 9px;border-radius:6px;max-width:70%}
+#jinfo{position:absolute;bottom:8px;left:10px;font-size:12px;color:#ffd780;background:#14161acc;padding:5px 9px;border-radius:6px}
+.note{font-size:10px;color:#6b737d;line-height:1.4}
+.bm{display:flex;gap:4px;align-items:center;font-size:11px;padding:2px 0;border-bottom:1px solid #22262e}
+.bm span{flex:1;cursor:pointer}.bm input[type=checkbox]{width:auto;margin:0}
+.bm button{width:auto;padding:1px 6px;font-size:10px;margin:0}
+</style></head><body>
+<div id="side">
+ <h1>Wrench Studio <span style="color:#8a929c;font-size:10px">v5</span></h1>
+ <h2>정책 / 블록</h2><select id="pol"></select><select id="blk"></select>
+ <div class="hrow"><button id="play">▶</button><button id="loopB" class="on">루프</button></div>
+ <input id="fr" type="range" min="0" max="374" value="0">
+ <div><label>재생속도 <span id="spdV">0.49</span>x</label><input id="spd" type="range" min="1" max="100" value="70"></div>
+ <h2>바디 투명도</h2>
+ <div class="hrow"><button id="opDn">−0.1</button><input id="op" type="range" min="1" max="10" value="9" style="flex:2"><button id="opUp">+0.1</button></div>
+ <h2>관절 집중 모드</h2>
+ <select id="focus"><option value="">(끔 — 전체)</option></select>
+ <div><label>비집중 투명도 <span id="dimV">0.10</span></label><input id="dim" type="range" min="0" max="10" value="1"></div>
+ <div class="hrow"><button id="showF" class="on">힘 F</button><button id="showM" class="on">모멘트 M</button></div>
+ <div class="hrow"><div><label>F 스케일</label><input id="fs" type="range" min="1" max="30" value="8"></div>
+ <div><label>M 스케일</label><input id="ms" type="range" min="1" max="40" value="12"></div>
+ <div><label>두께 감도</label><input id="tw" type="range" min="1" max="30" value="10"></div></div>
+ <h2>MAX 탐색 (전역 최악지점)</h2>
+ <select id="mmJoint"></select>
+ <div class="hrow"><button id="md0" class="on">peak</button><button id="md1">p99</button><button id="md2">rms</button></div>
+ <button id="mmLoad">이 관절 8축 MAX + scatter</button>
+ <button id="roseB">방향별(8분면) MAX 로즈 표시</button>
+ <div class="note">빨간점(성분 MAX 순간) 클릭 → 3D가 그 순간 <b>±1s 루프재생</b>. flat=파랑·rough=진홍·기타=회색 / 통계선 RMS(초록)·P99(주황)·peak(빨강) / 세로선=실측 무부하속도</div>
+ <h2>FEA 하중케이스 (docs/64 §10.2b)</h2>
+ <button id="lcLoad">이 관절 LC-1~4 로드</button>
+ <div id="lcTbl" style="font-size:10px"></div>
+ <div class="note">LC-1·2 = ×1.25 후 항복판정 · LC-3 = 소성체크 · LC-4 = 볼트 갭핑. 행 클릭 = 그 순간 3D ±1s 루프. 링크로컬(+x축방향/+y전방/+z상방), 관절 앵커 기준 브라켓 하중</div>
+ <h2>하중 구름 (링크 부착)</h2>
+ <div class="hrow"><button id="cldOn">구름 표시</button><button id="cldF" class="on">힘</button><button id="cldM">모멘트</button></div>
+ <div class="hrow"><button id="cldFlat" class="on">flat</button><button id="cldRough" class="on">rough</button></div>
+ <select id="cldRange"><option value="p99">≤P99 (작동 구름)</option><option value="all">전체</option><option value="tail">상위 1%만 (충격)</option></select>
+ <div class="hrow"><div><label>구름 스케일</label><input id="cldSc" type="range" min="1" max="40" value="12"></div>
+ <div><label>점 크기</label><input id="cldPs" type="range" min="1" max="20" value="5"></div>
+ <div><label>불투명도</label><input id="cldOp" type="range" min="1" max="20" value="6"></div></div>
+ <div id="cldInfo" class="note"></div>
+ <div class="note">각 점 = 측정 1샘플의 하중 벡터 끝점을 <b>그 링크 좌표계</b>에 찍은 것 → 링크와 함께 회전. 색=크기(파랑→빨강). 관절 집중 모드면 그 관절만. 미러 규약 수정본(F: −x / M: −y,−z, docs/64 §8h)</div>
+ <h2>북마크 (서버 저장)</h2>
+ <input id="bmName" type="text" placeholder="이름 (현재 정책/블록/프레임 저장)">
+ <button id="bmAdd">+ 현재 지점 북마크</button>
+ <div id="bmList"></div>
+ <div class="hrow"><button id="bmCmp">선택 2개 비교</button><button id="bmCmpOff">비교 해제</button></div>
+ <div class="note">이름 클릭=이동 · 더블클릭=이름변경 · ✕=삭제 · 2개 체크 후 비교 → A(빨/보라)·B(초록/노랑) 자세+하중 오버레이</div>
+</div>
+<div id="dragV"></div>
+<div id="main"><div id="view"><div id="hud"></div><div id="jinfo"></div><div id="maxbn" style="position:absolute;top:8px;right:10px;display:none;background:#c01818;color:#fff;font-weight:bold;padding:8px 14px;border-radius:8px;font-size:14px;box-shadow:0 0 14px #f00"></div></div><div id="dragH"></div><canvas id="chart"></canvas></div>
+<script>
+const LIM={hip_pitch:[40,120],hip_roll:[40,120],hip_yaw:[40,120],knee:[40,120],ankle_pitch:[20,60],ankle_roll:[5,14]};
+const NOLOAD={hip_pitch:19.9,hip_roll:19.9,hip_yaw:19.9,knee:19.9,ankle_pitch:19.7,ankle_roll:33.0};
+const J=['hip_pitch','hip_roll','hip_yaw','knee','ankle_pitch','ankle_roll'];
+const FLAT='gen21p2_fc',ROUGH='p2b_v2_fc';
+J.forEach(j=>{const o=document.createElement('option');o.textContent=j;document.getElementById('mmJoint').appendChild(o);});
+['L','R'].forEach(sd=>J.forEach((j,i)=>{const o=document.createElement('option');o.value=(sd==='L'?0:6)+i;o.textContent=sd+'_'+j;document.getElementById('focus').appendChild(o);}));
+let POL=[],pol=null,blkList=[],mot=null,fr=0,playing=null,loop=true,loopRange=null;
+let motB=null,cmpInfo=null;
+const view=document.getElementById('view');
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));view.appendChild(renderer.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x14161a);
+const cam=new THREE.PerspectiveCamera(45,1,0.01,100);cam.position.set(1.6,-1.6,1.2);cam.up.set(0,0,1);
+const ctrl=new THREE.OrbitControls(cam,renderer.domElement);ctrl.target.set(0,0,0.8);
+scene.add(new THREE.HemisphereLight(0xffffff,0x333344,1.0));
+const dl=new THREE.DirectionalLight(0xffffff,0.7);dl.position.set(2,-3,4);scene.add(dl);
+const grid=new THREE.GridHelper(8,32,0x2a2f38,0x22262e);grid.rotation.x=Math.PI/2;scene.add(grid);
+const meshGroup=new THREE.Group();scene.add(meshGroup);
+const meshGroupB=new THREE.Group();scene.add(meshGroupB);
+let bodyMeshes={},bodyMeshesB={};
+function resize(){const w=view.clientWidth,h=view.clientHeight;renderer.setSize(w,h);cam.aspect=w/h;cam.updateProjectionMatrix();}
+window.addEventListener('resize',resize);
+function hud(t){document.getElementById('hud').textContent=t;}
+async function loadMeshesInto(tag,group,store,alt){
+ group.clear();for(const k in store)delete store[k];
+ const bd=await (await fetch(`/api/bodies/${tag}`)).json();
+ if(!alt)window._bd=bd;
+ await Promise.all(bd.map(e=>fetch(`/api/meshgeom/${tag}/${e.mid}`).then(r=>r.json()).then(gd=>{
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(gd.v,3));
+  geo.setIndex(gd.f);geo.computeVertexNormals();
+  const isL=e.body.includes('/L_'),isR=e.body.includes('/R_');
+  let col=alt?(isL?0x40e080:(isR?0xe040c0:0x707a86)):(isL?0x3ec4f0:(isR?0xf0863e:0x9aa2ac));
+  const mat=new THREE.MeshPhongMaterial({color:col,shininess:8,flatShading:true,transparent:true,opacity:0.9});
+  const mesh=new THREE.Mesh(geo,mat);group.add(mesh);
+  (store[e.bid]=store[e.bid]||[]).push({mesh,gpos:e.gpos,gquat:e.gquat,body:e.body});
+ }).catch(()=>{})));
+}
+async function loadPolicies(){
+ POL=await (await fetch('/api/policies')).json();
+ const s=document.getElementById('pol');
+ POL.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;s.appendChild(o);});
+ pol=POL.includes(FLAT)?FLAT:POL[0];s.value=pol;
+ await loadPolicy();await bmRefresh();
+}
+async function loadPolicy(){
+ hud('loading '+pol+' …');
+ blkList=await (await fetch(`/api/blocks/${pol}`)).json();
+ const s=document.getElementById('blk');s.innerHTML='';
+ blkList.forEach((b,i)=>{const o=document.createElement('option');o.value=i;o.textContent=`vx ${b.cmd[0]} vy ${b.cmd[1]} wz ${b.cmd[2]}`;s.appendChild(o);});
+ await loadMeshesInto(pol,meshGroup,bodyMeshes,false);
+ await loadBlock(0);
+}
+async function loadBlock(i,keepFr){
+ const b=blkList[i];hud(`motion cmd(${b.cmd}) …`);
+ mot=await (await fetch(`/api/motion/${pol}?start=${b.start}&n=750&ds=2`)).json();
+ if(!keepFr)fr=0;
+ document.getElementById('fr').max=mot.frames.length-1;
+ loopRange=null;hud('');draw();
+}
+const LINKOF={hip_pitch:'hip_pitch_link',hip_roll:'hip_roll_link',hip_yaw:'thigh_link',knee:'shin_link',ankle_pitch:'ankle_pitch_link',ankle_roll:'foot_link'};
+const CHAIN=['base_link','hip_pitch_link','hip_roll_link','thigh_link','shin_link','ankle_pitch_link','foot_link'];
+function focusSet(k){
+ if(k==='')return null;
+ const sd=+k<6?'L':'R', lk=LINKOF[J[+k%6]];
+ const ci=CHAIN.indexOf(lk);
+ const keep=new Set();
+ [ci-1,ci,ci+1].forEach(i=>{if(i>=0&&i<CHAIN.length)keep.add(CHAIN[i]==='base_link'?'robot/base_link':`robot/${sd}_${CHAIN[i]}`);});
+ return keep;
+}
+// ---- 화살표 오브젝트 풀 (프레임당 지오메트리 생성 제거 — 성능 핵심) ----
+const UY=new THREE.Vector3(0,1,0),UZ=new THREE.Vector3(0,0,1);
+const uCyl=new THREE.CylinderGeometry(1,1,1,6),uCone=new THREE.ConeGeometry(1,1,8);
+const uTor=new THREE.TorusGeometry(1,0.08,6,16,Math.PI*1.5);
+const pool={fat:[],arc:[],fi:0,ai:0};
+function poolReset(){pool.fi=0;pool.ai=0;}
+function poolHideRest(){
+ for(let i=pool.fi;i<pool.fat.length;i++)pool.fat[i].g.visible=false;
+ for(let i=pool.ai;i<pool.arc.length;i++)pool.arc[i].g.visible=false;}
+function fatArrow(p,dir,len,color,thick){
+ let e;
+ if(pool.fi<pool.fat.length)e=pool.fat[pool.fi];
+ else{const mat=new THREE.MeshPhongMaterial();
+  const cyl=new THREE.Mesh(uCyl,mat),cone=new THREE.Mesh(uCone,mat);
+  const g=new THREE.Group();g.add(cyl);g.add(cone);scene.add(g);
+  e={g,cyl,cone,mat};pool.fat.push(e);}
+ pool.fi++;e.g.visible=true;
+ const cl=Math.max(len-0.045,0.01);
+ e.cyl.scale.set(thick,cl,thick);e.cyl.position.y=cl/2;
+ e.cone.scale.set(thick*2.4,0.045,thick*2.4);e.cone.position.y=cl+0.022;
+ e.mat.color.set(color);
+ e.g.quaternion.setFromUnitVectors(UY,dir);e.g.position.copy(p);
+ e.g.userData={};return e.g;
+}
+function arcArrow(p,axis,mag,scale,color,thick){
+ let e;
+ if(pool.ai<pool.arc.length)e=pool.arc[pool.ai];
+ else{const mat=new THREE.MeshPhongMaterial();
+  const tor=new THREE.Mesh(uTor,mat),cone=new THREE.Mesh(uCone,mat);
+  const g=new THREE.Group();g.add(tor);g.add(cone);scene.add(g);
+  e={g,tor,cone,mat};pool.arc.push(e);}
+ pool.ai++;e.g.visible=true;
+ const R=Math.min(0.05+Math.abs(mag)*scale,0.35);
+ e.tor.scale.set(R,R,R*(thick/0.08/R||1));
+ e.tor.scale.z=1;e.tor.scale.set(R,R,1);
+ const ang=Math.PI*1.5;
+ e.cone.scale.set(thick*2.6,0.04,thick*2.6);
+ e.cone.position.set(R*Math.cos(ang),R*Math.sin(ang),0);
+ e.cone.rotation.z=ang+(mag>=0?Math.PI:0);
+ e.mat.color.set(color);
+ e.g.quaternion.setFromUnitVectors(UZ,axis);e.g.position.copy(p);
+ e.g.userData={};return e.g;
+}
+const tmpQ=new THREE.Quaternion(),tmpQ2=new THREE.Quaternion(),tmpV=new THREE.Vector3();
+function poseGroup(mo,f,store,baseRef){
+ mo.bodies.forEach((bid,k)=>{
+  const o=k*7;
+  const px=f.poses[o],py=f.poses[o+1],pz=f.poses[o+2];
+  const qw=f.poses[o+3],qx=f.poses[o+4],qy=f.poses[o+5],qz=f.poses[o+6];
+  (store[bid]||[]).forEach(e=>{
+   tmpQ.set(qx,qy,qz,qw);tmpQ2.set(e.gquat[1],e.gquat[2],e.gquat[3],e.gquat[0]);
+   e.mesh.quaternion.copy(tmpQ).multiply(tmpQ2);
+   tmpV.set(e.gpos[0],e.gpos[1],e.gpos[2]).applyQuaternion(tmpQ);
+   e.mesh.position.set(px-baseRef[0]+tmpV.x,py-baseRef[1]+tmpV.y,pz+tmpV.z);
+  });
+ });
+}
+function drawArrows(f,baseRef,colF,colM,fk){
+ const Fs=+document.getElementById('fs').value/10000,Ms=+document.getElementById('ms').value/40000;
+ const showF=document.getElementById('showF').classList.contains('on');
+ const showM=document.getElementById('showM').classList.contains('on');
+ let info='';
+ for(let k=0;k<12;k++){
+  const focusOn=fk!==''&&fk!==null;
+  const isFocus=focusOn&&+fk===k;
+  if(focusOn&&!isFocus)continue;
+  const ao=k*3,wo=k*6;
+  const p=new THREE.Vector3(f.anch[ao]-baseRef[0],f.anch[ao+1]-baseRef[1],f.anch[ao+2]);
+  const Fv=new THREE.Vector3(f.w[wo],f.w[wo+1],f.w[wo+2]);
+  const Mv=new THREE.Vector3(f.w[wo+3],f.w[wo+4],f.w[wo+5]);
+  // 두께 = 크기 비례 (감도 tw로 파라미터화): th = tw·(기본 + |값|/기준), 상한 클램프
+  const tw=+document.getElementById('tw').value/10;
+  const fm=isFocus?1.8:1;
+  const thF=Math.min(0.003*tw*fm*(0.4+Fv.length()/600),0.03);
+  const thM=Math.min(0.0025*tw*fm*(0.4+Mv.length()/60),0.025);
+  if(showF&&Fv.length()>1)fatArrow(p,Fv.clone().normalize(),Fv.length()*Fs*(isFocus?1.4:1),colF,thF);
+  if(showM&&Mv.length()>0.5)arcArrow(p,Mv.clone().normalize(),Mv.length(),Ms*(isFocus?1.5:1),colM,thM);
+  if(isFocus)info=`${(+k<6?'L':'R')}_${J[k%6]}: |F| ${Fv.length().toFixed(0)} N · |M| ${Mv.length().toFixed(1)} N·m`;
+ }
+ return info;
+}
+// ===== FEA 하중케이스 패널 ==================================================
+// 통합 점프: 임의 (t_raw, block_start) 순간으로 3D 이동 + ±1s 루프.
+// blocks 목록은 중복 cmd 제거본이라 없는 블록은 합성 추가(전 점프 경로 공통 폴백).
+function jumpToInstant(t_raw,block_start,label,side){
+ let bi=blkList.findIndex(x=>x.start===block_start);
+ if(bi<0){
+  blkList.push({cmd:['jmp','',''],start:block_start});bi=blkList.length-1;
+  const o=document.createElement('option');o.value=bi;o.textContent=`(jump) start ${block_start}`;
+  document.getElementById('blk').appendChild(o);
+ }
+ document.getElementById('blk').value=bi;
+ return loadBlock(bi,true).then(()=>{
+  const ctr=Math.min(374,Math.max(0,Math.round((t_raw-block_start)/2)));
+  loopRange=[Math.max(0,ctr-25),Math.min(374,ctr+25)];fr=loopRange[0];
+  window._jumpMeta={c:ctr,label};
+  if(side){ // 관절 집중모드 자동 전환 (L/R 반영)
+   const j=document.getElementById('mmJoint').value;
+   document.getElementById('focus').value=String((side==='R'?6:0)+J.indexOf(j));
+   if(cldOn)cldRefresh();
+  }
+  startPlay();});
+}
+function lcJump(c){
+ jumpToInstant(c.t_raw,c.block_start,`${c.name} |F| ${c.Fmag}N |M| ${c.Mmag}Nm (${c.side})`,c.side);
+}
+document.getElementById('lcLoad').onclick=async()=>{
+ const j=document.getElementById('mmJoint').value;
+ hud('loadcase 계산중… (첫 호출 ~1분)');
+ const d=await (await fetch(`/api/loadcase/${pol}?joint=${j}`)).json();
+ hud('');
+ const el=document.getElementById('lcTbl');
+ let h=`<table style="width:100%;border-collapse:collapse;margin:4px 0">
+ <tr style="color:#8a929c"><td>case</td><td>Fx</td><td>Fy</td><td>Fz</td><td>Mx</td><td>My</td><td>Mz</td></tr>`;
+ d.cases.forEach((c,i)=>{
+  h+=`<tr class="lcRow" data-i="${i}" style="cursor:pointer;border-top:1px solid #2a2f38">
+  <td style="color:#ffd780">${c.name.replace(/ .*/,'')}<span style="color:#5a626c"> ${c.side}</span></td>
+  <td>${c.F[0]}</td><td>${c.F[1]}</td><td>${c.F[2]}</td>
+  <td>${c.M[0]}</td><td>${c.M[1]}</td><td>${c.M[2]}</td></tr>`;});
+ h+=`</table><div style="color:#8a929c">|P99|: `
+   +['Fx','Fy','Fz'].map(k=>`${k} ${d.stats[k].p99}`).join(' · ')+`<br>`
+   +['Mx','My','Mz'].map(k=>`${k} ${d.stats[k].p99}`).join(' · ')+` N·m</div>`;
+ el.innerHTML=h;
+ window._lcData=d;
+ el.querySelectorAll('.lcRow').forEach(r=>r.onclick=()=>lcJump(d.cases[+r.dataset.i]));
+};
+// ===== 하중 구름 (링크로컬 산점을 링크에 부착) =============================
+const cloudGroup=new THREE.Group();scene.add(cloudGroup);
+const cldCache={},cldObj={};let cldOn=false,cldKind='F';
+const CLDTAG=[['flat',FLAT,'cldFlat'],['rough',ROUGH,'cldRough']];
+function turbo(t){ // 0..1 -> 파랑→청록→노랑→빨강
+ t=Math.max(0,Math.min(1,t));
+ return [Math.min(1,Math.max(0,1.6*t-0.35)),Math.min(1,Math.max(0,1.5*Math.sin(Math.PI*t))),Math.min(1,Math.max(0,1.0-2.2*t))];
+}
+async function cldFetch(tag,j){
+ const key=`${tag}|${j}|${cldKind}`;
+ if(!cldCache[key])cldCache[key]=await (await fetch(`/api/cloud/${tag}?joint=${j}&kind=${cldKind}`)).json();
+ return cldCache[key];
+}
+function cldBuild(d,side,tagName){
+ const rng=document.getElementById('cldRange').value;
+ const mirF=[-1,1,1],mirM=[1,-1,-1],mir=(cldKind==='F')?mirF:mirM;
+ const pos=[],col=[],lim=(rng==='p99')?d.p99:(rng==='tail'?Infinity:Infinity);
+ const lo=(rng==='tail')?d.p99:-1,vmax=(rng==='tail')?d.peak:d.p99;
+ for(let i=0;i<d.n.length;i++){
+  const mg=d.n[i];if(mg>lim||mg<=lo)continue;
+  const o=i*3,s=(side==='R')?mir:[1,1,1];
+  pos.push(d.v[o]*s[0],d.v[o+1]*s[1],d.v[o+2]*s[2]);
+  const c=turbo(mg/Math.max(vmax,1e-6));col.push(c[0],c[1],c[2]);
+ }
+ const g=new THREE.BufferGeometry();
+ g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+ g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+ const mat=new THREE.PointsMaterial({size:0.01,vertexColors:true,transparent:true,
+   opacity:0.3,sizeAttenuation:true,depthWrite:false});
+ const p=new THREE.Points(g,mat);p.userData={n:pos.length/3,tag:tagName};return p;
+}
+async function cldRefresh(){
+ cloudGroup.children.forEach(p=>{p.geometry.dispose();p.material.dispose();});
+ cloudGroup.clear();for(const k in cldObj)delete cldObj[k];
+ if(!cldOn||!mot){document.getElementById('cldInfo').textContent='';draw();return;}
+ const fk=document.getElementById('focus').value;
+ const list=(fk!=='')?[+fk]:[...Array(12).keys()];
+ hud('구름 로딩…');const info=[];
+ for(const k of list){
+  const j=J[k%6],side=(k<6)?'L':'R';
+  for(const [nm,tg,btn] of CLDTAG){
+   if(!document.getElementById(btn).classList.contains('on'))continue;
+   const d=await cldFetch(tg,j);
+   const p=cldBuild(d,side,nm);cloudGroup.add(p);(cldObj[k]=cldObj[k]||[]).push(p);
+   if(side==='L')info.push(`${j} ${nm}: RMS ${d.rms} · P99 ${d.p99} · peak ${d.peak}`);
+  }
+ }
+ document.getElementById('cldInfo').innerHTML=info.join('<br>');
+ hud('');draw();
+}
+const cldQ=new THREE.Quaternion();
+function cldPose(f){
+ if(!cldOn)return;
+ // 스케일: 힘 1200N -> 슬라이더 1.0 배율일 때 1 m, 모멘트는 120 N·m 기준
+ const sc=(+document.getElementById('cldSc').value/10)/((cldKind==='F')?1200:120);
+ const ps=+document.getElementById('cldPs').value/2000;   // 월드 단위 (오브젝트 scale 무관)
+ const op=+document.getElementById('cldOp').value/40;
+ for(const k in cldObj){
+  const kk=+k,side=(kk<6)?'L':'R',j=J[kk%6];
+  const bi=(window._bd||[]).find(e=>e.body===`robot/${side}_${LINKOF[j]}`);
+  cldQ.set(0,0,0,1);
+  if(bi){const ki=mot.bodies.indexOf(bi.bid);if(ki>=0){const o=ki*7;cldQ.set(f.poses[o+4],f.poses[o+5],f.poses[o+6],f.poses[o+3]);}}
+  cldObj[k].forEach(p=>{
+   p.position.set(f.anch[kk*3]-f.base[0],f.anch[kk*3+1]-f.base[1],f.anch[kk*3+2]);
+   p.quaternion.copy(cldQ);p.scale.setScalar(sc);
+   p.material.size=ps;p.material.opacity=op;});
+ }
+}
+document.getElementById('cldOn').onclick=e=>{cldOn=!cldOn;e.target.classList.toggle('on',cldOn);cldRefresh();};
+document.getElementById('cldF').onclick=()=>{cldKind='F';document.getElementById('cldF').classList.add('on');
+ document.getElementById('cldM').classList.remove('on');cldRefresh();};
+document.getElementById('cldM').onclick=()=>{cldKind='M';document.getElementById('cldM').classList.add('on');
+ document.getElementById('cldF').classList.remove('on');cldRefresh();};
+['cldFlat','cldRough'].forEach(id=>document.getElementById(id).onclick=e=>{
+ e.target.classList.toggle('on');cldRefresh();});
+document.getElementById('cldRange').onchange=cldRefresh;
+['cldSc','cldPs','cldOp'].forEach(id=>document.getElementById(id).oninput=()=>draw());
+function draw(){
+ if(!mot)return;
+ const f=mot.frames[fr];
+ poseGroup(mot,f,bodyMeshes,f.base);
+ const op=+document.getElementById('op').value/10;
+ const dim=(+document.getElementById('dim').value/10)*op;
+ const fk=document.getElementById('focus').value;
+ const keep=focusSet(fk);
+ Object.values(bodyMeshes).forEach(arr=>arr.forEach(e=>{
+  e.mesh.material.opacity=(keep&&!keep.has(e.body))?dim:op;}));
+ poolReset();
+ const info=drawArrows(f,f.base,0xff4040,0xc890ff,fk);
+ if(cmpInfo&&motB){
+  const fB=motB.frames[Math.min(cmpInfo.frB,motB.frames.length-1)];
+  poseGroup(motB,fB,bodyMeshesB,f.base);
+  Object.values(bodyMeshesB).forEach(arr=>arr.forEach(e=>e.mesh.material.opacity=op*0.65));
+  drawArrows(fB,f.base,0x40e080,0xe0e040,fk);
+  hud(`A(빨/보라)=${cmpInfo.nameA}  ·  B(초록/노랑)=${cmpInfo.nameB}`);
+ } else hud(`${pol} · t=${(fr*mot.dt).toFixed(2)}s${loopRange?' [±1s 루프]':''}`);
+ document.getElementById('jinfo').textContent=info;
+ document.getElementById('fr').value=fr;
+ const bn=document.getElementById('maxbn');
+ if(window._jumpMeta&&loopRange&&Math.abs(fr-window._jumpMeta.c)<=1){bn.style.display='block';bn.textContent='★ '+window._jumpMeta.label+' — 이 순간';}
+ else bn.style.display='none';
+ if(roseOn)drawRose(f);
+ cldPose(f);
+ poolHideRest();
+ liveOverlay();
+}
+let roseArrows=[];
+async function toggleRose(){
+ roseOn=!roseOn;document.getElementById('roseB').classList.toggle('on',roseOn);
+ const j=document.getElementById('mmJoint').value;
+ if(roseOn&&!roseData[pol+j]){hud('maxdir 로딩…');
+  roseData[pol+j]=await (await fetch(`/api/maxdir/${pol}?joint=${j}`)).json();hud('');}
+ draw();}
+document.getElementById('roseB').onclick=toggleRose;
+function drawRose(f){
+ roseArrows=[];
+ const j=document.getElementById('mmJoint').value;
+ const rd=roseData[pol+j];if(!rd)return;
+ const fk=document.getElementById('focus').value;
+ const sd=(fk!==''&&+fk>=6)?'R':'L';
+ const jk=J.indexOf(j);const k=(sd==='R'?6:0)+jk;
+ const p=new THREE.Vector3(f.anch[k*3]-f.base[0],f.anch[k*3+1]-f.base[1],f.anch[k*3+2]);
+ // 링크 바디 쿼터니언 (로컬→월드)
+ const bname=`robot/${sd}_${LINKOF[j]}`;
+ const bi=(window._bd||[]).find(e=>e.body===bname);
+ let bq=new THREE.Quaternion();
+ if(bi){const ki=mot.bodies.indexOf(bi.bid);if(ki>=0){const o=ki*7;bq.set(f.poses[o+4],f.poses[o+5],f.poses[o+6],f.poses[o+3]);}}
+ const Fs=+document.getElementById('fs').value/10000;
+ Object.entries(rd[sd].F).forEach(([oc,e])=>{
+  const dir=new THREE.Vector3(e.v[0],e.v[1],e.v[2]).normalize().applyQuaternion(bq);
+  const a=fatArrow(p,dir,e.mag*Fs,0x30d0ff,Math.min(0.004+e.mag/900*0.01,0.02));
+  a.userData={jump:{t_raw:e.t_raw,block_start:e.block_start,value:e.mag,label:`dirMAX |F| ${e.mag}N oct${oc}`}};
+  roseArrows.push(a);});
+}
+// 로즈 화살표 클릭 → 그 순간 점프 (드래그와 구분)
+const ray=new THREE.Raycaster();let mdown=null;
+renderer.domElement.addEventListener('mousedown',e=>{mdown=[e.clientX,e.clientY];});
+renderer.domElement.addEventListener('mouseup',e=>{
+ if(!mdown||Math.hypot(e.clientX-mdown[0],e.clientY-mdown[1])>5){mdown=null;return;}
+ mdown=null;
+ if(!roseArrows.length)return;
+ const r=renderer.domElement.getBoundingClientRect();
+ const mo=new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
+ ray.setFromCamera(mo,cam);
+ const hits=ray.intersectObjects(roseArrows,true);
+ if(!hits.length)return;
+ let g2=hits[0].object;while(g2&&!g2.userData.jump)g2=g2.parent;
+ if(!g2)return;
+ const e2=g2.userData.jump;
+ jumpToInstant(e2.t_raw,e2.block_start,e2.label);
+});
+function animate(){requestAnimationFrame(animate);ctrl.update();renderer.render(scene,cam);}
+function spdVal(){const v=+document.getElementById('spd').value;return Math.max(0.005,(v/100)**2);}
+document.getElementById('spd').oninput=()=>{document.getElementById('spdV').textContent=spdVal().toFixed(3);if(playing)startPlay();};
+function startPlay(){
+ if(playing)clearInterval(playing);
+ const spd=spdVal();
+ playing=setInterval(()=>{
+  fr++;
+  const a=loopRange?loopRange[0]:0,b=loopRange?loopRange[1]:(mot.frames.length-1);
+  if(fr>b){if(loop)fr=a;else{fr=b;stopPlay();}}
+  draw();},40/spd);
+ document.getElementById('play').textContent='⏸';
+}
+function stopPlay(){if(playing)clearInterval(playing);playing=null;document.getElementById('play').textContent='▶';}
+document.getElementById('play').onclick=()=>playing?stopPlay():startPlay();
+document.getElementById('loopB').onclick=function(){loop=!loop;this.classList.toggle('on');};
+document.getElementById('fr').oninput=e=>{fr=+e.target.value;draw();};
+document.getElementById('pol').onchange=async e=>{pol=e.target.value;cmpOff();await loadPolicy();};
+document.getElementById('blk').onchange=e=>loadBlock(+e.target.value);
+['fs','ms','tw','focus','dim','op'].forEach(id=>document.getElementById(id).oninput=()=>{
+ document.getElementById('dimV').textContent=(document.getElementById('dim').value/10).toFixed(2);draw();});
+document.getElementById('focus').addEventListener('change',()=>{if(cldOn)cldRefresh();});
+['showF','showM'].forEach(id=>document.getElementById(id).onclick=function(){this.classList.toggle('on');draw();});
+document.getElementById('opUp').onclick=()=>{const o=document.getElementById('op');o.value=Math.min(10,+o.value+1);draw();};
+document.getElementById('opDn').onclick=()=>{const o=document.getElementById('op');o.value=Math.max(1,+o.value-1);draw();};
+let mmData=null,mmDots=[],mmScat={},mmMode='peak',roseOn=false,roseData={},scatState=null;
+const scatBase=document.createElement('canvas');
+[0,1,2].forEach(i=>document.getElementById('md'+i).onclick=function(){mmMode=['peak','p99','rms'][i];
+ [0,1,2].forEach(k=>document.getElementById('md'+k).classList.toggle('on',k===i));
+ document.getElementById('mmLoad').click();});
+document.getElementById('mmLoad').onclick=async()=>{
+ const j=document.getElementById('mmJoint').value;
+ hud('maxmode+scatter 로딩…');
+ const [mm,sc]=await Promise.all([
+  fetch(`/api/maxmode/${pol}?joint=${j}&mode=${mmMode}`).then(r=>r.json()),
+  mmScat[j]?Promise.resolve(mmScat[j]):fetch(`/api/scatter?joint=${j}`).then(r=>r.json())]);
+ mmData=mm;mmScat[j]=sc;hud('');drawScatter(j);};
+function stats(arr){const rms=Math.sqrt(arr.reduce((s,v)=>s+v*v,0)/arr.length);
+ const s=arr.map(Math.abs).sort((x,y)=>x-y);return[rms,s[Math.floor(s.length*0.99)],s[s.length-1]];}
+function drawScatter(j){
+ const cv0=document.getElementById('chart');cv0.width=cv0.clientWidth;cv0.height=cv0.clientHeight;
+ const cv=scatBase;cv.width=cv0.width;cv.height=cv0.height;
+ const g=cv.getContext('2d');g.clearRect(0,0,cv.width,cv.height);mmDots=[];
+ const sc=mmScat[j];if(!sc)return;
+ const[rt,pk]=LIM[j],nl=NOLOAD[j];
+ const X0=52,Y0=26,W=cv.width-235,H=cv.height-58;
+ const om=nl*1.15,tm=pk*1.15;
+ const X=v=>X0+W/2+v/om*(W/2),Y=v=>Y0+H/2-v/tm*(H/2);
+ g.strokeStyle='#2a2f38';g.strokeRect(X0,Y0,W,H);
+ g.strokeStyle='#22262e';g.beginPath();g.moveTo(X(0),Y0);g.lineTo(X(0),Y0+H);g.moveTo(X0,Y(0));g.lineTo(X0+W,Y(0));g.stroke();
+ [nl,-nl].forEach(v=>{g.strokeStyle='#d05070';g.setLineDash([4,3]);g.beginPath();g.moveTo(X(v),Y0);g.lineTo(X(v),Y0+H);g.stroke();g.setLineDash([]);});
+ g.fillStyle='#d05070';g.font='10px sans-serif';g.fillText(`no-load ${nl}`,X(nl)-58,Y0+12);
+ [[rt,'#e0b040','rated'],[pk,'#e05050','peak'],[-rt,'#e0b040',''],[-pk,'#e05050','']].forEach(([lv,c,lb])=>{
+  g.strokeStyle=c;g.setLineDash([3,4]);g.beginPath();g.moveTo(X0,Y(lv));g.lineTo(X0+W,Y(lv));g.stroke();g.setLineDash([]);
+  if(lb){g.fillStyle=c;g.fillText(lb,X0+W+4,Y(lv)+3);}});
+ Object.entries(sc).forEach(([tg,d])=>{
+  if(tg===FLAT||tg===ROUGH)return;
+  g.fillStyle='#5a616b26';
+  for(let i=0;i<d.tau.length;i++)g.fillRect(X(d.om[i]),Y(d.tau[i]),1.5,1.5);});
+ [[FLAT,'#4C72B0'],[ROUGH,'#C44E52']].forEach(([tg,col])=>{
+  const d=sc[tg];if(!d)return;
+  g.fillStyle=col;
+  for(let i=0;i<d.tau.length;i++)g.fillRect(X(d.om[i]),Y(d.tau[i]),1.8,1.8);});
+ [[FLAT,1.0],[ROUGH,0.5]].forEach(([tg,al])=>{
+  const d=sc[tg];if(!d)return;
+  const[rms,p99,mx]=stats(d.tau);
+  [[rms,'#40c070'],[p99,'#e08a30'],[mx,'#e04040']].forEach(([lv,c])=>{
+   g.globalAlpha=al;g.strokeStyle=c;g.lineWidth=1.3;
+   [lv,-lv].forEach(v=>{g.beginPath();g.moveTo(X0,Y(v));g.lineTo(X0+W,Y(v));g.stroke();});
+   g.globalAlpha=1;});});
+ if(mmData)['Fx','Fy','Fz','Mx','My','Mz','Fmag','Mmag'].forEach((cn,k)=>{
+  const e=mmData[cn];if(!e)return;
+  const c=e.idx-e.trace_t0;const x=X(e.omega[c]),y=Y(e.tau[c]);
+  g.fillStyle='#ff2020';g.beginPath();g.arc(x,y,5,0,7);g.fill();
+  g.strokeStyle='#fff';g.lineWidth=1;g.stroke();
+  g.fillStyle='#ff9090';g.font='bold 11px sans-serif';g.fillText(cn,x+7,y+4);
+  e._cn=cn;mmDots.push({x,y,e});
+  g.fillStyle='#9aa2ac';g.font='10px sans-serif';
+  g.fillText(`${cn} ${e.value}${cn[0]==='F'?'N':'Nm'} cmd(${e.cmd})`,X0+W+30,Y0+30+k*14);});
+ g.fillStyle='#dde1e6';g.font='bold 12px sans-serif';
+ g.fillText(`${j}  τ–ω · flat(파랑)/rough(진홍)/기타 회색 · 통계선 flat진하게·rough연하게 · RED=6축 MAX(클릭→±1s 재생)`,X0,16);
+ g.fillStyle='#8a929c';g.font='10px sans-serif';g.fillText('omega [rad/s]',X0+W/2-28,Y0+H+16);
+ scatState={X0,Y0,W,H,om,tm,joint:j};
+ liveOverlay();
+}
+function liveOverlay(){
+ if(!scatState)return;
+ const cv=document.getElementById('chart');const g=cv.getContext('2d');
+ g.clearRect(0,0,cv.width,cv.height);g.drawImage(scatBase,0,0);
+ if(!mot)return;
+ const {X0,Y0,W,H,om,tm,joint}=scatState;
+ const X=v=>X0+W/2+v/om*(W/2),Y=v=>Y0+H/2-v/tm*(H/2);
+ const jk=J.indexOf(joint);
+ const fk=document.getElementById('focus').value;
+ const side=(fk!==''&&+fk>=6)?1:0;
+ const idx=side*6+jk;
+ // 현재 블록 궤적 (till fr)
+ g.strokeStyle='#30e0ff';g.lineWidth=1.2;g.globalAlpha=0.8;g.beginPath();
+ for(let i=0;i<=fr;i++){const f2=mot.frames[i];const x=X(f2.om[idx]),y=Y(f2.tau[idx]);i?g.lineTo(x,y):g.moveTo(x,y);}
+ g.stroke();g.globalAlpha=1;
+ const f=mot.frames[fr];
+ const x=X(f.om[idx]),y=Y(f.tau[idx]);
+ g.fillStyle='#30e0ff';g.beginPath();g.arc(x,y,6,0,7);g.fill();
+ g.strokeStyle='#fff';g.stroke();
+ g.fillStyle='#30e0ff';g.font='bold 11px sans-serif';
+ g.fillText(`now ${(side?'R':'L')}_${joint}: τ ${f.tau[idx]} ω ${f.om[idx]}`,x+9,y-8);
+}
+document.getElementById('chart').addEventListener('click',ev=>{
+ if(!mmDots.length)return;
+ const r=ev.target.getBoundingClientRect();const mx=ev.clientX-r.left,my=ev.clientY-r.top;
+ let best=null;for(const d of mmDots){const dd=(d.x-mx)**2+(d.y-my)**2;if(dd<500&&(!best||dd<best.dd))best={dd,e:d.e};}
+ if(!best)return;
+ const e=best.e;
+ jumpToInstant(e.t_raw,e.block_start,`MAX ${best.e._cn||''} ${e.value}`);
+});
+async function bmRefresh(){
+ const bms=await (await fetch('/api/bookmarks')).json();
+ const el=document.getElementById('bmList');el.innerHTML='';
+ bms.forEach(b=>{
+  const d=document.createElement('div');d.className='bm';
+  d.innerHTML=`<input type="checkbox" data-id="${b.id}"><span title="${b.policy} blk${b.block_start} fr${b.frame}">${b.name}</span><button data-del="${b.id}">✕</button>`;
+  d.querySelector('span').onclick=()=>bmJump(b);
+  d.querySelector('span').ondblclick=async()=>{const n=prompt('새 이름',b.name);if(n){await fetch(`/api/bookmarks/${b.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});bmRefresh();}};
+  d.querySelector('[data-del]').onclick=async()=>{await fetch(`/api/bookmarks/${b.id}`,{method:'DELETE'});bmRefresh();};
+  el.appendChild(d);});
+ window._bms=bms;
+}
+document.getElementById('bmAdd').onclick=async()=>{
+ const name=document.getElementById('bmName').value||`bm ${pol} f${fr}`;
+ const b={name,policy:pol,block_start:blkList[+document.getElementById('blk').value].start,frame:fr};
+ await fetch('/api/bookmarks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+ document.getElementById('bmName').value='';bmRefresh();};
+async function bmJump(b){
+ cmpOff();
+ if(b.policy!==pol){pol=b.policy;document.getElementById('pol').value=pol;await loadPolicy();}
+ const bi=blkList.findIndex(x=>x.start===b.block_start);
+ if(bi>=0){document.getElementById('blk').value=bi;await loadBlock(bi,true);fr=b.frame;draw();}
+}
+document.getElementById('bmCmp').onclick=async()=>{
+ const sel=[...document.querySelectorAll('#bmList input:checked')].map(c=>+c.dataset.id);
+ if(sel.length!==2){alert('북마크 2개를 체크하세요');return;}
+ const A=window._bms.find(b=>b.id===sel[0]),B=window._bms.find(b=>b.id===sel[1]);
+ await bmJump(A);
+ hud('비교 로딩…');
+ await loadMeshesInto(B.policy,meshGroupB,bodyMeshesB,true);
+ motB=await (await fetch(`/api/motion/${B.policy}?start=${B.block_start}&n=750&ds=2`)).json();
+ cmpInfo={nameA:A.name,nameB:B.name,frB:B.frame};
+ stopPlay();draw();};
+function cmpOff(){cmpInfo=null;motB=null;meshGroupB.clear();for(const k in bodyMeshesB)delete bodyMeshesB[k];}
+document.getElementById('bmCmpOff').onclick=()=>{cmpOff();draw();};
+(function(){
+ const side=document.getElementById('side'),chart=document.getElementById('chart');
+ let m=null;
+ document.getElementById('dragV').onmousedown=e=>{m={t:'v',x:e.clientX,w:side.offsetWidth};e.preventDefault();};
+ document.getElementById('dragH').onmousedown=e=>{m={t:'h',y:e.clientY,h:chart.offsetHeight};e.preventDefault();};
+ window.addEventListener('mousemove',e=>{
+  if(!m)return;
+  if(m.t==='v')side.style.width=Math.max(200,m.w+e.clientX-m.x)+'px';
+  else chart.style.height=Math.max(80,m.h-(e.clientY-m.y))+'px';
+  resize();});
+ window.addEventListener('mouseup',()=>{if(m){m=null;const j=document.getElementById('mmJoint').value;if(mmScat[j])drawScatter(j);}});
+})();
+loadPolicies().then(()=>{resize();animate();});
+</script></body></html>

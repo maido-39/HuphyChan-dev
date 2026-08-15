@@ -1,15 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Link FEA Setup — BCs, loads, fasteners</title>
 <style>
- body{margin:0;font-family:system-ui,'Noto Sans KR',sans-serif;background:#14171c;color:#dde3ea;overflow:hidden}
+ :root{--bar-h:44px}
+ body{margin:0;font-family:system-ui,'Noto Sans KR',sans-serif;background:#14171c;color:#dde3ea;
+      overflow:hidden;-webkit-text-size-adjust:100%;overscroll-behavior:none}
  #bar{position:fixed;top:0;left:0;right:0;display:flex;gap:9px;align-items:center;flex-wrap:wrap;
-      padding:7px 12px;background:#20262e;border-bottom:1px solid #333;font-size:12.5px;z-index:5}
+      padding:7px 12px;background:#20262e;border-bottom:1px solid #333;font-size:12.5px;z-index:5;
+      padding-top:max(7px,env(safe-area-inset-top))}
+ .mobonly{display:none}
+ @media (max-width:820px), (max-height:520px){
+   #bar{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;gap:6px;padding:6px 8px;
+        -webkit-overflow-scrolling:touch;scrollbar-width:none}
+   #bar::-webkit-scrollbar{display:none}
+   #bar>*{flex:0 0 auto}
+   #bar b{font-size:12px}
+   select,button{padding:7px 10px;font-size:13px;min-height:34px}   /* tap targets */
+   .deskonly{display:none}
+   .mobonly{display:inline-block}
+   .panel{font-size:12px;line-height:1.45}
+   #info td:first-child{white-space:nowrap;color:#93a3b3;width:1%;padding-right:6px}
+   #info{max-height:38dvh}
+   #info{left:6px;right:6px;bottom:6px;max-width:none;max-height:44dvh;overflow-y:auto;
+         padding-bottom:max(9px,env(safe-area-inset-bottom))}
+   #leg{left:6px;right:6px;top:calc(var(--bar-h) + 6px);width:auto;max-height:40dvh;overflow-y:auto}
+ }
+ @media (max-height:520px) and (min-width:821px){   /* phone in landscape */
+   #info{left:8px;bottom:8px;right:auto;max-width:46vw;max-height:52dvh;overflow-y:auto}
+   #leg{left:auto;right:8px;top:calc(var(--bar-h) + 6px);width:250px;max-height:60dvh;overflow-y:auto}
+   #info.hide,#leg.hide{display:none}
+   table{width:100%} td{word-break:break-word}
+ }
  select,button{background:#14171c;color:#dde3ea;border:1px solid #445;border-radius:6px;padding:3px 7px;font-size:12px;cursor:pointer}
  button:hover{background:#2a3340} button.on{background:#2563a8;border-color:#4a90d9}
- #gl{position:fixed;left:0;top:44px;width:100vw;height:calc(100vh - 44px);display:block}
+ #gl{position:fixed;left:0;top:var(--bar-h);width:100vw;height:calc(100dvh - var(--bar-h));
+     display:block;touch-action:none}
+ #load{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:6;font-size:13px;
+       background:#20262eef;border:1px solid #3a4553;border-radius:8px;padding:10px 16px;display:none}
  .panel{position:fixed;background:#20262ed9;border:1px solid #333;border-radius:8px;padding:9px 12px;font-size:12px;z-index:4;line-height:1.55}
  #info{left:12px;bottom:12px;max-width:430px}
  #leg{right:12px;top:56px;width:210px}
@@ -33,13 +62,18 @@
  <button id="bbrg" class="on">Bearings</button>
  <button id="bres">Result (envelope vM)</button>
  <button id="bspin">Spin</button>
- <span class="hint">drag rotate · Shift pan · wheel zoom</span>
+ <button id="bfit">Fit</button>
+ <button id="btoginfo" class="mobonly on">Info</button>
+ <button id="btogleg" class="mobonly">Legend</button>
+ <span class="hint deskonly">drag rotate · Shift pan · wheel zoom</span>
 </div>
 <canvas id="gl"></canvas>
+<div id="load">loading…</div>
 <div class="panel" id="leg"></div>
 <div class="panel" id="info"></div>
 <script>
 const RAD=Math.PI/180;
+const isMobile=()=>innerWidth<820||innerHeight<520;
 let D=null, cur=null, res=null;
 const cv=document.getElementById('gl');
 const gl=cv.getContext('webgl',{antialias:true});
@@ -257,6 +291,15 @@ function turbo(t){t=Math.min(1,Math.max(0,t));
  const g=Math.max(0,Math.min(255,23.31+t*(557.33+t*(1225.33+t*(-3574.96+t*(1073.77+t*707.56))))));
  const b=Math.max(0,Math.min(255,27.2+t*(3211.1+t*(-15327.97+t*(27814.0+t*(-22569.18+t*6838.66))))));
  return [r/255,g/255,b/255];}
+function magLine(m){
+ const F=['Fx','Fy','Fz'].filter(k=>m[k]!==undefined).map(k=>m[k]).join('/');
+ const parts=[];
+ if(F)parts.push('F '+F+' N');
+ if(m.Maxial!==undefined)parts.push('motor torque '+m.Maxial+' N·m about the joint axis');
+ const M=['Mx','My','Mz'].filter(k=>m[k]!==undefined).map(k=>m[k]);
+ if(M.length===3)parts.push('M '+M.join('/')+' N·m');
+ return parts.join(' · ');
+}
 function boltSummary(s){
  const b=s.bolts||[]; if(!b.length)return '—';
  const c={},lh=b.filter(x=>x.head_type&&x.head_type.indexOf('LOW-HEAD')>=0).length;
@@ -266,19 +309,20 @@ function boltSummary(s){
         ' <span class="hint">(* = mating tap outside this part set)</span>';
 }
 function info(){
+ if(isMobile()&&!info._once){info._once=1;document.getElementById('leg').classList.add('hide');}
  const s=cur,e=s.envelope||{},m=s.magnitudes;
  const scr={};
  for(const sc of s.screws||[]) scr[sc.size]=(scr[sc.size]||0)+1;
  document.getElementById('info').innerHTML=
   `<b>${s.link}</b> — joint <b>${s.joint}</b>, ${s.stat} × ${s.factor}<br>
    <span class="hint">${s.fix_desc}</span><br>
-   <table><tr><td>load magnitudes</td><td>F ${m.Fx}/${m.Fy}/${m.Fz} N · M ${m.Mx}/${m.My}/${m.Mz} N·m</td></tr>
+   <table><tr><td>load magnitudes</td><td>${magLine(m)}</td></tr>
    <tr><td>load points</td><td>${s.load_points.map(p=>p.name+` (${p.nids.length}n)`).join(' · ')}</td></tr>
    <tr><td>fixed nodes</td><td>${s.fixed.length}</td></tr>
    <tr><td>screws (CAD)</td><td>${Object.entries(scr).map(([k,v])=>k+'×'+v).join(', ')||'—'}</td></tr>
    <tr><td>bolts (detected)</td><td>${boltSummary(s)}</td></tr>
    <tr><td>bearings</td><td>${(s.bearings||[]).map(b=>b.type).join(', ')||'—'}</td></tr></table>
-   ${e.max_vM?`<b>envelope (64 sign combos)</b>: max ${e.max_vM.toFixed(1)} MPa (SF ${e.SF.toFixed(2)})
+   ${e.max_vM?`<b>envelope (${Math.pow(2,(e.comps||['Fx','Fy','Fz','Mx','My','Mz']).length)} sign combos over ${(e.comps||[]).join(', ')||'6 components'})</b>: max ${e.max_vM.toFixed(1)} MPa (SF ${e.SF.toFixed(2)})
     · filtered ${e.max_vM_filtered?e.max_vM_filtered.toFixed(1):'—'} MPa (SF ${e.SF_filtered?e.SF_filtered.toFixed(2):'—'})<br>
     <span class="hint">governing signs ${Object.entries(e.governing_signs||{}).map(([k,v])=>k+(v>0?'+':'−')).join(' ')} · worst at ${(e.argmax_xyz||[]).join(', ')}</span>`:''}`;
  document.getElementById('leg').innerHTML=
@@ -291,7 +335,9 @@ function info(){
    <span class="sw" style="background:#f2cc40"></span>detected bolt M4 &nbsp;<span class="sw" style="background:#ff801a"></span>M5 &nbsp;<span class="sw" style="background:#bfd9f2"></span>M3<br>
    <span class="sw" style="background:#ff40d9"></span>LOW-HEAD 소두 &nbsp;<span class="sw" style="background:#8c7333"></span>thread engagement<br>
    <span class="sw" style="background:#59f2bf"></span>bearings (catalog size at measured seat)<br>
-   <span class="hint">arrows drawn both ways: the envelope takes the worst of all 2⁶ sign combinations</span>`;
+   <span class="hint">arrows drawn both ways: the envelope takes the worst of all
+   2<sup>${(s.envelope&&s.envelope.comps?s.envelope.comps.length:(Object.keys(s.magnitudes||{}).length||6))}</sup>
+   sign combinations</span>`;
 }
 // ---------- camera ----------
 let view={yaw:-0.6,pitch:0.3,dist:1.25,tx:0,ty:0},spin=false;
@@ -336,33 +382,96 @@ function draw(){
  }
  requestAnimationFrame(draw);
 }
-let drag=null;
-cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,pan:e.shiftKey||e.button===2};cv.setPointerCapture(e.pointerId);});
+// ---------- input: mouse + multi-touch (1 finger rotate, 2 fingers pan/pinch)
+const ptr=new Map();
+let drag=null, pinch=null;
+function mid(){const a=[...ptr.values()];return [(a[0].x+a[1].x)/2,(a[0].y+a[1].y)/2];}
+function dist2(){const a=[...ptr.values()];return Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);}
+cv.addEventListener('pointerdown',e=>{
+ try{cv.setPointerCapture(e.pointerId);}catch(_){}   // never let capture failure drop the touch
+ ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(ptr.size===1)drag={x:e.clientX,y:e.clientY,pan:e.shiftKey||e.button===2};
+ else if(ptr.size===2){drag=null;pinch={d:dist2(),m:mid()};}
+});
 cv.addEventListener('contextmenu',e=>e.preventDefault());
-cv.addEventListener('pointermove',e=>{if(!drag)return;
+cv.addEventListener('pointermove',e=>{
+ if(!ptr.has(e.pointerId))return;
+ ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(ptr.size>=2&&pinch){
+  const d=dist2(),m=mid();
+  view.dist*=Math.max(0.5,Math.min(2,pinch.d/Math.max(1,d)));
+  view.dist=Math.max(0.25,Math.min(6,view.dist));
+  view.tx+=(m[0]-pinch.m[0])*0.0018*view.dist;
+  view.ty-=(m[1]-pinch.m[1])*0.0018*view.dist;
+  pinch={d,m};
+  return;
+ }
+ if(!drag)return;
  const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
  if(drag.pan){view.tx+=dx*0.0018*view.dist;view.ty-=dy*0.0018*view.dist;}
  else{view.yaw+=dx*0.006;view.pitch=Math.max(-1.5,Math.min(1.5,view.pitch+dy*0.006));}
  drag.x=e.clientX;drag.y=e.clientY;});
-cv.addEventListener('pointerup',()=>drag=null);
+function endPtr(e){ptr.delete(e.pointerId);if(ptr.size<2)pinch=null;if(!ptr.size)drag=null;}
+cv.addEventListener('pointerup',endPtr);
+cv.addEventListener('pointercancel',endPtr);
 cv.addEventListener('wheel',e=>{e.preventDefault();view.dist*=Math.exp(e.deltaY*0.001);view.dist=Math.max(0.25,Math.min(6,view.dist));},{passive:false});
+// toolbar height -> canvas offset (the bar wraps to 2-3 rows on a phone)
+function barH(){document.documentElement.style.setProperty('--bar-h',
+  document.getElementById('bar').offsetHeight+'px');}
+addEventListener('resize',barH);addEventListener('orientationchange',()=>setTimeout(barH,120));
+barH();
+document.getElementById('bfit').addEventListener('click',()=>{
+ view={yaw:-0.6,pitch:0.3,dist:isMobile()?1.5:1.25,tx:0,ty:0};});
+for(const [b,el] of [['btoginfo','info'],['btogleg','leg']])
+ document.getElementById(b).addEventListener('click',e=>{
+  document.getElementById(el).classList.toggle('hide');
+  e.target.classList.toggle('on');});
 for(const id of ['bmesh','bfix','bload','bscrew','bbolt','bbrg'])
  document.getElementById(id).addEventListener('click',e=>{e.target.classList.toggle('on');});
 document.getElementById('bres').addEventListener('click',e=>{e.target.classList.toggle('on');build();});
 document.getElementById('bspin').addEventListener('click',e=>{spin=!spin;e.target.classList.toggle('on',spin);});
 document.getElementById('ulink').addEventListener('input',e=>load(e.target.value));
 document.getElementById('ucase').addEventListener('input',()=>load(document.getElementById('ulink').value));
-function load(link){
+// per-link lazy loading: the phone downloads ~1.5-3.5 MB for the link it shows,
+// not the 9 MB whole-body payload
+const cache={};
+function setLoading(on,txt){const el=document.getElementById('load');
+ el.style.display=on?'block':'none';if(txt)el.textContent=txt;}
+function show(link){
  const st=document.getElementById('ucase').value;
- cur=D.links[link][st]||D.links[link].P99;
+ const stats=cache[link];
+ cur=stats[st]||stats.P99||stats[Object.keys(stats)[0]];
  res=cur.result_vM||null;
  build();
+ if(isMobile()){view.dist=1.5;}
 }
-fetch('link_setup_data.json').then(r=>r.json()).then(d=>{
- D=d;
+function load(link){
+ if(cache[link]){show(link);return;}
+ const meta=IDX.links[link];
+ setLoading(true,`loading ${link} (${meta.size_mb} MB)…`);
+ fetch(meta.file).then(r=>r.json()).then(d=>{
+  cache[link]=d; setLoading(false); show(link);
+ }).catch(e=>setLoading(true,'load failed: '+e));
+}
+let IDX=null;
+setLoading(true,'loading index…');
+fetch('link_setup_index.json').then(r=>r.json()).then(d=>{
+ IDX=d;
  const sel=document.getElementById('ulink');
- for(const k of Object.keys(d.links)){const o=document.createElement('option');o.value=k;o.textContent=k;sel.appendChild(o);}
+ for(const [k,m] of Object.entries(d.links)){
+  const o=document.createElement('option');o.value=k;
+  o.textContent=`${k} (${m.joint}${m.solved?', solved':''})`;
+  sel.appendChild(o);
+ }
  load(Object.keys(d.links)[0]);
+}).catch(()=>{        // fall back to the single-payload file
+ fetch('link_setup_data.json').then(r=>r.json()).then(d=>{
+  IDX={links:{}};
+  const sel=document.getElementById('ulink');
+  for(const k of Object.keys(d.links)){cache[k]=d.links[k];
+   const o=document.createElement('option');o.value=k;o.textContent=k;sel.appendChild(o);}
+  setLoading(false); load(Object.keys(d.links)[0]);
+ });
 });
 draw();
 </script>

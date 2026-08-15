@@ -1,0 +1,500 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
+<title>Ankle 2-RSU Designer v2</title>
+<script src="/vendor/three.min.js"></script>
+<script src="/vendor/OrbitControls.js"></script>
+<style>
+body{background:#14161a;color:#dde1e6;font-family:'Segoe UI',sans-serif;margin:0;display:flex;height:100vh;overflow:hidden}
+#side{width:392px;min-width:300px;padding:12px;overflow-y:auto;background:#1b1e24;border-right:1px solid #2a2f38}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#view{flex:1;position:relative;min-height:120px}#view canvas{display:block}
+#hud{position:absolute;top:8px;left:10px;font-size:12px;color:#aab2bc;background:#14161acc;padding:6px 10px;border-radius:6px;line-height:1.5;max-width:75%}
+h1{font-size:15px;margin:0 0 6px}h2{font-size:11px;color:#8a929c;margin:10px 0 4px;text-transform:uppercase;border-bottom:1px solid #2a2f38;padding-bottom:2px}
+.p{display:flex;align-items:center;gap:5px;margin:2px 0;font-size:11px}
+.p label{width:96px;color:#9aa2ac}
+.p input[type=number]{width:52px;background:#242830;color:#cfd4da;border:1px solid #3a404a;border-radius:4px;font-size:11px;padding:2px}
+.p input[type=range]{flex:1}
+.p input[type=checkbox]{width:auto}
+.rng{color:#6b737d;font-size:10px}
+.note{font-size:10px;color:#6b737d;line-height:1.45;margin:3px 0}
+button{background:#242830;color:#cfd4da;border:1px solid #3a404a;border-radius:6px;padding:4px 8px;font-size:12px;width:100%;margin:2px 0}
+button.on{background:#3564c0;color:#fff}
+button.go{background:#2a6a3a;color:#fff;font-weight:700}
+#out,#optout{font-size:11px;line-height:1.6;background:#171a1f;border:1px solid #2a2f38;border-radius:6px;padding:8px;margin-top:6px}
+#hm{width:100%;background:#171a1f;border:1px solid #2a2f38;border-radius:6px}
+.warn{color:#ff6060;font-weight:700}.ok{color:#50d080}
+a{color:#5aa0e0}
+.hrow{display:flex;gap:5px}.hrow>*{flex:1}
+</style></head><body>
+<div id="side">
+ <h1>Ankle 2-RSU Designer <span style="color:#8a929c;font-size:10px">v2 — 실측수요 최적화</span></h1>
+ <div class="note">좌표: UJ 원점·X전방·Y좌·Z상. 앵커=(−RP_B, ±RP_r, −RP_h). 수요 = fc 실측 시계열 replay(flat+rough, L규약 통합). 계층 정의는 docs/71.</div>
+
+ <h2>1계층 — 확정 치수 (사용자 입력)</h2>
+ <div class="p"><label>B2RP (UJ→B축)</label><input type="number" id="B2RP" value="170.02"></div>
+ <div class="p"><label>A2B (B→A축)</label><input type="number" id="A2B" value="100"></div>
+ <div class="p"><label>RP_h (앵커→UJ 높이)</label><input type="number" id="RP_h" value="10.0"></div>
+ <div class="p"><label>축 X위치</label><input type="number" id="ax_x" value="0"></div>
+ <div class="note">★2026-08-12(최종) ROM 부호정정(pitch −50~+30)+A_h 35~45 반영 DE 재탐색 공식값(§8g, 3독립런 3.71~3.72%, 채택 v3c). B2RP 하한(170)·RP_h 상한(+10) pinned.</div>
+
+ <h2>2계층 — 관계 구속</h2>
+ <div class="p"><input type="checkbox" id="lnk"><label style="width:auto">A_h = RP_r (로드 시상면 평행 — §8t 권장, ★§8f: 마진 62%↓ 확인됨, 비권장)</label></div>
+ <div class="p" id="ahRow"><label>A_h 수동</label><input type="number" id="A_h" value="37.21"></div>
+ <div class="p"><input type="checkbox" id="autoL" checked><label style="width:auto">로드길이 = 중립·크랭크 180° 폐합 (파생치수)</label></div>
+ <div class="p" id="lRow" style="display:none"><label>A_L / B_L</label><input type="number" id="A_L" value="264.33"><input type="number" id="B_L" value="170.94"></div>
+ <div class="note">크랭크 중립 180°(수평·뒤) 고정 — 데드센터 회피(§8t). 좌우대칭·A=상단 로드.</div>
+
+ <h2>3계층 — 최적화 변수 [값 · min~max · 고정]</h2>
+ <div class="p"><label>A_r 크랭크</label><input type="number" id="A_r" value="64.01"><span class="rng">∈</span><input type="number" id="A_r_lo" value="40"><span class="rng">~</span><input type="number" id="A_r_hi" value="65"><input type="checkbox" id="A_r_fx"></div>
+ <div class="p"><label>B_r 크랭크</label><input type="number" id="B_r" value="63.89"><span class="rng">∈</span><input type="number" id="B_r_lo" value="40"><span class="rng">~</span><input type="number" id="B_r_hi" value="65"><input type="checkbox" id="B_r_fx"></div>
+ <div class="p"><label>RP_B (X 뒤)</label><input type="number" id="RP_B" value="52.17"><span class="rng">∈</span><input type="number" id="RP_B_lo" value="50"><span class="rng">~</span><input type="number" id="RP_B_hi" value="75"><input type="checkbox" id="RP_B_fx"></div>
+ <div class="p"><label>p0A 크랭크오프셋</label><input type="number" id="p0A" value="14.37"><span class="rng">∈</span><input type="number" id="p0A_lo" value="-45"><span class="rng">~</span><input type="number" id="p0A_hi" value="45"><input type="checkbox" id="p0A_fx"></div>
+ <div class="p"><label>p0B 크랭크오프셋</label><input type="number" id="p0B" value="8.51"><span class="rng">∈</span><input type="number" id="p0B_lo" value="-45"><span class="rng">~</span><input type="number" id="p0B_hi" value="45"><input type="checkbox" id="p0B_fx"></div>
+ <div class="p"><label>RP_r (Y)</label><input type="number" id="RP_r" value="39.58"><span class="rng">∈</span><input type="number" id="RP_r_lo" value="35"><span class="rng">~</span><input type="number" id="RP_r_hi" value="50"><input type="checkbox" id="RP_r_fx"></div>
+ <div class="note">★A_r/B_r 상한(65)에 pinned — §7e에서 사용자가 65로 확정한 값(70은 "크다"고 좁힘).</div>
+
+ <h2>한계 (hard 제약, docs/71)</h2>
+ <div class="p"><label>모터 peak [N·m]</label><input type="number" id="TPK" value="60"><label style="width:60px">모터 rated</label><input type="number" id="TRATE" value="20"></div>
+ <div class="p"><label style="width:96px">T-N무릎/무부하</label><input type="number" id="WKNEE" value="12.6"><input type="number" id="WMAX" value="19.8"></div>
+ <div class="p"><label>로드엔드 C0 [N]</label><input type="number" id="C0" value="5000"><label style="width:70px">요동한계 [°]</label><input type="number" id="SWL" value="20"></div>
+ <div class="note">H2/H3: 모터 τP99×1.25·peak ≤ peak토크, (ω,τ) 선형 T-N 내부 · H4: 로드 fP99×1.25 ≤ C0/1.5, peak ≤ C0 · H5: 요동각 ≤ 한계 (★WS 전역 그리드 + 수요점) · H6: 전달팔/r ≥ 0.3 (★WS 전역) · H1: ROM(pitch −50~+30, roll ±20) IK 폐합</div>
+
+ <button id="optB" class="go">▶ 최적화 실행 (3단계 그리드 축소, Deb 규칙)</button>
+ <div id="optout" style="display:none"></div>
+ <div class="note"><b>최적 정의</b>: hard 제약 전부 통과(feasible)한 후보 중 <b>최소 여유 최대화</b> — 여유 = min(모터토크, T-N, 로드엔드, 요동) 마진. 여유는 실측 수요 18k 샘플을 그 자세·그 토크로 replay해 계산하므로 "어느 각도에서 토크가 큰가"가 자동 반영됨. 동률이면 로드력 RMS 낮은 쪽.</div>
+
+ <h2>자세 / 뷰</h2>
+ <div class="p"><label>pitch [°]</label><input type="range" id="thp" min="-50" max="30" value="0"><input type="number" id="thpn" value="0"></div>
+ <div class="p"><label>roll [°]</label><input type="range" id="thr" min="-20" max="20" value="0"><input type="number" id="thrn" value="0"></div>
+ <div class="note">★2026-08-12 ROM 부호정정: +pitch=배굴(발끝 위) cap 30° · −pitch=저측굴곡(발끝 아래,push-off) cap 50° (docs/51 FK검증규약).</div>
+ <div class="hrow"><button id="dimsB" class="on">3D 치수 표시</button><button id="rstB">기본값 복원</button></div>
+ <button id="anim">□ 작업공간 스윕 재생 (커버리지 뷰 자동 전환)</button>
+ <div id="out"></div>
+ <div class="hrow"><button id="mCov" class="on">수요 커버리지</button><button id="mHm">최악 로드력 히트맵</button></div>
+ <canvas id="hm" width="360" height="230"></canvas>
+ <div id="covtxt" class="note"></div>
+ <div class="note"><a href="/">← 메인</a> · <a href="/ankle_opt.html">최적화 결과 3D 뷰어 →</a> · 수요점: <span style="color:#50d080">■</span>OK <span style="color:#ff6060">■</span>토크/T-N 초과 <span style="color:#ffa040">■</span>로드엔드 <span style="color:#e0e040">■</span>요동각 <span style="color:#888">■</span>IK불능 · +표=현재 자세</div>
+</div>
+<div id="main"><div id="view"><div id="hud"></div></div></div>
+<script>
+const D2R=Math.PI/180,$=id=>document.getElementById(id);
+const P={};
+const DEF={B2RP:170.02,A2B:100,RP_h:10.0,ax_x:0,A_r:64.01,B_r:63.89,RP_B:52.17,RP_r:39.58,p0A:14.37,p0B:8.51,
+ A_r_lo:40,A_r_hi:65,B_r_lo:40,B_r_hi:65,RP_B_lo:50,RP_B_hi:75,RP_r_lo:35,RP_r_hi:50,
+ TPK:60,TRATE:20,WKNEE:12.6,WMAX:19.8,C0:5000,SWL:20,A_h:37.21,A_L:264.33,B_L:170.94};
+const LIMS={p0A:[-45,45],p0B:[-45,45],B2RP:[80,500],A2B:[15,200],RP_h:[-40,120],ax_x:[-80,80],A_r:[5,90],B_r:[5,90],
+ RP_B:[5,200],RP_r:[5,120],TPK:[5,200],TRATE:[1,200],WKNEE:[1,50],WMAX:[2,60],C0:[100,100000],SWL:[3,30],
+ A_h:[5,120],A_L:[50,700],B_L:[50,700]};
+function clampIn(id){
+ // 값은 절대 강제 변경하지 않음(사용자가 LIMS 밖 값을 입력할 수 있어야 함) — NaN/빈칸만 DEF로 복구,
+ // 범위 밖이면 시각적 경고(빨간 테두리)만 표시.
+ const el=$(id);if(!el||!(id in LIMS))return;
+ let v=+el.value;const [lo,hi]=LIMS[id];
+ if(isNaN(v)){el.value=DEF[id];v=DEF[id];}
+ if(!(v>=lo&&v<=hi)){el.style.borderColor='#ff6060';setTimeout(()=>el.style.borderColor='',1200);}
+ else{el.style.borderColor='';}
+}
+function rd(){
+ Object.keys(LIMS).forEach(clampIn);
+ if(+$('WMAX').value<=+$('WKNEE').value+0.5)$('WMAX').value=(+$('WKNEE').value+0.5).toFixed(1);
+ ['B2RP','A2B','RP_h','ax_x','A_r','B_r','RP_B','RP_r','p0A','p0B','TPK','TRATE','WKNEE','WMAX','C0','SWL','thp','thr'].forEach(id=>P[id]=+$(id).value);
+ P.A_h=$('lnk').checked?P.RP_r:+$('A_h').value;
+ if($('autoL').checked){const L=fitL();P.A_L=L[0];P.B_L=L[1];$('A_L').value=L[0].toFixed(0);$('B_L').value=L[1].toFixed(0);}
+ else{P.A_L=+$('A_L').value;P.B_L=+$('B_L').value;}
+}
+// ---------- 기하 (v1 검증 수식 그대로) ----------
+function footR(tp,tr){const cp=Math.cos(tp),sp=Math.sin(tp),cr=Math.cos(tr),sr=Math.sin(tr);
+ return [[cp,sp*sr,sp*cr],[0,cr,-sr],[-sp,cp*sr,cp*cr]];}
+function mul(R,v){return [R[0][0]*v[0]+R[0][1]*v[1]+R[0][2]*v[2],R[1][0]*v[0]+R[1][1]*v[1]+R[1][2]*v[2],R[2][0]*v[0]+R[2][1]*v[1]+R[2][2]*v[2]];}
+function anchor(side,tp,tr){return mul(footR(tp,tr),[-P.RP_B,side*P.RP_r,-P.RP_h]);}
+function crankC(up,side){return [P.ax_x,side*P.A_h,up?P.B2RP+P.A2B:P.B2RP];}
+function tip(up,side,phi){const C=crankC(up,side),r=up?P.A_r:P.B_r;
+ return [C[0]+r*Math.cos(phi),C[1],C[2]+r*Math.sin(phi)];}
+function ik(up,side,Pa,L,ref){
+ const C=crankC(up,side),r=up?P.A_r:P.B_r;
+ const D=[C[0]-Pa[0],C[1]-Pa[1],C[2]-Pa[2]];
+ const k=(L*L-(D[0]*D[0]+D[1]*D[1]+D[2]*D[2])-r*r)/(2*r);
+ const rho=Math.hypot(D[0],D[2]);
+ if(Math.abs(k)>rho)return null;
+ const base=Math.atan2(D[2],D[0]),d=Math.acos(k/rho);
+ const nrm=a=>Math.atan2(Math.sin(a),Math.cos(a));
+ const s1=nrm(base+d),s2=nrm(base-d); // ★2026-08-04 IK 브랜치 수정: φ=β±d (구 π+β±d 는 부호반전 해 — 폐합 잔차 110mm 버그)
+ const rf=(ref===undefined||ref===null)?Math.PI+(up?P.p0A:P.p0B)*D2R:ref;
+ return Math.abs(nrm(s1-rf))<Math.abs(nrm(s2-rf))?s1:s2;
+}
+function fitL(){
+ const cA=Math.cos(P.p0A*D2R),sA=Math.sin(P.p0A*D2R),cB=Math.cos(P.p0B*D2R),sB=Math.sin(P.p0B*D2R);
+ const Pa=[-P.RP_B,P.RP_r,-P.RP_h],Pb=[-P.RP_B,-P.RP_r,-P.RP_h];
+ const TA=[P.ax_x-P.A_r*cA,P.A_h,P.B2RP+P.A2B-P.A_r*sA],TB=[P.ax_x-P.B_r*cB,-P.A_h,P.B2RP-P.B_r*sB];
+ return [Math.hypot(TA[0]-Pa[0],TA[1]-Pa[1],TA[2]-Pa[2]),
+         Math.hypot(TB[0]-Pb[0],TB[1]-Pb[1],TB[2]-Pb[2])];
+}
+function solve(tp,tr){
+ const Pa=anchor(1,tp,tr),Pb=anchor(-1,tp,tr);
+ const a=ik(true,1,Pa,P.A_L,null),b=ik(false,-1,Pb,P.B_L,null);
+ return (a===null||b===null)?null:{phiA:a,phiB:b,Pa,Pb};
+}
+// 자세+수요 -> 모터토크/속도·로드력·요동·전달팔  (replay 코어)
+function evalPt(tp,tr,tqp,tqr,wp,wr){
+ const h=1e-4,s0=solve(tp,tr);
+ if(!s0)return null;
+ const sp=solve(tp+h,tr),sr=solve(tp,tr+h);
+ if(!sp||!sr)return null;
+ const wr_=a=>Math.atan2(Math.sin(a),Math.cos(a)); // ±π 랩 수정
+ const J=[[wr_(sp.phiA-s0.phiA)/h,wr_(sr.phiA-s0.phiA)/h],[wr_(sp.phiB-s0.phiB)/h,wr_(sr.phiB-s0.phiB)/h]];
+ const det=J[0][0]*J[1][1]-J[0][1]*J[1][0];
+ if(Math.abs(det)<1e-9)return null;
+ const tA=( J[1][1]*tqp*1000-J[1][0]*tqr*1000)/det;
+ const tB=(-J[0][1]*tqp*1000+J[0][0]*tqr*1000)/det;
+ const wA=J[0][0]*wp+J[0][1]*wr, wB=J[1][0]*wp+J[1][1]*wr;
+ function rod(up,side,phi,Pt,L){
+  const C=crankC(up,side),T=tip(up,side,phi);
+  const u=[(Pt[0]-T[0])/L,(Pt[1]-T[1])/L,(Pt[2]-T[2])/L];
+  const arm=Math.abs((T[2]-C[2])*u[0]-(T[0]-C[0])*u[2]);
+  return {arm,sw:Math.asin(Math.min(1,Math.abs(u[1])))/D2R};
+ }
+ const rA=rod(true,1,s0.phiA,s0.Pa,P.A_L),rB=rod(false,-1,s0.phiB,s0.Pb,P.B_L);
+ if(rA.arm<1e-3||rB.arm<1e-3)return null;
+ return {tA:tA/1000,tB:tB/1000,wA,wB,fA:tA/rA.arm,fB:tB/rB.arm,
+         sw:Math.max(rA.sw,rB.sw),tr:Math.min(rA.arm/P.A_r,rB.arm/P.B_r),s:s0};
+}
+// 자세(tp,tr)에서 "그 순간 낼 수 있는" 관절토크 능력(rated/peak) — J^T 코너해.
+// ★가정: 반대축 토크요구가 0이어도 되는 최선의 경우(unconstrained) — 실제 커플링 시엔 이보다 타이트함(상한선).
+function capAt(tp,tr){
+ const h=1e-4,s0=solve(tp,tr);
+ if(!s0)return null;
+ const sp=solve(tp+h,tr),sr=solve(tp,tr+h);
+ if(!sp||!sr)return null;
+ const wr_=a=>Math.atan2(Math.sin(a),Math.cos(a));
+ const J=[[wr_(sp.phiA-s0.phiA)/h,wr_(sr.phiA-s0.phiA)/h],[wr_(sp.phiB-s0.phiB)/h,wr_(sr.phiB-s0.phiB)/h]];
+ // tau_p = J00*tA + J10*tB ; tau_r = J01*tA + J11*tB  (J행:모터A/B, J열:pitch/roll)
+ const pCap=lim=>(Math.abs(J[0][0])+Math.abs(J[1][0]))*lim;
+ const rCap=lim=>(Math.abs(J[0][1])+Math.abs(J[1][1]))*lim;
+ return {pRated:pCap(P.TRATE),pPeak:pCap(P.TPK),rRated:rCap(P.TRATE),rPeak:rCap(P.TPK)};
+}
+// ---------- 실측 수요 ----------
+let DEM=[];
+fetch('/api/ankle_demand').then(r=>r.json()).then(d=>{
+ // ★2026-08-12: ROM 밖(pitch>30 배굴, |roll|>20) 샘플은 EXCLUDE(기구가 못 감) — 예전엔 각도만 클립하고
+ // 토크는 유지해 실제 45도 발생 토크가 30도 지점에 잘못 배정되는 왜곡이 있었음(docs/71 §8g).
+ DEM=d.pts.filter(p=>p[0]>=-50&&p[0]<=30&&Math.abs(p[1])<=20)
+          .map(p=>({p:p[0],r:p[1],tp:p[2],tq:p[3],wp:p[4],wr:p[5]}));
+ update();
+});
+// ---------- 평가 (제약·마진, docs/71) ----------
+function evalGeom(stride){
+ // H1: ROM 그리드 폐합 + ★H5/H6 전역(요동각·전달팔은 WS 전체에서, docs/71 개정)
+ let romFail=0,swWS=0,trWS=1e9;
+ for(let i=0;i<13;i++)for(let j=0;j<9;j++){
+  const tp=(-50+80*i/12)*D2R,tr=(-20+40*j/8)*D2R;   // ★2026-08-12: ROM pitch -50~+30(구 -50~+40), roll ±20(구 ±25)
+  const s0=solve(tp,tr);
+  if(!s0){romFail++;continue;}
+  for(const [up,side,phi,Pt,L,r] of [[true,1,s0.phiA,s0.Pa,P.A_L,P.A_r],[false,-1,s0.phiB,s0.Pb,P.B_L,P.B_r]]){
+   const C=crankC(up,side),T=tip(up,side,phi);
+   const u=[(Pt[0]-T[0])/L,(Pt[1]-T[1])/L,(Pt[2]-T[2])/L];
+   const sw=Math.asin(Math.min(1,Math.abs(u[1])))/D2R;
+   const arm=Math.abs((T[2]-C[2])*u[0]-(T[0]-C[0])*u[2]);
+   if(sw>swWS)swWS=sw;
+   if(arm/r<trWS)trWS=arm/r;
+  }
+ }
+ let ikFail=0,n=0,swMax=swWS,trMin=trWS;
+ const taus=[],fs=[],tnUtil=[];let f2sum=0;
+ for(let i=0;i<DEM.length;i+=stride){
+  const q=DEM[i];n++;
+  const e=evalPt(q.p*D2R,q.r*D2R,q.tp,q.tq,q.wp,q.wr);
+  if(!e){ikFail++;continue;}
+  const tm=Math.max(Math.abs(e.tA),Math.abs(e.tB));
+  const fm=Math.max(Math.abs(e.fA),Math.abs(e.fB));
+  taus.push(tm);fs.push(fm);f2sum+=fm*fm;
+  if(e.sw>swMax)swMax=e.sw;
+  if(e.tr<trMin)trMin=e.tr;
+  for(const [t,w] of [[e.tA,e.wA],[e.tB,e.wB]]){
+   if(t*w<=0)continue;               // 역구동(브레이킹) 사분면은 T-N 제약 제외
+   const aw=Math.abs(w);
+   const lim=aw<=P.WKNEE?P.TPK:P.TPK*Math.max(0,(P.WMAX-aw)/(P.WMAX-P.WKNEE));
+   tnUtil.push(aw>=P.WMAX?9:Math.abs(t)/Math.max(lim,0.5));
+  }
+ }
+ if(!taus.length)return {feas:false,viol:1e9,score:-1e9};
+ taus.sort((a,b)=>a-b);fs.sort((a,b)=>a-b);tnUtil.sort((a,b)=>a-b);
+ const q99=a=>a.length?a[Math.min(a.length-1,Math.floor(0.99*a.length))]:0;
+ const tP99=q99(taus),tPk=taus[taus.length-1],fP99=q99(fs),fPk=fs[fs.length-1];
+ // ★doctrine(docs/65·71): P99×1.25 = hard 설계제약. raw peak(sim 클립·단발스파이크)는 리포트 전용.
+ const mT=1-tP99*1.25/P.TPK;
+ const mTN=1-q99(tnUtil);                       // 모터링 사분면 이용률의 P99
+ const mF=1-Math.max(fP99*1.25*1.5,fPk)/P.C0;   // 로드엔드는 peak≤C0 유지(브리넬)
+ const mS=1-swMax/P.SWL;
+ const mR=(trMin-0.3)/0.7;
+ const margins={'모터토크':mT,'T-N':mTN,'로드엔드':mF,'요동각':mS,'전달팔':mR};
+ const pkExc=taus.filter(t=>t>P.TPK).length/taus.length;
+ let viol=romFail*10+ikFail;
+ for(const k in margins)if(margins[k]<0)viol+=-margins[k]*100;
+ const feas=viol===0;
+ const score=Math.min(mT,tnMin,mF,mS,mR);
+ return {feas,viol,score,margins,tP99,tPk,fP99,fPk,pkExc,fRMS:Math.sqrt(f2sum/Math.max(1,n-ikFail)),swMax,ikFail,romFail};
+}
+function debBetter(a,b){ // a 가 b 보다 나은가
+ if(!b)return true;
+ if(a.feas!==b.feas)return a.feas;
+ if(!a.feas)return a.viol<b.viol;
+ if(Math.abs(a.score-b.score)>1e-6)return a.score>b.score;
+ return a.fRMS<b.fRMS;
+}
+// ---------- 최적화 (3단계 그리드 축소) ----------
+const OPTV=['A_r','B_r','RP_B','RP_r','p0A','p0B'];
+let opting=false;
+$('optB').onclick=async()=>{
+ if(opting)return;opting=true;
+ $('optout').style.display='block';
+ rd();
+ const free=OPTV.filter(v=>!$(v+'_fx').checked);
+ if(!free.length){$('optout').textContent='자유변수 없음 (전부 고정됨)';opting=false;return;}
+ let rng={};free.forEach(v=>rng[v]=[+$(v+'_lo').value,+$(v+'_hi').value]);
+ const LV=5,STAGES=3,strides=[24,12,6];
+ let best=null,bestP=null,tested=0;
+ { // 현재 입력값을 시드 후보로 먼저 평가 (사용자가 이미 좋은 값을 갖고 있으면 유지)
+  const cur=free.map(v=>P[v]);
+  const r0=evalGeom(strides[0]);tested++;
+  if(debBetter(r0,best)){best=r0;bestP=cur;}
+ }
+ for(let st=0;st<STAGES;st++){
+  const grids=free.map(v=>{const [lo,hi]=rng[v];
+   return Array.from({length:LV},(_,i)=>lo+(hi-lo)*i/(LV-1));});
+  const idx=new Array(free.length).fill(0);
+  const total=Math.pow(LV,free.length);
+  for(let c=0;c<total;c++){
+   let k=c;free.forEach((v,i)=>{idx[i]=k%LV;k=Math.floor(k/LV);});
+   free.forEach((v,i)=>{P[v]=grids[i][idx[i]];});
+   if($('lnk').checked)P.A_h=P.RP_r;
+   if($('autoL').checked){const L=fitL();P.A_L=L[0];P.B_L=L[1];}
+   const r=evalGeom(strides[st]);tested++;
+   if(debBetter(r,best)){best=r;bestP=free.map((v,i)=>grids[i][idx[i]]);}
+   if(c%40===0){
+    $('optout').innerHTML=`단계 ${st+1}/${STAGES} · ${c}/${total} (샘플 1/${strides[st]}) · 현best ${best&&best.feas?('마진 '+(100*best.score).toFixed(1)+'%'):'infeasible'}`;
+    await new Promise(r=>setTimeout(r,0));
+   }
+  }
+  // 축소: best 주변으로 범위 40%
+  free.forEach((v,i)=>{const [lo,hi]=rng[v],c0=bestP[i],half=(hi-lo)*0.2;
+   rng[v]=[Math.max(lo,c0-half),Math.min(hi,c0+half)];});
+ }
+ // 최종 정밀 재평가 + 적용
+ free.forEach((v,i)=>{P[v]=bestP[i];$(v).value=bestP[i].toFixed(1);});
+ rd();
+ const fin=evalGeom(1);
+ let mh='';for(const k in fin.margins){const m=fin.margins[k];
+  mh+=`${k} <b class="${m<0?'warn':(m<0.15?'':'ok')}">${(100*m).toFixed(1)}%</b> · `;}
+ $('optout').innerHTML=
+  `<b>${fin.feas?'✓ FEASIBLE':'✗ INFEASIBLE'}</b> (후보 ${tested}개, 최종 전수 재평가)<br>`+
+  free.map((v,i)=>`${v}=<b>${bestP[i].toFixed(1)}</b>`).join(' · ')+`<br>마진: ${mh}<br>`+
+  `모터 τ P99 ${fin.tP99.toFixed(1)} / raw peak ${fin.tPk.toFixed(1)} N·m (초과빈도 ${(100*fin.pkExc).toFixed(2)}% — 단발 클립, 리포트 전용) · 로드 f P99 ${fin.fP99.toFixed(0)} / peak ${fin.fPk.toFixed(0)} N · 요동max ${fin.swMax.toFixed(1)}°`+
+  (fin.feas?'':`<br class="warn">위반 크기 ${fin.viol.toFixed(1)} — 범위·한계 완화 필요`);
+ opting=false;update();
+};
+// ---------- three.js 3D ----------
+const view=$('view');
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+view.appendChild(renderer.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x14161a);
+const cam=new THREE.PerspectiveCamera(45,1,1,5000);cam.position.set(420,-420,320);cam.up.set(0,0,1);
+const ctrl=new THREE.OrbitControls(cam,renderer.domElement);ctrl.target.set(0,0,120);
+scene.add(new THREE.HemisphereLight(0xffffff,0x333344,1.1));
+const dl=new THREE.DirectionalLight(0xffffff,0.6);dl.position.set(300,-300,500);scene.add(dl);
+const grid=new THREE.GridHelper(600,24,0x2a2f38,0x22262e);grid.rotation.x=Math.PI/2;scene.add(grid);
+function resize(){const w=view.clientWidth,h=view.clientHeight;renderer.setSize(w,h);cam.aspect=w/h;cam.updateProjectionMatrix();}
+window.addEventListener('resize',resize);
+const G=new THREE.Group();scene.add(G);
+const M={shin:new THREE.MeshPhongMaterial({color:0x9aa2ac,transparent:true,opacity:0.35}),
+ act:new THREE.MeshPhongMaterial({color:0xe8c890}),actB:new THREE.MeshPhongMaterial({color:0xb8c4ec}),
+ crank:new THREE.MeshPhongMaterial({color:0xffd780}),rodA:new THREE.MeshPhongMaterial({color:0x3aa0ff}),
+ rodB:new THREE.MeshPhongMaterial({color:0xff7a2a}),foot:new THREE.MeshPhongMaterial({color:0xc0b8a8,transparent:true,opacity:0.55}),
+ uj:new THREE.MeshPhongMaterial({color:0xd0b0e0}),ball:new THREE.MeshPhongMaterial({color:0x50d080})};
+// ---------- 3D 치수 주석 ----------
+const texCache={};
+function label(txt,color){
+ const key=txt+'|'+color;
+ if(!texCache[key]){
+  const cv=document.createElement('canvas');cv.width=256;cv.height=56;
+  const cx=cv.getContext('2d');cx.font='bold 30px sans-serif';
+  cx.fillStyle=color;cx.textAlign='center';cx.textBaseline='middle';
+  cx.shadowColor='#000';cx.shadowBlur=6;cx.fillText(txt,128,28);
+  texCache[key]=new THREE.CanvasTexture(cv);
+ }
+ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:texCache[key],transparent:true,depthTest:false}));
+ sp.scale.set(86,18.8,1);return sp;
+}
+let hiliteId=null,hiliteT=null;
+function setHil(id){hiliteId=id;clearTimeout(hiliteT);
+ hiliteT=setTimeout(()=>{hiliteId=null;rebuild();},2500);rebuild();}
+function dim(a,b,txt,color,pid,off){
+ const hi=(pid===hiliteId);
+ if(hi)G.add(cyl(a,b,2.4,new THREE.MeshBasicMaterial({color:0xffffff})));
+ else{const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...a),new THREE.Vector3(...b)]);
+  G.add(new THREE.Line(g,new THREE.LineBasicMaterial({color})));}
+ [a,b].forEach(pt=>G.add(bl(pt,hi?3.6:1.8,new THREE.MeshBasicMaterial({color:hi?0xffffff:color}))));
+ const mid=[(a[0]+b[0])/2+(off?off[0]:0),(a[1]+b[1])/2+(off?off[1]:0),(a[2]+b[2])/2+(off?off[2]:0)];
+ const sp=label(txt,hi?'#ffffff':'#'+new THREE.Color(color).getHexString());
+ sp.position.set(...mid);G.add(sp);
+}
+function cyl(a,b,r,mat){
+ const va=new THREE.Vector3(...a),vb=new THREE.Vector3(...b);
+ const d=vb.clone().sub(va),len=d.length();
+ const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,14),mat);
+ m.position.copy(va.clone().add(vb).multiplyScalar(0.5));
+ m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return m;
+}
+function bl(p,r,mat){const m=new THREE.Mesh(new THREE.SphereGeometry(r,16,12),mat);m.position.set(...p);return m;}
+function rebuild(){
+ G.clear();rd();
+ const tp=P.thp*D2R,tr=P.thr*D2R;
+ const R=footR(tp,tr);
+ G.add(cyl([0,0,20],[0,0,P.B2RP+P.A2B+50],26,M.shin));
+ const CA=crankC(true,1),CB=crankC(false,-1);
+ G.add(cyl([P.ax_x,-34,CA[2]],[P.ax_x,34,CA[2]],40,M.act));
+ G.add(cyl([P.ax_x,-30,CB[2]],[P.ax_x,30,CB[2]],34,M.actB));
+ G.add(cyl([0,-P.RP_r-12,0],[0,P.RP_r+12,0],4,M.uj));
+ G.add(cyl(mul(R,[-60,0,0]),mul(R,[60,0,0]),4,M.uj));
+ const fp=new THREE.Mesh(new THREE.BoxGeometry(230,120,8),M.foot);
+ const q=new THREE.Matrix4().makeBasis(new THREE.Vector3(R[0][0],R[1][0],R[2][0]),
+  new THREE.Vector3(R[0][1],R[1][1],R[2][1]),new THREE.Vector3(R[0][2],R[1][2],R[2][2]));
+ fp.applyMatrix4(q);const fc=mul(R,[30,0,-P.RP_h-4]);fp.position.set(...fc);G.add(fp);
+ // 현재 자세에서 근방 실측 수요의 P99 토크로 표시 (자세 의존 수요)
+ const near=DEM.filter(d=>Math.abs(d.p-P.thp)<6&&Math.abs(d.r-P.thr)<5);
+ let tq=[0,0];
+ if(near.length>10){
+  const a=near.map(d=>Math.abs(d.tp)).sort((x,y)=>x-y),b=near.map(d=>Math.abs(d.tq)).sort((x,y)=>x-y);
+  tq=[a[Math.floor(0.99*a.length)],b[Math.floor(0.99*b.length)]];
+ }
+ const e=evalPt(tp,tr,tq[0],tq[1],0,0);
+ if(e){
+  const TA=tip(true,1,e.s.phiA),TB=tip(false,-1,e.s.phiB);
+  G.add(cyl([CA[0],TA[1],CA[2]],TA,7,M.crank));G.add(bl(TA,8,M.ball));
+  G.add(cyl([CB[0],TB[1],CB[2]],TB,7,M.crank));G.add(bl(TB,8,M.ball));
+  G.add(cyl(TA,e.s.Pa,5,M.rodA));G.add(cyl(TB,e.s.Pb,5,M.rodB));
+  G.add(bl(e.s.Pa,7,M.ball));G.add(bl(e.s.Pb,7,M.ball));
+  if($('dimsB').classList.contains('on')){
+   // 발측 데이텀 체인: RP_h(Z, 빨강) -> RP_r(Y, 초록) -> RP_B(X, 파랑) — 정의 그대로
+   const fpt=mul(R,[0,0,-P.RP_h]),aY=mul(R,[0,P.RP_r,-P.RP_h]);
+   dim([0,0,0],fpt,`RP_h ${P.RP_h}`,0xff7070,'RP_h',[30,0,0]);
+   dim(fpt,aY,`RP_r ${P.RP_r}`,0x60d060,'RP_r',[0,0,-20]);
+   dim(aY,e.s.Pa,`RP_B ${P.RP_B}`,0x70a0ff,'RP_B',[0,0,-20]);
+   // 정강이 스택
+   const oy=P.A_h+50;
+   dim([P.ax_x,oy,0],[P.ax_x,oy,P.B2RP],`B2RP ${P.B2RP}`,0xd0a0e0,'B2RP',[0,26,0]);
+   dim([P.ax_x,oy,P.B2RP],[P.ax_x,oy,P.B2RP+P.A2B],`A2B ${P.A2B}`,0xe0c060,'A2B',[0,26,0]);
+   dim([P.ax_x,0,CA[2]+46],[P.ax_x,P.A_h,CA[2]+46],`A_h ${P.A_h.toFixed(0)}`,0x60d060,'A_h',[0,0,20]);
+   // 크랭크 반경·로드 길이
+   dim([CA[0],TA[1],CA[2]],TA,`A_r ${P.A_r}`,0xffd780,'A_r',[0,0,24]);
+   dim([CB[0],TB[1],CB[2]],TB,`B_r ${P.B_r}`,0xffd780,'B_r',[0,0,-24]);
+   const mA=label(`A_L ${P.A_L.toFixed(0)}`,'#3aa0ff');
+   mA.position.set((TA[0]+e.s.Pa[0])/2+34,(TA[1]+e.s.Pa[1])/2,(TA[2]+e.s.Pa[2])/2);G.add(mA);
+   const mB=label(`B_L ${P.B_L.toFixed(0)}`,'#ff7a2a');
+   mB.position.set((TB[0]+e.s.Pb[0])/2+34,(TB[1]+e.s.Pb[1])/2,(TB[2]+e.s.Pb[2])/2);G.add(mB);
+  }
+  const cap=capAt(tp,tr);
+  const capLine=cap?
+   `이 자세에서 낼 수 있는 관절토크(상한, 반대축 자유가정): `+
+   `<b>Pitch</b> rated ±${cap.pRated.toFixed(1)} / peak ±${cap.pPeak.toFixed(1)} N·m · `+
+   `<b>Roll</b> rated ±${cap.rRated.toFixed(1)} / peak ±${cap.rPeak.toFixed(1)} N·m<br>`
+   :'';
+  $('out').innerHTML=
+   capLine+
+   `이 자세 근방 실측수요 P99: τp ${tq[0].toFixed(1)} · τr ${tq[1].toFixed(1)} N·m (n=${near.length})<br>`+
+   `→ 모터 (${e.tA.toFixed(1)}, ${e.tB.toFixed(1)}) N·m · 로드 (${e.fA.toFixed(0)}, ${e.fB.toFixed(0)}) N · 요동 ${e.sw.toFixed(1)}° · 전달팔비 ${e.tr.toFixed(2)}`;
+  $('hud').textContent=cap?
+   `pitch ${P.thp}° roll ${P.thr}° | 능력: P rated±${cap.pRated.toFixed(0)}/peak±${cap.pPeak.toFixed(0)} · R rated±${cap.rRated.toFixed(0)}/peak±${cap.rPeak.toFixed(0)} N·m | 모터 ${Math.max(Math.abs(e.tA),Math.abs(e.tB)).toFixed(1)} N·m`
+   :`pitch ${P.thp}° roll ${P.thr}° | 모터 ${Math.max(Math.abs(e.tA),Math.abs(e.tB)).toFixed(1)} N·m | 로드 ${Math.max(Math.abs(e.fA),Math.abs(e.fB)).toFixed(0)} N`;
+ }else{
+  $('out').innerHTML='<span class="warn">IK 불능 자세</span>';$('hud').textContent='IK 불능';
+ }
+}
+// ---------- 캔버스: 커버리지 / 히트맵 ----------
+let mode='cov',covCache=null;
+$('mCov').onclick=()=>{mode='cov';$('mCov').classList.add('on');$('mHm').classList.remove('on');covCache=null;drawCanvas();};
+$('mHm').onclick=()=>{mode='hm';$('mHm').classList.add('on');$('mCov').classList.remove('on');drawCanvas();};
+const X=(p)=> (p+50)/80, Y=(r)=>(r+20)/40;   // ★2026-08-12: ROM pitch -50~+30(span80)·roll ±20(span40)
+function drawCanvas(){
+ const cv=$('hm'),cx=cv.getContext('2d'),W=cv.width,H=cv.height;
+ cx.clearRect(0,0,W,H);
+ if(mode==='cov'){
+  if(!covCache){
+   covCache=[];let ok=0,tot=0;const cnt={red:0,orange:0,yellow:0,grey:0};
+   for(let i=0;i<DEM.length;i+=2){
+    const q=DEM[i];tot++;
+    const e=evalPt(q.p*D2R,q.r*D2R,q.tp,q.tq,q.wp,q.wr);
+    let col='#888';
+    if(!e)cnt.grey++;
+    if(e){
+     const lim=w=>Math.abs(w)<=P.WKNEE?P.TPK:P.TPK*Math.max(0,(P.WMAX-Math.abs(w))/(P.WMAX-P.WKNEE));
+     const over=(t,w)=>t*w>0&&Math.abs(t)>Math.max(lim(w),0.5);
+     if(over(e.tA,e.wA)||over(e.tB,e.wB)){col='#ff6060';cnt.red++;}
+     else if(Math.max(Math.abs(e.fA),Math.abs(e.fB))*1.5>P.C0){col='#ffa040';cnt.orange++;}
+     else if(e.sw>P.SWL){col='#e0e040';cnt.yellow++;}
+     else {col='#50d080';ok++;}
+    }
+    covCache.push([X(q.p)*W,H-Y(q.r)*H,col]);
+   }
+   $('covtxt').innerHTML=`커버리지: <b class="${ok/tot>0.995?'ok':'warn'}">${(100*ok/tot).toFixed(2)}%</b> / ${tot}점`+
+    ` — 미달 원인: <span style="color:#ff6060">토크·T-N ${cnt.red}</span> · <span style="color:#ffa040">로드엔드 ${cnt.orange}</span>`+
+    ` · <span style="color:#e0e040">요동 ${cnt.yellow}</span> · <span style="color:#888">IK불능 ${cnt.grey}</span>`;
+  }
+  for(const [x,y,c] of covCache){cx.fillStyle=c;cx.fillRect(x-1,y-1,2,2);}
+  cx.strokeStyle='#00d0ff';cx.lineWidth=1.5;
+  const px=X(P.thp)*W,py=H-Y(P.thr)*H;
+  cx.beginPath();cx.moveTo(px-7,py);cx.lineTo(px+7,py);cx.moveTo(px,py-7);cx.lineTo(px,py+7);cx.stroke();
+  cx.fillStyle='#8a929c';cx.font='10px sans-serif';
+  cx.fillText('pitch -50~30',W-70,H-4);cx.save();cx.translate(9,H/2);cx.rotate(-Math.PI/2);cx.fillText('roll -20~20',0,0);cx.restore();
+ }else{
+  const NP=15,NR=11;let vmax=0;const V=[];
+  for(let i=0;i<NP;i++){V.push([]);
+   for(let j=0;j<NR;j++){
+    const tp=(-45+80*i/(NP-1))*D2R,tr=(-22+44*j/(NR-1))*D2R;
+    const e=evalPt(tp,tr,49.5,17.7,0,0); // rough P99 수요
+    const v=e?Math.max(Math.abs(e.fA),Math.abs(e.fB)):null;
+    V[i].push(v);if(v)vmax=Math.max(vmax,v);
+   }}
+  const cw=W/NP,ch=H/NR;
+  for(let i=0;i<NP;i++)for(let j=0;j<NR;j++){
+   const v=V[i][j];
+   cx.fillStyle=v===null?'#3a3f48':`rgb(${40+Math.round(215*v/vmax)},${120-Math.round(40*v/vmax)},${200-Math.round(160*v/vmax)})`;
+   cx.fillRect(i*cw,H-(j+1)*ch,cw-1,ch-1);
+  }
+  cx.fillStyle='#dde1e6';cx.font='11px sans-serif';
+  cx.fillText(`max |f| = ${vmax.toFixed(0)} N @ τ(49.5, 17.7) 균일수요`,6,14);
+ }
+}
+// ---------- 배선 ----------
+['B2RP','A2B','RP_h','ax_x','A_h','A_L','B_L','A_r','B_r','RP_B','RP_r','TPK','WKNEE','WMAX','C0','SWL'].forEach(id=>{
+ $(id).onchange=()=>{covCache=null;update();};});
+$('lnk').onchange=()=>{$('ahRow').style.display=$('lnk').checked?'none':'flex';covCache=null;update();};
+$('autoL').onchange=()=>{$('lRow').style.display=$('autoL').checked?'none':'flex';covCache=null;update();};
+['thp','thr'].forEach(id=>{
+ $(id).oninput=()=>{$(id+'n').value=$(id).value;rebuild();if(mode==='cov')drawCanvas();};
+ $(id+'n').onchange=()=>{$(id).value=$(id+'n').value;rebuild();if(mode==='cov')drawCanvas();};});
+['B2RP','A2B','RP_h','ax_x','A_h','A_r','B_r','RP_B','RP_r','A_L','B_L'].forEach(id=>{
+ ['','_lo','_hi'].forEach(sfx=>{const el=$(id+sfx);
+  if(el){el.addEventListener('focus',()=>setHil(id));el.addEventListener('input',()=>setHil(id));}});
+});
+$('dimsB').onclick=()=>{$('dimsB').classList.toggle('on');rebuild();};
+$('rstB').onclick=()=>{for(const k in DEF){const el=$(k);if(el)el.value=DEF[k];}
+ covCache=null;update();};
+let hmT=null;
+function update(){covCache=null;rebuild();clearTimeout(hmT);hmT=setTimeout(drawCanvas,250);}
+let animOn=false,animT=0;
+$('anim').onclick=e=>{animOn=!animOn;
+ e.target.textContent=(animOn?'■':'□')+' 작업공간 스윕 재생 (커버리지 뷰 자동 전환)';
+ e.target.classList.toggle('on',animOn);
+ if(animOn){mode='cov';$('mCov').classList.add('on');$('mHm').classList.remove('on');drawCanvas();}};
+function loop(){
+ requestAnimationFrame(loop);
+ if(animOn&&!opting){
+  animT+=0.012;
+  const tp=-5+22*Math.sin(animT),tr=14*Math.sin(animT*1.7);
+  $('thp').value=$('thpn').value=tp.toFixed(1);
+  $('thr').value=$('thrn').value=tr.toFixed(1);
+  rebuild();drawCanvas();
+ }
+ ctrl.update();renderer.render(scene,cam);
+}
+resize();rd();rebuild();loop();
+</script></body></html>
