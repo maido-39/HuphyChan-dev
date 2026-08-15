@@ -1,0 +1,12 @@
+{
+    "autodeskProduct": "Fusion360",
+    "type": "addin",
+    "author": "Pygmalion",
+    "description": {
+        "": "Select every hole/screw of the same size at once, deselect what you do not want, add extra faces, then feed the result into a Simulation constraint or save it as a Selection Set."
+    },
+    "version": "1.0.0",
+    "runOnStartup": true,
+    "supportedOS": "windows|mac",
+    "editEnabled": true
+}
