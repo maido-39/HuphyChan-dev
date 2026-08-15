@@ -1,0 +1,577 @@
+{
+ "_doc": "Per-link FEA specs. Seats/bores are MEASURED (tools/fea/assign_bearings.py output in ~/pyg_fea/steps/link_*_joints.json). Loads reference tools/fea/loads.json (RL-policy measured wrenches); factor 1.25 = design case, 1.0 on 'peak' = reference case. Bearing seats carry the joint load over the loaded arc; sole/ground and mating seats are the supports.",
+ "L1_ankle_foot": {
+  "mesh": {
+   "size_far": 4.5,
+   "refine": [
+    [
+     -123.7,
+     160,
+     -800,
+     20,
+     1.3
+    ],
+    [
+     -123.7,
+     130,
+     -800,
+     20,
+     1.3
+    ],
+    [
+     -86.2,
+     195,
+     -810,
+     16,
+     1.0
+    ],
+    [
+     -161.2,
+     195,
+     -810,
+     16,
+     1.0
+    ]
+   ]
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "stance_P99",
+    "desc": "ankle_roll wrench P99x1.25 into the two roll-axis 6900 seats + measured rod forces at the JS6 balls; ground support at the sole",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -843.0,
+      "tol": 0.3
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "ankle_roll",
+      "stat": "P99",
+      "factor": 0.625,
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       160.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       155.0,
+       166.5
+      ],
+      "rtol": 0.8
+     },
+     {
+      "kind": "wrench",
+      "joint": "ankle_roll",
+      "stat": "P99",
+      "factor": 0.625,
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       130.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       123.5,
+       135.0
+      ],
+      "rtol": 0.8
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -86.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -100.0,
+       -66.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -169.8,
+       -481.8,
+       1116.2
+      ]
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -161.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -181.0,
+       -147.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -103.7,
+       -320.9,
+       805.4
+      ]
+     }
+    ]
+   },
+   {
+    "name": "heelstrike_peak",
+    "desc": "GRF peak 6.39 BW (3227 N) on the rear third of the sole; held at the two roll-axis 6900 seats (the foot's only tie to the shin) + measured rod forces",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       160.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       155.0,
+       166.5
+      ],
+      "rtol": 0.8
+     },
+     {
+      "type": "bore",
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       130.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       123.5,
+       135.0
+      ],
+      "rtol": 0.8
+     }
+    ],
+    "patch_loads": [
+     {
+      "axis": "z",
+      "value": -843.0,
+      "tol": 0.3,
+      "box": {
+       "y": [
+        145.0,
+        260.0
+       ]
+      },
+      "F": [
+       0.0,
+       0.0,
+       3227.0
+      ]
+     }
+    ],
+    "loads": [
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -86.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -100.0,
+       -66.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -169.8,
+       -481.8,
+       1116.2
+      ]
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -161.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -181.0,
+       -147.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -103.7,
+       -320.9,
+       805.4
+      ]
+     }
+    ]
+   }
+  ],
+  "subset": {
+   "indices": [
+    19,
+    20,
+    21,
+    24
+   ],
+   "_doc": "FEET sole + AnkleFeetPillowAB/A/B. The UJ core, shin plates, cranks and rod ends belong to other links; the foot connects upward ONLY through the two roll-axis 6900 seats in the pillows."
+  }
+ },
+ "L2_shin": {
+  "mesh": {
+   "size_far": 5.0,
+   "refine": [
+    [
+     -97.45,
+     115.0,
+     -310.0,
+     26,
+     1.6
+    ],
+    [
+     -123.7,
+     145.0,
+     -520.0,
+     24,
+     1.8
+    ]
+   ]
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "knee_P99",
+    "desc": "knee wrench P99x1.25 on the 6810 knee seat; supported at the ankle-motor end of the module",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -550.0,
+      "tol": 3.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "knee",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   },
+   {
+    "name": "knee_peak",
+    "desc": "knee peak wrench (reference case)",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -550.0,
+      "tol": 3.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "knee",
+      "stat": "peak",
+      "factor": 1.0,
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   }
+  ]
+ },
+ "L3_thigh": {
+  "mesh": {
+   "size_far": 5.0,
+   "refine": [
+    [
+     -123.7,
+     70.0,
+     -97.0,
+     55,
+     2.0
+    ],
+    [
+     -97.45,
+     115.0,
+     -310.0,
+     30,
+     1.6
+    ]
+   ]
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "hipyaw_cantilever_P99",
+    "desc": "hip_yaw wrench P99x1.25 on the 6814 yaw bearing seat (z-axis, r45) - the flagged cantilever case; supported at the knee bearing seat",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "hip_yaw",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "z",
+      "ctr": [
+       -123.7,
+       70.0,
+       -97.0
+      ],
+      "r": 45.01,
+      "span": [
+       -108.0,
+       -86.0
+      ],
+      "rtol": 1.0
+     }
+    ]
+   },
+   {
+    "name": "knee_P99_at_thigh",
+    "desc": "knee wrench P99x1.25 into the knee seat, supported at the yaw bearing seat",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "z",
+      "ctr": [
+       -123.7,
+       70.0,
+       -97.0
+      ],
+      "r": 45.01,
+      "span": [
+       -108.0,
+       -86.0
+      ],
+      "rtol": 1.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "knee",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   },
+   {
+    "name": "hipyaw_cantilever_peak",
+    "desc": "hip_yaw peak wrench (reference)",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "hip_yaw",
+      "stat": "peak",
+      "factor": 1.0,
+      "axis": "z",
+      "ctr": [
+       -123.7,
+       70.0,
+       -97.0
+      ],
+      "r": 45.01,
+      "span": [
+       -108.0,
+       -86.0
+      ],
+      "rtol": 1.0
+     }
+    ]
+   }
+  ]
+ },
+ "L5_hip_pitchroll": {
+  "mesh": {
+   "size_far": 5.0,
+   "refine": [
+    [
+     -52.7,
+     70.0,
+     60.0,
+     55,
+     2.0
+    ],
+    [
+     -123.7,
+     96.25,
+     60.0,
+     40,
+     1.8
+    ]
+   ]
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "hip_pitch_P99",
+    "desc": "hip_pitch wrench P99x1.25 on the CRBS808 crossed-roller seat (x-axis, r48); supported at the roll 6810 seat",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       96.25,
+       60.0
+      ],
+      "r": 32.51,
+      "span": [
+       90.0,
+       103.0
+      ],
+      "rtol": 0.9
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "hip_pitch",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "x",
+      "ctr": [
+       -52.7,
+       70.0,
+       60.0
+      ],
+      "r": 48.02,
+      "span": [
+       -60.0,
+       -45.0
+      ],
+      "rtol": 1.0
+     }
+    ]
+   },
+   {
+    "name": "hip_roll_P99",
+    "desc": "hip_roll wrench P99x1.25 on the 6810 roll seat (y-axis, r32.5); supported at the pitch CRBS seat",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "x",
+      "ctr": [
+       -52.7,
+       70.0,
+       60.0
+      ],
+      "r": 48.02,
+      "span": [
+       -60.0,
+       -45.0
+      ],
+      "rtol": 1.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "hip_roll",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       96.25,
+       60.0
+      ],
+      "r": 32.51,
+      "span": [
+       90.0,
+       103.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   }
+  ]
+ }
+}

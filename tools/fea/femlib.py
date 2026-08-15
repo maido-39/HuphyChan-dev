@@ -152,8 +152,110 @@ def probe_features(step_path, kind='cyl', axis=None, near=None, tol=25.,
 
 
 # ------------------------------------------------------------------ mesh
+def _mesh_once(step_paths, out_inp, size_far, refine, fragment, order2, verbose,
+               algo3d, heal, tol, curv=0, size_min=0.0):
+    """One meshing attempt (see mesh_assembly for the retry ladder)."""
+    import gmsh
+    gmsh.initialize()
+    gmsh.option.setNumber('General.Terminal', 1 if verbose else 0)
+    # OCC healing: imported assemblies carry slivers/seams that otherwise abort
+    # the 3-D algorithm ("Embedded edge node ... on the seam edge").
+    gmsh.option.setNumber('Geometry.Tolerance', tol)
+    if heal:
+        # NEVER enable OCCSewFaces/OCCMakeSolids on an already-valid assembly:
+        # they turn the solids into shells and the "3-D" mesh comes out as bare
+        # surface elements (silent, caught 2026-08-15 by an element-type check).
+        for opt in ('Geometry.OCCFixDegenerated', 'Geometry.OCCFixSmallEdges',
+                    'Geometry.OCCFixSmallFaces'):
+            gmsh.option.setNumber(opt, 1)
+    gmsh.model.add('asm')
+    vols = []
+    for p in ([step_paths] if isinstance(step_paths, str) else step_paths):
+        tags = gmsh.model.occ.importShapes(p)
+        vols += [t[1] for t in tags if t[0] == 3]
+    if fragment and len(vols) > 1:
+        frag, _ = gmsh.model.occ.fragment([(3, vols[0])], [(3, v) for v in vols[1:]])
+        vols = [t[1] for t in frag if t[0] == 3]
+    gmsh.model.occ.synchronize()
+    if heal:
+        gmsh.model.mesh.removeDuplicateNodes()
+    for k, v in enumerate(vols):
+        gmsh.model.addPhysicalGroup(3, [v], k + 1, name=f'V{v}')
+    fields = []
+    for (x, y, z, rad, sz) in (refine or []):
+        fid = gmsh.model.mesh.field.add('Ball')
+        for k, val in [('Radius', rad), ('VIn', sz), ('VOut', size_far),
+                       ('XCenter', x), ('YCenter', y), ('ZCenter', z)]:
+            gmsh.model.mesh.field.setNumber(fid, k, val)
+        fields.append(fid)
+    if fields:
+        fmin = gmsh.model.mesh.field.add('Min')
+        gmsh.model.mesh.field.setNumbers(fmin, 'FieldsList', fields)
+        gmsh.model.mesh.field.setAsBackgroundMesh(fmin)
+    else:
+        gmsh.option.setNumber('Mesh.MeshSizeMax', size_far)
+    gmsh.option.setNumber('Mesh.MeshSizeFromPoints', 0)
+    # curvature-driven sizing: without it a small bore/sphere gets one element
+    # and gmsh dies with "Impossible to mesh periodic surface"
+    gmsh.option.setNumber('Mesh.MeshSizeFromCurvature', curv)
+    if size_min:
+        gmsh.option.setNumber('Mesh.MeshSizeMin', size_min)
+    gmsh.option.setNumber('Mesh.Algorithm3D', algo3d)
+    gmsh.option.setNumber('Mesh.OptimizeNetgen', 1)
+    gmsh.option.setNumber('Mesh.SecondOrderLinear', 1)
+    try:
+        gmsh.model.mesh.generate(3)
+        if order2:
+            gmsh.model.mesh.setOrder(2)
+        gmsh.write(out_inp)
+        nn = len(gmsh.model.mesh.getNodes()[0])
+        ne = len(gmsh.model.mesh.getElementsByType(11)[0])   # 11 = 10-node tet
+        if ne == 0:
+            raise RuntimeError('no C3D10 volume elements were generated '
+                               '(surface-only mesh -- check healing options)')
+    finally:
+        gmsh.finalize()
+    return dict(inp=out_inp, nodes=nn, volumes=vols)
+
+
 def mesh_assembly(step_paths, out_inp, size_far=4.0, refine=None, fragment=True,
-                  order2=True, verbose=False):
+                  order2=True, verbose=False, ladder=True):
+    """Mesh with a retry ladder over the usual imported-assembly failures.
+
+    Attempts: Delaunay+healing -> HXT+healing -> HXT, coarser, healing+bigger
+    OCC tolerance. Raises the last error if all fail.
+    """
+    attempts = [
+        dict(algo3d=1, heal=False, tol=1e-6, curv=10, size_min=0.8,
+             size_far=size_far, refine=refine),
+        dict(algo3d=10, heal=False, tol=1e-6, curv=14, size_min=0.6,
+             size_far=size_far, refine=refine),
+        dict(algo3d=10, heal=True, tol=1e-3, curv=8, size_min=1.0,
+             size_far=size_far * 1.5,
+             refine=[(x, y, z, r, s * 1.4) for (x, y, z, r, s) in (refine or [])]),
+        dict(algo3d=1, heal=True, tol=1e-3, curv=0, size_min=0.0,
+             size_far=size_far * 2.0, refine=None),
+    ]
+    if not ladder:
+        attempts = attempts[:1]
+    last = None
+    for i, a in enumerate(attempts):
+        try:
+            m = _mesh_once(step_paths, out_inp, a['size_far'], a['refine'], fragment,
+                           order2, verbose, a['algo3d'], a['heal'], a['tol'],
+                           a.get('curv', 0), a.get('size_min', 0.0))
+            if i:
+                print(f'  (mesh succeeded on attempt {i + 1}: algo3d={a["algo3d"]}, '
+                      f'size_far={a["size_far"]}, curv={a.get("curv")}, tol={a["tol"]})')
+            return m
+        except Exception as e:                      # noqa: BLE001
+            last = e
+            print(f'  mesh attempt {i + 1} failed: {str(e)[:120]}')
+    raise last
+
+
+def _mesh_assembly_single(step_paths, out_inp, size_far=4.0, refine=None, fragment=True,
+                          order2=True, verbose=False):
     """Mesh one or more STEP files as ONE bonded assembly.
 
     `refine`: list of (x, y, z, radius, size) balls for local refinement.
@@ -350,6 +452,73 @@ def moment_load(nodes, nids, ctr, M):
     F = out
     F -= F.mean(0)     # kill residual net force
     return {i: F[k] for k, i in enumerate(nids)}
+
+
+# --------------------------------------------------------- joint modelling
+# How screws and bearings must enter a model (QA finding 2026-08-15: bonding
+# CAD screws/bearing balls into a fragment mesh makes rigid threads and rigid
+# ball lumps -- stiffer than reality and terrible mesh quality).
+#
+#   screening (whole link)  screws  -> washer_footprints() as the bonded/fixed
+#                                      patch, rest of the mating face free
+#                           bearing -> bearing_load()/support on the real SEAT
+#                                      over the loaded arc (never a rigid bore)
+#   joint submodel          screws  -> solid bolt + *TIE at thread + contact +
+#                                      thermal pretension (tools/fea/bolted_pilot.py)
+#                           bearing -> keep rings, replace rolling elements
+#                                      with smeared_raceway_modulus()
+
+# catalog-order radial stiffness [N/mm]; ALWAYS report a x3 sensitivity band
+BEARING_KR = {'6900ZZ': 3.0e4, '6810ZZ': 1.0e5, '6814ZZ': 1.5e5, 'CRBS808AUUU': 5.0e5}
+
+
+def washer_footprints(nodes, node_ids, screws, r_head=4.0, axis_tol=0.2, face_tol=0.6):
+    """Node sets under the screw heads/threads on a mating face.
+
+    `screws`: [{com, axis, d}] from link_<L>_joints.json. Returns
+    {screw_index: [nid, ...]} for nodes within r_head of each screw axis, i.e.
+    the patch that actually carries clamp load -- use it instead of bonding or
+    fixing a whole face (which is arbitrarily stiff and hides the bolt-hole
+    stress concentration).
+    """
+    out = {}
+    for k, s in enumerate(screws):
+        if not s.get('axis'):
+            continue
+        a = np.asarray(s['axis'], float)
+        a /= np.linalg.norm(a)
+        c = np.asarray(s['com'], float)
+        sel = []
+        for n in node_ids:
+            d = nodes[n] - c
+            radial = np.linalg.norm(d - (d @ a) * a)
+            if radial <= r_head:
+                sel.append(n)
+        if sel:
+            out[k] = sel
+    return out
+
+
+def smeared_raceway_modulus(k_r, r_mean, width, thickness):
+    """E [MPa] of an annulus that reproduces a bearing's radial stiffness.
+
+    First-order: the loaded half of the raceway acts as a compression layer of
+    area pi*r_mean*width and thickness `thickness`, so k = E*A/t.
+    Use for the ring-to-ring gap after deleting the rolling elements; report a
+    x3 sensitivity because catalog k_r itself is load-dependent.
+    """
+    A = np.pi * r_mean * width
+    return float(k_r * thickness / A)
+
+
+def annulus_between_rings(gmsh_mod, axis, ctr, r_in, r_out, width):
+    """Create the smeared-raceway annulus solid (call before occ.synchronize)."""
+    ax = {'x': (1, 0, 0), 'y': (0, 1, 0), 'z': (0, 0, 1)}[axis]
+    base = [ctr[i] - ax[i] * width / 2 for i in range(3)]
+    outer = gmsh_mod.occ.addCylinder(*base, *[a * width for a in ax], r_out)
+    inner = gmsh_mod.occ.addCylinder(*base, *[a * width for a in ax], r_in)
+    cut, _ = gmsh_mod.occ.cut([(3, outer)], [(3, inner)])
+    return [t[1] for t in cut if t[0] == 3]
 
 
 # ------------------------------------------------------------------ deck
