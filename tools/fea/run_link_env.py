@@ -38,6 +38,16 @@ def sel_bore(nodes, surf, s):
 
 def main():
     link = sys.argv[1]
+    # per-link lock: two runs of the same link share job names and the same
+    # envelope_*.json, so an overlapping stale run silently overwrites the good
+    # result (2026-08-15: a 6-component run finished after the 4-component one
+    # and left 589 MPa on disk where the correct answer was 127 MPa).
+    import fcntl
+    lockf = open(f'/tmp/pyg_link_{link}.lock', 'w')
+    try:
+        fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        raise SystemExit(f'another run for {link} is active - refusing to share its work dir')
     stat = 'peak' if '--peak' in sys.argv else 'P99'
     setup_only = '--setup-only' in sys.argv
     factor = 1.0 if stat == 'peak' else 1.25
