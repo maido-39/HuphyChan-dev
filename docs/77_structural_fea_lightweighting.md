@@ -153,3 +153,26 @@ Wrench Studio 서버(포트 8091)에 WebGL 결과 뷰어 추가 — 표준 FEA �
 **하중**: docs/64 §7b 링크로컬 XYZ 실측 렌치(P99 ×1.25 주케이스 / peak 참조케이스, M열 보수상한 명기) + GRF(P99 1.48BW/피크 6.39BW) + 로드 LC3 → `scratchpad/link_loads.json`.
 **실행**: 워크플로 wf_c47b0a84(4 에이전트 병렬 — L1 sole고정 스탠스/힐스트라이크, L2 무릎고정+발목렌치+모터반력 ±60N·m, L3 힙요고정+무릎렌치+120N·m, L4 골반고정+힙피치/힙요 캔틸레버 3LC) — 본디드 어셈블리(fragment 컨포멀) 스크리닝, 볼트 프리텐션 정밀화는 파일럿(§11a, 실행 중) 패턴으로 핫스팟에 후속. 메시/솔브는 flock 직렬화(8코어 15GB 보호).
 **Windows GPU**: 터널 다운(port 2222 닫힘 — Windows sshd 미복구)으로 이번 라운드 미활용. 복구 시 활용처 = 병렬 CCX CPU 솔브+PrePoMax(CalculiX는 GPU 가속 없음 — PaStiX4CalculiX 빌드는 비실용 판정).
+
+## §12 캠페인 라운드 2 — 인프라 영구화 + 4링크 병렬 (2026-08-15)
+
+**사고와 교훈**: 세션 간 **스크래치패드가 완전 초기화**되어 CalculiX 환경·링크 STEP·전 스크립트가 소실(캠페인 1라운드 전량 재실행). → **FEA 파이프라인 전체를 리포지토리로 이전**:
+
+| 파일 | 역할 |
+|---|---|
+| `tools/fea/femlib.py` | STEP→gmsh(occ.fragment=본디드 어셈블리)→C3D10→ccx→frd→뷰어케이스 전 과정 + **코사인 베어링하중**(레드팀 검증 모델)·모멘트 분배·전역 flock·아티팩트 필터 요약 |
+| `tools/fea/xcaf_links.py` | FullBody.step XCAF 분해 → 링크별 STEP (`~/pyg_fea/steps/`) |
+| `tools/fea/loads.json` | docs/64 실측 렌치 표(관절별 P99/peak, GRF, 로드 LC3, 재료) — 하중의 단일 출처 |
+| `tools/fea/bolted_pilot.py` | 볼트 조인트 레시피(나사 TIE + 열수축 프리텐션 + 마찰접촉) |
+| `tools/fea/smoke_clevis.py` | 파이프라인 회귀 테스트 |
+| `tools/fea/merge_cases.py` · `remote_ccx.sh` | 뷰어 케이스 병합 · Windows 원격 솔브 디스패치 |
+
+CalculiX도 영구 경로 재설치(`~/pyg_fea/ccxenv/bin/ccx`), 작업 산출물은 `~/pyg_fea/work/<링크>/`.
+
+**파이프라인 회귀 검증**(smoke_clevis, 갱신 CAD의 발측 클레비스 38.7cm³, 118k절점): 하중합 정확 일치, **보어 피크 184.8 MPa(SF 1.19) / 아티팩트 필터 86.4 MPa(SF 2.55)**, 최대변위 60µm — 구 지오메트리에 대한 레드팀 베어링 모델(194/133)과 동일 계열. 즉 **JS6 보어 국부 미달은 신 CAD에서도 유효**(필터값은 개선 2.55).
+
+**링크 분해 결과**(XCAF, 413솔리드): L1_foot 35/573cm³ · L2_shin 13/436 · L3_thigh 66/709 · L4_hip 87/598 · L5_pelvis 9/910 · (파스너 121·베어링 81 별도 분류).
+
+**실행 중**: 4링크 병렬 어셈블리 해석(wf_608208e8) — L1 스탠스/힐스트라이크(GRF 6.39BW), L2 발목렌치+모터반력 60N·m×2, L3 무릎렌치+120N·m, L4 힙피치/**힙요 캔틸레버**. 각 링크 P99×1.25 주케이스 + peak 참조케이스, 결과는 뷰어 케이스로 병합 예정.
+
+**Windows GPU 활용 판정(솔직한 정리)**: CalculiX는 **GPU 가속 경로가 없다**(PaStiX4CalculiX는 구세대 CUDA 의존·비실용). Windows 머신의 실질 가치는 ①**여유 CPU 코어로 ccx 병렬 솔브**(`tools/fea/remote_ccx.sh`, 터널만 서면 즉시 가동) ②PrePoMax GUI로 접촉모델 정밀검증 ③**GPU가 실제로 값어치 하는 곳 = Phase 2 위상최적화**(SIMP 반복 = 대규모 반복 선형해, GPU 솔버 이득 큼). 현재 터널 다운(2222 닫힘)이라 이번 라운드는 로컬 8코어로 진행.
