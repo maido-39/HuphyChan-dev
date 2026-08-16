@@ -118,16 +118,20 @@ def main():
         # ragged that HXT and Delaunay both failed on geometry that meshes fine
         # with the plain spec (L3, 2026-08-16). Refine enough to resolve a pad,
         # no more, and cap the count.
-        fine = max(2.0, min(4.0, size / 2.5))
-        cap = 24 if size > 10 else 40
+        fine = max(2.5, min(6.0, size / 3.0))
+        cap = 16 if size > 12 else (24 if size > 10 else 40)
         auto = []
-        for blk in list(spec['envelope'].get('fix', [])) + list(spec['envelope'].get('points', [])):
+        for blk in ([] if spec['mesh'].get('auto_refine') is False else
+                    list(spec['envelope'].get('fix', [])) + list(spec['envelope'].get('points', []))):
             if blk.get('type') == 'bolt_pads':
                 for q_ in blk['points']:
                     auto.append((q_[0], q_[1], q_[2], 14.0, fine))
             elif blk.get('type') == 'bore' and blk.get('ctr'):
                 auto.append((blk['ctr'][0], blk['ctr'][1], blk['ctr'][2],
                              float(blk.get('r', 10)) + 12.0, fine))
+        if spec['mesh'].get('auto_refine') is False:
+            print('   auto-refine disabled for this link (it destabilised the mesher)',
+                  flush=True)
         if auto:
             ref = ref + auto[:cap]
             print(f'   auto-refine at {len(auto[:cap])} BC features (size {fine:.1f} mm)',
@@ -145,7 +149,10 @@ def main():
                       'with the coarsest mesh', flush=True)   # run with no mesh file at all
                 break
             size *= 1.35
-            ref = [(x, y, z, r, sz * 1.3) for (x, y, z, r, sz) in ref]
+            # the BC balls dominate the node count on big links: relax them with
+            # the global size, otherwise coarsening barely moves the total
+            # (L3: 14 mm -> 786k, 18.9 mm -> 717k, then the mesher core-dumped)
+            ref = [(x, y, z, r * 0.85, sz * 1.35) for (x, y, z, r, sz) in ref]
             print(f'   over the {MAX_NODES} node budget - remeshing at {size:.1f} mm',
                   flush=True)
             os.remove(mesh_inp)
@@ -252,55 +259,45 @@ def main():
             tok = tok.strip()
             if tok.isdigit():
                 bridged.add(int(tok))
-    for i, c in enumerate(comps_e[1:], 1):
-        cn = {n for e in c for n in elems[e]}
-        if cn & bridged:
-            print(f'   component {i} ({len(c)} elems) is bridged by a rigid motor housing',
-                  flush=True)
-            continue
-        # bolted joints have real gaps (spacers, washers, clearance): widen the
-        # search until the two bodies are joined instead of aborting the run
-        for g in (3.0, 6.0, 12.0, 25.0):
-            txt, n = F.node_pair_equations(nodes, elems, comps_e[0], c, gap=g,
-                                           exclude=set(fix) | rigid_nodes)
-            if n:
-                if g > 3.0:
-                    print(f'   (component {i} needed a {g:.0f} mm tie gap - bolted joint)',
-                          flush=True)
-                break
-        if not n and motors:
-            # last resort: the actuator housing IS the structural bridge between
-            # two bolted halves. Tie a capped sample of nodes from both bodies
-            # that fall inside the motor envelope (rigid housing, physical).
-            cn_all = sorted({nd for e in c for nd in elems[e]} & set(surf))
-            main_s = sorted({nd for e in comps_e[0] for nd in elems[e]} & set(surf))
-            for m in motors:
-                axm = {'x': 0, 'y': 1, 'z': 2}[m['axis']]
-                cm = np.asarray(m['ctr'], float)
-                inside = lambda nd: (abs(nodes[nd][axm] - cm[axm]) < m['len'] / 2 + 15.0 and
-                                     np.linalg.norm(np.delete(nodes[nd] - cm, axm)) < m['r'] + 15.0)
-                excl = set(fix) | rigid_nodes
-                fixP = np.array([nodes[n] for n in fix]) if fix else np.zeros((0, 3))
-                def far_from_fix(nd, mm=25.0):
-                    if not len(fixP):
-                        return True
-                    return float(np.linalg.norm(fixP - nodes[nd], axis=1).min()) > mm
-                A = [nd for nd in cn_all if inside(nd) and nd not in excl and far_from_fix(nd)][:400]
-                B = [nd for nd in main_s if inside(nd) and nd not in excl and far_from_fix(nd)][:400]
-                if len(A) >= 20 and len(B) >= 20:
-                    ref = (max(nodes) + 900 + i)
-                    mot_nodes[ref] = cm
-                    rigid_nodes.update(A + B)
-                    tie_txt += F.rigid_motor(nodes, A + B, ref, f'BR{i}')
-                    n = len(A) + len(B)
-                    print(f"   component {i} bridged through the {m['name'].replace('robstride_','')} "
-                          f'housing ({len(A)}+{len(B)} nodes rigid)', flush=True)
+    # Components must be joined like the real assembly: a chain. Tying every
+    # component to the LARGEST one failed on L4, where the two side plates are
+    # 53.5 mm apart but each sits 0.05 mm from the bottom plate between them.
+    # Grow a connected set instead, always tying the next-nearest component to
+    # whatever is already connected.
+    joined = set(comps_e[0])
+    pending = list(comps_e[1:])
+    guard = 0
+    while pending and guard < 40:
+        guard += 1
+        best = None
+        for idx, c in enumerate(pending):
+            for g in (3.0, 6.0, 12.0, 25.0, 40.0):
+                txt, n = F.node_pair_equations(nodes, elems, joined, c, gap=g,
+                                               exclude=set(fix) | rigid_nodes)
+                if n:
+                    best = (idx, txt, n, g)
                     break
-        if not n:
-            raise SystemExit(f'component {i} ({len(c)} elems) cannot be tied to the main body '
-                             'even at a 25 mm gap and no motor housing spans it')
+            if best:
+                break
+        if best is None:
+            # nothing reachable by proximity: a rigid motor housing bolted across
+            # both bodies also holds a component in place
+            held = [k for k, c in enumerate(pending)
+                    if {nd for e_ in c for nd in elems[e_]} & (rigid_nodes | bridged)]
+            if held:
+                k = held[0]
+                print(f'   a {len(pending[k])}-element body is held by a rigid motor '
+                      'housing bolted across the joint', flush=True)
+                joined |= set(pending.pop(k))
+                continue
+            raise SystemExit(f'{len(pending)} component(s) cannot be joined to the '
+                             'assembly (nothing within 40 mm) - check the geometry')
+        idx, txt, n, g = best
         tie_txt += txt
-        print(f'   tied component {i} ({len(c)} elems) with {n} node-pair MPCs', flush=True)
+        joined |= set(pending[idx])
+        print(f'   joined a {len(pending[idx])}-element body with {n} node-pair MPCs '
+              f'(gap {g:.0f} mm)', flush=True)
+        pending.pop(idx)
 
     # ---- load points and their node sets
     pts = env_spec['points']
@@ -320,7 +317,8 @@ def main():
             print(f"   load point '{p['name'][:40]}' is inside a rigid housing -> "
                   f'applied at motor reference node {near}', flush=True)
         if 'ctr' not in p:      # plane patch / bolt pads: centroid of the region
-            p['ctr'] = [float(v) for v in np.mean([nodes[n] for n in p['nids']], axis=0)]
+            p['ctr'] = [float(v) for v in np.mean(
+                [nodes[n] if n in nodes else mot_nodes[n] for n in p['nids']], axis=0)]
             p['_ctr_from'] = 'node centroid'
         print(f"  load point {p['name']}: {len(p['nids'])} nodes "
               f"({'plane patch' if p.get('type') == 'plane' else 'seat r' + str(p.get('r'))})",
@@ -372,7 +370,7 @@ def main():
     if gfac:
         comps.append('Gbody')
     unit_stress = []
-    load_nids = sorted({n for p in pts for n in p['nids']})
+    load_nids = sorted({n for p in pts for n in p['nids'] if n in nodes})
     axmap = {'x': 0, 'y': 1, 'z': 2}
     if pair:
         ai = axmap[pair]
@@ -560,6 +558,7 @@ def main():
                  fix_desc=env_spec['fix_desc'],
                  load_points=[dict(name=p['name'], ctr=p.get('ctr', [0, 0, 0]),
                                    axis=p.get('axis', 'z'), r=p.get('r', 10),
+                                   via_motor_ref=bool(p.get('_via_motor_ref')),
                                    nids=[ridx[n] for n in p['nids'] if n in ridx],
                                    share=p.get('share', 1.0)) for p in pts],
                  joint=j, stat=stat, factor=factor,
