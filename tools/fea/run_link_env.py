@@ -146,7 +146,8 @@ def main():
         for attempt in range(4):
             t0 = time.time()
             m = F.mesh_assembly(steps, mesh_inp, size_far=size, refine=ref,
-                                fragment=spec['mesh'].get('fragment', True))
+                                fragment=spec['mesh'].get('fragment', True),
+                                curv=spec['mesh'].get('curv'))
             print(f"mesh {m['nodes']} nodes in {time.time() - t0:.0f}s "
                   f"(size_far {size})", flush=True)
             if m['nodes'] <= MAX_NODES:

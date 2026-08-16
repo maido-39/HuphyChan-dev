@@ -642,26 +642,27 @@
  },
  "L3_thigh": {
   "mesh": {
-   "size_far": 21.6,
+   "size_far": 16.0,
+   "curv": 0,
    "auto_refine": false,
    "refine": [
     [
      -123.7,
      70.0,
      -100.0,
-     26,
-     9.0
+     30.0,
+     6.0
     ],
     [
      -123.7,
      115.0,
      -310.0,
-     28,
-     9.0
+     30.0,
+     6.0
     ]
    ],
-   "max_nodes": 300000,
-   "_doc": "21.6 mm is the coarsest size this geometry still meshes at (coarser -> PLC errors); the local refinement is kept small so the model stays inside the solver's memory"
+   "max_nodes": 320000,
+   "_doc": "curvature-driven refinement was what made this link unsolvable: at curv=14 the round features gave 630k nodes at 21.6 mm, and every coarser size hit PLC errors. With curvature off it meshes at 16 mm in 128k nodes, and the two joint interfaces are resolved by explicit 6 mm balls instead."
   },
   "threads": 6,
   "cases": [
@@ -2916,5 +2917,282 @@
   "extra_steps": [],
   "geometry_of": "L1_ankle_foot",
   "_doc": "same foot as L1, loaded at the forefoot instead of the heel: the ankle axis sits at y=145, so the forefoot patch is 100-180 mm away against the heel's 0-80 mm and is the longer bending lever"
+ },
+ "L2b_shin_cornerfine": {
+  "mesh": {
+   "size_far": 16.4,
+   "refine": [
+    [
+     -151.4,
+     152.1,
+     -365.5,
+     10.0,
+     2.0
+    ],
+    [
+     -100.2,
+     152.2,
+     -365.5,
+     10.0,
+     2.0
+    ],
+    [
+     -151.4,
+     81.1,
+     -366.0,
+     10.0,
+     2.0
+    ],
+    [
+     -99.9,
+     80.5,
+     -366.0,
+     10.0,
+     2.0
+    ]
+   ],
+   "auto_refine": false,
+   "max_nodes": 420000
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "knee_P99",
+    "desc": "knee wrench P99x1.25 on the 6810 knee seat; supported at the ankle-motor end of the module",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -550.0,
+      "tol": 3.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "knee",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   },
+   {
+    "name": "knee_peak",
+    "desc": "knee peak wrench (reference case)",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -550.0,
+      "tol": 3.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "knee",
+      "stat": "peak",
+      "factor": 1.0,
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   }
+  ],
+  "envelope": {
+   "joint": "ankle_pitch",
+   "fix_desc": "knee interface: 6810 inner-ring seat (r24.99) + 6 x M5 flange pads (mating face and head seats)",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -92.95,
+      115.0,
+      -310.0
+     ],
+     "r": 24.99,
+     "span": [
+      -96.5,
+      -89.4
+     ],
+     "rtol": 0.9,
+     "name": "6810ZZ INNER-ring seat (shaft OD Phi49.98, 7.10 mm wide, measured area"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -150.45,
+       130.59,
+       -301.0
+      ],
+      [
+       -150.45,
+       115.0,
+       -292.0
+      ],
+      [
+       -150.45,
+       99.41,
+       -301.0
+      ],
+      [
+       -150.45,
+       99.41,
+       -319.0
+      ],
+      [
+       -150.45,
+       115.0,
+       -328.0
+      ],
+      [
+       -150.45,
+       130.59,
+       -319.0
+      ]
+     ],
+     "r_pad": 4.25,
+     "depth": 2.0,
+     "name": "6 x M5, PCD Phi36.0 about (115.0,-310.0). CLAMPING/MATING face against"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -159.45,
+       130.59,
+       -301.0
+      ],
+      [
+       -159.45,
+       115.0,
+       -292.0
+      ],
+      [
+       -159.45,
+       99.41,
+       -301.0
+      ],
+      [
+       -159.45,
+       99.41,
+       -319.0
+      ],
+      [
+       -159.45,
+       115.0,
+       -328.0
+      ],
+      [
+       -159.45,
+       130.59,
+       -319.0
+      ]
+     ],
+     "r_pad": 4.25,
+     "depth": 2.0,
+     "name": "the SAME 6 x M5 at the head-seat plane x=-159.45 (7 plane faces, 3275."
+    }
+   ],
+   "points": [
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -143.45,
+       190.27,
+       -581.25
+      ],
+      [
+       -143.45,
+       163.75,
+       -554.73
+      ],
+      [
+       -143.45,
+       126.25,
+       -554.73
+      ],
+      [
+       -143.45,
+       99.73,
+       -581.25
+      ],
+      [
+       -103.95,
+       190.27,
+       -581.25
+      ],
+      [
+       -103.95,
+       163.75,
+       -554.73
+      ],
+      [
+       -103.95,
+       126.25,
+       -554.73
+      ],
+      [
+       -103.95,
+       99.73,
+       -581.25
+      ]
+     ],
+     "r_pad": 3.5,
+     "depth": 2.0,
+     "name": "DISTAL joint load - L2 -> RS03 ankle_a housing -> L1_ankle_foot. Upper"
+    }
+   ],
+   "moment_mode": "geometry",
+   "joint_axis": "x",
+   "axial_torque_Nm": 60.0,
+   "pattern": true,
+   "joint_centre": [
+    -123.7,
+    145.0,
+    -800.0
+   ],
+   "_note": "distal = the 8 x M4 upper half of the PCD98 circle that bolts the RS03 ankle_a housing to L2 (review)",
+   "inertia_g": 3.0
+  },
+  "extra_steps": [
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_ankle_a.step",
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_ankle_b.step"
+  ],
+  "actuators": [
+   "robstride_rs03_ankle_a",
+   "robstride_rs03_ankle_b",
+   "robstride_rs04_knee_p"
+  ],
+  "geometry_of": "L2_shin",
+  "_doc": "same shin as L2, with a 2 mm mesh at the four symmetric corners that carry its 311 MPa peak. If the peak climbs with refinement the corner is a geometric singularity (an unfilleted internal corner) and the verdict must come from the nominal field; if it converges, the corner is a real stress riser."
  }
 }

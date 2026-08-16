@@ -312,6 +312,7 @@ def _mesh_once(step_paths, out_inp, size_far, refine, fragment, order2, verbose,
 
 
 def mesh_assembly(step_paths, out_inp, size_far=4.0, refine=None, fragment=True,
+                  curv=None,
                   order2=True, verbose=False, ladder=True, cylinders=None):
     """Mesh with a retry ladder over the usual imported-assembly failures.
 
@@ -338,6 +339,12 @@ def mesh_assembly(step_paths, out_inp, size_far=4.0, refine=None, fragment=True,
     if not ladder:
         attempts = attempts[:1]
     last = None
+    if curv is not None:
+        # a link may cap curvature refinement: on L3 the round features drove the
+        # count to 630k nodes at the only size that meshes, far past what the
+        # solver can hold
+        for a in attempts:
+            a['curv'] = min(a.get('curv', 0), curv) if curv else 0
     for i, a in enumerate(attempts):
         try:
             m = _mesh_once(step_paths, out_inp, a['size_far'], a['refine'],

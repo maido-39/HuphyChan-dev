@@ -72,6 +72,7 @@ def summarize(env, coords, ids, load_nids=(), filter_mm=1.5, yield_=276.0,
                governing_signs=dict(zip(env.get('comps', COMPS),
                                         env['signs'][env['sign_idx'][int(vm.argmax())]].tolist())),
                SF=float(yield_ / vm.max()))
+    keepf = None
     if len(fix_nids):
         # a small clamped pad carries the whole reaction and spikes locally; that
         # is a boundary-condition artifact, not a design stress
@@ -100,4 +101,32 @@ def summarize(env, coords, ids, load_nids=(), filter_mm=1.5, yield_=276.0,
                 out['SF_filtered'] = float(yield_ / vm[keep].max())
                 out['argmax_filtered_xyz'] = [round(float(v), 1)
                                               for v in P[keep][int(vm[keep].argmax())]]
+    # The design number excludes BOTH artefact zones: the nodes where the load is
+    # injected and the nodes that are clamped. Reporting only the load-side filter
+    # let L2's clamped knee flange stand as a 311 MPa "failure" while the link
+    # itself never passed 40 MPa.
+    keep_all = np.ones(len(ids), bool)
+    kf = locals().get('keepf')
+    kl = locals().get('keep')
+    if kf is not None:
+        keep_all &= kf
+    if kl is not None:
+        keep_all &= kl
+    if keep_all.any() and (kf is not None or kl is not None):
+        out['max_vM_design'] = float(vm[keep_all].max())
+        out['SF_design'] = float(yield_ / vm[keep_all].max())
+        out['argmax_design'] = [round(float(v), 1)
+                                for v in P[keep_all][int(vm[keep_all].argmax())]]
+    # How much material is actually over each allowable? A singularity at a
+    # constraint covers a handful of nodes; a real overload covers a region.
+    out['over_allowable'] = {}
+    for L in (1.0, 1.5, 2.0):
+        a = yield_ / L
+        n_raw = int((vm >= a).sum())
+        n_des = int((vm[keep_all] >= a).sum()) if keep_all.any() else 0
+        out['over_allowable'][f'SF>{L}'] = dict(
+            allowable_MPa=round(a, 1), nodes_raw=n_raw,
+            pct_raw=round(100.0 * n_raw / len(vm), 4),
+            nodes_design=n_des,
+            pct_design=round(100.0 * n_des / max(1, int(keep_all.sum())), 4))
     return out

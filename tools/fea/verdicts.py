@@ -20,7 +20,10 @@ def main():
     for f in sorted(glob.glob(f'{W}/*/envelope_P99.json')):
         d = json.load(open(f))
         link = d.get('link', os.path.basename(os.path.dirname(f)))
-        raw, filt = d['max_vM'], d.get('max_vM_filtered', d['max_vM'])
+        # the design number excludes the load-injection nodes AND the clamped nodes
+        raw = d['max_vM']
+        filt = d.get('max_vM_design', d.get('max_vM_filtered', d['max_vM']))
+        oa = (d.get('over_allowable') or {}).get('SF>2.0', {})
         rows.append(dict(
             link=link, joint=d.get('joint'), comps=d.get('comps'),
             mesh_nodes=d.get('mesh_nodes'), magnitudes=d.get('magnitudes'),
@@ -31,17 +34,20 @@ def main():
             verdict_raw={f'SF>{L}': ('PASS' if YIELD / raw >= L else 'FAIL') for L in LEVELS},
             allowable_MPa={f'SF>{L}': round(YIELD / L, 1) for L in LEVELS},
             moment_model=d.get('moment_model'),
+            over_SF2_nodes=oa.get('nodes_design'), over_SF2_pct=oa.get('pct_design'),
         ))
     json.dump(rows, open(f'{W}/verdicts.json', 'w'), indent=1)
 
-    print('| link | joint | max vM (bore/raw) | max vM (filtered) | SF raw | SF filt | '
-          'SF>1 | SF>1.5 | SF>2 | worst-at |')
-    print('|---|---|---|---|---|---|---|---|---|---|')
+    print('| link | joint | max vM raw | max vM design | SF raw | SF design | '
+          'SF>1 | SF>1.5 | SF>2 | over SF>2 allowable | worst-at |')
+    print('|---|---|---|---|---|---|---|---|---|---|---|')
     for r in rows:
         v = r['verdict']
+        ext = ('—' if not r.get('over_SF2_nodes') else
+               f"{r['over_SF2_nodes']} nodes ({r['over_SF2_pct']} %)")
         print(f"| {r['link']} | {r['joint']} | {r['max_vM']:.1f} | {r['max_vM_filtered']:.1f} | "
               f"{r['SF_raw']:.2f} | {r['SF_filtered']:.2f} | {v['SF>1.0']} | {v['SF>1.5']} | "
-              f"{v['SF>2.0']} | {r['argmax']} |")
+              f"{v['SF>2.0']} | {ext} | {r['argmax']} |")
     print(f'\n6061-T6 allowable: {YIELD:.0f} (SF>1) / {YIELD/1.5:.0f} (SF>1.5) / '
           f'{YIELD/2:.0f} MPa (SF>2)')
     print(f'{len(rows)} links solved')
