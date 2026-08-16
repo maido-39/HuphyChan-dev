@@ -33,6 +33,42 @@ KEEP_MARGIN = 1.6      # keep material whose stress is within this factor of the
 VOX = 3.0              # voxel size [mm]
 
 
+def write_voxel_stl(pts, path, vox):
+    """Occupancy of the retained material as an STL, so CAD has a shape to cut toward.
+
+    Voxelise the retained element centroids and emit only the faces of the outer
+    hull - an interior face between two kept voxels is not a surface.
+    """
+    if not len(pts):
+        return
+    P = np.asarray(pts, float)
+    key = np.floor((P - P.min(0)) / vox).astype(int)
+    occ = set(map(tuple, key))
+    org = P.min(0)
+    FACES = [((1, 0, 0), [(1, 0, 0), (1, 1, 0), (1, 1, 1), (1, 0, 1)]),
+             ((-1, 0, 0), [(0, 0, 0), (0, 0, 1), (0, 1, 1), (0, 1, 0)]),
+             ((0, 1, 0), [(0, 1, 0), (0, 1, 1), (1, 1, 1), (1, 1, 0)]),
+             ((0, -1, 0), [(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)]),
+             ((0, 0, 1), [(0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)]),
+             ((0, 0, -1), [(0, 0, 0), (0, 1, 0), (1, 1, 0), (1, 0, 0)])]
+    tris = []
+    for c in occ:
+        for n, quad in FACES:
+            if (c[0] + n[0], c[1] + n[1], c[2] + n[2]) in occ:
+                continue
+            q = [org + (np.array(c) + np.array(v)) * vox for v in quad]
+            tris.append((n, q[0], q[1], q[2]))
+            tris.append((n, q[0], q[2], q[3]))
+    with open(path, 'w') as f:
+        f.write('solid retained\n')
+        for n, a, b, c in tris:
+            f.write(f'facet normal {n[0]} {n[1]} {n[2]}\n  outer loop\n')
+            for v in (a, b, c):
+                f.write(f'    vertex {v[0]:.3f} {v[1]:.3f} {v[2]:.3f}\n')
+            f.write('  endloop\nendfacet\n')
+        f.write('endsolid retained\n')
+
+
 def main():
     link = sys.argv[1]
     d = f'{W}/{link}'
@@ -163,6 +199,8 @@ def main():
     allow = YIELD / 1.5
     retain = (estr >= allow / KEEP_MARGIN) | keep
     np.save(f'{d}/retain_centroids.npy', ecc[retain])
+    write_voxel_stl(ecc[retain], f'{d}/{link}_retained_SF1.5.stl', VOX)
+    print(f'   -> {d}/{link}_retained_SF1.5.stl  (shape to rebuild the CAD toward)')
     out['retained_elems'] = int(retain.sum())
     out['note'] = ('removable = envelope stress below yield/(SF*1.6) and outside every joint seat, '
                    'bearing seat and bolt pad keep-out. Rebuild the CAD toward the retained region, '
