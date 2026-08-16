@@ -23,7 +23,7 @@ STEPS = '/home/syaro/pyg_fea/steps'
 # carry it, and the campaign re-runs anything produced by an older revision - L2 was
 # solved before loads inside a rigid housing moved to the motor reference node, so
 # its number was not comparable with the links solved after it.
-ANALYSIS_REV = '2026-08-17a'
+ANALYSIS_REV = '2026-08-17b'
 WORK = '/home/syaro/pyg_fea/work'
 LOADS = json.load(open(f'{HERE}/loads.json'))
 
@@ -331,6 +331,7 @@ def main():
         if mot_nodes and len(inside_rigid) > 0.5 * len(p['nids']):
             near = min(mot_nodes, key=lambda r: float(np.linalg.norm(
                 np.asarray(mot_nodes[r], float) - np.mean([nodes[n] for n in p['nids']], axis=0))))
+            p['_weight_nodes'] = len(p['nids'])   # the flange it stands for, not one node
             p['nids'] = [near]
             p['_via_motor_ref'] = near
             print(f"   load point '{p['name'][:40]}' is inside a rigid housing -> "
@@ -389,6 +390,19 @@ def main():
     if gfac:
         comps.append('Gbody')
     unit_stress = []
+    merged = []
+    for p in pts:
+        same = next((q for q in merged if q['nids'] == p['nids']), None)
+        if same is not None:
+            same['_weight_nodes'] = (same.get('_weight_nodes', len(same['nids']))
+                                     + p.get('_weight_nodes', len(p['nids'])))
+            same['name'] = f"{same['name']} + {p['name']}"
+            print(f"   merged two load points that resolve to the same node "
+                  f"({p['nids']}) into one attachment", flush=True)
+        else:
+            merged.append(p)
+    pts = merged
+    env_spec['points'] = pts
     load_nids = sorted({n for p in pts for n in p['nids'] if n in nodes})
     axmap = {'x': 0, 'y': 1, 'z': 2}
     if pair:
@@ -423,7 +437,11 @@ def main():
             # generates about it: M_i = w_i*M + (c - p_i) x (w_i*F). Summed back
             # this reproduces (F, M) exactly, and unlike a least-norm split it
             # works for one, two or many attachments.
-            w = np.array([len(p['nids']) for p in pts], float)
+            # A motor reference node represents a whole bolted flange. Weighting by
+            # node count gave it 1 against a 26-node bore, so 93 % of the wrench went
+            # into the bearing seat and the flange carried almost nothing - which is
+            # what moved L2 from 311 to 60 MPa, not the corner refinement.
+            w = np.array([p.get('_weight_nodes', len(p['nids'])) for p in pts], float)
             w = w / w.sum()
             for p, wi in zip(pts, w):
                 pc = np.asarray(p['ctr'], float)

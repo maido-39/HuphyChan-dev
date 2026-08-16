@@ -45,6 +45,7 @@ def main():
                          over_pct=oa.get('pct_design'), argmax=e.get('argmax_design',
                                                                     e.get('argmax_xyz')),
                          lw=lw.get('levels', {}), rein=lw.get('reinforce', {}),
+                         total_cm3=lw.get('total_cm3'),
                          motors=specs.get(L, {}).get('actuators')))
 
     out = [f'# 링크 구조 판정 (현행) — 해석 리비전 `{rev}`', '',
@@ -104,8 +105,17 @@ def main():
         rein = (r['rein'] or {}).get('SF>2.0', {})
         rtxt = ('—' if not rein.get('needed') else
                 f"{rein['volume_cm3']} cm³, 두께 ×{rein['thickness_factor']}")
-        out.append(f"| {r['link']} | — | {lw.get('SF>1.5', {}).get('removable_pct', '—')} % | "
+        out.append(f"| {r['link']} | {r['total_cm3'] or '—'} cm³ | "
+                   f"{lw.get('SF>1.5', {}).get('removable_pct', '—')} % | "
                    f"{lw.get('SF>2.0', {}).get('removable_pct', '—')} % | {rtxt} |")
+
+    out += ['', '## 케이스 설명', '']
+    for r in rows:
+        doc = (specs.get(r['link']) or {}).get('_doc')
+        mot = specs.get(r['link'], {}).get('actuators')
+        tag = ('액추에이터 없음' if mot == [] else
+               ('액추에이터 %d개 강체' % len(mot)) if mot else '액추에이터 자동')
+        out.append(f"- **{r['link']}** ({tag}) — {doc or '기본 케이스'}")
 
     txt = '\n'.join(out) + '\n'
     open(os.path.abspath(OUT), 'w').write(txt)
