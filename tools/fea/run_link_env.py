@@ -23,7 +23,7 @@ STEPS = '/home/syaro/pyg_fea/steps'
 # carry it, and the campaign re-runs anything produced by an older revision - L2 was
 # solved before loads inside a rigid housing moved to the motor reference node, so
 # its number was not comparable with the links solved after it.
-ANALYSIS_REV = '2026-08-17b'
+ANALYSIS_REV = '2026-08-17c'
 WORK = '/home/syaro/pyg_fea/work'
 LOADS = json.load(open(f'{HERE}/loads.json'))
 
@@ -496,8 +496,15 @@ def main():
                     else:
                         d = F.bearing_load(nodes, p['nids'], p['axis'], p['ctr'], Fv)
                 else:
+                    # Maxial is the MOTOR torque about the joint axis, not about
+                    # whatever axis the component happens to sit at in the list.
+                    # `Mv[k-3]` put the foot's 60 N.m about global x (plantarflexion)
+                    # instead of ankle_roll about y, and that mis-axed couple supplied
+                    # 39 % of the only failing stress in the whole campaign.
                     Mv = np.zeros(3)
-                    Mv[k - 3] = E.UNIT_M * 1000.0 * share      # N*m -> N*mm
+                    ax_i = (axmap[env_spec['joint_axis']] if comp == 'Maxial'
+                            else 'xyz'.index(comp[1]))
+                    Mv[ax_i] = E.UNIT_M * 1000.0 * share       # N*m -> N*mm
                     d = F.moment_load(nodes, p['nids'], p['ctr'], Mv)
                 for n, f in d.items():
                     cl[n] = cl.get(n, np.zeros(3)) + f

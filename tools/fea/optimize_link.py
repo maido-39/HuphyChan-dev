@@ -63,7 +63,32 @@ def keepout_elements(link, spec, cen):
     return m
 
 
-def face_adjacency(eids, elems):
+def tie_pairs(src_inp):
+    """Node pairs joined by *EQUATION - bolted bodies are tied, not fused.
+
+    Element face-adjacency alone reports them as separate structures, which is how the
+    first connectivity audit over-counted the number of disconnected pieces.
+    """
+    txt = open(src_inp).read().splitlines()
+    pairs, i = [], 0
+    while i < len(txt):
+        if txt[i].strip().upper().startswith('*EQUATION'):
+            j = i + 2
+            body = []
+            while j < len(txt) and not txt[j].strip().startswith('*'):
+                body.append(txt[j])
+                j += 1
+            nds = [int(x.strip()) for ln in body for k, x in enumerate(ln.split(','))
+                   if k % 3 == 0 and x.strip().isdigit()]
+            for a in range(0, len(nds) - 1, 2):
+                pairs.append((nds[a], nds[a + 1]))
+            i = j
+            continue
+        i += 1
+    return pairs
+
+
+def face_adjacency(eids, elems, ties=()):
     face = {}
     for e in eids:
         c = elems[e][:4]
@@ -75,12 +100,24 @@ def face_adjacency(eids, elems):
             for b in es:
                 if a != b:
                     adj[a].add(b)
+    if ties:
+        of = {}
+        act = set(eids)
+        for e in eids:
+            for n in elems[e]:
+                of.setdefault(n, []).append(e)
+        for a, b in ties:
+            for ea in of.get(a, ()):
+                for eb in of.get(b, ()):
+                    if ea in act and eb in act and ea != eb:
+                        adj[ea].add(eb)
+                        adj[eb].add(ea)
     return adj
 
 
-def main_component(active, elems, fix, load):
+def main_component(active, elems, fix, load, ties=()):
     """The connected piece that carries load from the constrained end to the loaded end."""
-    adj = face_adjacency(active, elems)
+    adj = face_adjacency(active, elems, ties)
     seen, comps = set(), []
     for e in active:
         if e in seen:
@@ -205,6 +242,8 @@ def main():
             f'{link}: unit case(s) {dead} put their load on a node that is not part of the '
             'structure (a motor reference node). Optimise the *_nomotor variant of this link '
             'instead, where the wrench enters through the real bolt pads.')
+    ties = tie_pairs(f'{d}/{link}_u{comps_names[0]}.inp')
+    print(f'  {len(ties)} MPC tie pairs carried into the connectivity model', flush=True)
     gfac = float(spec['envelope'].get('inertia_g', 3.0))
     gvec = (0.0, 0.0, -9810.0)
 
@@ -278,7 +317,7 @@ def main():
                 cut.add(active[k])
                 acc += vol[pos[active[k]]]
             kept = [e for e in active if e not in cut]
-            comp, ncomp = main_component(kept, elems, fix, load)
+            comp, ncomp = main_component(kept, elems, fix, load, ties)
             lost_vol = vol[[pos[e] for e in kept if e not in set(comp)]].sum()
             if lost_vol <= 0.25 * max(acc, 1e-9):
                 taken = (cut, acc, comp, ncomp, lost_vol, step)

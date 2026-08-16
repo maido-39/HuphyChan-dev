@@ -66,8 +66,33 @@ def retained_mask(link, nodes, elems, vm_node, ids, spec):
     return eids, retained, vol, stress
 
 
-def components(eids, elems, mask):
-    """Connected components of the retained elements, by shared face (3 shared nodes)."""
+def tie_pairs(src_inp):
+    """Node pairs joined by *EQUATION - bolted bodies are tied, not fused.
+
+    Element face-adjacency alone reports them as separate structures, which is how the
+    first connectivity audit over-counted the number of disconnected pieces.
+    """
+    txt = open(src_inp).read().splitlines()
+    pairs, i = [], 0
+    while i < len(txt):
+        if txt[i].strip().upper().startswith('*EQUATION'):
+            j = i + 2
+            body = []
+            while j < len(txt) and not txt[j].strip().startswith('*'):
+                body.append(txt[j])
+                j += 1
+            nds = [int(x.strip()) for ln in body for k, x in enumerate(ln.split(','))
+                   if k % 3 == 0 and x.strip().isdigit()]
+            for a in range(0, len(nds) - 1, 2):
+                pairs.append((nds[a], nds[a + 1]))
+            i = j
+            continue
+        i += 1
+    return pairs
+
+
+def components(eids, elems, mask, ties=()):
+    """Connected components of the retained elements: shared face OR an MPC tie."""
     sel = [e for e, m in zip(eids, mask) if m]
     face = {}
     for e in sel:
@@ -81,6 +106,17 @@ def components(eids, elems, mask):
             for b in es:
                 if a != b:
                     adj[a].add(b)
+    if ties:
+        of = {}
+        for e in sel:
+            for n in elems[e]:
+                of.setdefault(n, []).append(e)
+        for a, b in ties:
+            for ea in of.get(a, ()):
+                for eb in of.get(b, ()):
+                    if ea != eb:
+                        adj[ea].add(eb)
+                        adj[eb].add(ea)
     seen, comps = set(), []
     for e in sel:
         if e in seen:
@@ -115,11 +151,10 @@ def main():
         ids = sorted({t for tri in tris for t in tri})
         vm = np.array(fd['fields']['vM_env'])
         eids, ret, vol, stress = retained_mask(link, nodes, elems, vm, ids, specs[link])
-        comps = components(eids, elems, ret)
+        ties = tie_pairs(deck[0]) if (deck := sorted(glob.glob(f'{d}/{link}_u*.inp'))) else []
+        comps = components(eids, elems, ret, ties)
         # which components touch the fixed nodes and which touch the loaded nodes?
-        import re as _re
         fix, load = set(), set()
-        deck = sorted(glob.glob(f'{d}/{link}_u*.inp'))
         if deck:
             from rejudge import deck_node_sets
             fix, load = deck_node_sets(deck[0])
