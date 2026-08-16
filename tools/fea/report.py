@@ -41,25 +41,37 @@ def main():
         oa = (e.get('over_allowable') or {}).get('SF>2.0', {})
         rows.append(dict(link=L, joint=e.get('joint'), rev=e.get('analysis_rev', '?'),
                          nodes=e.get('mesh_nodes'), raw=e['max_vM'], design=des,
-                         SF=YIELD / des, over=oa.get('nodes_design'),
+                         SF=YIELD / des, p99=e.get('p99_vM'), over=oa.get('nodes_design'),
                          over_pct=oa.get('pct_design'), argmax=e.get('argmax_design',
                                                                     e.get('argmax_xyz')),
                          lw=lw.get('levels', {}), rein=lw.get('reinforce', {}),
                          total_cm3=lw.get('total_cm3'),
                          motors=specs.get(L, {}).get('actuators')))
 
+    def kind(name):
+        if name.endswith('_nomotor'):
+            return '대조 (모터 제외)'
+        if 'cornerfine' in name or name.endswith('_fine'):
+            return '대조 (메시 수렴)'
+        return '설계 판정'
+
+    for r in rows:
+        r['kind'] = kind(r['link'])
+    rows.sort(key=lambda r: (r['kind'] != '설계 판정', r['link']))
+
     out = [f'# 링크 구조 판정 (현행) — 해석 리비전 `{rev}`', '',
            '`tools/fea/report.py`가 생성. 6061-T6 항복 276 MPa,',
            '허용 276 (SF>1) / 184 (SF>1.5) / 138 MPa (SF>2).', '',
            '설계 응력 = 하중 주입 절점과 구속 절점 근방을 **모두** 제외한 최대값.',
            '초과 절점 수는 특이점(절점 몇 개)과 실제 과부하(영역)를 가른다.', '',
-           '| 링크 | 관절 | 노드 | raw MPa | **설계 MPa** | **SF** | SF>1 | SF>1.5 | SF>2 | SF>2 초과 | 최대점 |',
-           '|---|---|---|---|---|---|---|---|---|---|---|']
+           '| 링크 | 성격 | 관절 | 노드 | raw MPa | **설계 MPa** | **SF** | p99 MPa | SF>1 | SF>1.5 | SF>2 | SF>2 초과 | 최대점 |',
+           '|---|---|---|---|---|---|---|---|---|---|---|---|---|']
     for r in rows:
         v = {f'SF>{L}': ('PASS' if r['SF'] >= L else '**FAIL**') for L in LEVELS}
         ov = '—' if not r['over'] else f"{r['over']}개 ({r['over_pct']} %)"
-        out.append(f"| {r['link']} | {r['joint']} | {r['nodes'] or '?'} | {r['raw']:.1f} | "
-                   f"**{r['design']:.1f}** | **{r['SF']:.2f}** | {v['SF>1.0']} | {v['SF>1.5']} | "
+        out.append(f"| {r['link']} | {r['kind']} | {r['joint']} | {r['nodes'] or '?'} | {r['raw']:.1f} | "
+                   f"**{r['design']:.1f}** | **{r['SF']:.2f}** | "
+                   f"{r['p99']:.1f} | {v['SF>1.0']} | {v['SF>1.5']} | "
                    f"{v['SF>2.0']} | {ov} | {r['argmax']} |")
 
     out += ['', '## 모터 강체 브래킷 (동일 렌치, 액추에이터 유/무)', '',

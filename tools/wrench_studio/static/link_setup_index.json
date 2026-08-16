@@ -28,6 +28,20 @@
    "solved": true,
    "stale": false
   },
+  "L1d_foot_toeoff_fine": {
+   "file": "link_setup_L1d_foot_toeoff_fine.json",
+   "stats": [
+    "P99"
+   ],
+   "joint": "ankle_roll",
+   "tris": 55508,
+   "nodes": 27690,
+   "bolts": 0,
+   "bearings": 4,
+   "size_mb": 1.87,
+   "solved": true,
+   "stale": false
+  },
   "L2_shin": {
    "file": "link_setup_L2_shin.json",
    "stats": [
@@ -56,6 +70,20 @@
    "solved": true,
    "stale": false
   },
+  "L2c_shin_nomotor": {
+   "file": "link_setup_L2c_shin_nomotor.json",
+   "stats": [
+    "P99"
+   ],
+   "joint": "ankle_pitch",
+   "tris": 27516,
+   "nodes": 13518,
+   "bolts": 0,
+   "bearings": 2,
+   "size_mb": 0.88,
+   "solved": true,
+   "stale": false
+  },
   "L3_thigh": {
    "file": "link_setup_L3_thigh.json",
    "stats": [
@@ -67,6 +95,20 @@
    "bolts": 58,
    "bearings": 2,
    "size_mb": 1.02,
+   "solved": true,
+   "stale": false
+  },
+  "L3c_thigh_nomotor": {
+   "file": "link_setup_L3c_thigh_nomotor.json",
+   "stats": [
+    "P99"
+   ],
+   "joint": "knee",
+   "tris": 31224,
+   "nodes": 15348,
+   "bolts": 0,
+   "bearings": 2,
+   "size_mb": 1.01,
    "solved": true,
    "stale": false
   },
@@ -98,6 +140,20 @@
    "solved": true,
    "stale": false
   },
+  "L5c_hip_nomotor": {
+   "file": "link_setup_L5c_hip_nomotor.json",
+   "stats": [
+    "P99"
+   ],
+   "joint": "hip_roll",
+   "tris": 37578,
+   "nodes": 18705,
+   "bolts": 0,
+   "bearings": 4,
+   "size_mb": 1.21,
+   "solved": true,
+   "stale": false
+  },
   "L6_pelvis": {
    "file": "link_setup_L6_pelvis.json",
    "stats": [
@@ -109,6 +165,20 @@
    "bolts": 41,
    "bearings": 0,
    "size_mb": 2.16,
+   "solved": true,
+   "stale": false
+  },
+  "L6c_pelvis_nomotor": {
+   "file": "link_setup_L6c_pelvis_nomotor.json",
+   "stats": [
+    "P99"
+   ],
+   "joint": "hip_pitch",
+   "tris": 61456,
+   "nodes": 30516,
+   "bolts": 0,
+   "bearings": 0,
+   "size_mb": 1.94,
    "solved": true,
    "stale": false
   }
