@@ -10,7 +10,7 @@
    "nodes": 26080,
    "bolts": 19,
    "bearings": 4,
-   "size_mb": 1.75,
+   "size_mb": 4.7,
    "solved": true,
    "stale": false
   },
@@ -24,7 +24,7 @@
    "nodes": 22714,
    "bolts": 0,
    "bearings": 4,
-   "size_mb": 1.53,
+   "size_mb": 4.21,
    "solved": true,
    "stale": false
   },
@@ -38,7 +38,7 @@
    "nodes": 27690,
    "bolts": 0,
    "bearings": 4,
-   "size_mb": 1.87,
+   "size_mb": 5.14,
    "solved": true,
    "stale": false
   },
@@ -52,7 +52,7 @@
    "nodes": 13519,
    "bolts": 60,
    "bearings": 2,
-   "size_mb": 0.9,
+   "size_mb": 2.46,
    "solved": true,
    "stale": false
   },
@@ -66,7 +66,7 @@
    "nodes": 13518,
    "bolts": 0,
    "bearings": 2,
-   "size_mb": 0.88,
+   "size_mb": 2.4,
    "solved": true,
    "stale": false
   },
@@ -80,7 +80,7 @@
    "nodes": 13518,
    "bolts": 0,
    "bearings": 2,
-   "size_mb": 0.88,
+   "size_mb": 2.42,
    "solved": true,
    "stale": false
   },
@@ -94,7 +94,7 @@
    "nodes": 15348,
    "bolts": 58,
    "bearings": 2,
-   "size_mb": 1.02,
+   "size_mb": 2.75,
    "solved": true,
    "stale": false
   },
@@ -108,7 +108,7 @@
    "nodes": 15348,
    "bolts": 0,
    "bearings": 2,
-   "size_mb": 1.01,
+   "size_mb": 2.78,
    "solved": true,
    "stale": false
   },
@@ -122,7 +122,7 @@
    "nodes": 23423,
    "bolts": 22,
    "bearings": 0,
-   "size_mb": 1.53,
+   "size_mb": 4.19,
    "solved": true,
    "stale": false
   },
@@ -136,7 +136,7 @@
    "nodes": 17185,
    "bolts": 38,
    "bearings": 4,
-   "size_mb": 1.11,
+   "size_mb": 3.05,
    "solved": true,
    "stale": false
   },
@@ -150,7 +150,7 @@
    "nodes": 18705,
    "bolts": 0,
    "bearings": 4,
-   "size_mb": 1.21,
+   "size_mb": 3.35,
    "solved": true,
    "stale": false
   },
@@ -164,7 +164,7 @@
    "nodes": 33553,
    "bolts": 41,
    "bearings": 0,
-   "size_mb": 2.16,
+   "size_mb": 5.98,
    "solved": true,
    "stale": false
   },
@@ -178,7 +178,7 @@
    "nodes": 30516,
    "bolts": 0,
    "bearings": 0,
-   "size_mb": 1.94,
+   "size_mb": 5.38,
    "solved": true,
    "stale": false
   }

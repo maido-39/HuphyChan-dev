@@ -38,6 +38,12 @@ def decimate(s):
                           for p in s['load_points']]
     if s.get('result_vM'):
         out['result_vM'] = [s['result_vM'][i] for i in used]
+    if s.get('fields'):
+        out['fields'] = {k2: [v[i] for i in used] for k2, v in s['fields'].items()}
+    if s.get('disp'):
+        out['disp'] = [s['disp'][i] for i in used]
+    if s.get('keepout'):
+        out['keepout'] = [s['keepout'][i] for i in used]
     out['_decimated'] = k
     return out
 
@@ -108,6 +114,26 @@ def main():
             k = next(iter(c))
             if len(c[k]['nodes']) == len(s['nodes']):
                 s['result_vM'] = c[k]['fields']['vM']
+        # the full post-processing field set (displacement, principal stresses,
+        # safety factor, keep-out mask) exported by export_fields.py
+        ff = f'{os.path.dirname(f)}/fields.json'
+        if fresh and os.path.exists(ff):
+            fd = json.load(open(ff))
+            if len(fd['fields']['vM_env']) == len(s['nodes']):
+                s['fields'] = fd['fields']
+                s['disp'] = fd['disp']
+                s['keepout'] = fd['keepout']
+                s['governing_signs'] = fd.get('governing_signs')
+                if not s.get('result_vM'):
+                    s['result_vM'] = fd['fields']['vM_env']
+            else:
+                print(f"   ({link}: field export has {len(fd['fields']['vM_env'])} nodes vs "
+                      f"{len(s['nodes'])} in the setup - skipped)")
+        lwf = f'{os.path.dirname(f)}/lightweight.json'
+        if os.path.exists(lwf):
+            lw = json.load(open(lwf))
+            s['lightweight'] = dict(lw.get('levels', {}), total_cm3=lw.get('total_cm3'))
+            s['reinforce'] = lw.get('reinforce', {})
         # only show fasteners/bearings that belong to the ANALYSED geometry: a
         # CAD sub-assembly can be wider than the link subset that was meshed
         P = np.array(s['nodes'], float)

@@ -26,6 +26,8 @@
    #info{left:6px;right:6px;bottom:6px;max-width:none;max-height:44dvh;overflow-y:auto;
          padding-bottom:max(9px,env(safe-area-inset-bottom))}
    #leg{left:6px;right:6px;top:calc(var(--bar-h) + 6px);width:auto;max-height:40dvh;overflow-y:auto}
+   #post{left:6px;right:6px;top:calc(var(--bar-h) + 6px);width:auto;max-height:52dvh;overflow-y:auto}
+   #post input[type=range]{width:70px}
  }
  @media (max-height:520px) and (min-width:821px){   /* phone in landscape */
    #info{left:8px;bottom:8px;right:auto;max-width:46vw;max-height:52dvh;overflow-y:auto}
@@ -41,7 +43,17 @@
        background:#20262eef;border:1px solid #3a4553;border-radius:8px;padding:10px 16px;display:none}
  .panel{position:fixed;background:#20262ed9;border:1px solid #333;border-radius:8px;padding:9px 12px;font-size:12px;z-index:4;line-height:1.55}
  #info{left:12px;bottom:12px;max-width:430px}
- #leg{right:12px;top:56px;width:210px}
+ #leg{right:12px;bottom:12px;width:210px;max-height:38dvh;overflow-y:auto}
+ #post{right:12px;top:56px;width:290px}
+ #post table td{padding:2px 6px 2px 0;vertical-align:middle}
+ #post input[type=range]{width:96px;vertical-align:middle}
+ #post input[size]{background:#14171c;color:#dde3ea;border:1px solid #445;border-radius:4px;
+                   padding:2px 4px;font-size:11.5px;width:52px}
+ #cbar{margin-top:7px}
+ #cbar .grad{height:13px;border:1px solid #445;border-radius:3px}
+ #cbar .ticks{display:flex;justify-content:space-between;font-size:10.5px;color:#93a3b3;margin-top:2px}
+ #probe{position:fixed;z-index:6;background:#0d1117ee;border:1px solid #4a90d9;border-radius:6px;
+        padding:6px 9px;font-size:11.5px;white-space:pre;pointer-events:none;display:none}
  .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
  .hint{color:#7d8b9a;font-size:11px}
  table{border-spacing:0} td{padding:0 8px 1px 0}
@@ -61,9 +73,10 @@
  <button id="bbolt" class="on">Bolts (detected)</button>
  <button id="bbrg" class="on">Bearings</button>
  <button id="bmot" class="on">Motors</button>
- <button id="bres">Result (envelope vM)</button>
- <button id="bweak">Weak only</button>
- <label>below SF <select id="usf"><option value="2">2</option><option value="1.5">1.5</option><option value="1">1</option></select></label>
+ <button id="bres">Result</button>
+ <button id="bpost" class="on">Post ▾</button>
+ <button id="bmark" class="on">Min/max</button>
+ <button id="bprobe">Probe</button>
  <button id="bspin">Spin</button>
  <button id="bfit">Fit</button>
  <button id="btoginfo" class="mobonly on">Info</button>
@@ -73,8 +86,50 @@
 <canvas id="gl"></canvas>
 <div id="load">loading…</div>
 <div class="panel" id="leg"></div>
+<div class="panel" id="post">
+ <b>Post-processing</b>
+ <table>
+ <tr><td>field</td><td><select id="ufield">
+   <optgroup label="envelope (design)">
+     <option value="vM_env">von Mises — envelope</option>
+     <option value="SF">safety factor (276/vM)</option>
+   </optgroup>
+   <optgroup label="governing signed case">
+     <option value="vM">von Mises</option>
+     <option value="S1">σ1 (max principal)</option>
+     <option value="S3">σ3 (min principal)</option>
+     <option value="Sxx">σxx</option><option value="Syy">σyy</option><option value="Szz">σzz</option>
+     <option value="Sxy">τxy</option><option value="Syz">τyz</option><option value="Szx">τzx</option>
+     <option value="U_mag">|u| displacement</option>
+     <option value="Ux">ux</option><option value="Uy">uy</option><option value="Uz">uz</option>
+   </optgroup></select></td></tr>
+ <tr><td>colour</td><td><select id="ucmap">
+   <option value="turbo">turbo</option><option value="viridis">viridis</option>
+   <option value="jet">jet</option><option value="coolwarm">cool-warm (signed)</option>
+   <option value="gray">grayscale</option></select>
+   <select id="ubands"><option value="0">smooth</option><option value="8">8 bands</option>
+   <option value="12">12</option><option value="16">16</option></select></td></tr>
+ <tr><td>range</td><td><input id="urmin" size="6"> – <input id="urmax" size="6">
+   <button id="brauto">auto</button><button id="brallow">allowable</button></td></tr>
+ <tr><td>show</td><td><select id="umode">
+   <option value="all">all material</option>
+   <option value="weak">only below SF …</option>
+   <option value="light">lightweighting (removable / keep)</option></select>
+   <select id="usf"><option value="2">SF 2</option><option value="1.5">SF 1.5</option>
+   <option value="1">SF 1</option></select></td></tr>
+ <tr><td>deform ×</td><td><input type="range" id="udef" min="0" max="500" value="0" step="5">
+   <span id="udefv">0</span></td></tr>
+ <tr><td>section</td><td><select id="uclip"><option value="">off</option>
+   <option value="x">X</option><option value="y">Y</option><option value="z">Z</option></select>
+   <input type="range" id="uclipv" min="0" max="100" value="50">
+   <button id="bclipflip">flip</button></td></tr>
+ </table>
+ <div id="cbar"></div>
+ <div id="postinfo" class="hint"></div>
+</div>
 <div class="panel" id="info"></div>
-<div class="panel" id="weakinfo" style="left:12px;bottom:auto;top:64px;max-width:520px"></div>
+<div id="probe"></div>
+
 <script>
 const RAD=Math.PI/180;
 const YIELD=276.0;   // 6061-T6 [MPa]
@@ -83,25 +138,39 @@ let D=null, cur=null, res=null;
 const cv=document.getElementById('gl');
 const gl=cv.getContext('webgl',{antialias:true});
 gl.getExtension('OES_element_index_uint');
-const VS=`attribute vec3 p;attribute vec3 n;attribute vec3 c;uniform mat4 mvp;uniform mat4 mv;
-varying vec3 vc;varying vec3 vn;void main(){gl_Position=mvp*vec4(p,1.0);vc=c;vn=mat3(mv)*n;}`;
-const FS=`precision mediump float;varying vec3 vc;varying vec3 vn;uniform float flat_;uniform float alpha;
-void main(){vec3 N=normalize(vn);float l=flat_>0.5?1.0:(0.42+0.58*abs(N.z));gl_FragColor=vec4(vc*l,alpha);}`;
+const VS=`attribute vec3 p;attribute vec3 n;attribute vec3 c;attribute vec3 d;
+uniform mat4 mvp;uniform mat4 mv;uniform float dscale;
+varying vec3 vc;varying vec3 vn;varying vec3 vw;
+void main(){vec3 P=p+d*dscale;vw=P;gl_Position=mvp*vec4(P,1.0);vc=c;vn=mat3(mv)*n;}`;
+const FS=`precision mediump float;varying vec3 vc;varying vec3 vn;varying vec3 vw;
+uniform float flat_;uniform float alpha;uniform float clipOn;uniform vec4 clip;
+void main(){
+ if(clipOn>0.5 && dot(vw,clip.xyz)>clip.w) discard;   // section plane
+ vec3 N=normalize(vn);float l=flat_>0.5?1.0:(0.42+0.58*abs(N.z));
+ gl_FragColor=vec4(vc*l,alpha);}`;
 function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
  if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(o);return o;}
 const prog=gl.createProgram();
 gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));
 gl.linkProgram(prog);gl.useProgram(prog);
 const loc={p:gl.getAttribLocation(prog,'p'),n:gl.getAttribLocation(prog,'n'),c:gl.getAttribLocation(prog,'c'),
+ d:gl.getAttribLocation(prog,'d'),dscale:gl.getUniformLocation(prog,'dscale'),
+ clipOn:gl.getUniformLocation(prog,'clipOn'),clip:gl.getUniformLocation(prog,'clip'),
  mvp:gl.getUniformLocation(prog,'mvp'),mv:gl.getUniformLocation(prog,'mv'),flat:gl.getUniformLocation(prog,'flat_'),alpha:gl.getUniformLocation(prog,'alpha')};
-function mkbuf(){return {v:gl.createBuffer(),n:gl.createBuffer(),c:gl.createBuffer(),i:gl.createBuffer(),count:0};}
-const B={mesh:mkbuf(),meshSafe:mkbuf(),fix:mkbuf(),load:mkbuf(),screw:mkbuf(),brg:mkbuf(),bolt:mkbuf(),mot:mkbuf()};
-function fill(b,V,N,C,I){
+function mkbuf(){return {v:gl.createBuffer(),n:gl.createBuffer(),c:gl.createBuffer(),
+ d:gl.createBuffer(),i:gl.createBuffer(),count:0,hasD:false};}
+const B={mesh:mkbuf(),meshSafe:mkbuf(),mark:mkbuf(),fix:mkbuf(),load:mkbuf(),screw:mkbuf(),brg:mkbuf(),bolt:mkbuf(),mot:mkbuf()};
+function fill(b,V,N,C,I,D){
  gl.bindBuffer(gl.ARRAY_BUFFER,b.v);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
  gl.bindBuffer(gl.ARRAY_BUFFER,b.n);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(N),gl.STATIC_DRAW);
  gl.bindBuffer(gl.ARRAY_BUFFER,b.c);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(C),gl.STATIC_DRAW);
+ if(D){gl.bindBuffer(gl.ARRAY_BUFFER,b.d);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(D),gl.STATIC_DRAW);b.hasD=true;}
+ else b.hasD=false;
  if(I){gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,b.i);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(I),gl.STATIC_DRAW);b.count=I.length;b.indexed=true;}
  else {b.count=V.length/3;b.indexed=false;}
+}
+function fillColors(b,C){
+ gl.bindBuffer(gl.ARRAY_BUFFER,b.c);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(C),gl.STATIC_DRAW);
 }
 // ---------- geometry helpers ----------
 function axisVec(a){return a==='x'?[1,0,0]:a==='y'?[0,1,0]:[0,0,1];}
@@ -164,19 +233,203 @@ function momentArc(o,ctr,axis,r,col,turns=0.75){
  arrow(o,prev,dir,r*0.5,r*0.055,col);
 }
 // ---------- build scene for a link ----------
-let ctr=[0,0,0],rad=300;
+let ctr=[0,0,0],rad=300,BB={min:[0,0,0],max:[1,1,1]};
 const COL={mesh:[0.55,0.60,0.66],fix:[0.20,0.55,1.0],F:[1.0,0.30,0.25],M:[1.0,0.72,0.15],
            screw:[0.85,0.85,0.30],screw5:[1.0,0.55,0.15],brg:[0.35,0.95,0.75],
            boltM4:[0.95,0.80,0.25],boltM5:[1.0,0.50,0.10],boltM3:[0.75,0.85,0.95],
            lowhead:[1.0,0.25,0.85],thread:[0.55,0.45,0.20],
            ghost:[0.62,0.66,0.72],
            motor:[0.30,0.42,0.62],motorRim:[0.55,0.68,0.90],res:null};
+
+// ---------- post-processing: fields, colour maps, display modes ----------
+const CMAP={
+ turbo:turbo,
+ viridis:t=>{t=Math.min(1,Math.max(0,t));
+  const r=Math.max(0,Math.min(1,0.28+t*(-0.33+t*(3.19+t*(-4.2+t*1.62)))));
+  const g=Math.max(0,Math.min(1,0.0+t*(1.41+t*(-1.16+t*(1.2+t*-0.53)))));
+  const b=Math.max(0,Math.min(1,0.33+t*(1.36+t*(-3.7+t*(4.35+t*-1.72)))));
+  return [r,g,b];},
+ jet:t=>{t=Math.min(1,Math.max(0,t));
+  return [Math.min(1,Math.max(0,1.5-Math.abs(4*t-3))),
+          Math.min(1,Math.max(0,1.5-Math.abs(4*t-2))),
+          Math.min(1,Math.max(0,1.5-Math.abs(4*t-1)))];},
+ coolwarm:t=>{t=Math.min(1,Math.max(0,t));
+  return [0.23+t*(0.87-0.23*0+0.0)*0+0.23+1.4*t-0.63*t*t, 0.30+1.5*t-1.5*t*t, 0.75-0.2*t-0.35*t*t];},
+ gray:t=>{t=Math.min(1,Math.max(0,t));return [0.15+0.8*t,0.15+0.8*t,0.15+0.8*t];}
+};
+const UNIT={SF:'',U_mag:'mm',Ux:'mm',Uy:'mm',Uz:'mm'};
+const $=id=>document.getElementById(id);
+function fieldName(){return $('ufield').value;}
+function fieldArr(){
+ const s=cur,f=fieldName();
+ if(s.fields&&s.fields[f])return s.fields[f];
+ if(f==='vM_env'&&res)return res;
+ return null;
+}
+function fieldUnit(){return UNIT[fieldName()]===undefined?'MPa':UNIT[fieldName()];}
+function sfLevel(){return parseFloat($('usf').value);}
+function autoRange(V){
+ let lo=Infinity,hi=-Infinity;
+ for(const v of V){if(v<lo)lo=v;if(v>hi)hi=v;}
+ return [lo,hi];
+}
+function curRange(V){
+ const a=parseFloat($('urmin').value),b=parseFloat($('urmax').value);
+ if(isFinite(a)&&isFinite(b)&&b>a)return [a,b];
+ const r=autoRange(V);
+ $('urmin').value=(+r[0].toPrecision(4)); $('urmax').value=(+r[1].toPrecision(4));
+ return r;
+}
+function colorbar(lo,hi,cm,bands){
+ const stops=[];
+ for(let k=0;k<=12;k++){const c=cm(k/12);
+  stops.push(`rgb(${(c[0]*255)|0},${(c[1]*255)|0},${(c[2]*255)|0}) ${(k/12*100).toFixed(0)}%`);}
+ const u=fieldUnit();
+ $('cbar').innerHTML=`<div class="grad" style="background:linear-gradient(90deg,${stops.join(',')})"></div>`
+  +`<div class="ticks"><span>${(+lo.toPrecision(4))}</span>`
+  +`<span>${(+((lo+hi)/2).toPrecision(4))}</span>`
+  +`<span>${(+hi.toPrecision(4))} ${u}</span></div>`
+  +(bands?`<div class="hint">${bands} contour bands</div>`:'');
+}
+// the two display modes that hide material: weak-only and the lightweighting study
+function classify(V){
+ const s=cur,mode=$('umode').value,L=sfLevel(),allow=YIELD/L;
+ const n=V.length,cls=new Uint8Array(n);      // 0 = shown solid, 1 = ghosted
+ if(mode==='weak'){
+  const isSF=fieldName()==='SF';
+  for(let i=0;i<n;i++)cls[i]=(isSF?(V[i]<=L):(V[i]>=allow))?0:1;
+ } else if(mode==='light'){
+  const vm=(s.fields&&s.fields.vM_env)||res||[],ko=s.keepout||[];
+  for(let i=0;i<n;i++)cls[i]=(vm[i]<allow/1.6 && !ko[i])?1:0;   // 1 = removable
+ }
+ return cls;
+}
+function paint(){
+ if(!GEO||!cur)return;
+ const s=cur,P=s.nodes,V0=fieldArr();
+ const showRes=$('bres').classList.contains('on')&&V0;
+ const mode=$('umode').value;
+ const C=[];
+ const fixed=new Set(s.fixed);
+ const loadN=new Set(); for(const lp of s.load_points) for(const i of lp.nids) loadN.add(i);
+ let lo=0,hi=1,cm=CMAP[$('ucmap').value],bands=parseInt($('ubands').value)||0,cls=null;
+ if(showRes){
+  [lo,hi]=curRange(V0);
+  cls=classify(V0);
+  for(let i=0;i<P.length;i++){
+   let col;
+   if(mode==='light'){
+    col = cls[i] ? [0.24,0.70,0.36]                       // removable
+        : ((s.keepout&&s.keepout[i]) ? [0.30,0.55,0.95]   // protected seat / pad
+        : [0.78,0.78,0.80]);                              // load-carrying material
+   } else {
+    let t=(V0[i]-lo)/Math.max(1e-9,hi-lo);
+    t=Math.min(1,Math.max(0,t));
+    if(bands)t=Math.floor(t*bands)/(bands-1||1);
+    col=cls&&cls[i]?COL.ghost:cm(t);
+   }
+   C.push(col[0],col[1],col[2]);
+  }
+ } else {
+  for(let i=0;i<P.length;i++){
+   const col=fixed.has(i)?COL.fix:(loadN.has(i)?COL.F:COL.mesh);
+   C.push(col[0],col[1],col[2]);
+  }
+ }
+ // split the surface: solid part vs ghosted part
+ if(cls&&mode!=='all'){
+  const Iw=[],Is=[];
+  for(const t of s.tris){
+   const ghost=(cls[t[0]]&&cls[t[1]]&&cls[t[2]]);
+   (ghost?Is:Iw).push(t[0],t[1],t[2]);
+  }
+  fill(B.mesh,GEO.V,GEO.N,C,Iw,GEO.D); fill(B.meshSafe,GEO.V,GEO.N,C,Is,GEO.D);
+ } else {
+  const I=[]; for(const t of s.tris)I.push(t[0],t[1],t[2]);
+  fill(B.mesh,GEO.V,GEO.N,C,I,GEO.D); fill(B.meshSafe,[],[],[],[],null);
+ }
+ if(showRes)colorbar(lo,hi,cm,bands); else $('cbar').innerHTML='';
+ marks(showRes?V0:null);
+ postInfo(V0,cls);
+}
+function postInfo(V,cls){
+ if(!V){$('postinfo').textContent='no result field for this link — showing the setup';return;}
+ const s=cur,mode=$('umode').value,L=sfLevel(),allow=YIELD/L,u=fieldUnit();
+ const [a,b]=autoRange(V);
+ let txt=`${fieldName()}: ${(+a.toPrecision(4))} … ${(+b.toPrecision(4))} ${u} over ${V.length} surface nodes`;
+ if(mode==='weak'&&cls){
+  let k=0; for(let i=0;i<cls.length;i++)if(!cls[i])k++;
+  txt+=`\nover the SF ${L} allowable (${allow.toFixed(0)} MPa): ${k} nodes (${(100*k/cls.length).toFixed(2)} %)`;
+ }
+ if(mode==='light'&&cls){
+  let k=0; for(let i=0;i<cls.length;i++)if(cls[i])k++;
+  const lw=s.lightweight&&s.lightweight[`SF>${L}`];
+  txt+=`\nremovable surface: ${k} of ${cls.length} nodes (${(100*k/cls.length).toFixed(1)} %)`;
+  if(lw)txt+=`\nvolume study: ${lw.removable_cm3} cm³ of ${s.lightweight.total_cm3} cm³ `
+            +`(${lw.removable_pct} %) below ${lw.keep_threshold_MPa} MPa and outside every keep-out`;
+  const re=s.reinforce&&s.reinforce[`SF>${L}`];
+  if(re&&re.needed)txt+=`\nreinforce: ${re.volume_cm3} cm³ over ${re.extent_mm} mm → thickness ×${re.thickness_factor}`;
+ }
+ $('postinfo').textContent=txt;
+}
+
+function marker(o,c,col,r){        // small octahedron at a node
+ const v=[[r,0,0],[-r,0,0],[0,r,0],[0,-r,0],[0,0,r],[0,0,-r]].map(d=>[c[0]+d[0],c[1]+d[1],c[2]+d[2]]);
+ const f=[[0,2,4],[2,1,4],[1,3,4],[3,0,4],[2,0,5],[1,2,5],[3,1,5],[0,3,5]];
+ for(const t of f)pushTri(o,v[t[0]],v[t[1]],v[t[2]],col);
+}
+function marks(V){
+ const o={V:[],N:[],C:[]};
+ if(V&&$('bmark').classList.contains('on')){
+  let lo=0,hi=0;
+  for(let i=1;i<V.length;i++){if(V[i]<V[lo])lo=i;if(V[i]>V[hi])hi=i;}
+  const r=Math.max(2,rad*0.012);
+  marker(o,cur.nodes[hi],[1.0,0.15,0.15],r);      // peak
+  marker(o,cur.nodes[lo],[0.2,0.5,1.0],r*0.8);    // minimum
+  MINMAX=[lo,hi];
+ } else MINMAX=null;
+ fill(B.mark,o.V,o.N,o.C,null);
+}
+let MINMAX=null;
+// ---------- probe: click a point, read every field at the nearest surface node
+function project(p){
+ const M=lastMVP; if(!M)return null;
+ const x=M[0]*p[0]+M[4]*p[1]+M[8]*p[2]+M[12];
+ const y=M[1]*p[0]+M[5]*p[1]+M[9]*p[2]+M[13];
+ const w=M[3]*p[0]+M[7]*p[1]+M[11]*p[2]+M[15];
+ if(w<=0)return null;
+ return [(x/w*0.5+0.5)*cv.clientWidth,(0.5-y/w*0.5)*cv.clientHeight];
+}
+function probeAt(px,py){
+ if(!cur)return;
+ const P=cur.nodes; let best=-1,bd=18*18;
+ const ds=parseFloat($('udef').value)||0;
+ for(let i=0;i<P.length;i++){
+  const d=(cur.disp&&cur.disp[i])||[0,0,0];
+  const q=project([P[i][0]+d[0]*ds,P[i][1]+d[1]*ds,P[i][2]+d[2]*ds]);
+  if(!q)continue;
+  const e=(q[0]-px)*(q[0]-px)+(q[1]-py)*(q[1]-py);
+  if(e<bd){bd=e;best=i;}
+ }
+ const el=$('probe');
+ if(best<0){el.style.display='none';return;}
+ const f=cur.fields||{},lines=[`node ${best} @ ${cur.nodes[best].map(v=>v.toFixed(1)).join(', ')} mm`];
+ const show=[['vM_env','vM envelope','MPa'],['SF','SF',''],['vM','vM (governing)','MPa'],
+             ['S1','σ1','MPa'],['S3','σ3','MPa'],['U_mag','|u|','mm']];
+ for(const [k,lab,u] of show)if(f[k]!==undefined)lines.push(`${lab}: ${f[k][best]} ${u}`);
+ if(cur.keepout&&cur.keepout[best])lines.push('inside a keep-out (seat / bolt pad)');
+ el.textContent=lines.join('\n');
+ el.style.display='block';
+ el.style.left=Math.min(px+14,innerWidth-220)+'px';
+ el.style.top=(py+parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bar-h'))+14)+'px';
+}
+let GEO=null;                 // per-link vertex arrays kept for repainting
 function build(){
  const s=cur;
  const P=s.nodes;
- // mesh
+ // mesh geometry (positions, normals, nodal displacement for the deformed shape)
  {
-  const V=[],N=[],C=[],I=[];
+  const V=[],N=[],D=[];
   const nn=new Float32Array(P.length*3);
   for(const t of s.tris){
    const a=P[t[0]],b=P[t[1]],c=P[t[2]];
@@ -184,45 +437,12 @@ function build(){
    const n=cross(u,v);
    for(const i of t){nn[i*3]+=n[0];nn[i*3+1]+=n[1];nn[i*3+2]+=n[2];}
   }
-  const fixed=new Set(s.fixed);
-  const loadN=new Set(); for(const lp of s.load_points) for(const i of lp.nids) loadN.add(i);
-  const useRes=res&&document.getElementById('bres').classList.contains('on');
-  // "weak only": material that fails the chosen safety factor stays solid, the
-  // rest goes translucent, so the vulnerable regions are the only thing you see
-  const weakOn=res&&document.getElementById('bweak').classList.contains('on');
-  const allow=YIELD/parseFloat(document.getElementById('usf').value);
-  let lo=0,hi=1;
-  if(useRes){lo=Math.min(...res);hi=Math.max(...res);}
   for(let i=0;i<P.length;i++){
    V.push(...P[i]); N.push(nn[i*3],nn[i*3+1],nn[i*3+2]);
-   let col=COL.mesh;
-   if(weakOn){
-    // solid part keeps the stress colour; the safe part is a neutral ghost
-    col = res[i]>=allow ? turbo(Math.min(1,(res[i]-allow)/Math.max(1e-9,hi-allow)*0.75+0.25))
-                        : COL.ghost;
-   }
-   else if(useRes){const t=(res[i]-lo)/Math.max(1e-9,hi-lo);col=turbo(t);}
-   else if(fixed.has(i))col=COL.fix;
-   else if(loadN.has(i))col=COL.F;
-   C.push(...col);
+   const d=(s.disp&&s.disp[i])||[0,0,0]; D.push(d[0],d[1],d[2]);
   }
-  if(weakOn){
-   const Iw=[],Is=[];
-   for(const t of s.tris){
-    // a face counts as weak if any of its nodes is over the allowable
-    (Math.max(res[t[0]],res[t[1]],res[t[2]])>=allow?Iw:Is).push(t[0],t[1],t[2]);
-   }
-   fill(B.mesh,V,N,C,Iw); fill(B.meshSafe,V,N,C,Is);
-   const nW=res.filter(v=>v>=allow).length;
-   document.getElementById('weakinfo').innerHTML=
-     `<b>weak-only view</b>: ${(YIELD/parseFloat(document.getElementById('usf').value)).toFixed(0)} MPa `
-     +`allowable (SF ${document.getElementById('usf').value}) · solid = over it `
-     +`(${nW} of ${res.length} surface nodes, ${(100*nW/res.length).toFixed(2)} %) · max ${hi.toFixed(1)} MPa`;
-  } else {
-   for(const t of s.tris)I.push(t[0],t[1],t[2]);
-   fill(B.mesh,V,N,C,I); fill(B.meshSafe,[],[],[],[]);
-   document.getElementById('weakinfo').innerHTML='';
-  }
+  GEO={V,N,D};
+  paint();
  }
  // load arrows: all six components, both signs (the envelope covers sign combos)
  {
@@ -328,6 +548,7 @@ function build(){
  // camera framing
  let mn=[1e9,1e9,1e9],mx2=[-1e9,-1e9,-1e9];
  for(const p of P)for(let k=0;k<3;k++){mn[k]=Math.min(mn[k],p[k]);mx2[k]=Math.max(mx2[k],p[k]);}
+ BB={min:mn.slice(),max:mx2.slice()};
  ctr=[(mn[0]+mx2[0])/2,(mn[1]+mx2[1])/2,(mn[2]+mx2[2])/2];
  rad=Math.max(mx2[0]-mn[0],mx2[1]-mn[1],mx2[2]-mn[2]);
  info();
@@ -387,12 +608,16 @@ function info(){
    <span class="sw" style="background:#ff40d9"></span>LOW-HEAD 소두 &nbsp;<span class="sw" style="background:#8c7333"></span>thread engagement<br>
    <span class="sw" style="background:#59f2bf"></span>bearings (catalog size at measured seat)<br>
    <span class="sw" style="background:#4d6b9e"></span>motors (RobStride RS03/RS04, measured envelope)<br>
+   <span class="sw" style="background:#3db35c"></span>lightweighting: removable material<br>
+   <span class="sw" style="background:#4d8cf2"></span>lightweighting: protected seat / bolt pad<br>
+   <span class="sw" style="background:#c7c7cc"></span>lightweighting: load-carrying, keep<br>
+   <span class="sw" style="background:#ff2626"></span>peak of the field &nbsp;<span class="sw" style="background:#3380ff"></span>minimum<br>
    <span class="hint">arrows drawn both ways: the envelope takes the worst of all
    2<sup>${(s.envelope&&s.envelope.comps?s.envelope.comps.length:(Object.keys(s.magnitudes||{}).length||6))}</sup>
    sign combinations</span>`;
 }
 // ---------- camera ----------
-let view={yaw:-0.6,pitch:0.3,dist:1.25,tx:0,ty:0},spin=false;
+let view={yaw:-0.6,pitch:0.3,dist:1.25,tx:0,ty:0},spin=false,lastMVP=null;
 function mul(A,Bm){const R=new Array(16).fill(0);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)R[i*4+j]+=A[i*4+k]*Bm[k*4+j];return R;}
 const T=(x,y,z)=>[1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1];
 function mats(){
@@ -412,6 +637,9 @@ function drawBuf(b,flat,alpha){
  gl.uniform1f(loc.alpha,alpha===undefined?1:alpha);
  for(const [buf,l] of [[b.v,loc.p],[b.n,loc.n],[b.c,loc.c]]){
   gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,3,gl.FLOAT,false,0,0);}
+ if(b.hasD){gl.bindBuffer(gl.ARRAY_BUFFER,b.d);gl.enableVertexAttribArray(loc.d);
+            gl.vertexAttribPointer(loc.d,3,gl.FLOAT,false,0,0);}
+ else {gl.disableVertexAttribArray(loc.d);gl.vertexAttrib3f(loc.d,0,0,0);}
  if(b.indexed){gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,b.i);gl.drawElements(gl.TRIANGLES,b.count,gl.UNSIGNED_INT,0);}
  else gl.drawArrays(gl.TRIANGLES,0,b.count);
 }
@@ -424,8 +652,20 @@ function draw(){
  if(cur){
   if(spin)view.yaw+=0.004;
   const {MV,MVP}=mats();
+  lastMVP=MVP;
   gl.uniformMatrix4fv(loc.mvp,false,new Float32Array(MVP));
   gl.uniformMatrix4fv(loc.mv,false,new Float32Array(MV));
+  gl.uniform1f(loc.dscale,parseFloat(document.getElementById('udef').value)||0);
+  const ca=document.getElementById('uclip').value;
+  if(ca){
+   const k='xyz'.indexOf(ca), nrm=[0,0,0];
+   const flip=document.getElementById('bclipflip').classList.contains('on')?-1:1;
+   nrm[k]=flip;
+   const t=parseFloat(document.getElementById('uclipv').value)/100;
+   const lo=BB.min[k],hi=BB.max[k],pos=lo+(hi-lo)*t;
+   gl.uniform1f(loc.clipOn,1);
+   gl.uniform4f(loc.clip,nrm[0],nrm[1],nrm[2],pos*flip);
+  } else gl.uniform1f(loc.clipOn,0);
   if(document.getElementById('bmesh').classList.contains('on'))drawBuf(B.mesh,false);
   if(document.getElementById('bfix').classList.contains('on'))drawBuf(B.fix,true);
   if(document.getElementById('bload').classList.contains('on'))drawBuf(B.load,false);
@@ -433,6 +673,7 @@ function draw(){
   if(document.getElementById('bbolt').classList.contains('on'))drawBuf(B.bolt,false);
   if(document.getElementById('bbrg').classList.contains('on'))drawBuf(B.brg,false);
   if(document.getElementById('bmot').classList.contains('on'))drawBuf(B.mot,false);
+  drawBuf(B.mark,true);
   // translucent pass last, with depth writes off so the solid weak regions stay
   // visible through the ghost shell around them
   if(B.meshSafe.count&&document.getElementById('bmesh').classList.contains('on')){
@@ -490,13 +731,40 @@ for(const [b,el] of [['btoginfo','info'],['btogleg','leg']])
   e.target.classList.toggle('on');});
 for(const id of ['bmesh','bfix','bload','bscrew','bbolt','bbrg','bmot'])
  document.getElementById(id).addEventListener('click',e=>{e.target.classList.toggle('on');});
-document.getElementById('bres').addEventListener('click',e=>{e.target.classList.toggle('on');build();});
-document.getElementById('bweak').addEventListener('click',e=>{
+document.getElementById('bres').addEventListener('click',e=>{e.target.classList.toggle('on');paint();});
+document.getElementById('bpost').addEventListener('click',e=>{
  e.target.classList.toggle('on');
- // the weak view is a result view: turn the stress field on with it
- if(e.target.classList.contains('on'))document.getElementById('bres').classList.add('on');
- build();});
-document.getElementById('usf').addEventListener('change',build);
+ $('post').style.display=e.target.classList.contains('on')?'':'none';});
+// field change resets the range so the new quantity is not clipped by the old one
+$('ufield').addEventListener('change',()=>{
+ $('urmin').value='';$('urmax').value='';
+ $('bres').classList.add('on');paint();});
+for(const id of ['ucmap','ubands','usf'])$(id).addEventListener('change',paint);
+for(const id of ['urmin','urmax'])$(id).addEventListener('change',paint);
+$('umode').addEventListener('change',()=>{
+ if($('umode').value!=='all')$('bres').classList.add('on');
+ paint();});
+$('bmark').addEventListener('click',e=>{e.target.classList.toggle('on');paint();});
+$('bprobe').addEventListener('click',e=>{
+ e.target.classList.toggle('on');
+ if(!e.target.classList.contains('on'))$('probe').style.display='none';});
+cv.addEventListener('click',ev=>{
+ if(!$('bprobe').classList.contains('on'))return;
+ const r=cv.getBoundingClientRect();
+ probeAt(ev.clientX-r.left,ev.clientY-r.top);});
+$('brauto').addEventListener('click',()=>{$('urmin').value='';$('urmax').value='';paint();});
+$('brallow').addEventListener('click',()=>{
+ // scale the colours to the allowable, so anything saturated is a real problem
+ const f=fieldName();
+ if(f==='SF'){$('urmin').value=0;$('urmax').value=(sfLevel()*2);}
+ else {$('urmin').value=0;$('urmax').value=(YIELD/sfLevel()).toFixed(0);}
+ paint();});
+$('udef').addEventListener('input',()=>{
+ $('udefv').textContent=$('udef').value;});
+$('uclipv').addEventListener('input',draw1);
+$('uclip').addEventListener('change',draw1);
+$('bclipflip').addEventListener('click',e=>{e.target.classList.toggle('on');});
+function draw1(){}   // the clip uniforms are read every frame in draw()
 document.getElementById('bspin').addEventListener('click',e=>{spin=!spin;e.target.classList.toggle('on',spin);});
 document.getElementById('ulink').addEventListener('input',e=>load(e.target.value));
 document.getElementById('ucase').addEventListener('input',()=>load(document.getElementById('ulink').value));
@@ -523,6 +791,8 @@ function load(link){
 }
 let IDX=null;
 setLoading(true,'loading index…');
+if(isMobile()){document.getElementById('post').style.display='none';
+                document.getElementById('bpost').classList.remove('on');}
 fetch('link_setup_index.json').then(r=>r.json()).then(d=>{
  IDX=d;
  const sel=document.getElementById('ulink');
