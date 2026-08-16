@@ -40,8 +40,11 @@ def combine(unit_stress, magnitudes, chunk=200_000, comps=None):
     U = np.asarray(unit_stress, float)
     n = U.shape[0]
     comps = comps or COMPS[:n]
-    scale = np.array([magnitudes[i] / (UNIT_F if comps[i][0] == 'F' else UNIT_M)
-                      for i in range(n)])
+    def _unit(c):
+        if c == 'Gbody':
+            return 1.0          # the unit solve already is 1 g
+        return UNIT_F if c[0] == 'F' else UNIT_M
+    scale = np.array([magnitudes[i] / _unit(comps[i]) for i in range(n)])
     U = U * scale[:, None, None]
     signs = np.array(list(itertools.product([1., -1.], repeat=n)))   # (2^n, n)
     N = U.shape[1]

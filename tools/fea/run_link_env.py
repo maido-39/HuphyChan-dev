@@ -24,7 +24,24 @@ LOADS = json.load(open(f'{HERE}/loads.json'))
 
 
 def sel_bore(nodes, surf, s):
-    """Node set of a load/BC region: a bore/seat cylinder or a planar patch."""
+    """Node set of a load/BC region: bore/seat cylinder, planar patch, or the
+    annular pads under a set of screw heads (the real bolted footprint)."""
+    if s.get('type') == 'bolt_pads':
+        ai = {'x': 0, 'y': 1, 'z': 2}[s['axis']]
+        oi = [i for i in range(3) if i != ai]
+        rp, dep = float(s.get('r_pad', 4.0)), float(s.get('depth', 2.0))
+        pts = [np.asarray(q, float) for q in s['points']]
+        out = []
+        for n in surf:
+            v = nodes[n]
+            for q in pts:
+                if abs(v[ai] - q[ai]) <= dep and \
+                   np.hypot(v[oi[0]] - q[oi[0]], v[oi[1]] - q[oi[1]]) <= rp:
+                    out.append(n)
+                    break
+        if len(out) < 12:
+            raise SystemExit(f'bolt_pads selection too small ({len(out)}): {s.get("_desc", s)}')
+        return out
     if s.get('type') == 'plane':
         p = F.plane_pred(s['axis'], s['value'], tol=s.get('tol', 0.3),
                          box={k: tuple(v) for k, v in s.get('box', {}).items()})
@@ -69,20 +86,24 @@ def main():
     # length and position; aluminium stiffness = the softer, load-shedding
     # choice, so the link itself is judged conservatively). Bolt-level detail at
     # the flange is a separate submodel, not part of the screening.
-    prox = []
+    # Motors: modelled as RIGID BODIES on their mounting flanges with the motor
+    # mass at a reference node (femlib.rigid_motor). Meshing the real housings or
+    # even envelope cylinders was unsolvable (527k nodes / 1031 MPCs); a housing
+    # is far stiffer than the bracket anyway, so a rigid flange + point mass is
+    # both cheaper and the standard treatment. Their weight enters through the
+    # gravity/inertia unit case, their torque through the axial-moment case.
+    motors = []
     PJ = f'{STEPS}/actuator_proxies.json'
     if spec.get('actuators') and os.path.exists(PJ):
         allp = json.load(open(PJ))
-        for a in spec['actuators']:
-            prox.append(allp[a])
-        print('actuator proxies: ' + ', '.join(
-            f"{a} ({allp[a]['axis']}-axis r{allp[a]['r']} L{allp[a]['len']})"
-            for a in spec['actuators']), flush=True)
+        motors = [dict(allp[a], name=a) for a in spec['actuators'] if a in allp]
+        print('motors (rigid + point mass): ' + ', '.join(
+            f"{m['name'].replace('robstride_','')} {m.get('mass_kg', 1.5)} kg" for m in motors),
+            flush=True)
     if not os.path.exists(mesh_inp):
         t0 = time.time()
         m = F.mesh_assembly(steps, mesh_inp, size_far=spec['mesh']['size_far'],
-                            refine=[tuple(r) for r in spec['mesh'].get('refine', [])],
-                            cylinders=prox)
+                            refine=[tuple(r) for r in spec['mesh'].get('refine', [])])
         print(f"mesh {m['nodes']} nodes in {time.time() - t0:.0f}s", flush=True)
     nodes, elems, elsets = F.parse_inp(mesh_inp)
     elsets = {k: v for k, v in elsets.items() if v}
@@ -116,6 +137,29 @@ def main():
                              'the main body - check the actuator proxy placement')
         tie_txt += txt
         print(f'   tied component {i} ({len(c)} elems) with {n} node-pair MPCs', flush=True)
+
+    # ---- motors: flange node sets, reference nodes, point masses
+    mot_txt, mot_nodes, mot_mass = '', {}, {}
+    if motors:
+        nid0 = max(nodes) + 1
+        for k, m in enumerate(motors):
+            ax = {'x': 0, 'y': 1, 'z': 2}[m['axis']]
+            c = np.asarray(m['ctr'], float)
+            flange = [n for n in surf
+                      if abs(nodes[n][ax] - c[ax]) < m['len'] / 2 + 12.0
+                      and np.linalg.norm(np.delete(nodes[n] - c, ax)) < m['r'] + 10.0]
+            flange = [n for n in flange if n not in set(fix)]
+            if len(flange) < 20:
+                print(f"   WARNING: motor {m['name']} found only {len(flange)} flange nodes "
+                      '- check the proxy placement', flush=True)
+                continue
+            ref = nid0 + k
+            mot_nodes[ref] = c
+            mot_mass[ref] = m.get('mass_kg', 1.5) / 1000.0        # tonne
+            mot_txt += F.rigid_motor(nodes, flange, ref, str(k))
+            print(f"   motor {m['name'].replace('robstride_','')}: {len(flange)} flange nodes, "
+                  f"ref node {ref}, {m.get('mass_kg', 1.5)} kg", flush=True)
+    tie_txt += mot_txt
 
     # ---- load points and their node sets
     pts = env_spec['points']
@@ -167,6 +211,9 @@ def main():
     axial = env_spec.get('axial_torque_Nm')
     if mode == 'geometry' and axial:
         comps.append('Maxial')
+    gfac = env_spec.get('inertia_g', 3.0)      # +-3 g envelope on self weight
+    if gfac:
+        comps.append('Gbody')
     unit_stress = []
     load_nids = sorted({n for p in pts for n in p['nids']})
     axmap = {'x': 0, 'y': 1, 'z': 2}
@@ -203,6 +250,8 @@ def main():
                     d = F.bearing_load(nodes, p['nids'], p['axis'], p['ctr'], fv)
                     for n, f in d.items():
                         cl[n] = cl.get(n, np.zeros(3)) + f
+        elif comp == 'Gbody':
+            pass          # body load is written into the deck, not as CLOAD
         elif pair and k >= 3:
             mi = k - 3
             if mi == ai:
@@ -229,7 +278,7 @@ def main():
                 if k < 3:
                     Fv = np.zeros(3)
                     Fv[k] = E.UNIT_F * share
-                    if p.get('type') == 'plane':      # flat interface: uniform traction
+                    if p.get('type') in ('plane', 'bolt_pads'):   # flat/bolted interface
                         d = {n: Fv / len(p['nids']) for n in p['nids']}
                     else:
                         d = F.bearing_load(nodes, p['nids'], p['axis'], p['ctr'], Fv)
@@ -240,8 +289,14 @@ def main():
                 for n, f in d.items():
                     cl[n] = cl.get(n, np.zeros(3)) + f
         if not os.path.exists(f'{W}/{job}.frd'):
+            grav = None
+            if comp == 'Gbody':
+                grav = (0.0, 0.0, -9810.0)                  # 1 g, -z
+                for ref, mt in mot_mass.items():            # motor weight
+                    cl[ref] = np.array([0.0, 0.0, -mt * 9810.0])
             F.write_deck(f'{W}/{job}.inp', nodes, elems, elsets,
-                         {e: F.AL for e in elsets}, fix, cl, extra=tie_txt)
+                         {e: F.AL for e in elsets}, fix, cl, extra=tie_txt,
+                         gravity=grav, extra_nodes=mot_nodes)
             t0 = time.time()
             r = F.run_ccx(W, job, threads=spec.get('threads', 6))
             print(f'  unit {comp}: solve ok={r["ok"]} in {time.time() - t0:.0f}s '
@@ -258,9 +313,17 @@ def main():
     # ---- envelope over sign combinations
     mags = []
     j = env_spec['joint']
-    d = LOADS[j][stat]
+    d = LOADS[j][stat] if j in LOADS else {}
     for c in comps:
-        mags.append(axial if c == 'Maxial' else d[c] * factor)
+        ovr = env_spec.get('magnitudes_N') or {}
+        if c in ovr:
+            mags.append(float(ovr[c]))
+        elif c == 'Maxial':
+            mags.append(axial)
+        elif c == 'Gbody':
+            mags.append(gfac)                # unit solve = 1 g; envelope covers +-gfac g
+        else:
+            mags.append(d[c] * factor)
     env = E.combine(unit_stress, mags, comps=comps)
     summ = E.summarize(env, P, ids, load_nids=load_nids)
     summ.update(link=link, joint=j, stat=stat, factor=factor,

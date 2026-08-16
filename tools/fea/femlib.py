@@ -531,6 +531,24 @@ def moment_load(nodes, nids, ctr, M):
     return {i: F[k] for k, i in enumerate(nids)}
 
 
+def rigid_motor(nodes, flange_nids, ref_id, name):
+    """Model an actuator as a RIGID BODY on its mounting flange.
+
+    Meshing the real housings (3600 faces) or even envelope-cylinder proxies
+    blew the model up (527k nodes, 1031 MPCs, failed solve). A motor housing is
+    far stiffer than the aluminium bracket it bolts to, so the standard
+    treatment is a rigid body over the flange nodes with the motor mass carried
+    at a reference node -- cheap, and it puts the motor's weight and its torque
+    reaction into the structure where they really act.
+    """
+    txt = [f'*NSET, NSET=NMOT{name}']
+    ids = sorted(flange_nids)
+    for i in range(0, len(ids), 8):
+        txt.append(','.join(str(v) for v in ids[i:i + 8]) + ',')
+    txt.append(f'*RIGID BODY, NSET=NMOT{name}, REF NODE={ref_id}')
+    return '\n'.join(txt) + '\n'
+
+
 # --------------------------------------------------------- joint modelling
 # How screws and bearings must enter a model (QA finding 2026-08-15: bonding
 # CAD screws/bearing balls into a fragment mesh makes rigid threads and rigid
@@ -701,12 +719,22 @@ def node_pair_equations(nodes, elems, comp_a, comp_b, gap=3.0, max_pairs=400,
 
 # ------------------------------------------------------------------ deck
 def write_deck(path, nodes, elems, elsets, mat_of_elset, fixed, cloads,
-               out_fields=('U', 'S'), extra=''):
-    """Write a linear-static CalculiX deck. cloads: {nid: (fx,fy,fz)}."""
+               out_fields=('U', 'S'), extra='', gravity=None, extra_nodes=None,
+               density_t_mm3=2.70e-9):
+    """Write a linear-static CalculiX deck. cloads: {nid: (fx,fy,fz)}.
+
+    gravity: (gx,gy,gz) in mm/s^2 -> *DLOAD GRAV on every element set, so the
+    link's own weight (and any inertial factor folded into the vector) is a real
+    body load rather than something we hope the joint wrench already covered.
+    extra_nodes: {nid: (x,y,z)} appended to the node block -- used for the motor
+    reference nodes of the rigid-body motor model.
+    """
     with open(path, 'w') as f:
         f.write('*NODE, NSET=NALL\n')
         for nid in sorted(nodes):
             x, y, z = nodes[nid]
+            f.write(f'{nid}, {x:.6f}, {y:.6f}, {z:.6f}\n')
+        for nid, (x, y, z) in sorted((extra_nodes or {}).items()):
             f.write(f'{nid}, {x:.6f}, {y:.6f}, {z:.6f}\n')
         for es, eids in elsets.items():
             if not eids:
@@ -721,6 +749,8 @@ def write_deck(path, nodes, elems, elsets, mat_of_elset, fixed, cloads,
             mats[m['name']] = m
         for m in mats.values():
             f.write(f"*MATERIAL, NAME={m['name']}\n*ELASTIC\n{m['E']}, {m['nu']}\n")
+            if gravity is not None:
+                f.write(f"*DENSITY\n{density_t_mm3}\n")
         for es, m in mat_of_elset.items():
             if elsets.get(es):
                 f.write(f"*SOLID SECTION, ELSET={es}, MATERIAL={m['name']}\n")
@@ -728,7 +758,17 @@ def write_deck(path, nodes, elems, elsets, mat_of_elset, fixed, cloads,
         for i in range(0, len(fixed), 8):
             f.write(','.join(str(v) for v in fixed[i:i + 8]) + ',\n')
         f.write(extra)
-        f.write('*BOUNDARY\nFIX, 1, 3\n*STEP\n*STATIC\n*CLOAD\n')
+        f.write('*BOUNDARY\nFIX, 1, 3\n*STEP\n*STATIC\n')
+        if gravity is not None:
+            g = np.asarray(gravity, float)
+            mag = float(np.linalg.norm(g))
+            if mag > 0:
+                u = g / mag
+                f.write('*DLOAD\n')
+                for es in elsets:
+                    if elsets[es]:
+                        f.write(f'{es}, GRAV, {mag:.4f}, {u[0]:.6f}, {u[1]:.6f}, {u[2]:.6f}\n')
+        f.write('*CLOAD\n')
         for nid, v in sorted(cloads.items()):
             for k in range(3):
                 if abs(v[k]) > 1e-12:
