@@ -151,6 +151,54 @@ def probe_features(step_path, kind='cyl', axis=None, near=None, tol=25.,
     return rows
 
 
+def resolve_overlaps(step_path, out_path, min_overlap_cm3=0.005, verbose=True):
+    """Cut interpenetrating solids apart so the mesher can work.
+
+    Some CAD parts overlap (a hub inside a housing, a pin inside a boss). gmsh
+    then emits "PLC Error: a segment and a facet intersect" with or without
+    occ.fragment, and no mesh size helps. Here the smaller solid is subtracted
+    from the larger one, which keeps every feature and removes the ambiguity.
+    Returns (path, n_cuts).
+    """
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    sols = load_solids(step_path, min_vol_cm3=0.0)
+    shapes = [s['shape'] for s in sols]
+    vols = [s['vol_cm3'] for s in sols]
+    order = sorted(range(len(sols)), key=lambda i: -vols[i])
+    cuts = 0
+    for a_i in order:
+        for b_i in order:
+            if a_i == b_i or vols[b_i] > vols[a_i]:
+                continue
+            ba, bb = sols[a_i], sols[b_i]
+            if any(ba['bmin'][k] > bb['bmax'][k] or bb['bmin'][k] > ba['bmax'][k]
+                   for k in range(3)):
+                continue
+            com = BRepAlgoAPI_Common(shapes[a_i], shapes[b_i])
+            com.Build()
+            if not com.IsDone():
+                continue
+            gp = GProp_GProps()
+            BRepGProp.VolumeProperties_s(com.Shape(), gp)
+            ov = gp.Mass() / 1000.
+            if ov < min_overlap_cm3:
+                continue
+            cut = BRepAlgoAPI_Cut(shapes[a_i], shapes[b_i])
+            cut.Build()
+            if cut.IsDone():
+                shapes[a_i] = cut.Shape()
+                cuts += 1
+                if verbose:
+                    print(f'   overlap {ov:.2f} cm3: cut solid {b_i} '
+                          f'({vols[b_i]:.1f} cm3) out of {a_i} ({vols[a_i]:.1f} cm3)',
+                          flush=True)
+    write_step(shapes, out_path)
+    return out_path, cuts
+
+
 # ------------------------------------------------------------------ mesh
 def _mesh_once(step_paths, out_inp, size_far, refine, fragment, order2, verbose,
                algo3d, heal, tol, curv=0, size_min=0.0, cylinders=None):
@@ -281,17 +329,25 @@ def mesh_assembly(step_paths, out_inp, size_far=4.0, refine=None, fragment=True,
         dict(algo3d=1, heal=True, tol=1e-3, curv=0, size_min=0.0,
              size_far=size_far * 2.0, refine=None),
     ]
+    # last resort: skip occ.fragment. Overlapping/interfering CAD solids make
+    # fragment emit self-intersecting facets ("PLC Error: a segment and a facet
+    # intersect"), and bolted parts should not be bonded anyway - the campaign
+    # ties them with node-pair MPCs / rigid motor housings instead.
+    attempts.append(dict(algo3d=1, heal=False, tol=1e-6, curv=10, size_min=0.8,
+                         size_far=size_far, refine=refine, no_fragment=True))
     if not ladder:
         attempts = attempts[:1]
     last = None
     for i, a in enumerate(attempts):
         try:
-            m = _mesh_once(step_paths, out_inp, a['size_far'], a['refine'], fragment,
+            m = _mesh_once(step_paths, out_inp, a['size_far'], a['refine'],
+                           False if a.get('no_fragment') else fragment,
                            order2, verbose, a['algo3d'], a['heal'], a['tol'],
                            a.get('curv', 0), a.get('size_min', 0.0), cylinders)
             if i:
                 print(f'  (mesh succeeded on attempt {i + 1}: algo3d={a["algo3d"]}, '
-                      f'size_far={a["size_far"]}, curv={a.get("curv")}, tol={a["tol"]})')
+                      f'size_far={a["size_far"]}, curv={a.get("curv")}, tol={a["tol"]}'
+                      f'{", NO fragment - parts tied instead of bonded" if a.get("no_fragment") else ""})')
             return m
         except Exception as e:                      # noqa: BLE001
             last = e
@@ -722,7 +778,7 @@ def node_pair_equations(nodes, elems, comp_a, comp_b, gap=3.0, max_pairs=400,
 # ------------------------------------------------------------------ deck
 def write_deck(path, nodes, elems, elsets, mat_of_elset, fixed, cloads,
                out_fields=('U', 'S'), extra='', gravity=None, extra_nodes=None,
-               density_t_mm3=2.70e-9):
+               density_t_mm3=2.70e-9, extra_cload=''):
     """Write a linear-static CalculiX deck. cloads: {nid: (fx,fy,fz)}.
 
     gravity: (gx,gy,gz) in mm/s^2 -> *DLOAD GRAV on every element set, so the
@@ -775,13 +831,15 @@ def write_deck(path, nodes, elems, elsets, mat_of_elset, fixed, cloads,
             for k in range(3):
                 if abs(v[k]) > 1e-12:
                     f.write(f'{nid}, {k + 1}, {v[k]:.6f}\n')
+        f.write(extra_cload)          # rotational dofs of rigid-body reference nodes
         f.write('*NODE FILE\n' + ', '.join(x for x in out_fields if x == 'U')
                 + '\n*EL FILE\n' + ', '.join(x for x in out_fields if x != 'U') + '\n*END STEP\n')
     return path
 
 
-def run_ccx(job_dir, job, threads=6, lock=LOCK_SOLVE, timeout=None):
+def run_ccx(job_dir, job, threads=None, lock=LOCK_SOLVE, timeout=None):
     """Solve with a global lock so parallel agents don't thrash 8 cores/15 GB."""
+    threads = threads or int(os.environ.get('PYG_CCX_THREADS', 6))
     cmd = (f'cd {job_dir} && flock {lock} env OMP_NUM_THREADS={threads} '
            f'CCX_NPROC_EQUATION_SOLVER={threads} nice -n 10 {CCX} -i {job}')
     r = subprocess.run(['bash', '-lc', cmd], capture_output=True, text=True, timeout=timeout)

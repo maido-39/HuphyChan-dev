@@ -28,7 +28,9 @@ HB=$W/heartbeat
 MAX_TRY=3
 STALL_MIN=25
 MIN_FREE_GB=25
-MAX_NODES=450000
+MAX_NODES=260000          # 15 GB box: 161k-287k solved fine, 392k died in the solver
+export PYG_MAX_NODES=260000
+export PYG_CCX_THREADS=4  # fewer threads = less peak memory per solve
 mkdir -p "$W"
 # single-instance guard by PID file: a plain flock fd is inherited by every
 # child, so an orphaned `sleep` kept the lock held after the parent died and no
@@ -107,16 +109,18 @@ hang_guard() {   # $1 = link, $2 = pid of the run
   done
 }
 
-node_budget() {  # coarsen up front if the existing mesh is too big for 15 GB
-  local L="$1" f="$W/$L/${L}_mesh.inp"
-  [ -f "$f" ] || return 0
-  local n
-  n=$(grep -c '^[0-9]' "$f" 2>/dev/null || echo 0)
-  if [ "$n" -gt "$MAX_NODES" ]; then
-    log "  $L mesh has ~$n lines of nodes/elements (> budget) - coarsening first"
-    coarsen "$L" | while read -r l; do log "   $l"; done
-    rm -f "$f"
-  fi
+uptodate() {   # $1 = link : result exists AND was produced from this link's
+               # current spec section (a hash, so editing another link's entry
+               # no longer invalidates everything - that re-ran a finished L1)
+  $PY - "$1" <<'EOF'
+import json,hashlib,os,sys
+L=sys.argv[1]
+res=f'/home/syaro/pyg_fea/work/{L}/envelope_P99.json'
+if not os.path.exists(res): print('no'); raise SystemExit
+spec=json.load(open('tools/fea/link_specs.json'))[L]
+h=hashlib.sha1(json.dumps(spec,sort_keys=True).encode()).hexdigest()[:12]
+print('yes' if json.load(open(res)).get('spec_hash')==h else 'no')
+EOF
 }
 
 pass=0
@@ -126,12 +130,11 @@ while true; do
   todo=0
   for L in $(links); do
     RES="$W/$L/envelope_P99.json"
-    [ -f "$RES" ] && [ "$RES" -nt "$SPEC" ] && continue
+    [ "$(uptodate "$L")" = "yes" ] && continue
     t=$(tries "$L")
     if [ "${t:-0}" -ge "$MAX_TRY" ]; then continue; fi
     todo=$((todo+1))
     log "STAGE1 $L (pass $pass, try $((t+1))/$MAX_TRY)"
-    node_budget "$L"
     rm -f "$W/$L"/*_u*.frd "$W/$L"/*_u*.inp 2>/dev/null
     timeout 10800 $PY tools/fea/run_link_env.py "$L" >> "$W/${L}_run.log" 2>&1 &
     runpid=$!
@@ -139,12 +142,17 @@ while true; do
     guard=$!
     wait "$runpid"; rc=$?
     kill "$guard" 2>/dev/null
-    if [ -f "$RES" ] && [ "$RES" -nt "$SPEC" ]; then
+    if [ "$(uptodate "$L")" = "yes" ]; then
       setstate "$L" 1 done
       log "STAGE1 $L DONE $($PY -c "
 import json;d=json.load(open('$RES'))
 print('max %.1f MPa SF %.2f | filtered %.1f SF %.2f'%(d['max_vM'],d['SF'],d.get('max_vM_filtered',0),d.get('SF_filtered',0)))" 2>/dev/null)"
       $PY tools/fea/merge_setup.py >> "$W/merge.log" 2>&1
+    elif [ "$rc" -eq 0 ] && [ -f "$RES" ]; then
+      # solved fine, but the spec changed while it was running -> not a failure,
+      # and it must not eat a retry: just redo it against the current spec
+      setstate "$L" 0 superseded
+      log "STAGE1 $L SUPERSEDED (spec edited mid-run) - will redo with the current spec"
     else
       setstate "$L" 1 "failed(rc=$rc)"
       log "STAGE1 $L FAILED rc=$rc: $(tail -3 "$W/${L}_run.log" | tr -d '\r' | tail -1 | cut -c1-110)"
@@ -164,7 +172,7 @@ print('max %.1f MPa SF %.2f | filtered %.1f SF %.2f'%(d['max_vM'],d['SF'],d.get(
   for L in $(links); do
     [ -f "$W/$L/envelope_P99.json" ] || continue
     OUT="$W/$L/lightweight.json"
-    [ -f "$OUT" ] && [ "$OUT" -nt "$W/$L/envelope_P99.json" ] && continue
+    [ -f "$OUT" ] && [ "$OUT" -nt "$W/$L/envelope_P99.json" ] && continue   # opt is keyed on the result file
     log "STAGE3 $L lightweighting"
     timeout 5400 $PY tools/fea/lightweight.py "$L" >> "$W/${L}_opt.log" 2>&1 \
       && log "STAGE3 $L DONE $($PY -c "

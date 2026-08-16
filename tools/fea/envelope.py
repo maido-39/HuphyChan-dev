@@ -63,7 +63,8 @@ def combine(unit_stress, magnitudes, chunk=200_000, comps=None):
     return dict(vm_max=vm_max, sign_idx=which, signs=signs, comps=list(comps))
 
 
-def summarize(env, coords, ids, load_nids=(), filter_mm=1.5, yield_=276.0):
+def summarize(env, coords, ids, load_nids=(), filter_mm=1.5, yield_=276.0,
+              fix_nids=(), bc_filter_mm=4.0):
     vm = env['vm_max']
     P = np.asarray(coords)
     out = dict(max_vM=float(vm.max()), p99_vM=float(np.percentile(vm, 99)),
@@ -71,6 +72,21 @@ def summarize(env, coords, ids, load_nids=(), filter_mm=1.5, yield_=276.0):
                governing_signs=dict(zip(env.get('comps', COMPS),
                                         env['signs'][env['sign_idx'][int(vm.argmax())]].tolist())),
                SF=float(yield_ / vm.max()))
+    if len(fix_nids):
+        # a small clamped pad carries the whole reaction and spikes locally; that
+        # is a boundary-condition artifact, not a design stress
+        idxf = {n: k for k, n in enumerate(ids)}
+        FP = np.array([P[idxf[n]] for n in fix_nids if n in idxf])
+        if len(FP):
+            keepf = np.ones(len(ids), bool)
+            for k in range(0, len(FP), 400):
+                d = np.linalg.norm(P[:, None, :] - FP[None, k:k + 400, :], axis=2).min(1)
+                keepf &= d > bc_filter_mm
+            if keepf.any():
+                out['max_vM_away_from_BC'] = float(vm[keepf].max())
+                out['SF_away_from_BC'] = float(yield_ / vm[keepf].max())
+                out['argmax_away_from_BC'] = [round(float(v), 1)
+                                              for v in P[keepf][int(vm[keepf].argmax())]]
     if len(load_nids):
         idx = {n: k for k, n in enumerate(ids)}
         LP = np.array([P[idx[n]] for n in load_nids if n in idx])

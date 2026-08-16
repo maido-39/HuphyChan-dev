@@ -69,6 +69,8 @@ def main():
     setup_only = '--setup-only' in sys.argv
     factor = 1.0 if stat == 'peak' else 1.25
     spec = json.load(open(f'{HERE}/link_specs.json'))[link]
+    import hashlib
+    spec_hash = hashlib.sha1(json.dumps(spec, sort_keys=True).encode()).hexdigest()[:12]
     W = f'{WORK}/{link}'
     os.makedirs(W, exist_ok=True)
     step = f'{STEPS}/link_{link}.step'
@@ -76,6 +78,11 @@ def main():
         sols = F.load_solids(step, min_vol_cm3=spec['subset'].get('min_vol_cm3', 0.0))
         keep = [s for i, s in enumerate(sols) if i in set(spec['subset']['indices'])]
         step = F.write_step(keep, f'{W}/{link}_subset.step')
+        if spec['mesh'].get('repair_overlaps'):
+            step, ncut = F.resolve_overlaps(step, f'{W}/{link}_repaired.step')
+            print(f'   geometry repair: {ncut} interpenetrations cut', flush=True)
+        print(f'subset: {len(keep)}/{len(sols)} solids, '
+              f'{sum(s["vol_cm3"] for s in keep):.1f} cm3', flush=True)
     mesh_inp = f'{W}/{link}_mesh.inp'
     # actuator bodies are structural members of the link: their housings are
     # bolted into the load path, so they must be meshed with it
@@ -100,11 +107,57 @@ def main():
         print('motors (rigid + point mass): ' + ', '.join(
             f"{m['name'].replace('robstride_','')} {m.get('mass_kg', 1.5)} kg" for m in motors),
             flush=True)
+    MAX_NODES = int(os.environ.get('PYG_MAX_NODES', 420000))
     if not os.path.exists(mesh_inp):
-        t0 = time.time()
-        m = F.mesh_assembly(steps, mesh_inp, size_far=spec['mesh']['size_far'],
-                            refine=[tuple(r) for r in spec['mesh'].get('refine', [])])
-        print(f"mesh {m['nodes']} nodes in {time.time() - t0:.0f}s", flush=True)
+        size = spec['mesh']['size_far']
+        ref = [tuple(r) for r in spec['mesh'].get('refine', [])]
+        # make sure the fix/load interfaces themselves are resolved: a bolt pad
+        # that only catches a handful of nodes carries the whole reaction and
+        # produces a fake 300 MPa spike (L2, 2026-08-16)
+        # Keep this gentle: 60 fine balls on a big link made gmsh's size field so
+        # ragged that HXT and Delaunay both failed on geometry that meshes fine
+        # with the plain spec (L3, 2026-08-16). Refine enough to resolve a pad,
+        # no more, and cap the count.
+        fine = max(2.0, min(4.0, size / 2.5))
+        cap = 24 if size > 10 else 40
+        auto = []
+        for blk in list(spec['envelope'].get('fix', [])) + list(spec['envelope'].get('points', [])):
+            if blk.get('type') == 'bolt_pads':
+                for q_ in blk['points']:
+                    auto.append((q_[0], q_[1], q_[2], 14.0, fine))
+            elif blk.get('type') == 'bore' and blk.get('ctr'):
+                auto.append((blk['ctr'][0], blk['ctr'][1], blk['ctr'][2],
+                             float(blk.get('r', 10)) + 12.0, fine))
+        if auto:
+            ref = ref + auto[:cap]
+            print(f'   auto-refine at {len(auto[:cap])} BC features (size {fine:.1f} mm)',
+                  flush=True)
+        for attempt in range(4):
+            t0 = time.time()
+            m = F.mesh_assembly(steps, mesh_inp, size_far=size, refine=ref,
+                                fragment=spec['mesh'].get('fragment', True))
+            print(f"mesh {m['nodes']} nodes in {time.time() - t0:.0f}s "
+                  f"(size_far {size})", flush=True)
+            if m['nodes'] <= MAX_NODES:
+                break
+            if attempt == 3:        # keep the last mesh: deleting it left the
+                print(f'   still over budget at {m["nodes"]} nodes - proceeding '
+                      'with the coarsest mesh', flush=True)   # run with no mesh file at all
+                break
+            size *= 1.35
+            ref = [(x, y, z, r, sz * 1.3) for (x, y, z, r, sz) in ref]
+            print(f'   over the {MAX_NODES} node budget - remeshing at {size:.1f} mm',
+                  flush=True)
+            os.remove(mesh_inp)
+        spec['mesh']['size_far'] = round(size, 2)
+        spec['mesh']['refine'] = [[x, y, z, r, round(sz, 2)] for (x, y, z, r, sz) in ref]
+        allspec = json.load(open(f'{HERE}/link_specs.json'))
+        allspec[link]['mesh'] = spec['mesh']
+        json.dump(allspec, open(f'{HERE}/link_specs.json', 'w'), indent=1)
+        spec_hash = hashlib.sha1(
+            json.dumps(allspec[link], sort_keys=True).encode()).hexdigest()[:12]
+    if not os.path.exists(mesh_inp):
+        raise SystemExit('mesh file missing after the meshing stage - see the log above')
     nodes, elems, elsets = F.parse_inp(mesh_inp)
     elsets = {k: v for k, v in elsets.items() if v}
     bf = F.boundary_faces(elems)
@@ -127,15 +180,53 @@ def main():
     # ---- motors: flange node sets, reference nodes, point masses
     tie_txt = ''            # deck fragment: motor rigid bodies + component ties
     mot_txt, mot_nodes, mot_mass = '', {}, {}
+    # CalculiX refuses a node that sits in a *RIGID BODY and in an *EQUATION at
+    # the same time ("dof ... to a rigid body is detected in another equation"),
+    # which killed every L2 solve. Track rigid membership and keep the ties off.
+    rigid_nodes = set()
     if motors:
         nid0 = max(nodes) + 1
         for k, m in enumerate(motors):
             ax = {'x': 0, 'y': 1, 'z': 2}[m['axis']]
             c = np.asarray(m['ctr'], float)
-            flange = [n for n in surf
-                      if abs(nodes[n][ax] - c[ax]) < m['len'] / 2 + 12.0
-                      and np.linalg.norm(np.delete(nodes[n] - c, ax)) < m['r'] + 10.0]
-            flange = [n for n in flange if n not in set(fix)]
+            # prefer the real bolt pattern of this actuator (detected bolts whose
+            # parts/links name it); a fat cylindrical grab rigidified 15,040 nodes
+            # of the thigh on the first try, which is neither physical nor solvable
+            jf = f'{STEPS}/link_{link}_joints.json'
+            pads = []
+            if os.path.exists(jf):
+                short = m['name'].replace('robstride_', '')
+                for b_ in json.load(open(jf)).get('detected_bolts', []):
+                    tag = ' '.join(str(v) for v in (b_.get('links') or [])) + ' ' + \
+                          ' '.join(str(v) for v in (b_.get('parts') or {}).values())
+                    if short in tag.lower():
+                        pads.append((np.asarray(b_['head_point'], float),
+                                     np.asarray(b_['axis'], float)))
+            fixset = set(fix)
+            flange = []
+            if pads:
+                for n in surf:
+                    if n in fixset:
+                        continue
+                    v = nodes[n]
+                    for q, qa in pads:
+                        d = v - q
+                        if abs(float(d @ qa)) < 6.0 and \
+                           np.linalg.norm(d - (d @ qa) * qa) < 6.0:
+                            flange.append(n)
+                            break
+            if len(flange) < 20:      # fallback: thin annulus at the housing face
+                flange = [n for n in surf
+                          if n not in fixset
+                          and abs(abs(nodes[n][ax] - c[ax]) - m['len'] / 2) < 4.0
+                          and np.linalg.norm(np.delete(nodes[n] - c, ax)) < m['r'] + 4.0]
+            if len(flange) > 1200:    # keep the rigid patch modest
+                flange = flange[::max(1, len(flange) // 1200)]
+            flange = [n for n in flange if n not in rigid_nodes]   # one body per node
+            if fix:
+                fp = np.array([nodes[n] for n in fix])
+                flange = [n for n in flange
+                          if float(np.linalg.norm(fp - nodes[n], axis=1).min()) > 15.0]
             if len(flange) < 20:
                 print(f"   WARNING: motor {m['name']} found only {len(flange)} flange nodes "
                       '- check the proxy placement', flush=True)
@@ -143,6 +234,7 @@ def main():
             ref = nid0 + k
             mot_nodes[ref] = c
             mot_mass[ref] = m.get('mass_kg', 1.5) / 1000.0        # tonne
+            rigid_nodes.update(flange)
             mot_txt += F.rigid_motor(nodes, flange, ref, str(k))
             print(f"   motor {m['name'].replace('robstride_','')}: {len(flange)} flange nodes, "
                   f"ref node {ref}, {m.get('mass_kg', 1.5)} kg", flush=True)
@@ -169,15 +261,44 @@ def main():
         # bolted joints have real gaps (spacers, washers, clearance): widen the
         # search until the two bodies are joined instead of aborting the run
         for g in (3.0, 6.0, 12.0, 25.0):
-            txt, n = F.node_pair_equations(nodes, elems, comps_e[0], c, gap=g, exclude=fix)
+            txt, n = F.node_pair_equations(nodes, elems, comps_e[0], c, gap=g,
+                                           exclude=set(fix) | rigid_nodes)
             if n:
                 if g > 3.0:
                     print(f'   (component {i} needed a {g:.0f} mm tie gap - bolted joint)',
                           flush=True)
                 break
+        if not n and motors:
+            # last resort: the actuator housing IS the structural bridge between
+            # two bolted halves. Tie a capped sample of nodes from both bodies
+            # that fall inside the motor envelope (rigid housing, physical).
+            cn_all = sorted({nd for e in c for nd in elems[e]} & set(surf))
+            main_s = sorted({nd for e in comps_e[0] for nd in elems[e]} & set(surf))
+            for m in motors:
+                axm = {'x': 0, 'y': 1, 'z': 2}[m['axis']]
+                cm = np.asarray(m['ctr'], float)
+                inside = lambda nd: (abs(nodes[nd][axm] - cm[axm]) < m['len'] / 2 + 15.0 and
+                                     np.linalg.norm(np.delete(nodes[nd] - cm, axm)) < m['r'] + 15.0)
+                excl = set(fix) | rigid_nodes
+                fixP = np.array([nodes[n] for n in fix]) if fix else np.zeros((0, 3))
+                def far_from_fix(nd, mm=25.0):
+                    if not len(fixP):
+                        return True
+                    return float(np.linalg.norm(fixP - nodes[nd], axis=1).min()) > mm
+                A = [nd for nd in cn_all if inside(nd) and nd not in excl and far_from_fix(nd)][:400]
+                B = [nd for nd in main_s if inside(nd) and nd not in excl and far_from_fix(nd)][:400]
+                if len(A) >= 20 and len(B) >= 20:
+                    ref = (max(nodes) + 900 + i)
+                    mot_nodes[ref] = cm
+                    rigid_nodes.update(A + B)
+                    tie_txt += F.rigid_motor(nodes, A + B, ref, f'BR{i}')
+                    n = len(A) + len(B)
+                    print(f"   component {i} bridged through the {m['name'].replace('robstride_','')} "
+                          f'housing ({len(A)}+{len(B)} nodes rigid)', flush=True)
+                    break
         if not n:
             raise SystemExit(f'component {i} ({len(c)} elems) cannot be tied to the main body '
-                             'even at a 25 mm gap - geometry needs a look')
+                             'even at a 25 mm gap and no motor housing spans it')
         tie_txt += txt
         print(f'   tied component {i} ({len(c)} elems) with {n} node-pair MPCs', flush=True)
 
@@ -185,6 +306,19 @@ def main():
     pts = env_spec['points']
     for p in pts:
         p['nids'] = sel_bore(nodes, surf, p)
+        # If a load region sits inside a motor's rigid housing, pushing on those
+        # nodes just feeds the rigid body and the structure sees almost nothing
+        # (L4: 836 N applied, 0.96 MPa peak). The physical statement is that the
+        # load arrives THROUGH the actuator, so apply it at that housing's
+        # reference node and let the rigid body spread it into the flange.
+        inside_rigid = [n for n in p['nids'] if n in rigid_nodes]
+        if mot_nodes and len(inside_rigid) > 0.5 * len(p['nids']):
+            near = min(mot_nodes, key=lambda r: float(np.linalg.norm(
+                np.asarray(mot_nodes[r], float) - np.mean([nodes[n] for n in p['nids']], axis=0))))
+            p['nids'] = [near]
+            p['_via_motor_ref'] = near
+            print(f"   load point '{p['name'][:40]}' is inside a rigid housing -> "
+                  f'applied at motor reference node {near}', flush=True)
         if 'ctr' not in p:      # plane patch / bolt pads: centroid of the region
             p['ctr'] = [float(v) for v in np.mean([nodes[n] for n in p['nids']], axis=0)]
             p['_ctr_from'] = 'node centroid'
@@ -254,7 +388,7 @@ def main():
               f'{np.round(pp.max(0) - pp.min(0), 1)} mm about {jc_p.tolist()}', flush=True)
     for k, comp in enumerate(comps):
         job = f'{link}_u{comp}'
-        cl = {}
+        cl, mom_extra = {}, {}
         if comp == 'Gbody':
             pass          # body load goes into the deck as *DLOAD GRAV, not CLOAD
         elif pattern:
@@ -265,14 +399,35 @@ def main():
                 Mv[axmap[env_spec['joint_axis']]] = E.UNIT_M * 1000.0
             else:
                 Mv['xyz'.index(comp[1])] = E.UNIT_M * 1000.0
-            if len(pts) == 1 and np.linalg.norm(Mv) > 0:
-                d = F.moment_load(nodes, pts[0]['nids'], pts[0]['ctr'], Mv)  # one seat: it carries the torque
-                for n, f in d.items():
-                    cl[n] = cl.get(n, np.zeros(3)) + f
-            else:
-                fs = F.distribute_wrench([p['ctr'] for p in pts], jc_p, Fv, Mv)
-                for p, fv in zip(pts, fs):
-                    d = F.bearing_load(nodes, p['nids'], p['axis'], p['ctr'], fv)
+            # Statics transport: the joint wrench is defined at the joint centre,
+            # but it is handed over at attachment regions that can be far away
+            # (the shin's ankle bolt circle is 200 mm from the ankle centre). Each
+            # region takes its share of the force PLUS the moment that share
+            # generates about it: M_i = w_i*M + (c - p_i) x (w_i*F). Summed back
+            # this reproduces (F, M) exactly, and unlike a least-norm split it
+            # works for one, two or many attachments.
+            w = np.array([len(p['nids']) for p in pts], float)
+            w = w / w.sum()
+            for p, wi in zip(pts, w):
+                pc = np.asarray(p['ctr'], float)
+                Fi = Fv * wi
+                Mi = Mv * wi + np.cross(jc_p - pc, Fi)
+                if np.linalg.norm(Fi) > 0:
+                    if p.get('_via_motor_ref') or p.get('type') in ('plane', 'bolt_pads'):
+                        d = {n: Fi / len(p['nids']) for n in p['nids']}
+                    else:
+                        d = F.bearing_load(nodes, p['nids'], p['axis'], pc, Fi)
+                    for n, f in d.items():
+                        cl[n] = cl.get(n, np.zeros(3)) + f
+                if np.linalg.norm(Mi) > 0:
+                    if p.get('_via_motor_ref'):
+                        # moment straight onto the rigid reference node
+                        d = {}
+                        cl_m = cl.setdefault(p['nids'][0], np.zeros(3))
+                        mom_extra.setdefault(p['nids'][0], np.zeros(3))
+                        mom_extra[p['nids'][0]] += Mi
+                    else:
+                        d = F.moment_load(nodes, p['nids'], pc, Mi)
                     for n, f in d.items():
                         cl[n] = cl.get(n, np.zeros(3)) + f
         elif pair and k >= 3:
@@ -317,9 +472,14 @@ def main():
                 grav = (0.0, 0.0, -9810.0)                  # 1 g, -z
                 for ref, mt in mot_mass.items():            # motor weight
                     cl[ref] = np.array([0.0, 0.0, -mt * 9810.0])
+            extra_cl = ''
+            for nid, mv in mom_extra.items():
+                for k3 in range(3):
+                    if abs(mv[k3]) > 1e-9:
+                        extra_cl += f'{nid}, {k3 + 4}, {mv[k3]:.6f}\n'
             F.write_deck(f'{W}/{job}.inp', nodes, elems, elsets,
                          {e: F.AL for e in elsets}, fix, cl, extra=tie_txt,
-                         gravity=grav, extra_nodes=mot_nodes)
+                         gravity=grav, extra_nodes=mot_nodes, extra_cload=extra_cl)
             t0 = time.time()
             r = F.run_ccx(W, job, threads=spec.get('threads', 6))
             print(f'  unit {comp}: solve ok={r["ok"]} in {time.time() - t0:.0f}s '
@@ -348,8 +508,9 @@ def main():
         else:
             mags.append(d[c] * factor)
     env = E.combine(unit_stress, mags, comps=comps)
-    summ = E.summarize(env, P, ids, load_nids=load_nids)
-    summ.update(link=link, joint=j, stat=stat, factor=factor,
+    summ = E.summarize(env, P, ids, load_nids=load_nids, fix_nids=fix)
+    summ.update(spec_hash=spec_hash,
+                link=link, joint=j, stat=stat, factor=factor,
                 pair_axis=env_spec.get('pair_axis'),
                 comps=comps,
                 moment_model=(('forces + measured motor torque about the joint axis; '
@@ -365,6 +526,12 @@ def main():
                               'moments applied locally at the single seat (conservative)'),
                 magnitudes=dict(zip(comps, [round(m, 1) for m in mags])),
                 mesh_nodes=len(nodes), n_fixed=len(fix), n_loaded=len(load_nids))
+    Fapplied = float(np.linalg.norm([summ['magnitudes'].get(c, 0.0) for c in ('Fx', 'Fy', 'Fz')]))
+    if summ['max_vM'] < 3.0 and Fapplied > 100.0:
+        raise SystemExit(
+            f"implausible result: {Fapplied:.0f} N applied but peak stress is only "
+            f"{summ['max_vM']:.2f} MPa - the load path is short-circuited (a rigid body or "
+            'tie probably spans load and fix); not writing this result')
     print('\nENVELOPE ' + json.dumps(summ, indent=1), flush=True)
     json.dump(summ, open(f'{W}/envelope_{stat}.json', 'w'), indent=1)
 
