@@ -117,10 +117,19 @@ def main():
         rein = (r['rein'] or {}).get('SF>2.0', {})
         rtxt = ('—' if not rein.get('needed') else
                 f"{rein['volume_cm3']} cm³, 두께 ×{rein['thickness_factor']}")
-        out.append(f"| {r['link']} | {r['total_cm3'] or '—'} cm³ | "
-                   f"{lw.get('SF>1.5', {}).get('removable_pct', '—')} % | "
-                   f"{lw.get('SF>2.0', {}).get('removable_pct', '—')} % | {rtxt} |")
+        # a failing part has no meaningful "removable" figure until it is reinforced
+        def rem(level):
+            if r['SF'] < level:
+                return '판정 미달 — 보강 먼저'
+            return f"{lw.get(f'SF>{level}', {}).get('removable_pct', '—')} %"
+        out.append(f"| {r['link']} | {r['total_cm3'] or '—'} cm³ | {rem(1.5)} | "
+                   f"{rem(2.0)} | {rtxt} |")
 
+    out += ['',
+            '> 제거 가능 체적은 **액추에이터 강체 포함** 모델(응력 하한)로 계산된 값이므로 '
+            '절감의 **상한**으로 읽어야 한다. 보수적 경계(모터 제외)에서는 L5를 제외한 링크가 '
+            '판정 자체를 통과하지 못하므로, 실제 절감량은 하우징 강성을 실제 값으로 모델링한 '
+            '뒤에 확정된다.', '']
     out += ['', '## 케이스 설명', '']
     for r in rows:
         doc = (specs.get(r['link']) or {}).get('_doc')
