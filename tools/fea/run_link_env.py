@@ -19,6 +19,11 @@ import envelope as E        # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STEPS = '/home/syaro/pyg_fea/steps'
+# Bump when a change alters results (load path, ties, filters, materials). Results
+# carry it, and the campaign re-runs anything produced by an older revision - L2 was
+# solved before loads inside a rigid housing moved to the motor reference node, so
+# its number was not comparable with the links solved after it.
+ANALYSIS_REV = '2026-08-17a'
 WORK = '/home/syaro/pyg_fea/work'
 LOADS = json.load(open(f'{HERE}/loads.json'))
 
@@ -521,7 +526,7 @@ def main():
             mags.append(d[c] * factor)
     env = E.combine(unit_stress, mags, comps=comps)
     summ = E.summarize(env, P, ids, load_nids=load_nids, fix_nids=fix)
-    summ.update(spec_hash=spec_hash,
+    summ.update(spec_hash=spec_hash, analysis_rev=ANALYSIS_REV,
                 link=link, joint=j, stat=stat, factor=factor,
                 pair_axis=env_spec.get('pair_axis'),
                 comps=comps,

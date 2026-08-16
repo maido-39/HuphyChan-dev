@@ -1,0 +1,41 @@
+INFO:     Started server process [536071]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8091 (Press CTRL+C to quit)
+INFO:     127.0.0.1:42992 - "GET /api/motion/gen21p2_fc?start=0&n=50&ds=2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43006 - "GET /api/maxmode/gen21p2_fc?joint=knee&mode=p99 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46280 - "GET /api/maxdir/gen21p2_fc?joint=knee HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52564 - "GET / HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59467 - "GET / HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59467 - "GET /vendor/three.min.js HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59468 - "GET /vendor/OrbitControls.js HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59467 - "GET /api/policies HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59467 - "GET /api/blocks/gen21p2_fc HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59467 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     192.168.20.172:59467 - "GET /api/bodies/gen21p2_fc HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59467 - "GET /api/meshgeom/gen21p2_fc/0 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59468 - "GET /api/meshgeom/gen21p2_fc/1 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59469 - "GET /api/meshgeom/gen21p2_fc/2 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59470 - "GET /api/meshgeom/gen21p2_fc/3 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59472 - "GET /api/meshgeom/gen21p2_fc/5 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59471 - "GET /api/meshgeom/gen21p2_fc/4 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59467 - "GET /api/meshgeom/gen21p2_fc/6 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59468 - "GET /api/meshgeom/gen21p2_fc/8 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59469 - "GET /api/meshgeom/gen21p2_fc/9 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59470 - "GET /api/meshgeom/gen21p2_fc/10 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59467 - "GET /api/meshgeom/gen21p2_fc/11 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59471 - "GET /api/meshgeom/gen21p2_fc/13 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59468 - "GET /api/meshgeom/gen21p2_fc/12 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59467 - "GET /api/motion/gen21p2_fc?start=0&n=750&ds=2 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59467 - "GET /api/bookmarks HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59490 - "GET /api/scatter?joint=hip_pitch HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59491 - "GET /api/scatter?joint=hip_pitch HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59491 - "GET /api/scatter?joint=hip_pitch HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59489 - "GET /api/maxmode/gen21p2_fc?joint=hip_pitch&mode=p99 HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59490 - "GET /api/maxmode/gen21p2_fc?joint=hip_pitch&mode=rms HTTP/1.1" 200 OK
+INFO:     192.168.20.172:59490 - "GET /api/maxmode/gen21p2_fc?joint=hip_pitch&mode=rms HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39224 - "GET / HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [536071]

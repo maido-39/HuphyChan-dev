@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4절 링크 무릎 설계기 · Four-bar Knee Designer</title>
+<style>
+  :root{
+    --ink:#0e1217; --panel:#161c25; --panel2:#1b232f; --line:#2a3542; --grid:#1f2833;
+    --text:#e4ebf3; --muted:#93a2b5; --dim:#5f7085;
+    --in:#4db8ff; --out:#ffa94d; --coup:#c58cff; --ground:#7688a0;
+    --good:#37d69a; --warn:#f5c451; --crit:#ff6b8a;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--ink);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.45}
+  h1{font-size:14px;font-weight:650;letter-spacing:.2px;margin:0}
+  .sub{color:var(--dim);font-size:11px}
+  header{display:flex;align-items:baseline;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header .stat{margin-left:auto;display:flex;gap:16px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  header .stat b{color:var(--text);font-weight:600}
+  .app{display:grid;grid-template-columns:290px 1fr 320px;gap:1px;background:var(--line);height:calc(100% - 47px)}
+  .col{background:var(--ink);overflow-y:auto;padding:12px}
+  .col::-webkit-scrollbar{width:9px}.col::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
+  .grp{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 11px;margin-bottom:10px}
+  .grp>h2{font-size:10px;text-transform:uppercase;letter-spacing:.9px;color:var(--dim);margin:0 0 9px;font-weight:600}
+  .row{display:flex;align-items:center;gap:7px;margin:6px 0}
+  .row label{width:74px;flex:none;font-size:12px}
+  .row .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  input[type=number]{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    border-radius:5px;padding:4px 6px;font-family:var(--mono);font-size:12px;text-align:right}
+  input[type=number]:focus{outline:2px solid var(--in);outline-offset:-1px;border-color:var(--in)}
+  input[disabled]{opacity:.45;cursor:not-allowed}
+  input[type=range]{width:100%;accent-color:var(--in)}
+  .rangebox{display:none;gap:5px;margin:2px 0 8px 81px}
+  .rangebox.on{display:flex}
+  .rangebox input{width:56px;padding:3px 5px;font-size:11px}
+  .rangebox span{color:var(--dim);font-family:var(--mono);align-self:center}
+  .lk{width:26px;height:24px;flex:none;border:1px solid var(--line);background:var(--panel2);border-radius:5px;
+    cursor:pointer;color:var(--dim);font-size:12px;display:grid;place-items:center;padding:0}
+  .lk.full{color:var(--crit);border-color:var(--crit);background:#2a1922}
+  .lk.range{color:var(--warn);border-color:var(--warn);background:#292416}
+  .lk:hover{filter:brightness(1.25)}
+  button.act{width:100%;padding:8px;border:1px solid var(--in);background:#12314a;color:var(--in);
+    border-radius:6px;font-weight:600;cursor:pointer;font-size:12px}
+  button.act:hover{background:#164064}
+  button.ghost{background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+  .viz{background:var(--ink);position:relative;height:100%;display:flex;flex-direction:column}
+  #stage{flex:1;touch-action:none;cursor:grab}
+  #stage.drag{cursor:grabbing}
+  .hint{position:absolute;bottom:10px;left:12px;color:var(--dim);font-size:11px;pointer-events:none}
+  .badge{position:absolute;top:10px;left:12px;font-family:var(--mono);font-size:11px;padding:4px 8px;border-radius:5px;
+    border:1px solid var(--line);background:var(--panel)}
+  .readout .k{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;padding:3px 0;
+    border-bottom:1px dashed var(--grid)}
+  .readout .k span:first-child{color:var(--muted)}
+  .readout .k b{font-weight:600;font-variant-numeric:tabular-nums}
+  .pill{font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600}
+  .pill.good{background:#123528;color:var(--good)} .pill.warn{background:#332c12;color:var(--warn)}
+  .pill.crit{background:#331420;color:var(--crit)}
+  canvas{width:100%;display:block;background:var(--panel);border:1px solid var(--line);border-radius:7px}
+  #plotT{height:150px} #plotMu{height:120px}
+  .plabel{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);margin:10px 0 5px}
+  .lg{display:flex;gap:12px;flex-wrap:wrap;font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:5px}
+  .lg i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:4px;border-radius:2px}
+  @media(max-width:1080px){.app{grid-template-columns:1fr;height:auto}.viz{height:56vh}}
+</style>
+</head>
+<body>
+<header>
+  <h1>4절 링크 무릎 설계기</h1>
+  <span class="sub">Four-bar knee designer · 드래그로 크랭크를 돌리고, 길이·잠금·범위로 설계</span>
+  <div class="stat">
+    <span>입력 <b id="hTheta2">–</b></span>
+    <span>출력 <b id="hTheta4">–</b></span>
+    <span>비 g <b id="hG">–</b></span>
+    <span>전달각 <b id="hMu">–</b></span>
+    <span id="hFeas" class="pill good">OK</span>
+  </div>
+</header>
+
+<div class="app">
+  <!-- ============ LEFT: PARAMETERS ============ -->
+  <div class="col" id="paramCol">
+    <div class="grp">
+      <h2>링크 길이 (mm) · 🔒잠금 / ◇범위</h2>
+      <div id="links"></div>
+      <div class="row" style="margin-top:9px;gap:6px">
+        <button class="act ghost" id="assembly">조립모드 전환</button>
+        <button class="act ghost" id="reset" style="flex:0 0 96px" title="저장된 설정 지우고 기본값으로">기본값 복원</button>
+      </div>
+      <p class="sub" style="margin:5px 0 0">설정은 새로고침해도 자동 저장됩니다(이 브라우저).</p>
+    </div>
+
+    <div class="grp">
+      <h2>입력 액추에이터</h2>
+      <div class="row"><label>모터</label>
+        <select id="actPreset" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:5px;padding:4px 6px;font-family:var(--mono)">
+          <option value="RS04">RS04 (120/40)</option><option value="RS03">RS03 (60/20)</option><option value="RS02">RS02 (17/7)</option><option value="RS00">RS00 (14/5)</option><option value="custom">커스텀</option>
+        </select></div>
+      <div class="row"><label>peak τ</label><input type="number" id="aTpk" value="120" step="1"><span class="sub">N·m</span></div>
+      <div class="row"><label>연속 τ</label><input type="number" id="aTc" value="40" step="1"><span class="sub">N·m</span></div>
+      <div class="row"><label>코너 ω</label><input type="number" id="aWc" value="10" step="1"><span class="sub">rad/s</span></div>
+      <div class="row"><label>최대 ω</label><input type="number" id="aW" value="19.9" step="0.1"><span class="sub">rad/s</span></div>
+      <div class="row"><label title="실물 비선형 T-ω 곡선: ω:τ 쌍, 세미콜론 구분. 있으면 이걸 우선 사용">T-ω 곡선</label>
+        <input type="text" id="twCurve" value="0:120;11:113;12.6:102;14.1:91;15.7:78;17.3:56;18.8:45;19.9:11" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:5px;padding:4px 6px;font-family:var(--mono);font-size:11px"></div>
+      <p class="sub" style="margin:5px 0 0">★<b>실측 TN 곡선</b>(Motor_Spec/*_TN_curve_48V.csv, rpm→rad/s). 드롭다운으로 모터 전환. RS04 실물 무부하 ≈ 19.9 rad/s.</p>
+    </div>
+
+    <div class="grp">
+      <h2>하중 수요 (우리 실험 데이터)</h2>
+      <div class="row"><label>데이터</label>
+        <select id="dSrc" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:5px;padding:4px 6px;font-family:var(--mono)">
+          <option value="both">공칭+최악</option><option value="nom">공칭(평지)</option><option value="worst">최악(러프)</option><option value="none">끄기(수동)</option>
+        </select></div>
+      <div class="row"><label>통계</label>
+        <select id="dStat" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:5px;padding:4px 6px;font-family:var(--mono)">
+          <option value="p99">P99 (τ·ω p99)</option><option value="peak">Peak (τ·ω 최대치)</option>
+        </select></div>
+      <p class="sub" style="margin:4px 0 6px"><b>출처(2026-07-10 갱신)</b>: 공칭=p2_long(P2-final flat 정식측정) · 최악=<b>p2r_final_wc</b>(rough P2 최종정책, in-DR wide-DR 캠페인 7200 steps). 각도별 5° bin p99/peak/RMS. 구 blind-rough(ω 28.9)의 파워적자 bin들이 정상화됨(ω p99 ≤10.4).</p>
+      <div class="row"><label>수동 피크각</label><input type="number" id="dAng" value="-43" step="1"><span class="sub">° 출력</span></div>
+      <div class="row"><label>수동 τ</label><input type="number" id="dTau" value="62" step="1"><span class="sub">N·m</span></div>
+      <div class="row"><label>속도수요</label><input type="number" id="dW" value="15" step="1"><span class="sub">rad/s</span></div>
+      <input type="hidden" id="dTauW" value="120">
+      <div class="row" style="margin-top:7px"><label>무릎 map</label>
+        <input type="number" id="kSign" value="1" step="1" title="부호(+1/−1)" style="width:44px">
+        <span class="sub">×θ4 +</span>
+        <input type="number" id="kOff" value="0" step="1" title="오프셋°(싱크 시 자동)" style="width:54px"><span class="sub">°</span></div>
+      <div class="row"><label>크랭크0 싱크</label><input type="checkbox" id="syncK" checked style="width:auto">
+        <span class="sub">무릎 초기각</span><input type="number" id="kneeHome" value="0" step="1" title="크랭크 0°일 때 무릎각(액추에이터 홈)" style="width:54px"><span class="sub">°</span></div>
+      <p class="sub" style="margin:3px 0 0">싱크 ON: 크랭크 0°(θ2=0)=무릎 초기각이 되도록 kOff 자동. 기하 최적화 중에도 유지.</p>
+    </div>
+
+    <div class="grp">
+      <h2>출력 사용범위 (안전/최적)</h2>
+      <div class="row"><label>무릎각 범위</label>
+        <input type="number" id="opLo" value="-130" step="5" style="width:58px"><span class="sub">~</span>
+        <input type="number" id="opHi" value="-15" step="5" style="width:58px"><span class="sub">°</span></div>
+      <button class="act ghost" id="opLim">범위 제한: OFF</button>
+      <div class="row" style="margin-top:8px"><label title="하중이 드문 심굴곡 구간은 전달각 창을 완화 (하중-가중 설계)">μ 완화구간</label>
+        <input type="checkbox" id="muRelax" checked style="width:auto"><span class="sub">무릎</span>
+        <input type="number" id="muRelB" value="-60" step="5" style="width:50px"><span class="sub">°보다 깊으면</span></div>
+      <div class="row"><label></label>
+        <input type="number" id="muRelLo" value="20" step="5" style="width:48px"><span class="sub">~</span>
+        <input type="number" id="muRelHi" value="170" step="5" style="width:48px"><span class="sub">° 허용 (기본 40~145)</span></div>
+      <p class="sub" style="margin:5px 0 0">근거: flat 보행은 −60°보다 깊은 굴곡 점유 0.8%·τp99 22N·m — 깊은 구간 고하중은 낙상성 과도(점유 1~4%, 모터클립). 하중 구간만 엄격, 과도 구간은 완화.</p>
+    </div>
+
+    <div class="grp">
+      <h2>최적화 — DE + Deb 규칙 (전역·제약분리)</h2>
+      <div class="row"><label>전회전 요구</label><input type="checkbox" id="fullRot" style="width:auto">
+        <span class="sub">기본 OFF=하드스톱 왕복 구동(입력 스톱각 자동 산출) — r2&gt;r4 증속 허용</span></div>
+      <div class="row"><label>요구 스윙</label><input type="number" id="reqSwing" value="90" step="5"><span class="sub">° 이상</span></div>
+      <div class="row"><label>개체수 NP</label><input type="number" id="deNP" value="40" step="4"><span class="sub">개체</span></div>
+      <button class="act" id="opt" style="border-color:var(--in);color:var(--in);background:#12314a">최적화 실행 ▶</button>
+      <p class="sub" style="margin:6px 0 4px"><b>τ·ω 모두 HARD</b> — 어떤 bin에서든 용량&lt;수요면 절대 승인 안 됨(체크패널). 목적=feasible 내 최악 τ마진 최대화. Deb 규칙+ε-스케줄+연속 라운드+후보 8 아카이브. ★수요 τ×ω가 모터 Pmax를 넘는 bin은 <b>어떤 기어비·링크로도 불가</b>(파워 행 진단) → 재학습·사용범위·모터로만 해결. 리서치: docs/60.</p>
+      <div class="plabel" style="margin:6px 0 3px">수렴 · <span style="color:#4db8ff">세대 최고</span> / <span style="color:#ffa94d">전역 최고</span> (feas=τ마진 / infeas=−100·Σ위반)</div>
+      <canvas id="convC" height="70" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:6px;display:block"></canvas>
+    </div>
+  </div>
+
+  <!-- ============ CENTER: VISUALIZER ============ -->
+  <div class="viz">
+    <div class="badge" id="vizBadge">crank-rocker</div>
+    <svg id="stage" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="hint">크랭크 끝(●)을 드래그해 손으로 움직여보세요 · 지면·조인트 핸들(◇)로 길이 조정</div>
+  </div>
+
+  <!-- ============ RIGHT: ANALYSIS ============ -->
+  <div class="col">
+    <div class="grp readout">
+      <h2>현재 위치 해석</h2>
+      <div class="k"><span>출력 토크 용량 (peak)</span><b id="rTout">–</b></div>
+      <div class="k"><span>출력 토크 용량 (연속)</span><b id="rToutC">–</b></div>
+      <div class="k"><span>출력 최대 속도</span><b id="rWout">–</b></div>
+      <div class="k"><span>기계이득 MA = 1/|g|</span><b id="rMA">–</b></div>
+      <div class="k"><span>무릎각(map)</span><b id="rKnee">–</b></div>
+      <div class="k" style="border:0;margin-top:5px"><span>수요 대비</span><b id="rCheck">–</b></div>
+    </div>
+
+    <div class="grp">
+      <h2>수요곡선 종합 (최악 마진)</h2>
+      <div class="readout">
+        <div class="k"><span>최악 bin τ 용량/수요</span><b id="pTout">–</b></div>
+        <div class="k"><span>마진 τ·ω — p99 / peak</span><b id="pBoth">–</b></div>
+        <div class="k"><span>도달성 · 스윙</span><b id="pWout">–</b></div>
+        <div class="k" style="border:0"><span>판정 (τ·ω·스윙, 기준=통계 선택)</span><b id="pVerdict">–</b></div>
+      </div>
+    </div>
+
+    <div class="grp readout">
+      <h2>제약 (HARD) 체크 · 목적</h2>
+      <div class="k"><span>입력 전회전</span><b id="cRot">–</b></div>
+      <div class="k"><span>Grashof 마진 ≥6mm</span><b id="cGr">–</b></div>
+      <div class="k"><span>입력=최단 링크</span><b id="cShort">–</b></div>
+      <div class="k"><span>스윙 ≥ 요구</span><b id="cSwing">–</b></div>
+      <div class="k"><span>전달각 40~145°</span><b id="cMu">–</b></div>
+      <div class="k"><span>사용범위 커버</span><b id="cCover">–</b></div>
+      <div class="k"><span>수요 bin 도달</span><b id="cReach">–</b></div>
+      <div class="k"><span>ω 마진 ≥ 0</span><b id="cOmega">–</b></div>
+      <div class="k"><span>τ 마진 ≥ 0</span><b id="cTau">–</b></div>
+      <div class="k"><span>모터 파워 커버 (기하로 가능?)</span><b id="cPwr">–</b></div>
+      <div class="k" style="border:0"><span><b>목적</b>: 최악 τ마진 (max, feasible 내)</span><b id="cObj">–</b></div>
+    </div>
+
+    <div class="grp">
+      <h2>수요 대비 상세 — 부족량 (최악 6 bin)</h2>
+      <div id="binTable" style="font-family:var(--mono);font-size:11px"></div>
+      <p class="sub" style="margin:4px 0 0">기준=통계 선택. τ용량=TN(ω수요/|g|)/|g| · ω용량=ω<sub>max</sub>·|g| · P=τ×ω 수요가 모터 Pmax 내인지. <span style="color:var(--crit)">빨강=부족</span>.</p>
+    </div>
+
+    <div class="grp">
+      <h2>후보 해 (다양 상위 8 · 클릭=적용)</h2>
+      <div id="candList" class="readout"></div>
+      <p class="sub" style="margin:4px 0 0">✓=전 제약 만족 / ✗=최소위반(Σv). 최적화가 라운드를 돌수록 갱신. 실행 중엔 클릭 무시.</p>
+    </div>
+
+    <div class="plabel">출력 토크 vs 출력각 · 실험 산점도 + 용량</div>
+    <canvas id="plotT" height="158"></canvas>
+    <div class="lg"><span><i style="background:var(--out)"></i>peak 용량</span><span><i style="background:#ffd166"></i>연속(rated) 용량</span><span><i style="background:var(--good)"></i>ω-제한 용량</span>
+      <span><i style="background:#ff6b8a"></i>수요 τ p99</span><span><i style="background:#ff2d55"></i>수요 τ peak</span><span><i style="background:#d98cb3"></i>수요 τ RMS(열)</span><span><i style="background:#8695a8"></i>실측 산점</span></div>
+
+    <div class="plabel">출력 속도 vs 출력각 · 용량 vs 수요</div>
+    <canvas id="plotW" height="120"></canvas>
+    <div class="lg"><span><i style="background:var(--in)"></i>속도 용량 ω·|g|</span><span><i style="background:#ff6b8a"></i>수요 ω p99</span>
+      <span><i style="background:#ff2d55"></i>수요 ω peak</span><span><i style="background:#d98cb3"></i>수요 ω RMS</span><span><i style="background:#8695a8"></i>실측 ω</span><span><i style="background:var(--coup)"></i>전달각(우축)</span></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const DEG=180/Math.PI, RAD=Math.PI/180;
+
+// ---- state ----
+const P=["r1","r2","r3","r4"];
+const META={r1:{name:"지면 (ground)",c:"var(--ground)"},r2:{name:"크랭크·입력",c:"var(--in)"},
+            r3:{name:"커플러",c:"var(--coup)"},r4:{name:"로커·출력",c:"var(--out)"}};
+const state={
+  // default = strict-Grashof crank-rocker, output swing -42..-118 deg (knee-like);
+  // demand peak -43 sits at the shallow toggle -> high MA but low speed (illustrates
+  // the torque/speed trade). RS04-sized; tune lengths + locks from here.
+  r1:125,r2:30,r3:140,r4:55, theta2:2.4, branch:true,
+  lock:{r1:0,r2:0,r3:0,r4:0},           // 0=free,1=full,2=range
+  rng:{r1:[90,150],r2:[15,45],r3:[100,150],r4:[40,90]},
+  opLim:false,                          // 사용범위 제한 모드 (drag clamp + demand/opt window)
+};
+
+// ---- knee experiment demand: FULL-DATA binned stats + scatter, per policy ----
+// EXPC[p]=[kneeDeg, tau_p99, tau_PEAK, tau_RMS, w_p99, w_PEAK, w_RMS] (5° bins over
+// ALL samples; bins with <20 samples (~0.1%, fall/transient artifacts) dropped)
+// EXPS[p]=[kneeDeg, |tau|, |omega|]  (downsampled scatter, visual)
+// PROVENANCE (2026-07-10): nom = p2_long.npz — P2-final flat 최종정책 정식측정
+// (18k steps, 133 cmd, 학습DR 일치). worst = worstcase_rough.npz — ⚠구세대
+// (7/1 blind-rough, OOD 오염 발견된 캠페인) → rough P2 최종정책 wide-DR 캠페인으로
+// 교체 예정. 갱신 스크립트: docs/59 §2.
+const EXPC={
+  nom:[[-72.5,19.6,19.9,10.2,4.18,4.46,1.85],[-67.5,19.8,20.5,8.7,4.74,6.39,2.17],[-62.5,22.8,24.0,10.7,6.12,7.41,2.53],[-57.5,21.5,24.2,10.4,7.71,7.95,2.78],[-52.5,27.5,31.4,10.5,8.45,10.49,2.8],[-47.5,30.9,47.8,10.4,8.43,12.35,2.71],[-42.5,36.1,62.7,10.6,8.43,10.66,2.63],[-37.5,42.9,73.1,11.4,8.08,11.88,2.56],[-32.5,51.1,120.0,13.8,7.53,13.56,2.47],[-27.5,52.6,78.5,16.5,7.88,9.94,2.6],[-22.5,46.8,58.1,19.5,6.61,8.49,2.75],[-17.5,44.0,59.8,17.2,6.92,11.11,2.46],[-12.5,33.8,47.1,12.5,8.5,12.11,1.86],[-7.5,30.8,44.6,9.5,5.82,11.85,1.23],[-2.5,37.3,45.5,10.7,6.51,8.87,1.9],[2.5,42.1,60.0,19.8,1.6,4.82,0.29]],
+  worst:[[-77.5,102.9,120.0,29.9,7.7,7.78,3.76],[-72.5,120.0,120.0,48.3,9.07,11.5,2.82],[-67.5,120.0,120.0,45.3,8.47,9.87,2.94],[-62.5,120.0,120.0,29.1,10.43,20.02,2.97],[-57.5,120.0,120.0,31.0,9.52,24.22,2.87],[-52.5,120.0,120.0,29.9,8.19,13.89,2.59],[-47.5,104.0,120.0,28.7,8.74,13.56,2.78],[-42.5,86.2,118.4,24.5,7.86,11.1,2.91],[-37.5,74.0,109.9,26.1,8.54,14.29,3.18],[-32.5,63.3,75.1,24.7,8.54,12.69,3.41],[-27.5,55.4,67.2,22.5,8.18,13.3,3.08],[-22.5,47.1,63.4,19.4,8.18,11.76,3.05],[-17.5,39.8,56.7,17.3,6.47,10.12,2.21],[-12.5,32.9,42.7,15.4,4.68,6.62,1.29],[-7.5,28.9,37.8,10.0,2.99,4.53,0.77],[-2.5,26.5,30.5,9.4,3.29,4.45,0.81]],
+};
+const EXPS={
+  nom:[[-39.9,35.3,0.21],[-58.6,8.6,0.69],[-44.3,51.5,0.36],[-42.7,47.4,0.77],[-50.4,2.7,0.19],[-40.7,43.5,0.43],[-43.4,39.6,0.61],[-51.6,1.2,0.05],[-40.1,46.4,0.34],[-41.5,0,0.86],[-47.5,8.8,2.2],[-39.3,44.2,0.14],[-45.3,6.4,1.37],[-45.1,49.6,0.67],[-40.8,47.2,0.27],[-50.6,0.8,0.58],[-41.3,47.1,0.36],[-41.7,50.4,0.21],[-54.3,0.1,0.79],[-42.2,47.8,0.2],[-40.8,44.1,0.49],[-57.9,0.3,0.24],[-41.9,53,0.25],[-39.7,38.1,1.61],[-47.9,6.3,0.91],[-37.5,48.1,0.11],[-48.1,6.9,0.57],[-38.7,11.8,3.09],[-37.5,36.8,0.69],[-48.5,1.9,0.17],[-41.3,11.4,2.15],[-42.3,52.2,0.13],[-56.5,0.6,1.08],[-45.6,49.3,0.09],[-43.5,16.4,3.94],[-50.6,14.8,2.32],[-43.2,52.3,0.12],[-44.8,47.6,0.11],[-43,5.4,1.83],[-42.4,47.9,0.02],[-43.6,2.2,0.87],[-43.7,10.6,2.92],[-38.4,35.4,0.55],[-46.3,2.3,1.89],[-41.4,63,0.89],[-35.8,32,0.07],[-50.1,0.6,1.16],[-39.5,49.7,0.08],[-38,38.9,0.71],[-55.5,3,0.37],[-43.4,52,0.42],[-43.2,47.4,0.79],[-52.3,2.8,0.22],[-40.3,44.3,0.44],[-46,23.7,0.73],[-51.5,7.3,1.05],[-39.8,49.2,0.12],[-42.2,20.4,1.53],[-43.7,12.7,2.78],[-39.3,48.6,0.1],[-43.6,3,1.69],[-40.3,34.4,0.66],[-38.5,43.8,0.39],[-49,1.9,0.74],[-42.8,47.2,0.59],[-41.9,51.6,0.53],[-52.3,0.1,0.64],[-41.6,48.6,0.39],[-42.1,66.5,0.16],[-35.3,12.2,0.35],[-39.8,40.2,0.08],[-40.6,49.7,0.06],[-37.1,24.7,0.21],[-40.1,25.9,0.05],[-40,23.9,0.01],[-44.7,52.6,0.34],[-41.6,44.5,0.96],[-50.7,4.1,0.01],[-39.7,40.2,0.37],[-43.8,28.6,0.13],[-49.7,3.8,0.03],[-38.1,41,0.3],[-43.8,10.6,0.41],[-51.6,4.6,0.41],[-39.6,47.5,0.06],[-45.5,1.3,0.76],[-45.8,7.4,2.13],[-39.7,47.5,0.25],[-47.7,0.1,0.43],[-43.7,29,0.11],[-39.3,43.5,0.32],[-48,1.1,0.35],[-41.4,48.6,0.61],[-41.5,37.2,0.28],[-50.8,3,0.44],[-42.1,62.7,0.48],[-43.4,2.9,0.37],[-51.9,3,0.25],[-38.6,46.1,0.66],[-41.2,6.6,1.59],[-47.9,6.3,2.28],[-37,46.8,0.32],[-44.6,4.7,2.24],[-42.8,66.3,0.35],[-37.8,45.8,0.1],[-42.4,10.6,2.57],[-39.4,42.6,0.41],[-33.7,36,1.15],[-49.1,1.1,0.74],[-54.7,11.8,2.97],[-39.6,1.2,0.21],[-49.4,0.9,0.49],[-38.3,52.2,0.44],[-38.7,0.4,0.41],[-49.9,1.1,0.72],[-36.6,48.6,0.56],[-45.9,0.3,0.05],[-37.9,3.8,0.89],[-38.6,51.8,0.13],[-47.1,0.7,0.24],[-39.4,23.8,0.68],[-37.8,43.4,0.05],[-41.6,0.3,0.12],[-41.4,36.2,0.12],[-39.9,48.4,0.77],[-48.3,0.6,0.48],[-39.3,39,0.43],[-43.6,38.4,0.62],[-53,2.8,0.26],[-39,41,0.67],[-40.1,5.8,0.17],[-49.2,3.5,0.07],[-36.1,39.8,0.29],[-42,3,0.88],[-46.8,4.7,0.78],[-35.6,39.6,0.03],[-46.8,5.7,1.29],[-42.2,26.4,0.1],[-39.7,44,0.55],[-48.8,1,0.52],[-40.7,39.8,0.71],[-42.2,47.2,0.76],[-51,2.8,0.47],[-36,53.7,0.48],[-36.8,3.3,0.32],[-38.2,4.5,0.08],[-37.4,13,0.19],[-35.9,9.5,0.4],[-38.9,11.8,0.02],[-38.3,11.4,0.03]],
+  worst:[[-37.3,34.8,0.04],[-70,13.2,8.04],[-67.3,104.9,1.13],[-56.2,120,7.91],[-54.4,51.8,0.41],[-24.2,29.1,0.35],[-41.4,37.7,0.15],[-46,43,0.74],[-40.8,7.7,0.94],[-45,15.3,0.42],[-38.8,20.9,0.48],[-70,120,0.95],[-75.2,21.4,0.81],[-48.3,72.1,0.26],[-54.1,88.5,0.26],[-44.5,51.5,1.03],[-46.5,36.1,1.35],[-42.2,19.2,0.01],[-47.2,57,0.77],[-41.7,36.4,4.23],[-38.9,1.8,0.39],[-46.7,49.4,0.33],[-115.8,120,1.63],[-39.3,37.9,0.55],[-37.4,49.2,0.68],[-44,62.7,0.45],[-55.2,15.8,8.16],[-40.5,49.5,0.24],[-75.1,6.6,0.07],[-50.5,1,3.67],[-40.7,34.1,1.01],[-57.5,13.9,1.68],[-42.1,42.8,0.18],[-74.5,120,2.02],[-49,9.5,0.11],[-40.4,10.6,0.22],[-40.7,18.7,0.01],[-44.5,49.9,0.49],[-42.3,12.7,0.42],[-43.5,47.1,1.23],[-39.3,14.9,1.88],[-55.6,6.9,7.39],[-39.1,53.3,0.72],[-48,37.2,1.59],[-40.3,28.5,0.11],[-41,27.9,0.01],[-40.8,21.6,0],[-41.8,52.2,0.07],[-82.6,5.8,1.31],[-70.5,17.5,10.94],[-80.8,23.9,14.59],[-87.5,6.1,4.99],[-45.4,52,0.86],[-48.7,6.2,2.52],[-54.5,16,9],[-70.8,87.1,3.66],[-43.5,25.5,0.86],[-109,9.4,13.83],[-70.3,50.8,3.58],[-75.8,9.8,2.41],[-59.4,8.4,6.41],[-49.6,11.7,1.5],[-39.7,44.8,0.04],[-57.3,60.6,2.99],[-47.2,64.4,2.37],[-69.4,1.8,1.91],[-39.5,5.6,0.23],[-39.7,30.4,0.1],[-52,26.4,2.32],[-41.8,31.3,0.02],[-69.1,1.2,4.79],[-74.7,7.1,1.07],[-42.2,24.6,0.2],[-56.8,29.4,4.52],[-41.5,17.7,0.02],[-66.1,2.1,3.93],[-35.8,20.3,2.48],[-61.3,5.9,0.77],[-41.9,10,0.22],[-63.5,7.9,4.74],[-58.4,0.5,1.59],[-42.3,40.4,0.11],[-32.4,1.5,4.3],[-48,21,0.1],[-46.4,22.3,5.1],[-92.5,27.2,5.02],[-63.6,5.7,0.13],[-48.1,26.1,0.63],[-41.2,26.8,0.15],[-38.5,48.3,8.18],[-38.8,20.7,0.1],[-40.7,22.6,0.01],[-51.5,10.8,2.52],[-35.4,5.3,2.14],[-43.3,63.5,0.05],[-26.3,6.7,0.94],[-30.3,48.2,3.29],[-39.4,11.1,0.33],[-35.1,54.5,0.02],[-37.4,12.6,0.06],[-45.2,0,1.15],[-57.8,22.1,2.96],[-40.6,5,0.83],[-33.1,6.4,0.04],[-40.8,9.1,1.82],[-44.3,34.4,0.7],[-24.2,1.8,0.9],[-50,6.8,2.48],[-50.2,104.9,0.24],[-43.4,55.6,1.11],[-39.6,18.7,0.03],[-45.9,74.3,0.46],[-45.7,31.7,9.4],[-46.8,69.4,0.06],[-54,6.1,0.19],[-41.6,31.7,0.33],[-62.7,10.1,0.98],[-61,1.3,0.22],[-52.6,0.3,3.91],[-39.3,19.7,0.11],[-39.8,15.9,0.02],[-38.7,14.1,0],[-38.7,22.3,10.06],[-41.1,57.2,2.13],[-56.3,106,2.74],[-45,15.5,0.98],[-34.8,38.4,0.84],[-42.4,1.9,0.2],[-25.5,15,2.35],[-72.2,120,0.19],[-32.8,12.8,0.69],[-57,53.1,4.02],[-33.9,16.8,0.02],[-35.2,0.8,1.51],[-38.8,34.4,0.22],[-47.6,33.3,6],[-42.4,67.3,0.84],[-37.9,23.5,0.5],[-59.2,6.2,6.98],[-38.6,3.9,1.08],[-38.5,12,9.02],[-43.1,7,0.22],[-36.9,12.2,0.15],[-40.1,10.8,0.04],[-39.7,19.4,0.02],[-66.6,5.2,3.01],[-37.6,7.4,0.95],[-39.3,38.9,0.21],[-39.7,22.1,0.01],[-39.5,19.3,0.02]],
+};
+const kOff=()=>+$("kOff").value, kSign=()=>+$("kSign").value||1;
+const kneeToOut=k=>(k-kOff())/kSign();     // knee angle -> mechanism output angle (display)
+// operating range = the SAFE/OPTIMAL span we intend to use (knee deg), distinct from
+// the mechanism's physically reachable rocker range. Shown always; when 범위제한 is
+// ON it also clamps drag + filters demand + sets the optimizer's constraint window.
+const opRange=()=>{const lo=+$("opLo").value,hi=+$("opHi").value;
+  return isFinite(lo)&&isFinite(hi)&&lo<hi?[lo,hi]:null;};
+function opOutFor(kO,kS){const r=opRange();if(!r)return null;
+  const a=(r[0]-kO)/kS,b=(r[1]-kO)/kS;return[Math.min(a,b),Math.max(a,b)];}
+const opOut=()=>opOutFor(kOff(),kSign());
+// demand = selected policies' full-data binned stats, ENVELOPED (max tau & w) per
+// angle bin. stat: 'p99' -> (tau_p99, w_p95), 'peak' -> maxima; default = the dStat
+// dropdown (= 판정·최적화 기준). Plots overlay BOTH stats regardless of selection.
+// kO,kS override the knee map (for optimizing kOff/kSign); default = live DOM values.
+function demandCurve(kO,kS,stat){
+  const s=$("dSrc").value; if(s==="none")return[];
+  kO=kO!==undefined?kO:kOff(); kS=kS!==undefined?kS:kSign();
+  let src=[]; if(s!=="worst")src.push(...EXPC.nom); if(s!=="nom")src.push(...EXPC.worst);
+  if(state.opLim){const r=opRange(); if(r)src=src.filter(e=>e[0]>=r[0]&&e[0]<=r[1]);}
+  const s2=stat||$("dStat").value;
+  const ti=s2==="peak"?2:(s2==="rms"?3:1), wi=s2==="peak"?5:(s2==="rms"?6:4);
+  const bins={};
+  for(const e of src){const key=Math.round(e[0]); const b=bins[key]||{k:e[0],t:0,w:0};
+    b.t=Math.max(b.t,e[ti]); b.w=Math.max(b.w,e[wi]); bins[key]=b;}
+  return Object.values(bins).map(o=>({knee:o.k,out:(o.k-kO)/kS,tau:o.t,w:o.w})).sort((a,b)=>a.out-b.out);
+}
+function expPts(){const s=$("dSrc").value;if(s==="none")return[];
+  const src=[];if(s!=="worst")src.push(...EXPS.nom);if(s!=="nom")src.push(...EXPS.worst);return src;}
+// crank-0 <-> knee-home sync: kOff so that θ4(θ2=0) maps to the knee initial angle.
+const syncEnabled=()=>$("syncK")&&$("syncK").checked;
+function syncedKOff(cand,kS){const s0=solve(cand,0); if(!s0.valid)return kOff(); return (+$("kneeHome").value)-kS*(s0.th4*DEG);}
+// actuator torque-speed envelope: flat Tpk to corner, linear to 0 at wmax
+// real nonlinear T-w curve "w:t;w:t;..." (rad/s : N·m); overrides linear model
+function twCurve(){
+  const s=($("twCurve").value||"").trim(); if(!s)return null;
+  const pts=s.split(/[;\n]/).map(p=>p.split(":").map(Number)).filter(a=>a.length===2&&a.every(v=>isFinite(v)));
+  return pts.length>=2?pts.sort((a,b)=>a[0]-b[0]):null;
+}
+function tAvail(wm){
+  const w=Math.abs(wm), cv=twCurve();
+  if(cv){ if(w<=cv[0][0])return cv[0][1];
+    for(let i=1;i<cv.length;i++){if(w<=cv[i][0]){const a=cv[i-1],b=cv[i];return a[1]+(b[1]-a[1])*(w-a[0])/(b[0]-a[0]||1);}}
+    return 0; }
+  const Tp=+$("aTpk").value,wc=+$("aWc").value,wx=+$("aW").value;
+  if(w<=wc)return Tp; if(w>=wx)return 0; return Tp*(wx-w)/(wx-wc);}
+// actuator presets — REAL RobStride TN curves @48V (Motor_Spec/*_TN_curve_48V.csv),
+// rpm->rad/s. aTc = continuous(rated) from overload_rotation. no-load ~20 rad/s (RS04).
+const ACT={
+  RS04:{aTpk:120,aTc:40,aWc:10,aW:19.9,twCurve:"0:120;11:113;12.6:102;14.1:91;15.7:78;17.3:56;18.8:45;19.9:11"},
+  RS03:{aTpk:60,aTc:20,aWc:12.6,aW:19.7,twCurve:"0:60;13.4:57;14.5:53;15.5:48;16.8:42;17.8:35;18.8:28;19.7:10"},
+  RS00:{aTpk:14,aTc:5,aWc:10.5,aW:33,twCurve:"0:14;13.1:13;16.8:12;19.9:10;23:8;26.2:6;29.8:4;33:1"},
+  RS02:{aTpk:17,aTc:7,aWc:23,aW:42.4,twCurve:"0:17;25.1:16;28.3:14;30.9:12;34:10;36.7:8;39.8:4;42.4:1"},
+};
+
+// ---- kinematics: circle-circle intersection ----
+function solve(s,th2){
+  const O2=[0,0], O4=[s.r1,0];
+  const A=[s.r2*Math.cos(th2), s.r2*Math.sin(th2)];
+  const dx=A[0]-O4[0], dy=A[1]-O4[1], d=Math.hypot(dx,dy);
+  if(d===0 || d>s.r3+s.r4 || d<Math.abs(s.r3-s.r4)) return {valid:false,O2,O4,A};
+  const a=(d*d + s.r4*s.r4 - s.r3*s.r3)/(2*d);
+  const h2=s.r4*s.r4 - a*a;
+  if(h2<0) return {valid:false,O2,O4,A};
+  const h=Math.sqrt(h2), ux=dx/d, uy=dy/d;
+  const px=O4[0]+a*ux, py=O4[1]+a*uy, sg=s.branch?1:-1;
+  const B=[px - sg*h*uy, py + sg*h*ux];
+  const th4=Math.atan2(B[1]-O4[1], B[0]-O4[0]);
+  const c1=[A[0]-B[0],A[1]-B[1]], c2=[O4[0]-B[0],O4[1]-B[1]];
+  let cs=(c1[0]*c2[0]+c1[1]*c2[1])/(Math.hypot(c1[0],c1[1])*Math.hypot(c2[0],c2[1]));
+  cs=Math.max(-1,Math.min(1,cs));
+  return {valid:true,O2,O4,A,B,th4,mu:Math.acos(cs)};
+}
+function unwrap(d){while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;return d;}
+function ratio(s,th2){ // g = dθ4/dθ2
+  const e=2e-4, a=solve(s,th2+e), b=solve(s,th2-e);
+  if(!a.valid||!b.valid)return null;
+  return unwrap(a.th4-b.th4)/(2*e);
+}
+// sweep input over full turn -> valid samples sorted by output angle.
+// g via forward-diff against the previous sample (1 solve/sample instead of 3)
+// so the DE optimizer's thousands of evaluations stay cheap.
+function sweep(s){
+  const N=720, out=[]; let min4=1e9,max4=-1e9,prev=null;
+  for(let i=0;i<=N;i++){
+    const th2=i/N*2*Math.PI, r=solve(s,th2);
+    if(!r.valid){prev=null;continue;}
+    let g;
+    if(prev)g=unwrap(r.th4-prev.th4)/(th2-prev.th2);
+    else{const r2=solve(s,th2+1e-4);g=r2.valid?unwrap(r2.th4-r.th4)/1e-4:null;}
+    prev={th2,th4:r.th4};
+    if(g===null||Math.abs(g)<1e-4)continue;
+    out.push({th2,th4:r.th4,g,mu:r.mu});
+    min4=Math.min(min4,r.th4);max4=Math.max(max4,r.th4);
+  }
+  return {pts:out,minDeg:min4*DEG,maxDeg:max4*DEG,full:out.length>N*0.98,frac:out.length/(N+1)};
+}
+// find sample whose output angle ~ target (deg)
+function atOutput(sw,deg){
+  let best=null,bd=1e9;
+  for(const p of sw.pts){const e=Math.abs(p.th4*DEG-deg);if(e<bd){bd=e;best=p;}}
+  return bd<8?best:null;
+}
+const kneeOf=t4deg=>(+$("kSign").value)*t4deg + (+$("kOff").value);
+
+// ---- build param UI ----
+function buildLinks(){
+  const box=$("links"); box.innerHTML="";
+  for(const k of P){
+    const wrap=document.createElement("div");
+    wrap.innerHTML=`
+      <div class="row">
+        <span class="dot" style="background:${META[k].c}"></span>
+        <label title="${META[k].name}">${k} <span class="sub">${META[k].name.split(' ')[0]}</span></label>
+        <input type="number" id="in_${k}" step="1" value="${state[k]}">
+        <button class="lk" id="lk_${k}" title="클릭: free→잠금→범위">○</button>
+      </div>
+      <div class="rangebox" id="rb_${k}">
+        <input type="number" id="lo_${k}" value="${state.rng[k][0]}"><span>&lt; ${k} &lt;</span>
+        <input type="number" id="hi_${k}" value="${state.rng[k][1]}">
+      </div>`;
+    box.appendChild(wrap);
+    $("in_"+k).addEventListener("input",e=>{state[k]=clampRange(k,+e.target.value);refresh();});
+    $("lk_"+k).addEventListener("click",()=>cycleLock(k));
+    $("lo_"+k).addEventListener("input",e=>{state.rng[k][0]=+e.target.value;});
+    $("hi_"+k).addEventListener("input",e=>{state.rng[k][1]=+e.target.value;});
+  }
+  syncLocks();
+}
+function clampRange(k,v){ if(state.lock[k]===2){v=Math.max(state.rng[k][0],Math.min(state.rng[k][1],v));} return v; }
+function cycleLock(k){ state.lock[k]=(state.lock[k]+1)%3; syncLocks(); refresh(); }
+function syncLocks(){
+  for(const k of P){
+    const b=$("lk_"+k), L=state.lock[k];
+    b.className="lk"+(L===1?" full":L===2?" range":"");
+    b.textContent=L===1?"🔒":L===2?"◇":"○";
+    b.title=L===1?"잠금(고정)":L===2?"범위 a<x<b":"자유";
+    $("rb_"+k).classList.toggle("on",L===2);
+    $("in_"+k).disabled=(L===1);
+  }
+}
+
+// ---- visualizer ----
+const svg=$("stage"); let view={s:1,ox:0,oy:0};
+function fitView(){
+  const r=svg.getBoundingClientRect(); svg.setAttribute("viewBox",`0 0 ${r.width} ${r.height}`);
+  const span=(state.r1+state.r2+state.r4)*1.15+40;
+  view.s=Math.min(r.width,r.height)/span;
+  view.ox=r.width*0.5 - (state.r1*0.5)*view.s; view.oy=r.height*0.62;
+}
+const TX=p=>[view.ox+p[0]*view.s, view.oy-p[1]*view.s];
+function line(x1,y1,x2,y2,col,w,dash){return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="${w}" ${dash?`stroke-dasharray="${dash}"`:""} stroke-linecap="round"/>`;}
+function dot(x,y,r,col,fill){return `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill||col}" stroke="${col}" stroke-width="1.5"/>`;}
+
+function renderViz(sol,sw){
+  fitView();
+  const g=[];
+  // ROM arc of output rocker (grey dashed = physically reachable) + operating
+  // sub-arc (green = the safe/optimal 사용범위 we intend to use)
+  if(sw.pts.length){
+    const O4=TX([state.r1,0]); const rr=state.r4*view.s;
+    const a0=-sw.minDeg, a1=-sw.maxDeg; // svg y-down
+    g.push(`<path d="${arcPath(O4[0],O4[1],rr,Math.min(a0,a1),Math.max(a0,a1))}" fill="none" stroke="var(--grid)" stroke-width="1.4" stroke-dasharray="3 3"/>`);
+    const oo=opOut();
+    if(oo){
+      const lo=Math.max(oo[0],sw.minDeg), hi=Math.min(oo[1],sw.maxDeg);
+      if(hi>lo)g.push(`<path d="${arcPath(O4[0],O4[1],rr,Math.min(-lo,-hi),Math.max(-lo,-hi))}" fill="none" stroke="var(--good)" stroke-width="3.2" opacity="${state.opLim?0.9:0.45}" stroke-linecap="round"/>`);
+    }
+    // input HARD-STOP arc (limited-rotation drive): allowed crank range in green,
+    // stopper positions as red radial ticks at O2
+    const cres=window._cres;
+    if(!fullRotOn()&&cres&&cres.info&&cres.info.stopLo!=null){
+      const O2c=TX([0,0]); const r2r=state.r2*view.s*0.45;
+      const a0=-cres.info.stopLo, a1=-cres.info.stopHi;
+      g.push(`<path d="${arcPath(O2c[0],O2c[1],r2r,Math.min(a0,a1),Math.max(a0,a1))}" fill="none" stroke="var(--good)" stroke-width="2.6" opacity="0.8" stroke-linecap="round"/>`);
+      for(const sd of[cres.info.stopLo,cres.info.stopHi]){
+        const ca=Math.cos(-sd*RAD), sa=Math.sin(-sd*RAD);
+        g.push(line(O2c[0]+ca*r2r*0.75,O2c[1]+sa*r2r*0.75,O2c[0]+ca*r2r*1.28,O2c[1]+sa*r2r*1.28,"var(--crit)",4));
+      }
+    }
+  }
+  const O2=TX(sol.O2), O4=TX(sol.O4);
+  // ground link
+  g.push(line(O2[0],O2[1],O4[0],O4[1],"var(--ground)",2,"6 5"));
+  if(sol.valid){
+    const A=TX(sol.A), B=TX(sol.B);
+    g.push(line(O2[0],O2[1],A[0],A[1],"var(--in)",4));      // crank
+    g.push(line(A[0],A[1],B[0],B[1],"var(--coup)",4));       // coupler
+    g.push(line(O4[0],O4[1],B[0],B[1],"var(--out)",4));      // rocker
+    // transmission angle arc at B
+    const badMu=(sol.mu*DEG<40||sol.mu*DEG>145);
+    g.push(`<circle cx="${B[0]}" cy="${B[1]}" r="16" fill="none" stroke="${badMu?'var(--crit)':'var(--good)'}" stroke-width="1.4" opacity=".7"/>`);
+    g.push(dot(A[0],A[1],7,"var(--in)","#0e1217"));          // draggable crank tip
+    g.push(dot(B[0],B[1],5,"var(--coup)","#0e1217"));
+  }else{
+    g.push(`<text x="${(O2[0]+O4[0])/2}" y="${O2[1]-20}" fill="var(--crit)" font-family="var(--mono)" font-size="12" text-anchor="middle">조립 불가 (링크 도달 X)</text>`);
+    const A=TX(sol.A); g.push(line(O2[0],O2[1],A[0],A[1],"var(--in)",4)); g.push(dot(A[0],A[1],7,"var(--in)","#0e1217"));
+  }
+  // pivots + length handles
+  g.push(dot(O2[0],O2[1],5,"var(--ground)","var(--panel)"));
+  g.push(dot(O4[0],O4[1],5,"var(--ground)","var(--panel)"));
+  g.push(`<rect x="${O4[0]-4}" y="${O4[1]-4}" width="8" height="8" fill="none" stroke="var(--ground)" transform="rotate(45 ${O4[0]} ${O4[1]})"/>`);
+  svg.innerHTML=g.join("");
+}
+function arcPath(cx,cy,r,a0,a1){
+  const p0=[cx+r*Math.cos(a0*RAD),cy+r*Math.sin(a0*RAD)], p1=[cx+r*Math.cos(a1*RAD),cy+r*Math.sin(a1*RAD)];
+  const large=Math.abs(a1-a0)>180?1:0;
+  return `M ${p0[0]} ${p0[1]} A ${r} ${r} 0 ${large} 1 ${p1[0]} ${p1[1]}`;
+}
+
+// drag crank
+let dragging=false;
+svg.addEventListener("pointerdown",e=>{dragging=true;svg.classList.add("drag");svg.setPointerCapture(e.pointerId);moveCrank(e);});
+svg.addEventListener("pointermove",e=>{if(dragging)moveCrank(e);});
+svg.addEventListener("pointerup",e=>{dragging=false;svg.classList.remove("drag");});
+function moveCrank(e){
+  const r=svg.getBoundingClientRect();
+  const mx=(e.clientX-r.left-view.ox)/view.s, my=(view.oy-(e.clientY-r.top))/view.s;
+  let t2=Math.atan2(my,mx);
+  // limited-rotation drive: clamp drag to the input HARD-STOP range
+  const cres=window._cres;
+  if(!fullRotOn()&&cres&&cres.info&&cres.info.stopLo!=null){
+    let td=t2*DEG; if(td<0)td+=360;
+    const lo=cres.info.stopLo, hi=cres.info.stopHi;
+    if(td<lo||td>hi){
+      td=(Math.min(Math.abs(td-lo),360-Math.abs(td-lo))<Math.min(Math.abs(td-hi),360-Math.abs(td-hi)))?lo:hi;
+      t2=td*RAD;
+    }
+  }
+  if(state.opLim){                       // 범위제한: clamp drag so output stays in 사용범위
+    const oo=opOut();
+    if(oo){
+      const s=solve(state,t2);
+      const ok=s.valid&&s.th4*DEG>=oo[0]-0.5&&s.th4*DEG<=oo[1]+0.5;
+      if(!ok){
+        const sw=window._sw||sweep(state);
+        let best=null,bd=1e9;
+        for(const p of sw.pts){const o=p.th4*DEG;if(o<oo[0]||o>oo[1])continue;
+          const d=Math.abs(unwrap(p.th2-t2));if(d<bd){bd=d;best=p;}}
+        if(!best)return;                 // no reachable pose inside the range
+        t2=best.th2;
+      }
+    }
+  }
+  state.theta2=t2; refresh();
+}
+
+// ---- plots ----
+function plot(canvas,draw){
+  const c=canvas.getContext("2d");
+  const cssW=canvas.clientWidth||300, cssH=canvas.clientHeight||150;
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=cssW*dpr; canvas.height=cssH*dpr;
+  c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,cssW,cssH);
+  draw(c,cssW,cssH);
+}
+function axes(c,W,H,x0,x1,y0,y1,xl){
+  c.font="10px "+getComputedStyle(document.body).getPropertyValue("--mono");
+  c.strokeStyle="#243040";c.fillStyle="#5f7085";c.lineWidth=1;
+  for(let i=0;i<=4;i++){const y=8+(H-26)*i/4;const v=y1-(y1-y0)*i/4;
+    c.beginPath();c.moveTo(38,y);c.lineTo(W-6,y);c.stroke();c.fillText(v.toFixed(v<10?1:0),4,y+3);}
+  const P=[x0,(x0+x1)/2,x1];
+  P.forEach(v=>{const x=38+(W-44)*(v-x0)/(x1-x0);c.fillText(v.toFixed(0),x-6,H-4);});
+  c.fillStyle="#5f7085";c.fillText(xl,W-70,H-4);
+}
+function xrange(sw,extra){let xs=sw.pts.map(p=>p.th4*DEG);let x0=Math.min(...xs),x1=Math.max(...xs);
+  if(extra&&extra.length){x0=Math.min(x0,...extra);x1=Math.max(x1,...extra);}return[x0,x1];}
+// green band = operating range (사용범위) on an angle-axis plot
+function shadeOp(c,W,H,px,x0,x1){
+  const oo=opOut(); if(!oo)return;
+  const a=px(Math.max(oo[0],x0)), b=px(Math.min(oo[1],x1)); if(b<=a)return;
+  c.fillStyle=`rgba(55,214,154,${state.opLim?0.09:0.05})`;c.fillRect(a,8,b-a,H-26);
+  c.strokeStyle="rgba(55,214,154,.55)";c.setLineDash([4,3]);c.lineWidth=1;
+  c.beginPath();c.moveTo(a,8);c.lineTo(a,H-18);c.moveTo(b,8);c.lineTo(b,H-18);c.stroke();c.setLineDash([]);
+}
+function drawT(c,W,H){
+  const sw=window._sw; if(!sw.pts.length)return;
+  const Tpk=+$("aTpk").value, dem=demandCurve(), sc=expPts();
+  const cap=sw.pts.map(p=>[p.th4*DEG,Math.min(Tpk/Math.abs(p.g),Tpk*6)]).sort((a,b)=>a[0]-b[0]);
+  const oo=opOut();
+  const[x0,x1]=xrange(sw,dem.map(d=>d.out).concat(oo||[]));
+  // y-axis must include the CAPACITY curve (not just demand) so the orange line
+  // isn't clipped. Use capacity p85 to ignore near-toggle spikes; clamp to Tpk*4.
+  const cv=cap.map(c=>c[1]).sort((a,b)=>a-b), capHi=cv[Math.floor(cv.length*0.85)]||Tpk;
+  const demPkT=dem.length?demandCurve(undefined,undefined,"peak").map(d=>d.tau):[];
+  const y1=Math.min(Tpk*4,Math.max(Tpk*1.15,capHi*1.05,...dem.map(d=>d.tau),...demPkT,...sc.map(p=>Math.min(p[1],Tpk*3)))),y0=0;
+  axes(c,W,H,x0,x1,y0,y1,"출력각 °");
+  const px=v=>38+(W-44)*(v-x0)/(x1-x0), py=v=>8+(H-26)*(1-(v-y0)/(y1-y0));
+  shadeOp(c,W,H,px,x0,x1);
+  sw.pts.forEach(p=>{if(p.mu*DEG<40||p.mu*DEG>145){c.fillStyle="rgba(255,107,138,.09)";c.fillRect(px(p.th4*DEG)-1,8,2,H-26);}});
+  const poly=(pts,col,dash)=>{c.strokeStyle=col;c.lineWidth=2;c.setLineDash(dash||[]);c.beginPath();
+    pts.forEach(([x,y],i)=>{const Y=py(Math.min(y,y1));i?c.lineTo(px(x),Y):c.moveTo(px(x),Y);});c.stroke();c.setLineDash([]);};
+  poly(cap,"#ffa94d");                                   // peak torque capacity
+  const Tc=+$("aTc").value;
+  const capC=sw.pts.map(p=>[p.th4*DEG,Math.min(Tc/Math.abs(p.g),Tpk*6)]).sort((a,b)=>a[0]-b[0]);
+  poly(capC,"#ffd166",[7,4]);                             // CONTINUOUS(rated) capacity — pair w/ RMS
+  if(dem.length){                                         // speed-derated capacity + demand stats
+    const cw=[];for(const d of dem){const at=atOutput(sw,d.out);if(!at)continue;const g=Math.abs(at.g);cw.push([d.out,tAvail(d.w/g)/g]);}
+    poly(cw,"#37d69a");
+    const sel=$("dStat").value;
+    const dP=demandCurve(undefined,undefined,"p99"), dK=demandCurve(undefined,undefined,"peak"),
+          dR=demandCurve(undefined,undefined,"rms");
+    c.lineWidth=sel==="p99"?2.2:1.2; poly(dP.map(d=>[d.out,d.tau]),"#ff6b8a",[5,3]);   // p99
+    c.lineWidth=sel==="peak"?2.2:1.2; poly(dK.map(d=>[d.out,d.tau]),"#ff2d55",[2,3]);  // peak
+    c.lineWidth=1.4; poly(dR.map(d=>[d.out,d.tau]),"#d98cb3",[1,3]);                   // RMS(열)
+    c.lineWidth=2;
+  }
+  c.fillStyle="rgba(134,149,168,.55)";                    // experiment scatter
+  for(const[a,t]of sc){const x=px(kneeToOut(a)),y=py(Math.min(t,y1));
+    if(x>=38&&x<=W-6&&t<=y1){c.beginPath();c.arc(x,y,1.6,0,7);c.fill();}}
+  const cur=window._sol,g=ratio(state,state.theta2);
+  if(cur.valid&&g){c.fillStyle="#e4ebf3";c.beginPath();c.arc(px(cur.th4*DEG),py(Math.min(Tpk/Math.abs(g),y1)),3.5,0,7);c.fill();}
+}
+function drawW(c,W,H){
+  const sw=window._sw; if(!sw.pts.length)return;
+  const wx=+$("aW").value, sc=expPts(), dem=demandCurve();
+  const cap=sw.pts.map(p=>[p.th4*DEG,wx*Math.abs(p.g)]).sort((a,b)=>a[0]-b[0]);
+  const oo=opOut();
+  const[x0,x1]=xrange(sw,dem.map(d=>d.out).concat(oo||[]));
+  const demPkW=dem.length?demandCurve(undefined,undefined,"peak").map(d=>d.w*1.05):[];
+  const y1=Math.max(+$("dW").value*1.2,...dem.map(d=>d.w*1.1),...demPkW,...cap.map(p=>p[1]).filter(isFinite),...sc.map(p=>p[2])),y0=0;
+  axes(c,W,H,x0,x1,y0,y1,"출력각 °");
+  const px=v=>38+(W-44)*(v-x0)/(x1-x0),py=v=>8+(H-26)*(1-(v-y0)/(y1-y0)),pm=m=>8+(H-26)*(1-m/180);
+  shadeOp(c,W,H,px,x0,x1);
+  c.strokeStyle="rgba(197,140,255,.5)";c.lineWidth=1.3;c.beginPath();        // transmission angle (right, 0-180)
+  sw.pts.map(p=>[p.th4*DEG,p.mu*DEG]).sort((a,b)=>a[0]-b[0]).forEach(([x,m],i)=>{i?c.lineTo(px(x),pm(m)):c.moveTo(px(x),pm(m));});c.stroke();
+  c.strokeStyle="#4db8ff";c.lineWidth=2;c.beginPath();                        // output speed capacity
+  cap.forEach(([x,y],i)=>{const Y=py(Math.min(y,y1));i?c.lineTo(px(x),Y):c.moveTo(px(x),Y);});c.stroke();
+  // speed DEMAND: BOTH stats overlaid (p95 dashed pink, peak dotted red; selected
+  // stat drawn thicker). Flat manual dW line only in manual mode (dSrc=none).
+  if(dem.length){
+    const sel=$("dStat").value;
+    const dP=demandCurve(undefined,undefined,"p99"), dK=demandCurve(undefined,undefined,"peak");
+    const dp=(arr,col,dash,w)=>{c.strokeStyle=col;c.lineWidth=w;c.setLineDash(dash);c.beginPath();
+      arr.forEach((d,i)=>{const Y=py(Math.min(d.w,y1));i?c.lineTo(px(d.out),Y):c.moveTo(px(d.out),Y);});
+      c.stroke();c.setLineDash([]);};
+    dp(dP,"#ff6b8a",[5,3],sel==="p99"?2.2:1.2);   // omega p99
+    dp(dK,"#ff2d55",[2,3],sel==="peak"?2.2:1.2);  // omega peak
+    dp(demandCurve(undefined,undefined,"rms"),"#d98cb3",[1,3],1.4);  // omega RMS
+  }else{
+    const dW=+$("dW").value;c.strokeStyle="#ff6b8a";c.setLineDash([3,3]);c.beginPath();c.moveTo(38,py(dW));c.lineTo(W-6,py(dW));c.stroke();c.setLineDash([]);
+  }
+  c.fillStyle="rgba(134,149,168,.55)";
+  for(const[a,,w]of sc){const x=px(kneeToOut(a)),y=py(Math.min(w,y1));if(x>=38&&x<=W-6&&w<=y1){c.beginPath();c.arc(x,y,1.6,0,7);c.fill();}}
+  const cur=window._sol,g=ratio(state,state.theta2);
+  if(cur.valid&&g){c.fillStyle="#e4ebf3";c.beginPath();c.arc(px(cur.th4*DEG),py(Math.min(wx*Math.abs(g),y1)),3.3,0,7);c.fill();}
+}
+
+// ---- optimize ----
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+// ---- HARD constraints vs OBJECTIVE — Deb (2000) feasibility rules ----
+// HARD (must ALL be zero-violation, normalized): full crank rotation, Grashof
+// margin>=6mm, input crank=shortest link (graded slope), swing>=required,
+// transmission angle in [40,145] over the operating window, op-range coverage
+// (범위제한 ON), every demand bin reachable, speed margin>=0 at every bin.
+// OBJECTIVE (compared ONLY among feasible candidates): maximize the worst-case
+// torque margin. NO penalty weights anywhere — Deb's 3 lexicographic rules:
+// feasible beats infeasible; among infeasible smaller total violation wins;
+// among feasible better objective wins. Research: docs/60_fourbar_optimizer.
+const CN={rot:"전회전",grashof:"Grashof",shortest:"입력최단",swing:"스윙",
+          muLo:"전달각<40",muHi:"전달각>145",cover:"범위커버",reach:"bin도달",
+          omega:"ω마진",tau:"τ마진"};
+// motor max mechanical power from the T-w curve — a demand bin whose tau*w
+// exceeds this is infeasible for EVERY ratio/linkage (gears don't create power)
+function motorPmax(){
+  const wx=+$("aW").value||20; let pm=0;
+  for(let i=0;i<=60;i++){const w=wx*i/60; pm=Math.max(pm,w*tAvail(w));}
+  return pm;
+}
+const fullRotOn=()=>!$("fullRot")||$("fullRot").checked;
+// contiguous (in th2) + g-sign-consistent sub-arcs of the sweep — the usable
+// strokes of a LIMITED-ARC (reciprocating) drive. Analysis 2026-07-09: with the
+// full-rotation requirement the user's box is infeasible under EVERY reasonable
+// relaxation (Grashof forces r2<=r4-6 -> no speed amplification, and demand ends
+// sit at rocker toggles); dropping it (r2>r4 allowed, demand mid-arc) is feasible
+// with CURRENT data. docs/60 §7.
+function segmentsOf(sw){
+  const segs=[]; let cur=[]; const gap=2*Math.PI/720*1.9;
+  for(const p of sw.pts){
+    if(cur.length&&((p.th2-cur[cur.length-1].th2)>gap||((cur[cur.length-1].g>0)!==(p.g>0)))){
+      segs.push(cur);cur=[];}
+    cur.push(p);
+  }
+  if(cur.length)segs.push(cur);
+  return segs.filter(s=>s.length>4);
+}
+function constraintsOf(cand,swPre){
+  const sw=swPre||sweep(cand);
+  const fullR=fullRotOn();
+  const v={}; const info={frac:sw.frac};
+  if(fullR)v.rot=Math.max(0,0.99-sw.frac)*20;
+  if(sw.pts.length<2)return{feas:false,sumV:40+(v.rot||0),f:-1e9,v,info};
+  const kS=cand.kSign!==undefined?cand.kSign:kSign();
+  const kO=syncEnabled()?syncedKOff(cand,kS):(cand.kOff!==undefined?cand.kOff:kOff());
+  let dem=demandCurve(kO,kS);
+  if(!dem.length){                        // manual mode -> single pseudo-bin
+    const a=+$("dAng").value,t=+$("dTau").value,w=+$("dW").value;
+    if(isFinite(a)&&isFinite(t))dem=[{out:a,tau:t,w:isFinite(w)?w:0}];
+  }
+  const req=+$("reqSwing").value, Tpk=+$("aTpk").value, wx=+$("aW").value;
+  if(fullR){
+    const Ls=[cand.r1,cand.r2,cand.r3,cand.r4], srt=[...Ls].sort((a,b)=>a-b);
+    info.grMargin=(srt[1]+srt[2])-(srt[0]+srt[3]);
+    v.grashof=Math.max(0,6-info.grMargin)/6;
+    v.shortest=Math.max(0,(cand.r2-srt[0])/Math.max(srt[0],1)); // graded
+  }
+  const oo=state.opLim?opOutFor(kO,kS):null;
+  let oLo=sw.minDeg,oHi=sw.maxDeg;
+  if(oo){oLo=oo[0];oHi=oo[1];}
+  else if(dem.length){oLo=Math.min(...dem.map(d=>d.out));oHi=Math.max(...dem.map(d=>d.out));}
+  const segs=fullR?[sw.pts]:segmentsOf(sw);
+  let best=null;
+  for(const seg of segs){
+    const sv={...v};
+    let sMin=1e9,sMax=-1e9,t2a=1e9,t2b=-1e9;
+    for(const p of seg){const o=p.th4*DEG;
+      if(o<sMin)sMin=o; if(o>sMax)sMax=o;
+      if(p.th2<t2a)t2a=p.th2; if(p.th2>t2b)t2b=p.th2;}
+    const swing=sMax-sMin;
+    sv.swing=Math.max(0,req-swing)/Math.max(req,1);
+    sv.cover=(oo||!fullR)?(Math.max(0,sMin-oLo)+Math.max(0,oHi-sMax))/Math.max(oHi-oLo,1):0;
+    // transmission-angle window, LOAD-WEIGHTED (2026-07-09, user): strict
+    // [40,145] where sustained loads live (knee shallower than muRelB), relaxed
+    // [muRelLo,muRelHi] in the deep-flexion transient zone (flat occupancy 0.8%,
+    // tau p99 22 N.m; deep high-tau = rare clipped fall-recovery transients).
+    const mrOn=$("muRelax")&&$("muRelax").checked;
+    const mrB=mrOn?+$("muRelB").value:-1e9, mrLo=+$("muRelLo").value||20, mrHi=+$("muRelHi").value||170;
+    let muMin=180,muMax=0,vLo=0,vHi=0,seen=false;
+    for(const p of seg){const o=p.th4*DEG;
+      if(o>=oLo-2&&o<=oHi+2){
+        seen=true;
+        const m=p.mu*DEG, kAng=kS*o+kO;
+        const relaxed=mrOn&&kAng<mrB;
+        const wl=relaxed?mrLo:40, wh=relaxed?mrHi:145;
+        vLo=Math.max(vLo,(wl-m)/40); vHi=Math.max(vHi,(m-wh)/35);
+        if(!relaxed){if(m<muMin)muMin=m;if(m>muMax)muMax=m;}
+      }}
+    if(!seen){muMin=0;muMax=180;vLo=1;vHi=1;}
+    if(muMin>179.9){muMin=0;muMax=0;}   // strict zone empty (all relaxed) -> display only
+    sv.muLo=Math.max(0,vLo); sv.muHi=Math.max(0,vHi);
+    let f=1e18,unreach=0,wmin=1e18;
+    for(const d of dem){const at=atOutput({pts:seg},d.out);
+      if(!at){unreach++;continue;}
+      const g=Math.abs(at.g);
+      f=Math.min(f,Math.min(tAvail(d.w/g)/g,Tpk*3)-d.tau);
+      wmin=Math.min(wmin,wx*g-d.w);}
+    sv.reach=dem.length?unreach/dem.length:0;
+    sv.omega=(dem.length&&wmin<1e17)?Math.max(0,-wmin)/5:(dem.length?1:0);
+    if(f>1e17)f=dem.length?-1e9:0;
+    // torque adequacy is a HARD requirement too (2026-07-10, user): a design that
+    // delivers less torque than the demand at ANY bin must NOT be approved.
+    // Objective (among feasible) remains maximizing the same worst margin (>=0).
+    sv.tau=(dem.length&&f>-1e8)?Math.max(0,-f)/40:0;
+    let sumV=0;for(const k in sv)sumV+=sv[k];
+    // input HARD-STOP angles: the th2 sub-range whose output covers the
+    // operating window — where the physical crank stoppers go (+ overtravel).
+    let sLo=1e9,sHi=-1e9;
+    for(const p of seg){const o=p.th4*DEG;
+      if(o>=oLo-1&&o<=oHi+1){if(p.th2<sLo)sLo=p.th2;if(p.th2>sHi)sHi=p.th2;}}
+    const pMax=motorPmax();
+    const pwrBad=dem.filter(d=>d.tau*d.w>pMax*1.001).length;
+    const res={feas:sumV===0,sumV,f,v:sv,
+      info:{...info,swing,muMin,muMax,reach:dem.length-unreach,total:dem.length,
+            wmin:wmin<1e17?wmin:NaN,worst:f,arc:fullR?360:(t2b-t2a)*DEG,
+            pMax,pwrBad,
+            stopLo:(!fullR&&sLo<1e8)?sLo*DEG:null,
+            stopHi:(!fullR&&sLo<1e8)?sHi*DEG:null}};
+    if(!best||debBetter(res,best))best=res;
+  }
+  return best||{feas:false,sumV:40,f:-1e9,v,info};
+}
+function debBetter(a,b){                  // Deb's 3 rules (lexicographic)
+  if(a.feas!==b.feas)return a.feas;
+  if(!a.feas)return a.sumV<b.sumV;
+  return a.f>b.f;
+}
+// optimization variables: unlocked lengths + kOff (knee-map offset, only when
+// crank-0 sync is OFF — synced kOff is geometry-derived, not a variable).
+function optVars(){return P.filter(k=>state.lock[k]!==1).concat(syncEnabled()?[]:["kOff"]);}
+function setVal(k,v){ state[k]=v; if(k==="kOff")$("kOff").value=(+v).toFixed(1); else $("in_"+k).value=(+v).toFixed(2); }
+function sampleBounds(k){
+  if(k==="kOff")return[-180,180];
+  if(state.lock[k]===2)return[state.rng[k][0],state.rng[k][1]];
+  return[10,300];                        // free length: full plausible mm box
+}
+// ============ DE/rand/1/bin + Deb feasibility rules (research: docs/60) ============
+// WHY DE: derivative-free (integer plateaus + non-assembly holes kill gradients),
+// canonical pairing with Deb's rules (Lampinen 2002), best-in-class for four-bar
+// synthesis (Acharyya & Mandal). Discrete {kSign, branch}: cardinality 4 -> ENUMERATE
+// all combos as separate DE runs (Lampinen&Zelinka guidance for tiny cardinality).
+// F dithered [0.5,1.0]/generation, CR=0.9, LHS init, individual#0 = current design,
+// stall-stop, best-feasible-EVER archive (anytime), seeded PRNG (reproducible),
+// final coordinate-pattern polish under Deb acceptance.
+const opt={on:false,mode:"de",ci:0,combos:[],pop:null,initIdx:0,ei:0,gen:0,stall:0,
+  F:0.7,NP:40,GENMAX:150,STALL:30,genImp:false,gbest:null,gX:null,evals:0,
+  trace:[],bestTrace:[],rng:null,pol:null,curVals:null,
+  round:1,lastImp:1,eps0:0,archive:[]};   // eps-DE + continuous rounds + candidates
+const SEED=0x9E3779B9;
+// eps-level comparison (Takahama & Sakai): candidates with violation <= eps are
+// treated as feasible-equivalent so the population can cross infeasible ridges
+// toward thin/disconnected feasible pockets (Deb's known failure mode). eps
+// decays to 0 by 60% of GENMAX; the ARCHIVE always uses strict Deb order.
+function epsBetter(a,b,eps){
+  const fa=a.sumV<=eps, fb=b.sumV<=eps;
+  if(fa&&fb)return a.f>b.f;
+  if(fa!==fb)return fa;
+  return a.sumV<b.sumV;
+}
+function normDist(v1,v2,free){let m=0;
+  for(const k of free){const[lo,hi]=sampleBounds(k);m=Math.max(m,Math.abs(v1[k]-v2[k])/Math.max(hi-lo,1));}
+  return m;}
+// meaningful improvement (for round-convergence accounting): tiny f jitter
+// between random restarts must NOT reset the stall counter, or rounds never end.
+function meaningful(a,b){
+  if(!b)return true;
+  if(a.feas!==b.feas)return a.feas;
+  if(!a.feas)return (b.sumV-a.sumV)>0.02;
+  return (a.f-b.f)>0.5;
+}
+function tryArchive(res,vals,ks,br,free){    // keep top-8 DIVERSE candidates
+  const a=opt.archive;
+  for(let i=0;i<a.length;i++){
+    if(a[i].ks===ks&&a[i].br===br&&normDist(vals,a[i].vals,free)<0.06){
+      if(debBetter(res,a[i].res)){
+        if(meaningful(res,a[i].res))opt.lastImp=opt.round;
+        a[i]={res,vals:{...vals},ks,br};
+        a.sort((x,y)=>debBetter(x.res,y.res)?-1:1);}
+      return;
+    }
+  }
+  a.push({res,vals:{...vals},ks,br});
+  a.sort((x,y)=>debBetter(x.res,y.res)?-1:1);
+  if(a.length>8)a.pop(); else opt.lastImp=opt.round;
+}
+function renderCands(){
+  const el=$("candList"); if(!el)return;
+  el.innerHTML=opt.archive.map((e,i)=>{
+    const r=e.res, v=e.vals;
+    const tag=r.feas?`<span style="color:var(--good)">✓ f=${r.f.toFixed(0)}</span>`
+                    :`<span style="color:var(--crit)">✗ Σv=${r.sumV.toFixed(2)}</span>`;
+    const dims=["r1","r2","r3","r4"].map(k=>k in v?`${k.slice(1)}:${(+v[k]).toFixed(0)}`:null).filter(Boolean).join(" ");
+    return `<div class="k" data-ci="${i}" style="cursor:pointer" title="클릭하면 적용">`+
+      `<span>#${i+1} ${dims} · k${e.ks>0?"+":"−"}${e.br?"A":"B"}</span><b>${tag}</b></div>`;
+  }).join("")||`<span class="sub">아직 없음</span>`;
+}
+function applyCand(i){
+  const e=opt.archive[i]; if(!e||opt.on)return;
+  for(const k in e.vals)setVal(k,+(+e.vals[k]).toFixed(k==="kOff"?1:2));
+  state.kSign=e.ks;$("kSign").value=e.ks;state.branch=e.br;
+  refresh();
+  $("vizBadge").textContent=`후보 #${i+1} 적용 · ${e.res.feas?"✓ feasible · f="+e.res.f.toFixed(1):"✗ Σv="+e.res.sumV.toFixed(2)}`;
+}
+const metric=r=>r.feas?r.f:-100*r.sumV;  // display metric for the convergence plot
+function mkCand(vals,ks,br){const c={...state,...vals};c.kSign=ks;c.branch=br;return c;}
+function deStep(free){
+  const[ks,br]=opt.combos[opt.ci];
+  if(opt.pop===null){                    // start combo: archive elites + LHS
+    opt.pop=[];
+    const cur={};for(const k of free){const[lo,hi]=sampleBounds(k);
+      cur[k]=Math.min(hi,Math.max(lo,opt.curVals[k]));}
+    opt.pop.push({x:cur,r:null});        // individual #0 = current design
+    for(const e of opt.archive){         // elitist restart: same-combo archive members
+      if(e.ks===ks&&e.br===br&&opt.pop.length<5){
+        const v={};for(const k of free){const[lo,hi]=sampleBounds(k);
+          v[k]=Math.min(hi,Math.max(lo,e.vals[k]!==undefined?e.vals[k]:cur[k]));}
+        opt.pop.push({x:v,r:null});
+      }
+    }
+    for(let i=opt.pop.length;i<opt.NP;i++){const vals={};
+      for(const k of free){const[lo,hi]=sampleBounds(k);vals[k]=lo+(hi-lo)*((i+opt.rng())/opt.NP);}
+      opt.pop.push({x:vals,r:null});}
+    opt.initIdx=0;opt.gen=0;opt.stall=0;opt.ei=0;opt.genImp=false;opt.eps0=0;
+  }
+  if(opt.initIdx<opt.NP){                // init evaluations (one per step)
+    const ind=opt.pop[opt.initIdx];
+    ind.r=constraintsOf(mkCand(ind.x,ks,br));opt.evals++;
+    tryArchive(ind.r,ind.x,ks,br,free);
+    if(!opt.gbest||debBetter(ind.r,opt.gbest)){
+      if(meaningful(ind.r,opt.gbest))opt.lastImp=opt.round;
+      opt.gbest=ind.r;opt.gX={vals:{...ind.x},ks,br};}
+    opt.initIdx++;
+    if(opt.initIdx===opt.NP){            // eps0 = median violation of initial pop
+      const sv=opt.pop.map(p=>p.r.sumV).sort((a,b)=>a-b);
+      opt.eps0=sv[Math.floor(sv.length/2)]||0;
+    }
+    return;
+  }
+  if(opt.ei===0)opt.F=0.5+0.5*opt.rng(); // F dither per generation
+  const Tc=Math.floor(opt.GENMAX*0.6);
+  const eps=(opt.gen<Tc)?opt.eps0*Math.pow(1-opt.gen/Tc,5):0;
+  const i=opt.ei,NP=opt.NP;
+  let a,b,c;
+  do{a=Math.floor(opt.rng()*NP);}while(a===i);
+  do{b=Math.floor(opt.rng()*NP);}while(b===i||b===a);
+  do{c=Math.floor(opt.rng()*NP);}while(c===i||c===a||c===b);
+  const jr=Math.floor(opt.rng()*free.length),trial={};
+  free.forEach((k,j)=>{const[lo,hi]=sampleBounds(k);
+    trial[k]=(opt.rng()<0.9||j===jr)     // CR=0.9, forced gene at jr
+      ?Math.min(hi,Math.max(lo,opt.pop[a].x[k]+opt.F*(opt.pop[b].x[k]-opt.pop[c].x[k])))
+      :opt.pop[i].x[k];});
+  const r=constraintsOf(mkCand(trial,ks,br));opt.evals++;
+  if(epsBetter(r,opt.pop[i].r,eps))opt.pop[i]={x:trial,r}; // eps-DE selection
+  tryArchive(r,trial,ks,br,free);
+  if(!opt.gbest||debBetter(r,opt.gbest)){
+    if(meaningful(r,opt.gbest))opt.lastImp=opt.round;
+    opt.gbest=r;opt.gX={vals:{...trial},ks,br};opt.genImp=true;}
+  opt.ei++;
+  if(opt.ei>=NP){                        // generation boundary
+    opt.ei=0;opt.gen++;opt.stall=opt.genImp?0:opt.stall+1;opt.genImp=false;
+    const gb=opt.pop.reduce((m,p)=>debBetter(p.r,m.r)?p:m);
+    opt.trace.push(metric(gb.r));opt.bestTrace.push(metric(opt.gbest));
+    if(opt.trace.length>400){opt.trace.shift();opt.bestTrace.shift();}
+    if(opt.stall>=opt.STALL||opt.gen>=opt.GENMAX){
+      opt.ci++;opt.pop=null;
+      if(opt.ci>=opt.combos.length){     // all combos done -> polish phase
+        opt.mode="polish";
+        opt.pol={vals:{...opt.gX.vals},ki:0,sg:1,imp:false,
+          step:Object.fromEntries(free.map(k=>{const[lo,hi]=sampleBounds(k);return[k,(hi-lo)*0.02];}))};
+      }
+    }
+  }
+}
+function polishStep(free){               // coordinate pattern search, Deb acceptance
+  const p=opt.pol, ks=opt.gX.ks, br=opt.gX.br;
+  const k=free[p.ki],[lo,hi]=sampleBounds(k);
+  const t={...p.vals};t[k]=Math.min(hi,Math.max(lo,p.vals[k]+p.sg*p.step[k]));
+  if(Math.abs(t[k]-p.vals[k])>1e-9){
+    const r=constraintsOf(mkCand(t,ks,br));opt.evals++;
+    if(debBetter(r,opt.gbest)){opt.gbest=r;p.vals=t;opt.gX={vals:{...t},ks,br};p.imp=true;}
+  }
+  if(p.sg===1)p.sg=-1;
+  else{p.sg=1;p.ki++;
+    if(p.ki>=free.length){p.ki=0;
+      opt.trace.push(metric(opt.gbest));opt.bestTrace.push(metric(opt.gbest));
+      if(!p.imp){let mx=0;for(const k2 in p.step){p.step[k2]*=0.5;mx=Math.max(mx,p.step[k2]);}
+        if(mx<0.05)return endRound();
+      }
+      p.imp=false;
+    }
+  }
+  return false;
+}
+// CONTINUOUS SEARCH: after each full round (4 combos + polish), restart with a
+// fresh deterministic seed and archive-elitist init. Stops only when the user
+// presses 정지, or after 5 rounds with zero archive/global improvement (globally
+// converged), or a 50-round backstop.
+function endRound(){
+  if(opt.round-opt.lastImp>=5||opt.round>=50){finishOpt(true);return true;}
+  opt.round++;
+  opt.rng=mulberry32((SEED^Math.imul(opt.round,0x85EBCA6B))>>>0);
+  opt.ci=0;opt.pop=null;opt.mode="de";opt.gen=0;opt.stall=0;opt.ei=0;
+  return false;
+}
+function applyBest(){
+  if(!opt.gX)return;
+  for(const k in opt.gX.vals)setVal(k,+(+opt.gX.vals[k]).toFixed(k==="kOff"?1:2));
+  state.kSign=opt.gX.ks;$("kSign").value=opt.gX.ks;state.branch=opt.gX.br;
+}
+function optFrame(){
+  if(!opt.on)return;
+  const free=optVars(),t0=performance.now();
+  while(performance.now()-t0<12){
+    if(opt.mode==="de")deStep(free);
+    else if(polishStep(free))return;     // polish may finish inside
+  }
+  applyBest();                           // live: viewer/plots always show best-ever
+  refresh();drawConv();renderCands();
+  const g=opt.gbest;
+  $("vizBadge").textContent=`R${opt.round} · `+(opt.mode==="de"
+    ?`DE ${Math.min(opt.ci+1,opt.combos.length)}/${opt.combos.length} · 세대 ${opt.gen} · 평가 ${opt.evals}`
+    :`정제 · 평가 ${opt.evals}`)
+    +(g?(g.feas?` · ✓ FEASIBLE · 최악 τ마진 ${g.f.toFixed(1)} N·m`:` · ✗ 위반 Σ ${g.sumV.toFixed(2)}`):"");
+  requestAnimationFrame(optFrame);
+}
+function finishOpt(complete){
+  opt.on=false;$("opt").textContent="최적화 실행 ▶";$("opt").style.background="#12314a";
+  applyBest();refresh();drawConv();renderCands();
+  const g=opt.gbest;
+  let msg=complete?`전역탐색 수렴 (${opt.round}라운드)`:"중단 · 최고해 적용";
+  if(g){
+    if(g.feas)msg+=` · ✓ 전 제약 만족 · 최악 τ마진 ${g.f.toFixed(1)} N·m`;
+    else{const bad=Object.entries(g.v).filter(([,x])=>x>1e-9).sort((a,b)=>b[1]-a[1])
+      .map(([k,x])=>`${CN[k]||k} ${x.toFixed(2)}`).join(", ");
+      msg+=` · ✗ 실행가능해 없음(수렴) — 위반: ${bad}`;
+      if(g.info&&g.info.pwrBad)msg+=` · ★${g.info.pwrBad}bin은 모터파워(${(g.info.pMax/1000).toFixed(1)}kW) 초과=기하로 해결 불가 → 재학습/사용범위/모터 재검토`;
+      msg+=` · 후보 패널서 대안 확인`;}
+  }
+  $("vizBadge").textContent=msg+` · 평가 ${opt.evals}`;
+}
+function optimize(){
+  if(opt.on){finishOpt(false);return;}
+  const free=optVars();
+  if(!free.length){$("vizBadge").textContent="모든 길이가 🔒잠금 (탐색변수 없음)";return;}
+  state.kOff=+$("kOff").value;state.kSign=+$("kSign").value||1;
+  opt.rng=mulberry32(SEED);              // fixed seed = bit-reproducible runs
+  opt.NP=Math.max(12,Math.min(80,Math.round(+$("deNP").value)||40));
+  opt.combos=[[1,true],[1,false],[-1,true],[-1,false]];
+  opt.curVals={};for(const k of free)opt.curVals[k]=state[k];
+  opt.ci=0;opt.pop=null;opt.mode="de";opt.gbest=null;opt.gX=null;opt.evals=0;
+  opt.round=1;opt.lastImp=1;opt.archive=[];
+  opt.trace=[];opt.bestTrace=[];opt.on=true;
+  $("opt").textContent="정지 ■ (최고해 적용)";$("opt").style.background="#4a1f2a";
+  requestAnimationFrame(optFrame);
+}
+function drawConv(){
+  const cvs=$("convC"),cw=cvs.clientWidth||280,ch=cvs.clientHeight||70,dpr=devicePixelRatio||1;
+  cvs.width=cw*dpr;cvs.height=ch*dpr;const c=cvs.getContext("2d");c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,cw,ch);
+  const t=opt.trace,b=opt.bestTrace; if(t.length<2)return;
+  const hi=Math.max(...t,...b), lo=Math.max(Math.min(...t,...b),hi-2500), rng=(hi-lo)||1; // clip deep invalid spikes
+  const draw=(arr,col,w)=>{c.strokeStyle=col;c.lineWidth=w;c.beginPath();
+    arr.forEach((v,i)=>{const x=4+(cw-8)*i/(arr.length-1),y=6+(ch-12)*(1-(Math.max(v,lo)-lo)/rng);
+      i?c.lineTo(x,y):c.moveTo(x,y);});c.stroke();};
+  draw(t,"#4db8ff",1.2);                 // current explored score
+  if(b.length>=2)draw(b,"#ffa94d",1.8);  // global best so far
+  c.fillStyle="#5f7085";c.font="9px "+getComputedStyle(document.body).getPropertyValue("--mono");
+  c.fillText("iter "+t.length,4,ch-2);c.fillText(hi.toFixed(0),cw-44,10);
+}
+
+// ---- refresh everything ----
+function refresh(){
+  // crank-0 <-> knee-home sync: derive kOff from current geometry before anything reads it
+  if(syncEnabled()){const ko=syncedKOff(state,kSign()); $("kOff").value=ko.toFixed(1); $("kOff").readOnly=true;}
+  else $("kOff").readOnly=false;
+  const sol=solve(state,state.theta2); const sw=sweep(state);
+  window._sol=sol; window._sw=sw;
+  // header
+  $("hTheta2").textContent=(state.theta2*DEG).toFixed(0)+"°";
+  $("hTheta4").textContent=sol.valid?(sol.th4*DEG).toFixed(0)+"°":"—";
+  const g=ratio(state,state.theta2);
+  $("hG").textContent=g?g.toFixed(3):"—";
+  $("hMu").textContent=sol.valid?(sol.mu*DEG).toFixed(0)+"°":"—";
+  const feas=$("hFeas");
+  if(!sol.valid){feas.textContent="조립불가";feas.className="pill crit";}
+  else if(sol.mu*DEG<40||sol.mu*DEG>145){feas.textContent="사각(전달각)";feas.className="pill warn";}
+  else{feas.textContent="OK";feas.className="pill good";}
+  $("vizBadge").textContent=sw.full?"crank-rocker (입력 전회전)":"double-rocker (입력 진동)";
+  // readout
+  const Tpk=+$("aTpk").value,Tc=+$("aTc").value,W=+$("aW").value;
+  if(sol.valid&&g){
+    const ag=Math.abs(g);
+    $("rTout").textContent=(Tpk/ag).toFixed(1)+" N·m";
+    $("rToutC").textContent=(Tc/ag).toFixed(1)+" N·m";
+    $("rWout").textContent=(W*ag).toFixed(1)+" rad/s";
+    $("rMA").textContent=(1/ag).toFixed(2);
+    $("rKnee").textContent=kneeOf(sol.th4*DEG).toFixed(0)+"°";
+  }else{["rTout","rToutC","rWout","rMA","rKnee"].forEach(i=>$(i).textContent="—");}
+  // demand-curve worst-case (nonlinear demand + speed-derated capacity)
+  const dem=demandCurve(), swing=sw.maxDeg-sw.minDeg, swingOK=swing>=+$("reqSwing").value;
+  if(dem.length){
+    let worst=null,unreach=0,wm=null,wmAng=0;
+    const wx=+$("aW").value;
+    for(const d of dem){const at=atOutput(sw,d.out);
+      if(!at){unreach++;continue;} const gg=Math.abs(at.g), capW=tAvail(d.w/gg)/gg, m=capW-d.tau;
+      const wcap=wx*gg-d.w; if(wm===null||wcap<wm){wm=wcap;wmAng=d.out;}  // per-bin ω margin
+      if(worst===null||m<worst.m)worst={m,ang:d.out,cap:capW,tau:d.tau};}
+    if(worst){
+      $("pTout").textContent=worst.cap.toFixed(0)+" vs 수요 "+worst.tau.toFixed(0)+" @"+worst.ang.toFixed(0)+"°";
+      // BOTH-stat margins (p99 and peak) side by side, independent of dStat selection
+      {
+        const mm=stat=>{const dd=demandCurve(undefined,undefined,stat);let mT=null,mW=null;
+          for(const d of dd){const at=atOutput(sw,d.out);if(!at)continue;const gg=Math.abs(at.g);
+            const t=tAvail(d.w/gg)/gg-d.tau, w=wx*gg-d.w;
+            if(mT===null||t<mT)mT=t; if(mW===null||w<mW)mW=w;}
+          return [mT,mW];};
+        const[tP,wP]=mm("p99"),[tK,wK]=mm("peak");
+        // thermal margin: continuous(rated) capacity Tc/|g| vs RMS demand per bin
+        const Tc2=+$("aTc").value; let tR=null;
+        for(const d of demandCurve(undefined,undefined,"rms")){
+          const at=atOutput(sw,d.out); if(!at)continue;
+          const m2=Tc2/Math.abs(at.g)-d.tau; if(tR===null||m2<tR)tR=m2;}
+        const f=(v,d)=>v===null?"–":v.toFixed(d);
+        $("pBoth").innerHTML=`<span style="color:#ff6b8a">p99 ${f(tP,0)}/${f(wP,1)}</span> · <span style="color:#ff2d55">peak ${f(tK,0)}/${f(wK,1)}</span> · <span style="color:#d98cb3">열(RMS vs 연속) ${f(tR,0)}</span>`;
+      }
+      $("pWout").textContent=(unreach?unreach+" bin 도달X":"전 bin 도달")+" · 스윙 "+swing.toFixed(0)+"°"
+        +(wm!==null?` · ω마진 ${wm.toFixed(1)} @${wmAng.toFixed(0)}°`:"");
+      const wOK=wm===null||wm>=0;
+      const pass=worst.m>=0&&unreach===0&&swingOK&&wOK;
+      $("pVerdict").innerHTML=`<span class="pill ${pass?'good':worst.m>=-5&&unreach===0&&wOK?'warn':'crit'}">`+
+        `최소마진 ${worst.m.toFixed(0)} N·m · ω ${wOK?'✓':'✗'} · 스윙 ${swingOK?'✓':'✗'}${unreach?' · 미달 '+unreach:''}</span>`;
+    }
+    // current-position check vs nearest demand bin — show BOTH tau and omega
+    if(sol.valid&&g){const near=dem.reduce((a,b)=>Math.abs(b.out-sol.th4*DEG)<Math.abs(a.out-sol.th4*DEG)?b:a);
+      const ag2=Math.abs(g), capW=tAvail(near.w/ag2)/ag2, wcap=(+$("aW").value)*ag2;
+      const okT=capW>=near.tau, okW=wcap>=near.w;
+      $("rCheck").innerHTML=`<span class="pill ${okT&&okW?'good':'crit'}">τ ${capW.toFixed(0)}/${near.tau.toFixed(0)} · ω ${wcap.toFixed(1)}/${near.w.toFixed(1)} @${near.out.toFixed(0)}°</span>`;}
+    else $("rCheck").textContent="—";
+    // per-bin DEFICIT table: worst 6 bins by tau margin, showing exactly WHAT is
+    // short (tau / omega / motor power) and by how much
+    {
+      const wx2=+$("aW").value, pM=motorPmax();
+      const rows=[];
+      for(const d of dem){
+        const at=atOutput(sw,d.out);
+        if(!at){rows.push({knee:d.knee,mT:-1e9,html:
+          `<div class="k"><span>${d.knee.toFixed(0)}°</span><b><span class="pill crit">도달 불가</span></b></div>`});continue;}
+        const gg=Math.abs(at.g), tC=tAvail(d.w/gg)/gg, wC=wx2*gg, pOK=d.tau*d.w<=pM*1.001;
+        const cell=(ok,txt)=>`<span style="color:${ok?'var(--good)':'var(--crit)'}">${txt}</span>`;
+        rows.push({knee:d.knee,mT:tC-d.tau,html:
+          `<div class="k"><span>${d.knee.toFixed(0)}°</span><b>`+
+          cell(tC>=d.tau,`τ${tC.toFixed(0)}/${d.tau.toFixed(0)}`)+" · "+
+          cell(wC>=d.w,`ω${wC.toFixed(1)}/${d.w.toFixed(1)}`)+" · "+
+          cell(pOK,pOK?"P✓":"P✗")+`</b></div>`});
+      }
+      rows.sort((a,b)=>a.mT-b.mT);
+      $("binTable").innerHTML=rows.slice(0,6).map(r=>r.html).join("")||`<span class="sub">수요 없음</span>`;
+    }
+  }else{ // manual mode
+    const at=atOutput(sw,+$("dAng").value),dTau=+$("dTau").value,dW=+$("dW").value;
+    if(at){const ag=Math.abs(at.g),to=Tpk/ag,wo=W*ag,okT=to>=dTau,okW=wo>=dW;
+      $("pTout").textContent=to.toFixed(1)+" N·m"; $("pWout").textContent=wo.toFixed(1)+" rad/s";
+      $("pVerdict").innerHTML=`<span class="pill ${okT&&okW?'good':okT||okW?'warn':'crit'}">τ ${okT?'✓':'✗'} · ω ${okW?'✓':'✗'} · 스윙 ${swingOK?'✓':'✗'}</span>`;
+      if(sol.valid&&g)$("rCheck").innerHTML=`<span class="pill ${Tpk/Math.abs(g)>=dTau?'good':'warn'}">${(Tpk/Math.abs(g)).toFixed(0)} vs ${dTau}</span>`;
+    }else{["pTout","pWout"].forEach(i=>$(i).textContent="—");$("pVerdict").innerHTML=`<span class="pill crit">피크각 도달 X</span>`;$("rCheck").textContent="—";}
+  }
+  // HARD-constraint checklist + objective (Deb separation, same code as optimizer)
+  {
+    const cr=constraintsOf(state,sw), cv=cr.v, ci=cr.info;
+    const pill=(ok,txt)=>`<span class="pill ${ok?'good':'crit'}">${ok?'✓':'✗'} ${txt}</span>`;
+    const off=`<span class="pill good">— off</span>`;
+    const fullR=fullRotOn();
+    $("cRot").innerHTML  =fullR?pill((cv.rot||0)===0,(ci.frac*100).toFixed(0)+"%")
+                               :`<span class="pill good">스톱 θ2 ${ci.stopLo!=null?ci.stopLo.toFixed(0)+"~"+ci.stopHi.toFixed(0)+"°":"–"}</span>`;
+    window._cres=cr;
+    $("cGr").innerHTML   =fullR?pill((cv.grashof||0)===0, ci.grMargin!==undefined?ci.grMargin.toFixed(1)+"mm":"–"):off;
+    $("cShort").innerHTML=fullR?pill((cv.shortest||0)===0,"r2="+state.r2.toFixed(0)):off;
+    $("cSwing").innerHTML=pill(cv.swing===0,    ci.swing!==undefined?ci.swing.toFixed(0)+"°/"+$("reqSwing").value:"–");
+    $("cMu").innerHTML   =pill(cv.muLo===0&&cv.muHi===0, ci.muMin!==undefined?ci.muMin.toFixed(0)+"~"+ci.muMax.toFixed(0)+"°":"–");
+    $("cCover").innerHTML=state.opLim?pill(cv.cover===0,(cv.cover*100).toFixed(0)+"% 미커버"):`<span class="pill good">— off</span>`;
+    $("cReach").innerHTML=pill(cv.reach===0,    (ci.reach!==undefined?ci.reach+"/"+ci.total:"–"));
+    $("cOmega").innerHTML=pill(cv.omega===0,    isNaN(ci.wmin)?"–":ci.wmin.toFixed(1)+" rad/s");
+    $("cTau").innerHTML  =pill((cv.tau||0)===0, cr.f<=-1e8?"–":cr.f.toFixed(1)+" N·m");
+    $("cPwr").innerHTML  =ci.pwrBad?`<span class="pill crit">✗ ${ci.pwrBad}bin이 모터 Pmax ${(ci.pMax/1000).toFixed(1)}kW 초과 — 링크로 불가</span>`
+                                    :`<span class="pill good">✓ Pmax ${ci.pMax?(ci.pMax/1000).toFixed(2):"–"}kW 내</span>`;
+    $("cObj").innerHTML  =`<span class="pill ${cr.feas?'good':'warn'}">${cr.f<=-1e8?'–':cr.f.toFixed(1)+" N·m"}${cr.feas?'':' (infeas)'}</span>`;
+  }
+  // render
+  renderViz(sol,sw);
+  plot($("plotT"),drawT); plot($("plotW"),drawW);
+  saveState();
+}
+
+// ---- persistence (localStorage, this browser) ----
+const LSKEY="fourbar_v1";
+const INPUTS=["aTpk","aTc","aWc","aW","twCurve","actPreset","dAng","dTau","dW","kSign","kOff","kneeHome","reqSwing","dSrc","dStat","opLo","opHi","deNP","muRelB","muRelLo","muRelHi"];
+function saveState(){
+  try{localStorage.setItem(LSKEY,JSON.stringify({
+    r1:state.r1,r2:state.r2,r3:state.r3,r4:state.r4,theta2:state.theta2,branch:state.branch,
+    lock:state.lock,rng:state.rng,syncK:$("syncK").checked,opLim:state.opLim,
+    fullRot:$("fullRot").checked,muRelax:$("muRelax").checked,
+    inputs:Object.fromEntries(INPUTS.map(id=>[id,$(id).value]))
+  }));}catch(e){}
+}
+function loadState(){
+  let s; try{s=JSON.parse(localStorage.getItem(LSKEY)||"null");}catch(e){return;}
+  if(!s)return;
+  for(const k of ["r1","r2","r3","r4","theta2","branch"]) if(k in s) state[k]=s[k];
+  if(s.lock) state.lock=s.lock;
+  if(s.rng) state.rng=s.rng;
+  if(s.inputs) for(const id in s.inputs){const el=$(id); if(el&&s.inputs[id]!=null) el.value=s.inputs[id];}
+  if("syncK" in s)$("syncK").checked=s.syncK;
+  if("opLim" in s)state.opLim=!!s.opLim;
+  if("fullRot" in s)$("fullRot").checked=!!s.fullRot;
+  if("muRelax" in s)$("muRelax").checked=!!s.muRelax;
+}
+
+// ---- wire ----
+loadState();          // restore saved settings BEFORE building the UI
+buildLinks();
+$("assembly").addEventListener("click",()=>{state.branch=!state.branch;refresh();});
+$("opt").addEventListener("click",optimize);
+$("candList").addEventListener("click",e=>{const row=e.target.closest("[data-ci]");
+  if(row)applyCand(+row.dataset.ci);});
+$("reset").addEventListener("click",()=>{try{localStorage.removeItem(LSKEY);}catch(e){} location.reload();});
+["aTpk","aTc","aWc","aW","twCurve","dAng","dTau","dW","kSign","kOff","kneeHome","reqSwing","opLo","opHi","deNP","muRelB","muRelLo","muRelHi"].forEach(id=>$(id).addEventListener("input",refresh));
+$("muRelax").addEventListener("change",refresh);
+$("syncK").addEventListener("change",refresh);
+$("dSrc").addEventListener("change",refresh);
+$("dStat").addEventListener("change",refresh);
+$("fullRot").addEventListener("change",refresh);
+function syncOpLim(){const b=$("opLim");b.textContent="범위 제한: "+(state.opLim?"ON":"OFF");
+  b.style.borderColor=state.opLim?"var(--good)":"var(--line)";
+  b.style.color=state.opLim?"var(--good)":"var(--muted)";}
+$("opLim").addEventListener("click",()=>{state.opLim=!state.opLim;syncOpLim();refresh();});
+syncOpLim();
+$("actPreset").addEventListener("change",e=>{const a=ACT[e.target.value];
+  if(a){for(const k in a)$(k).value=a[k];} refresh();});
+window.addEventListener("resize",refresh);
+window.addEventListener("load",()=>requestAnimationFrame(refresh));
+refresh();
+</script>
+</body>
+</html>

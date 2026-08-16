@@ -1,0 +1,7 @@
+services:
+  wrench-studio:
+    build: .
+    ports: ["8091:8091"]
+    volumes:
+      - ../../mujoco-sim/mjlab:/mjlab:ro
+      - ./cache:/app/cache

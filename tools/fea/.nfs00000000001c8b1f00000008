@@ -113,15 +113,13 @@ uptodate() {   # $1 = link : result exists AND was produced from this link's
                # current spec section (a hash, so editing another link's entry
                # no longer invalidates everything - that re-ran a finished L1)
   $PY - "$1" <<'EOF'
-import json,hashlib,os,re,sys
+import json,hashlib,os,sys
 L=sys.argv[1]
 res=f'/home/syaro/pyg_fea/work/{L}/envelope_P99.json'
 if not os.path.exists(res): print('no'); raise SystemExit
 spec=json.load(open('tools/fea/link_specs.json'))[L]
 h=hashlib.sha1(json.dumps(spec,sort_keys=True).encode()).hexdigest()[:12]
-rev=re.search(r"ANALYSIS_REV = '([^']+)'",open('tools/fea/run_link_env.py').read()).group(1)
-d=json.load(open(res))
-print('yes' if d.get('spec_hash')==h and d.get('analysis_rev')==rev else 'no')
+print('yes' if json.load(open(res)).get('spec_hash')==h else 'no')
 EOF
 }
 

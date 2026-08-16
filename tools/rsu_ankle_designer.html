@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2-RSU 발목 설계기 · 2-RSU Ankle Designer</title>
+<style>
+  :root{
+    --ink:#0e1217;--panel:#161c25;--panel2:#1b232f;--line:#2a3542;--grid:#1f2833;
+    --text:#e4ebf3;--muted:#93a2b5;--dim:#5f7085;
+    --a:#4db8ff;--b:#ffa94d;--rod:#c58cff;--foot:#37d69a;--gnd:#42505f;
+    --good:#37d69a;--warn:#f5c451;--crit:#ff6b8a;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}html,body{margin:0;height:100%}
+  body{background:var(--ink);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.45}
+  h1{font-size:14px;font-weight:650;margin:0}.sub{color:var(--dim);font-size:11px}
+  header{display:flex;align-items:baseline;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header .stat{margin-left:auto;display:flex;gap:14px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  header .stat b{color:var(--text)}
+  .app{display:grid;grid-template-columns:280px 1fr 340px;gap:1px;background:var(--line);height:calc(100% - 47px)}
+  .col{background:var(--ink);overflow-y:auto;padding:12px}
+  .col::-webkit-scrollbar{width:9px}.col::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
+  .grp{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 11px;margin-bottom:10px}
+  .grp>h2{font-size:10px;text-transform:uppercase;letter-spacing:.9px;color:var(--dim);margin:0 0 9px;font-weight:600}
+  .row{display:flex;align-items:center;gap:7px;margin:5px 0}
+  .row label{width:96px;flex:none;font-size:12px}
+  .row .u{color:var(--dim);font-size:11px;width:34px}
+  input[type=number]{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:5px;padding:3px 6px;font-family:var(--mono);font-size:12px;text-align:right}
+  input[type=range]{width:100%;accent-color:var(--a)}
+  select,input[type=text]{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:5px;padding:4px 6px;font-family:var(--mono);font-size:11px}
+  .viz{position:relative;height:100%;display:flex;flex-direction:column;background:var(--ink)}
+  #stage3d{flex:1;touch-action:none;cursor:grab;display:block}
+  #stage3d.drag{cursor:grabbing}
+  .badge{position:absolute;top:10px;left:12px;font-family:var(--mono);font-size:11px;padding:4px 8px;border-radius:5px;border:1px solid var(--line);background:var(--panel)}
+  .hint{position:absolute;bottom:10px;left:12px;color:var(--dim);font-size:11px;pointer-events:none}
+  canvas.map{width:100%;display:block;background:var(--panel);border:1px solid var(--line);border-radius:7px;cursor:crosshair}
+  .plabel{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);margin:10px 0 5px}
+  .readout .k{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;padding:3px 0;border-bottom:1px dashed var(--grid)}
+  .readout .k span:first-child{color:var(--muted)}.readout .k b{font-variant-numeric:tabular-nums}
+  .pill{font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600}
+  .pill.good{background:#123528;color:var(--good)}.pill.warn{background:#332c12;color:var(--warn)}.pill.crit{background:#331420;color:var(--crit)}
+  .lg{display:flex;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:5px}
+  .lg i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:3px;border-radius:2px}
+  button.act{width:100%;padding:7px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);border-radius:6px;cursor:pointer;font-size:12px}
+  button.act:hover{filter:brightness(1.2)}
+  @media(max-width:1100px){.app{grid-template-columns:1fr}.viz{height:52vh}}
+</style>
+</head>
+<body>
+<header>
+  <h1>2-RSU 발목 설계기</h1>
+  <span class="sub">2-RSU ankle · 3D + R-P 워크스페이스/토크맵 · IK·J<sup>T</sup> 실시간</span>
+  <div class="stat">
+    <span>roll <b id="hRoll">0°</b></span><span>pitch <b id="hPitch">0°</b></span>
+    <span>α_A <b id="hAlA">–</b></span><span>α_B <b id="hAlB">–</b></span>
+    <span>κ <b id="hKappa">–</b></span><span id="hFeas" class="pill good">OK</span>
+  </div>
+</header>
+
+<div class="app">
+  <!-- LEFT: parameters -->
+  <div class="col">
+    <div class="grp">
+      <h2>기하 파라미터 (mm) · X+전방 Z상 Y좌우</h2>
+      <div id="params"></div>
+      <div class="row" style="margin-top:8px"><button class="act" id="reset">기본값 복원</button></div>
+      <p class="sub" style="margin:5px 0 0">대칭(A↔B 미러). 크랭크축 ∥ Y(시상면 스윙). 설정 자동저장.</p>
+    </div>
+    <div class="grp">
+      <h2>입력 액추에이터</h2>
+      <div class="row"><label>모터</label>
+        <select id="actPreset"><option value="RS03">RS03 (60/20)</option><option value="RS04">RS04 (120/40)</option><option value="RS00">RS00 (14/5)</option><option value="custom">커스텀</option></select></div>
+      <div class="row"><label>peak τ</label><input type="number" id="aTpk" value="60"><span class="u">N·m</span></div>
+      <div class="row"><label>연속 τ</label><input type="number" id="aTc" value="20"><span class="u">N·m</span></div>
+    </div>
+    <div class="grp">
+      <h2>하중 수요 (발목 실측 p99)</h2>
+      <div class="row"><label>roll τ</label><input type="number" id="dRoll" value="13.5"><span class="u">N·m</span></div>
+      <div class="row"><label>pitch τ</label><input type="number" id="dPitch" value="60.4"><span class="u">N·m</span></div>
+      <div class="row"><label>수요 오버레이</label><input type="checkbox" id="showDem" checked style="width:auto"></div>
+      <p class="sub" style="margin:5px 0 0">토크맵 = 이 수요를 낼 때 모터토크 이용률. 오버레이 = 실측 R-P 작동영역.</p>
+    </div>
+  </div>
+
+  <!-- CENTER: 3D -->
+  <div class="viz">
+    <div class="badge" id="viz3dBadge">3D 기구</div>
+    <canvas id="stage3d"></canvas>
+    <div class="hint">드래그=궤도회전 · 휠=확대 · 오른쪽 R-P 맵을 클릭해 자세 이동</div>
+  </div>
+
+  <!-- RIGHT: R-P map + readout -->
+  <div class="col">
+    <div class="grp readout">
+      <h2>현재 자세 해석</h2>
+      <div class="k"><span>모터 토크 τ_A / τ_B</span><b id="rTau">–</b></div>
+      <div class="k"><span>최대 이용률 (vs peak)</span><b id="rUtil">–</b></div>
+      <div class="k"><span>조작성 κ = σmax/σmin</span><b id="rKap">–</b></div>
+      <div class="k" style="border:0"><span>도달·특이점</span><b id="rFeas">–</b></div>
+    </div>
+    <div class="plabel">R-P 워크스페이스 / 토크맵</div>
+    <div class="row" style="margin:0 0 5px"><label class="sub" style="width:52px">레이어</label>
+      <select id="layer"><option value="util">모터토크 이용률 %</option><option value="reach">도달성</option><option value="kappa">조작성 1/κ</option></select></div>
+    <canvas id="mapC" class="map" height="300"></canvas>
+    <div class="lg"><span>x=roll y=pitch [°]</span><span><i style="background:#fff"></i>현재</span><span><i style="background:var(--crit)"></i>수요영역</span><span>경계=워크스페이스</span></div>
+    <div class="plabel">능력 평행사변형 (J<sup>T</sup>·모터box) vs 수요</div>
+    <canvas id="polyC" class="map" height="150"></canvas>
+    <div class="lg"><span><i style="background:var(--a)"></i>능력(±peak)</span><span><i style="background:var(--crit)"></i>수요점</span></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id), DEG=180/Math.PI, RAD=Math.PI/180;
+
+// ---- linear algebra (3-vec) ----
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+const add=(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]];
+const scl=(a,s)=>[a[0]*s,a[1]*s,a[2]*s];
+const nrm=a=>Math.hypot(a[0],a[1],a[2]);
+function Rx(t){const c=Math.cos(t),s=Math.sin(t);return [[1,0,0],[0,c,-s],[0,s,c]];}
+function Ry(t){const c=Math.cos(t),s=Math.sin(t);return [[c,0,s],[0,1,0],[-s,0,c]];}
+const mv=(M,v)=>[M[0][0]*v[0]+M[0][1]*v[1]+M[0][2]*v[2],M[1][0]*v[0]+M[1][1]*v[1]+M[1][2]*v[2],M[2][0]*v[0]+M[2][1]*v[1]+M[2][2]*v[2]];
+function mm(A,B){const C=[[0,0,0],[0,0,0],[0,0,0]];for(let i=0;i<3;i++)for(let j=0;j<3;j++)for(let k=0;k<3;k++)C[i][j]+=A[i][k]*B[k][j];return C;}
+
+// ---- parameters (mm; internally used in m) ----
+const PAR=[
+  {k:"cx",name:"크랭크중심 X",v:0},{k:"b",name:"크랭크중심 ±Y",v:45},{k:"f",name:"모터→발바닥",v:110},
+  {k:"crank",name:"크랭크길이 α",v:30},{k:"rod",name:"로드길이 β",v:95},{k:"hp",name:"홈위상 φ(°)",v:-90},
+  {k:"px",name:"발엔드 X(pitch레버)",v:55},{k:"c",name:"발엔드 ±Y(roll)",v:80},
+  {k:"e",name:"R-P중심→바닥",v:50},{k:"d",name:"발엔드→바닥",v:15},
+];
+const state={};PAR.forEach(p=>state[p.k]=p.v);
+const cam={az:-0.9,el:0.5,scale:900,drag:false};
+const pose={roll:0,pitch:0.35};   // rad
+const branch={A:+1,B:+1};
+
+// ---- 2-RSU kinematics (units: m; params in mm/1000) ----
+function limb(s){ // s=+1 A, -1 B
+  const g=k=>state[k]/1000;
+  const a=[g("cx"),s*g("b"),g("f")-g("e")];
+  const z=[0,1,0];
+  const hp=state.hp*RAD, u=[Math.cos(hp),0,-Math.sin(hp)], v=cross(z,u);
+  const bpt=[g("px"),s*g("c")/2,g("d")-g("e")];
+  return {a,z,u,v,bpt,c:g("crank"),r:g("rod")};
+}
+function ik(roll,pitch,br){
+  const R=mm(Ry(pitch),Rx(roll)), out={};
+  for(const [key,s] of [["A",+1],["B",-1]]){
+    const L=limb(s), q=mv(R,L.bpt), dv=sub(q,L.a);
+    const A=L.c*dot(L.u,dv), B=L.c*dot(L.v,dv), C=0.5*(L.c*L.c+dot(dv,dv)-L.r*L.r);
+    const rho=Math.hypot(A,B); if(rho<1e-9||C*C>rho*rho) return null;
+    out[key]=Math.atan2(B,A)+(br?br[key]:+1)*Math.acos(Math.max(-1,Math.min(1,C/rho)));
+  }
+  return out;
+}
+function jac(roll,pitch,br){
+  const als=ik(roll,pitch,br); if(!als)return null;
+  const R=mm(Ry(pitch),Rx(roll));
+  const E=[[Math.cos(pitch),0],[0,1],[-Math.sin(pitch),0]]; // 3x2: col0=Ry*x, col1=y
+  const J=[[0,0],[0,0]];
+  let ri=0;
+  for(const [key,s] of [["A",+1],["B",-1]]){
+    const L=limb(s), q=mv(R,L.bpt), al=als[key];
+    const p=add(L.a,add(scl(L.u,L.c*Math.cos(al)),scl(L.v,L.c*Math.sin(al))));
+    const l=sub(p,q), qxl=cross(q,l);
+    const den=dot(l,cross(L.z,sub(p,L.a)));
+    if(Math.abs(den)<1e-12) return null;
+    J[ri][0]=(qxl[0]*E[0][0]+qxl[1]*E[1][0]+qxl[2]*E[2][0])/den;
+    J[ri][1]=(qxl[0]*E[0][1]+qxl[1]*E[1][1]+qxl[2]*E[2][1])/den;
+    ri++;
+  }
+  return {J,als};
+}
+function invT(J){ // (J^-T): solve J^T x = tau -> x = J^-T tau ; return function
+  const det=J[0][0]*J[1][1]-J[0][1]*J[1][0];
+  return det;
+}
+function motorTau(J,tp){ // tau_mot = J^-T tp ; J^-T = (J^-1)^T
+  const det=J[0][0]*J[1][1]-J[0][1]*J[1][0]; if(Math.abs(det)<1e-9)return null;
+  // J^-1 = 1/det [[J11,-J01],[-J10,J00]] ; (J^-1)^T:
+  const iT=[[J[1][1]/det,-J[1][0]/det],[-J[0][1]/det,J[0][0]/det]];
+  return [iT[0][0]*tp[0]+iT[0][1]*tp[1], iT[1][0]*tp[0]+iT[1][1]*tp[1]];
+}
+function kappa(J){ // sqrt(lambda_max/lambda_min) of J J^T
+  const a=J[0][0]*J[0][0]+J[0][1]*J[0][1], bb=J[0][0]*J[1][0]+J[0][1]*J[1][1], dd=J[1][0]*J[1][0]+J[1][1]*J[1][1];
+  const tr=a+dd, de=a*dd-bb*bb, disc=Math.max(0,tr*tr/4-de);
+  const l1=tr/2+Math.sqrt(disc), l2=tr/2-Math.sqrt(disc);
+  return l2>1e-12?Math.sqrt(l1/l2):1e9;
+}
+
+// ---- embedded ankle demand (roll°, pitch°, |rollTau|, |pitchTau|), Bbase_kd6 ----
+const ANK=[[-0.4,-0.5,2.2,17.8],[3.2,7.9,0.6,25.9],[-7.2,24.2,1.3,3.9],[-1.1,4.5,1.7,83.6],[2.8,2.2,3.2,44],[5.1,0.5,11.7,24.3],[1.3,-0.1,2,46.5],[2.6,2.7,11.3,19.4],[-0.2,5,10,27.4],[-0.6,0.3,4.8,49.7],[-5.1,4,0.7,31.2],[2.4,5.6,2.8,28.2],[2.5,2.9,13.3,33.7],[-11.3,8.8,10.3,18.1],[1.9,4.5,1.9,40.2],[6,2.5,15.9,12.7],[-2.6,1.7,8.3,20.8],[4,4.5,10.6,20.1],[-3.8,2.8,4.3,9.4],[1.6,6.1,3.7,17.7],[2.1,6,2.1,22.6],[-0.8,3.9,5.3,21.4],[4.6,6.8,1.4,23.5],[6.7,4.6,3.3,14.2],[4.5,10.2,0.3,31.8],[1.9,-2.3,3.4,37.1],[3.1,3.8,3.6,52.2],[5.3,1.3,4.2,34.5],[5.6,11.9,9.1,8.5],[8.5,10.1,1.6,8.8],[-0.2,0,3.7,34.6],[-0.7,1.7,1.6,44.7],[-4.7,0,7.8,19.9],[2.8,5.2,2.3,24.8],[-0.7,5.6,2.8,35.5],[-4.2,-0.7,2.5,17.5],[-7.4,0.3,1,15.2],[-6.1,2.1,6.8,33.7],[-0.5,1.8,5.2,30.2],[0.8,2.9,1,29.3],[3.8,0.8,0,45.6],[-0.5,8.6,5.4,12.5],[-3,11.2,8.6,2.1],[-3,7.7,5.1,9],[-2.3,7.7,3.2,17.4],[-3.8,-0.4,8,43.1],[-0.4,1.3,0.9,26.3],[-1.1,-0.1,0.4,23]];
+
+// ---- 3D projection (ortho + orbit) ----
+function project(p){ // world m -> screen; z up
+  const ca=Math.cos(cam.az),sa=Math.sin(cam.az);
+  const x1=p[0]*ca-p[1]*sa, y1=p[0]*sa+p[1]*ca, z1=p[2];
+  const ce=Math.cos(cam.el),se=Math.sin(cam.el);
+  const y2=y1*ce-z1*se, z2=y1*se+z1*ce;
+  return {x:x1*cam.scale, y:-z2*cam.scale, depth:y2};
+}
+const cv3=$("stage3d"); let W3=0,H3=0;
+function render3d(){
+  const r=cv3.getBoundingClientRect(),dpr=devicePixelRatio||1;
+  cv3.width=r.width*dpr;cv3.height=r.height*dpr;const c=cv3.getContext("2d");c.setTransform(dpr,0,0,dpr,0,0);
+  W3=r.width;H3=r.height;c.clearRect(0,0,W3,H3);
+  const ox=W3*0.5, oy=H3*0.62;
+  const P=p=>{const s=project(p);return [ox+s.x,oy+s.y,s.depth];};
+  const prims=[];
+  // ground grid at z=-e
+  const e=state.e/1000, gs=0.15;
+  for(let i=-3;i<=3;i++){
+    const a=P([i*0.05,-gs,-e]),b=P([i*0.05,gs,-e]); prims.push({d:(a[2]+b[2])/2,f:()=>{c.strokeStyle="#243040";c.lineWidth=1;c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();}});
+    const a2=P([-gs,i*0.05,-e]),b2=P([gs,i*0.05,-e]); prims.push({d:(a2[2]+b2[2])/2,f:()=>{c.strokeStyle="#243040";c.lineWidth=1;c.beginPath();c.moveTo(a2[0],a2[1]);c.lineTo(b2[0],b2[1]);c.stroke();}});
+  }
+  const R=mm(Ry(pose.pitch),Rx(pose.roll)), als=ik(pose.roll,pose.pitch,branch);
+  // gimbal
+  {const o=P([0,0,0]);prims.push({d:o[2],f:()=>{c.fillStyle="#7688a0";c.beginPath();c.arc(o[0],o[1],4,0,7);c.fill();}});}
+  // foot platform (quad through rod-ends + toe/heel), rotated by R
+  const fpts=[[state.px/1000+0.05,0,state.d/1000-state.e/1000],[state.px/1000-0.06,0,state.d/1000-state.e/1000]];
+  for(const [key,s,col] of [["A",+1,"var(--a)"],["B",-1,"var(--b)"]]){
+    const L=limb(s), q=mv(R,L.bpt), a=L.a;
+    let p;
+    if(als){const al=als[key];p=add(a,add(scl(L.u,L.c*Math.cos(al)),scl(L.v,L.c*Math.sin(al))));}
+    const Pa=P(a),Pq=P(q);
+    // motor pivot
+    prims.push({d:Pa[2],f:()=>{c.fillStyle=col;c.beginPath();c.arc(Pa[0],Pa[1],5,0,7);c.fill();c.strokeStyle="#0e1217";c.stroke();}});
+    if(p){const Pp=P(p);
+      prims.push({d:(Pa[2]+Pp[2])/2,f:()=>{c.strokeStyle=col;c.lineWidth=4;c.lineCap="round";c.beginPath();c.moveTo(Pa[0],Pa[1]);c.lineTo(Pp[0],Pp[1]);c.stroke();}}); // crank
+      prims.push({d:(Pp[2]+Pq[2])/2,f:()=>{c.strokeStyle="var(--rod)";c.lineWidth=3.5;c.lineCap="round";c.beginPath();c.moveTo(Pp[0],Pp[1]);c.lineTo(Pq[0],Pq[1]);c.stroke();}}); // rod
+    }
+    // foot rod-end
+    prims.push({d:Pq[2],f:()=>{c.fillStyle="var(--foot)";c.beginPath();c.arc(Pq[0],Pq[1],4,0,7);c.fill();}});
+  }
+  // foot outline (toe-heel line + connect rod-ends)
+  const qA=mv(R,limb(+1).bpt), qB=mv(R,limb(-1).bpt);
+  const toe=mv(R,[state.px/1000+0.07,0,state.d/1000-state.e/1000]), heel=mv(R,[state.px/1000-0.08,0,state.d/1000-state.e/1000]);
+  const PqA=P(qA),PqB=P(qB),Pt=P(toe),Ph=P(heel);
+  prims.push({d:(PqA[2]+PqB[2])/2,f:()=>{c.strokeStyle="var(--foot)";c.lineWidth=2;c.globalAlpha=.7;c.beginPath();c.moveTo(PqA[0],PqA[1]);c.lineTo(PqB[0],PqB[1]);c.stroke();c.beginPath();c.moveTo(Pt[0],Pt[1]);c.lineTo(Ph[0],Ph[1]);c.stroke();c.globalAlpha=1;}});
+  // painter sort (far first = larger depth first, camera looks -y)
+  prims.sort((p,q)=>q.d-p.d).forEach(p=>p.f());
+  $("viz3dBadge").textContent=als?"3D 기구":"조립 불가 (자세 미도달)";
+}
+// orbit
+cv3.addEventListener("pointerdown",e=>{cam.drag=true;cv3.setPointerCapture(e.pointerId);cam._x=e.clientX;cam._y=e.clientY;cv3.classList.add("drag");});
+cv3.addEventListener("pointermove",e=>{if(!cam.drag)return;cam.az-=(e.clientX-cam._x)*0.01;cam.el=Math.max(-1.4,Math.min(1.4,cam.el+(e.clientY-cam._y)*0.01));cam._x=e.clientX;cam._y=e.clientY;render3d();});
+cv3.addEventListener("pointerup",()=>{cam.drag=false;cv3.classList.remove("drag");});
+cv3.addEventListener("wheel",e=>{e.preventDefault();cam.scale*=Math.exp(-e.deltaY*0.001);render3d();},{passive:false});
+
+// ---- R-P heatmap ----
+const RMIN=-35,RMAX=35,PMIN=-20,PMAX=45,GN=64;
+function color(v,lo,hi){ // green->yellow->red for util; v in 0..1
+  const t=Math.max(0,Math.min(1,(v-lo)/(hi-lo)));
+  const r=Math.round(t<0.5?55+t*2*(245-55):245), g=Math.round(t<0.5?214:214-(t-0.5)*2*(214-107)), b=Math.round(t<0.5?154-t*2*100:54);
+  return [r,g,b];
+}
+function renderMap(){
+  const cvs=$("mapC"),cw=cvs.clientWidth||300,ch=cvs.clientHeight||300,dpr=devicePixelRatio||1;
+  cvs.width=cw*dpr;cvs.height=ch*dpr;const c=cvs.getContext("2d");c.setTransform(dpr,0,0,dpr,0,0);
+  const layer=$("layer").value, Tpk=+$("aTpk").value, tp=[+$("dRoll").value,+$("dPitch").value];
+  const img=c.createImageData(GN,GN), D=img.data;
+  for(let iy=0;iy<GN;iy++)for(let ix=0;ix<GN;ix++){
+    const roll=(RMIN+(RMAX-RMIN)*ix/(GN-1))*RAD, pit=(PMIN+(PMAX-PMIN)*(GN-1-iy)/(GN-1))*RAD;
+    const jr=jac(roll,pit,branch); let col;
+    if(!jr){col=[24,32,42];}
+    else if(layer==="reach"){col=[30,90,60];}
+    else if(layer==="kappa"){const ik=1/Math.min(50,kappa(jr.J));col=color(1-ik,0,1);}
+    else{const tm=motorTau(jr.J,tp);col=tm?color(Math.max(Math.abs(tm[0]),Math.abs(tm[1]))/Tpk,0.3,1.2):[24,32,42];}
+    const o=(iy*GN+ix)*4;D[o]=col[0];D[o+1]=col[1];D[o+2]=col[2];D[o+3]=255;
+  }
+  // blit scaled
+  const tmp=document.createElement("canvas");tmp.width=GN;tmp.height=GN;tmp.getContext("2d").putImageData(img,0,0);
+  c.imageSmoothingEnabled=false;c.drawImage(tmp,0,0,cw,ch);
+  const X=r=>(r-RMIN)/(RMAX-RMIN)*cw, Y=p=>(PMAX-p)/(PMAX-PMIN)*ch;
+  // demand overlay
+  if($("showDem").checked){c.fillStyle="rgba(255,107,138,.55)";for(const[r,p]of ANK){const x=X(r),y=Y(p);if(x>=0&&x<=cw&&y>=0&&y<=ch){c.beginPath();c.arc(x,y,2,0,7);c.fill();}}}
+  // axes labels
+  c.fillStyle="#5f7085";c.font="10px "+getComputedStyle(document.body).getPropertyValue("--mono");
+  c.fillText("roll→",cw-38,ch-4);c.fillText("↑pitch",4,12);
+  c.fillText(RMIN,2,ch-4);c.fillText(RMAX,cw-20,ch-14);
+  // current pose marker
+  const cx=X(pose.roll*DEG),cy=Y(pose.pitch*DEG);
+  c.strokeStyle="#fff";c.lineWidth=1.5;c.beginPath();c.arc(cx,cy,5,0,7);c.stroke();
+  c.beginPath();c.moveTo(cx-8,cy);c.lineTo(cx+8,cy);c.moveTo(cx,cy-8);c.lineTo(cx,cy+8);c.stroke();
+}
+$("mapC").addEventListener("pointerdown",e=>setPoseFromMap(e));
+$("mapC").addEventListener("pointermove",e=>{if(e.buttons)setPoseFromMap(e);});
+function setPoseFromMap(e){
+  const cvs=$("mapC"),r=cvs.getBoundingClientRect();
+  pose.roll=(RMIN+(RMAX-RMIN)*(e.clientX-r.left)/r.width)*RAD;
+  pose.pitch=(PMAX-(PMAX-PMIN)*(e.clientY-r.top)/r.height)*RAD;
+  refresh();
+}
+
+// ---- capability parallelogram ----
+function renderPoly(){
+  const cvs=$("polyC"),cw=cvs.clientWidth||300,ch=cvs.clientHeight||150,dpr=devicePixelRatio||1;
+  cvs.width=cw*dpr;cvs.height=ch*dpr;const c=cvs.getContext("2d");c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,cw,ch);
+  const jr=jac(pose.roll,pose.pitch,branch), Tpk=+$("aTpk").value, tp=[+$("dRoll").value,+$("dPitch").value];
+  // scale by demand extent
+  const sc=Math.max(30,Math.abs(tp[0]),Math.abs(tp[1]))*2.2;
+  const X=v=>cw/2+v/sc*cw*0.42, Y=v=>ch/2-v/sc*ch*0.42;
+  c.strokeStyle="#243040";c.beginPath();c.moveTo(X(0),0);c.lineTo(X(0),ch);c.moveTo(0,Y(0));c.lineTo(cw,Y(0));c.stroke();
+  c.fillStyle="#5f7085";c.font="10px "+getComputedStyle(document.body).getPropertyValue("--mono");c.fillText("roll τ",cw-38,Y(0)-3);c.fillText("pitch τ",X(0)+3,10);
+  if(jr){ // platform-torque set = J^T (box +-Tpk)
+    const JT=[[jr.J[0][0],jr.J[1][0]],[jr.J[0][1],jr.J[1][1]]];
+    const vtx=[[Tpk,Tpk],[Tpk,-Tpk],[-Tpk,-Tpk],[-Tpk,Tpk]].map(t=>[JT[0][0]*t[0]+JT[0][1]*t[1],JT[1][0]*t[0]+JT[1][1]*t[1]]);
+    c.strokeStyle="#4db8ff";c.lineWidth=2;c.beginPath();vtx.forEach((v,i)=>{i?c.lineTo(X(v[0]),Y(v[1])):c.moveTo(X(v[0]),Y(v[1]));});c.closePath();c.stroke();
+    c.fillStyle="rgba(77,184,255,.10)";c.fill();
+  }
+  // demand point
+  c.fillStyle="#ff6b8a";c.beginPath();c.arc(X(tp[0]),Y(tp[1]),4,0,7);c.fill();
+}
+
+// ---- readout ----
+function refresh(){
+  const jr=jac(pose.roll,pose.pitch,branch), tp=[+$("dRoll").value,+$("dPitch").value], Tpk=+$("aTpk").value;
+  $("hRoll").textContent=(pose.roll*DEG).toFixed(0)+"°";$("hPitch").textContent=(pose.pitch*DEG).toFixed(0)+"°";
+  if(jr){
+    $("hAlA").textContent=(jr.als.A*DEG).toFixed(0)+"°";$("hAlB").textContent=(jr.als.B*DEG).toFixed(0)+"°";
+    const kp=kappa(jr.J);$("hKappa").textContent=kp.toFixed(1);
+    const tm=motorTau(jr.J,tp);
+    $("rTau").textContent=tm?tm[0].toFixed(1)+" / "+tm[1].toFixed(1)+" N·m":"특이";
+    const util=tm?Math.max(Math.abs(tm[0]),Math.abs(tm[1]))/Tpk*100:1e9;
+    $("rUtil").innerHTML=tm?`<span class="pill ${util<70?'good':util<100?'warn':'crit'}">${util.toFixed(0)}%</span>`:'<span class="pill crit">특이</span>';
+    $("rKap").textContent=kp.toFixed(2);
+    $("hFeas").textContent="OK";$("hFeas").className="pill good";
+    $("rFeas").innerHTML=kp>15?'<span class="pill warn">특이점 근접(κ↑)</span>':'<span class="pill good">양호</span>';
+  }else{
+    ["hAlA","hAlB","rTau","rKap"].forEach(i=>$(i).textContent="–");$("hKappa").textContent="–";
+    $("hFeas").textContent="미도달";$("hFeas").className="pill crit";
+    $("rUtil").innerHTML='<span class="pill crit">미도달</span>';$("rFeas").innerHTML='<span class="pill crit">워크스페이스 밖</span>';
+  }
+  render3d();renderPoly();saveState();
+}
+let mapTimer=null;
+function refreshAll(){refresh();clearTimeout(mapTimer);mapTimer=setTimeout(renderMap,60);}
+
+// ---- param UI ----
+function buildParams(){
+  const box=$("params");box.innerHTML="";
+  for(const p of PAR){
+    const d=document.createElement("div");d.className="row";
+    d.innerHTML=`<label title="${p.name}">${p.k} <span class="sub">${p.name}</span></label><input type="number" id="p_${p.k}" step="1" value="${state[p.k]}">`;
+    box.appendChild(d);
+    $("p_"+p.k).addEventListener("input",e=>{state[p.k]=+e.target.value;refreshAll();});
+  }
+}
+
+// ---- actuator preset (real TN peaks) ----
+const ACT={RS04:{aTpk:120,aTc:40},RS03:{aTpk:60,aTc:20},RS00:{aTpk:14,aTc:5}};
+
+// ---- persistence ----
+const LSKEY="rsu_v1";
+function saveState(){try{localStorage.setItem(LSKEY,JSON.stringify({state,pose,cam,inp:{aTpk:$("aTpk").value,aTc:$("aTc").value,dRoll:$("dRoll").value,dPitch:$("dPitch").value,actPreset:$("actPreset").value,layer:$("layer").value}}));}catch(e){}}
+function loadState(){let s;try{s=JSON.parse(localStorage.getItem(LSKEY)||"null");}catch(e){return;}if(!s)return;
+  if(s.state)Object.assign(state,s.state);if(s.pose)Object.assign(pose,s.pose);if(s.cam)Object.assign(cam,s.cam);
+  if(s.inp)for(const k in s.inp){const el=$(k);if(el&&s.inp[k]!=null)el.value=s.inp[k];}}
+
+// ---- wire ----
+loadState();buildParams();
+["aTpk","aTc","dRoll","dPitch","showDem","layer"].forEach(id=>$(id).addEventListener("input",refreshAll));
+$("layer").addEventListener("change",renderMap);
+$("actPreset").addEventListener("change",e=>{const a=ACT[e.target.value];if(a){$("aTpk").value=a.aTpk;$("aTc").value=a.aTc;}refreshAll();});
+$("reset").addEventListener("click",()=>{try{localStorage.removeItem(LSKEY);}catch(e){}location.reload();});
+window.addEventListener("resize",refreshAll);
+window.addEventListener("load",()=>requestAnimationFrame(refreshAll));
+refreshAll();
+</script>
+</body>
+</html>

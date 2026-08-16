@@ -130,6 +130,35 @@ def main():
               f"{vol_rem/1000:.1f} cm3 ({vol_rem/total*100:.1f} %)"
               f"{'' if out['levels'][f'SF>{L}']['feasible'] else '   [current design already below this SF]'}")
 
+    # Where material has to be ADDED. Lightweighting alone is misleading on a link
+    # that fails: L1b can shed 90 % of its volume and still be under-strength at the
+    # forefoot. For a bending-dominated plate sigma ~ 1/t^2, so the thickness factor
+    # to reach an allowable is sqrt(sigma/allowable).
+    out['reinforce'] = {}
+    for L in LEVELS:
+        allow = YIELD / L
+        hot = estr >= allow
+        if not hot.any():
+            out['reinforce'][f'SF>{L}'] = dict(needed=False)
+            continue
+        C = ecc[hot]
+        out['reinforce'][f'SF>{L}'] = dict(
+            needed=True,
+            elements=int(hot.sum()),
+            volume_cm3=round(float(evol[hot].sum()) / 1000, 2),
+            pct_of_link=round(100.0 * float(evol[hot].sum()) / total, 3),
+            bbox=[[round(float(v), 1) for v in C.min(0)], [round(float(v), 1) for v in C.max(0)]],
+            extent_mm=round(float(np.linalg.norm(C.max(0) - C.min(0))), 1),
+            peak_MPa=round(float(estr.max()), 1),
+            thickness_factor=round(float(np.sqrt(estr.max() / allow)), 2),
+            note=('bending-dominated estimate: multiply the local wall thickness by '
+                  'thickness_factor, or add a rib of that equivalent stiffness, then re-run '
+                  'run_link_env for the mandatory re-verification'))
+        print(f"   SF>{L}: reinforce {hot.sum()} elements "
+              f"({100.0 * float(evol[hot].sum()) / total:.2f} % of volume, extent "
+              f"{out['reinforce'][f'SF>{L}']['extent_mm']:.0f} mm) -> thickness x"
+              f"{out['reinforce'][f'SF>{L}']['thickness_factor']:.2f}")
+
     # export the retained region (SF>1.5 case) as a point cloud + voxel occupancy
     allow = YIELD / 1.5
     retain = (estr >= allow / KEEP_MARGIN) | keep

@@ -645,24 +645,9 @@
    "size_far": 16.0,
    "curv": 0,
    "auto_refine": false,
-   "refine": [
-    [
-     -123.7,
-     70.0,
-     -100.0,
-     30.0,
-     6.0
-    ],
-    [
-     -123.7,
-     115.0,
-     -310.0,
-     30.0,
-     6.0
-    ]
-   ],
+   "refine": [],
    "max_nodes": 320000,
-   "_doc": "curvature-driven refinement was what made this link unsolvable: at curv=14 the round features gave 630k nodes at 21.6 mm, and every coarser size hit PLC errors. With curvature off it meshes at 16 mm in 128k nodes, and the two joint interfaces are resolved by explicit 6 mm balls instead."
+   "_doc": "proven configuration measured on this geometry: curvature refinement off, 16 mm, no local balls -> 128k nodes. Adding refinement balls made gmsh report duplicated facets, so the interfaces are resolved by the 16 mm mesh and the design stress excludes the clamped nodes instead."
   },
   "threads": 6,
   "cases": [
