@@ -124,21 +124,8 @@ def main():
     fix = sorted(set(fix))
     print(f'fixed nodes {len(fix)} ({env_spec["fix_desc"]})', flush=True)
 
-    # bolted bodies come out as separate mesh components -> tie them at the
-    # flange contact, otherwise the floating body makes the solve singular
-    comps_e = F.components(elems)
-    tie_txt = ''
-    print(f'mesh connectivity: {len(comps_e)} component(s) {[len(c) for c in comps_e[:4]]}',
-          flush=True)
-    for i, c in enumerate(comps_e[1:], 1):
-        txt, n = F.node_pair_equations(nodes, elems, comps_e[0], c, gap=3.0, exclude=fix)
-        if not n:
-            raise SystemExit(f'component {i} ({len(c)} elems) has no face within 2.5 mm of '
-                             'the main body - check the actuator proxy placement')
-        tie_txt += txt
-        print(f'   tied component {i} ({len(c)} elems) with {n} node-pair MPCs', flush=True)
-
     # ---- motors: flange node sets, reference nodes, point masses
+    tie_txt = ''            # deck fragment: motor rigid bodies + component ties
     mot_txt, mot_nodes, mot_mass = '', {}, {}
     if motors:
         nid0 = max(nodes) + 1
@@ -161,10 +148,46 @@ def main():
                   f"ref node {ref}, {m.get('mass_kg', 1.5)} kg", flush=True)
     tie_txt += mot_txt
 
+    # bolted bodies come out as separate mesh components -> tie them at the
+    # flange contact, otherwise the floating body makes the solve singular
+    comps_e = F.components(elems)
+    print(f'mesh connectivity: {len(comps_e)} component(s) {[len(c) for c in comps_e[:4]]}',
+          flush=True)
+    bridged = set()
+    for txt_i in mot_txt.split('*NSET, NSET=NMOT')[1:]:
+        body = txt_i.split('*RIGID BODY')[0]
+        for tok in body.replace('\n', ',').split(','):
+            tok = tok.strip()
+            if tok.isdigit():
+                bridged.add(int(tok))
+    for i, c in enumerate(comps_e[1:], 1):
+        cn = {n for e in c for n in elems[e]}
+        if cn & bridged:
+            print(f'   component {i} ({len(c)} elems) is bridged by a rigid motor housing',
+                  flush=True)
+            continue
+        # bolted joints have real gaps (spacers, washers, clearance): widen the
+        # search until the two bodies are joined instead of aborting the run
+        for g in (3.0, 6.0, 12.0, 25.0):
+            txt, n = F.node_pair_equations(nodes, elems, comps_e[0], c, gap=g, exclude=fix)
+            if n:
+                if g > 3.0:
+                    print(f'   (component {i} needed a {g:.0f} mm tie gap - bolted joint)',
+                          flush=True)
+                break
+        if not n:
+            raise SystemExit(f'component {i} ({len(c)} elems) cannot be tied to the main body '
+                             'even at a 25 mm gap - geometry needs a look')
+        tie_txt += txt
+        print(f'   tied component {i} ({len(c)} elems) with {n} node-pair MPCs', flush=True)
+
     # ---- load points and their node sets
     pts = env_spec['points']
     for p in pts:
         p['nids'] = sel_bore(nodes, surf, p)
+        if 'ctr' not in p:      # plane patch / bolt pads: centroid of the region
+            p['ctr'] = [float(v) for v in np.mean([nodes[n] for n in p['nids']], axis=0)]
+            p['_ctr_from'] = 'node centroid'
         print(f"  load point {p['name']}: {len(p['nids'])} nodes "
               f"({'plane patch' if p.get('type') == 'plane' else 'seat r' + str(p.get('r'))})",
               flush=True)
@@ -232,7 +255,9 @@ def main():
     for k, comp in enumerate(comps):
         job = f'{link}_u{comp}'
         cl = {}
-        if pattern:
+        if comp == 'Gbody':
+            pass          # body load goes into the deck as *DLOAD GRAV, not CLOAD
+        elif pattern:
             Fv = np.zeros(3); Mv = np.zeros(3)
             if comp.startswith('F'):
                 Fv['xyz'.index(comp[1])] = E.UNIT_F
@@ -250,8 +275,6 @@ def main():
                     d = F.bearing_load(nodes, p['nids'], p['axis'], p['ctr'], fv)
                     for n, f in d.items():
                         cl[n] = cl.get(n, np.zeros(3)) + f
-        elif comp == 'Gbody':
-            pass          # body load is written into the deck, not as CLOAD
         elif pair and k >= 3:
             mi = k - 3
             if mi == ai:

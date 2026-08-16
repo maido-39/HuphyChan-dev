@@ -13,15 +13,8 @@ W=/home/syaro/pyg_fea/work
 HB=$W/heartbeat
 STALE=2400          # 40 min without a heartbeat = stuck
 mkdir -p "$W"
-# single-instance guard by PID file: a flock fd is inherited by children, so
-# an orphaned `sleep` held the lock after the parent died and blocked every
-# restart (2026-08-16 stall).
-PIDF=$W/supervise.pid
-if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null \
-   && tr '\0' ' ' < /proc/"$(cat "$PIDF")"/cmdline 2>/dev/null | grep -q supervise.sh; then
-  echo "supervisor already running (pid $(cat "$PIDF"))"; exit 0
-fi
-echo $$ > "$PIDF"
+exec 8>/tmp/pyg_supervise.lock
+flock -n 8 || { echo "supervisor already running"; exit 0; }
 rm -f "$W/STOP"
 log() { echo "[$(date +%m-%d\ %H:%M:%S)] supervisor: $*"; }
 

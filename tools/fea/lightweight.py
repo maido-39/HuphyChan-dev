@@ -42,25 +42,44 @@ def main():
     # rebuild the per-node envelope field from the unit solves
     comps = env.get('comps') or ['Fx', 'Fy', 'Fz']
     import envelope as E
-    US, ids = [], None
-    for c in comps:
-        coords, blocks = F.parse_frd(f'{d}/{link}_u{c}.frd')
-        S = [x for nm, x in blocks if nm == 'STRESS'][-1]
-        ids = sorted(S)
-        US.append(np.array([S[i] for i in ids]))
-    mags = [env['magnitudes'][c] for c in comps]
-    e = E.combine(US, mags, comps=comps)
-    vm = e['vm_max']
-    P = np.array([coords[i] for i in ids])
+    case_f = f'{d}/case_{link}_env.json'
+    have_units = all(os.path.exists(f'{d}/{link}_u{c}.frd') for c in comps)
+    if have_units:
+        US, ids = [], None
+        for c in comps:
+            coords, blocks = F.parse_frd(f'{d}/{link}_u{c}.frd')
+            S = [x for nm, x in blocks if nm == 'STRESS'][-1]
+            ids = sorted(S)
+            US.append(np.array([S[i] for i in ids]))
+        mags = [env['magnitudes'][c] for c in comps]
+        vm = E.combine(US, mags, comps=comps)['vm_max']
+        P = np.array([coords[i] for i in ids])
+    elif os.path.exists(case_f):
+        # unit results were pruned for disk space -> use the exported surface field
+        cj = json.load(open(case_f))
+        c0 = cj[next(iter(cj))]
+        P = np.array(c0['nodes'], float)
+        vm = np.array(c0['fields']['vM'], float)
+        ids = list(range(len(vm)))
+        print('   (using the exported surface envelope; unit results were pruned)')
+    else:
+        raise SystemExit('neither unit results nor an exported case are available - '
+                         'run run_link_env.py for this link first')
     print(f'{link}: {len(ids)} nodes, envelope max {vm.max():.1f} MPa')
 
     # element centroid stress + volume
     ecc, evol, estr = [], [], []
-    idx = {n: k for k, n in enumerate(ids)}
+    idx = {n: k for k, n in enumerate(ids)} if have_units else None
+    if idx is None:
+        from scipy.spatial import cKDTree          # surface field -> nearest node
+        tree = cKDTree(P)
     for eid, c in elems.items():
         p = np.array([nodes[n] for n in c[:4]])
         v = abs(np.dot(np.cross(p[1] - p[0], p[2] - p[0]), p[3] - p[0])) / 6.0
-        s = np.mean([vm[idx[n]] for n in c[:4] if n in idx]) if all(n in idx for n in c[:4]) else 0.
+        if idx is not None:
+            s = np.mean([vm[idx[n]] for n in c[:4]]) if all(n in idx for n in c[:4]) else 0.
+        else:
+            s = float(vm[tree.query(p.mean(0))[1]])
         ecc.append(p.mean(0))
         evol.append(v)
         estr.append(s)

@@ -2,35 +2,35 @@
  "_doc": "Per-link FEA specs. Seats/bores are MEASURED (tools/fea/assign_bearings.py output in ~/pyg_fea/steps/link_*_joints.json). Loads reference tools/fea/loads.json (RL-policy measured wrenches); factor 1.25 = design case, 1.0 on 'peak' = reference case. Bearing seats carry the joint load over the loaded arc; sole/ground and mating seats are the supports.",
  "L1_ankle_foot": {
   "mesh": {
-   "size_far": 6.5,
+   "size_far": 10.12,
    "refine": [
     [
      -123.7,
-     160,
+     163.05,
      -800,
-     18,
-     1.8
+     20,
+     2.34
     ],
     [
      -123.7,
-     130,
+     126.95,
      -800,
-     18,
-     1.8
+     20,
+     2.34
     ],
     [
      -86.2,
      195,
      -810,
-     14,
-     1.4
+     16,
+     1.82
     ],
     [
      -161.2,
      195,
      -810,
-     14,
-     1.4
+     16,
+     1.82
     ]
    ]
   },
@@ -1029,21 +1029,21 @@
  },
  "L5_hip_pitchroll": {
   "mesh": {
-   "size_far": 6.0,
+   "size_far": 10.94,
    "refine": [
     [
      -52.7,
      70.0,
      60.0,
      50,
-     2.4
+     4.06
     ],
     [
      -123.7,
      96.25,
      60.0,
      40,
-     2.0
+     3.38
     ]
    ]
   },
@@ -1399,25 +1399,28 @@
  },
  "L4_hip_yaw": {
   "mesh": {
-   "size_far": 6.0,
+   "size_far": 8.1,
    "refine": [
     [
      -123.7,
      70.0,
      -40.0,
      45,
-     2.4
+     3.12
     ],
     [
      -123.7,
      100.5,
      60.0,
      40,
-     2.4
+     3.12
     ]
    ]
   },
-  "actuators": [],
+  "actuators": [
+   "robstride_rs04_hip_r",
+   "robstride_rs03_hip_y"
+  ],
   "envelope": {
    "joint": "hip_yaw",
    "moment_mode": "geometry",
@@ -1583,25 +1586,28 @@
  },
  "L6_pelvis": {
   "mesh": {
-   "size_far": 8.0,
+   "size_far": 10.0,
    "refine": [
     [
      0.0,
      70.0,
      60.0,
      60,
-     3.0
+     3.6
     ],
     [
      0.0,
      70.0,
      132.0,
      55,
-     3.0
+     3.6
     ]
    ]
   },
-  "actuators": [],
+  "actuators": [
+   "robstride_rs04_hip_p",
+   "robstride_rs04_hip_r_1_"
+  ],
   "envelope": {
    "joint": "hip_pitch",
    "moment_mode": "geometry",

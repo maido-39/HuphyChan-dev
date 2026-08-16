@@ -701,6 +701,8 @@ def node_pair_equations(nodes, elems, comp_a, comp_b, gap=3.0, max_pairs=400,
             pairs.append((sb[k + i], sa[j[i]], float(dmin[i])))
     if not pairs:
         return '', 0
+    if not pairs:
+        return '', 0
     pairs.sort(key=lambda p: p[2])
     # spread the constraints over the interface instead of clustering
     step = max(1, len(pairs) // max_pairs)
