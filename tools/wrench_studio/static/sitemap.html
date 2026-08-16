@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pygmalion 도구 사이트맵</title>
+<style>
+ body{margin:0;font-family:system-ui,'Noto Sans KR',sans-serif;background:#14171c;color:#dde3ea;
+      line-height:1.6;-webkit-text-size-adjust:100%}
+ header{padding:22px 26px 14px;border-bottom:1px solid #2c343f;background:#1a1f26}
+ h1{margin:0 0 4px;font-size:19px}
+ .sub{color:#93a3b3;font-size:13px}
+ main{padding:18px 26px 60px;max-width:1180px}
+ h2{font-size:15px;margin:26px 0 10px;color:#9fd0ff;border-bottom:1px solid #2c343f;padding-bottom:5px}
+ .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+ .card{background:#1a1f26;border:1px solid #2c343f;border-radius:9px;padding:12px 14px}
+ .card a{color:#7fc0ff;text-decoration:none;font-weight:600;font-size:14px}
+ .card a:hover{text-decoration:underline}
+ .card p{margin:5px 0 0;font-size:12.5px;color:#b9c4d0}
+ .card .meta{margin-top:6px;font-size:11.5px;color:#7d8b9a}
+ .tag{display:inline-block;background:#243244;border:1px solid #35485f;border-radius:4px;
+      padding:0 6px;font-size:10.5px;color:#9fd0ff;margin-right:5px}
+ table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:6px}
+ th,td{border-bottom:1px solid #262d36;padding:5px 9px 5px 0;text-align:left;vertical-align:top}
+ th{color:#93a3b3;font-weight:600;white-space:nowrap}
+ code{background:#0f1319;border:1px solid #2c343f;border-radius:4px;padding:1px 5px;font-size:11.5px}
+ .note{background:#1a1f26;border-left:3px solid #4a90d9;border-radius:0 7px 7px 0;
+       padding:9px 13px;font-size:12.5px;margin:12px 0}
+ .warn{border-left-color:#e8a33d}
+</style>
+</head>
+<body>
+<header>
+ <h1>Pygmalion — 도구 사이트맵</h1>
+ <div class="sub">웹 뷰어는 이 서버(<code>server.py</code>, 포트 <b>8091</b>)가 서비스한다.
+ 다른 포트(8231 등)는 스크린샷 촬영용 임시 서버라 촬영이 끝나면 사라진다.</div>
+</header>
+<main>
+
+<div class="note">
+ <b>주소 규칙</b> — 같은 기계에서는 <code>http://127.0.0.1:8091/&lt;페이지&gt;</code>,
+ 같은 랜에서는 <code>http://192.168.20.177:8091/&lt;페이지&gt;</code>.
+ 서버 실행: <code>cd tools/wrench_studio &amp;&amp; ../../mujoco-sim/mjlab/.venv/bin/python3 server.py</code>
+</div>
+
+<h2>구조 해석 (FEA)</h2>
+<div class="grid">
+ <div class="card">
+  <a href="link_setup_viewer.html">Link FEA 포스트프로세서</a>
+  <p>전신 링크의 구속·하중·나사·베어링·모터 셋업과 해석 결과를 함께 보는 메인 도구.
+     필드 선택(포락 vM / 안전율 / 주응력 σ1·σ3 / 응력성분 / 변위), 컬러맵과 등고선 밴드,
+     범위 수동 지정과 allowable 프리셋, 컬러바, 변형 형상 배율, 단면 절단,
+     최대·최소 마커, 클릭 프로브, <b>경량화 뷰</b>(제거 가능 / 보호 / 유지).</p>
+  <div class="meta"><span class="tag">주력</span>데이터: <code>link_setup_index.json</code> + 링크별 <code>link_setup_&lt;링크&gt;.json</code></div>
+ </div>
+ <div class="card">
+  <a href="fea_viewer.html">FEA Result Viewer (발목 단품)</a>
+  <p>발목 클레비스 단품 해석 결과 뷰어. 링크 캠페인 이전에 만든 단일 파트용이며,
+     전신 판정은 위의 Link FEA 포스트프로세서를 쓴다.</p>
+  <div class="meta">데이터: <code>fea_data.json</code></div>
+ </div>
+</div>
+
+<h2>발목 2-RSU 설계</h2>
+<div class="grid">
+ <div class="card">
+  <a href="ankle_cad_viewer.html">Ankle 2-RSU CAD 뷰어</a>
+  <p>실제 STEP 모델 위에서 roll-pitch 기구학, 4개 볼조인트 요동각, AB 모터 가동범위를 본다.
+     설계 파라미터의 함수로 유도한 관절각 수식(Fusion 파라메트릭용) 확인용.</p>
+ </div>
+ <div class="card">
+  <a href="ankle.html">Ankle 2-RSU Designer v2</a>
+  <p>기하 파라미터를 직접 조절하며 ROM과 토크 전달을 보는 설계기.</p>
+ </div>
+ <div class="card">
+  <a href="ankle_opt.html">Ankle 2-RSU 최적화 결과</a>
+  <p>제약 최적화(Deb 3규칙 · DE) 결과와 실행 가능해 분포.</p>
+ </div>
+ <div class="card">
+  <a href="crank_torque_player.html">크랭크-토크 플레이어</a>
+  <p>크랭크 각도에 따른 토크 전달비를 인터랙티브하게 재생.</p>
+ </div>
+</div>
+
+<h2>하중·수요 분석</h2>
+<div class="grid">
+ <div class="card">
+  <a href="demand3d.html">Ankle Demand 3D Explorer</a>
+  <p>정책 측정에서 뽑은 발목 수요(roll-pitch 평면의 토크·속도)를 3D 서피스로 탐색.</p>
+ </div>
+ <div class="card">
+  <a href="index.html">Wrench Studio v5</a>
+  <p>관절 렌치 측정 데이터 브라우저 — 링크별 반력, 모터 토크, 케이스 비교.</p>
+ </div>
+</div>
+
+<h2>명령행 도구 <span class="sub">(<code>tools/fea/</code>, 실행: <code>mujoco-sim/mjlab/.venv/bin/python3 tools/fea/&lt;스크립트&gt;</code>)</span></h2>
+
+<b style="font-size:13px">해석 파이프라인</b>
+<table>
+<tr><th>스크립트</th><th>역할</th></tr>
+<tr><td><code>xcaf_links.py</code></td><td>전신 STEP을 링크별 STEP으로 분해(체결구·베어링 분류 포함)</td></tr>
+<tr><td><code>detect_bolts.py</code></td><td>구멍 기하로 볼트 체결 검출(클리어런스+탭 쌍, 카운터보어로 머리 방향 판정)</td></tr>
+<tr><td><code>bolts_to_links.py</code> / <code>assign_bearings.py</code></td><td>검출된 볼트·베어링을 링크 메타데이터에 부착</td></tr>
+<tr><td><code>run_link_env.py</code></td><td><b>메인 해석</b> — 링크별 방향 포락(단위 케이스 + 부호 조합), 강체 모터, 사슬 타이</td></tr>
+<tr><td><code>envelope.py</code></td><td>부호 조합 포락 합성 + 설계 응력·허용치 초과 절점 통계</td></tr>
+<tr><td><code>femlib.py</code></td><td>STEP→gmsh→CalculiX→frd 공용 라이브러리</td></tr>
+<tr><td><code>autorun.sh</code> / <code>supervise.sh</code></td><td>무인 캠페인 구동 + 감시(정지 원인별 방어 장치 내장)</td></tr>
+</table>
+
+<b style="font-size:13px">판정·검증</b>
+<table>
+<tr><th>스크립트</th><th>역할</th></tr>
+<tr><td><code>verdicts.py</code> / <code>report.py</code></td><td>SF&gt;1 / 1.5 / 2 판정표, 전체 통합 리포트 생성</td></tr>
+<tr><td><code>rejudge.py</code></td><td>재솔브 없이 기존 결과를 현재 필터로 재판정</td></tr>
+<tr><td><code>equilibrium_check.py</code></td><td>반력 총합 = 적용 하중 평형 검증(하중 누설·우회 탐지)</td></tr>
+<tr><td><code>bolt_group.py</code> · <code>test_bolt_group.py</code></td><td>체결부 볼트 인장·전단·분리·미끄럼 판정 + 교과서 4케이스 회귀 테스트</td></tr>
+<tr><td><code>thread_check.py</code></td><td>알루미늄 탭 나사 강도(너트 없는 설계의 예압 상한)</td></tr>
+</table>
+
+<b style="font-size:13px">최적화·시각화 데이터</b>
+<table>
+<tr><th>스크립트</th><th>역할</th></tr>
+<tr><td><code>lightweight.py</code></td><td>제거 가능 체적 + 보강 필요 영역 + 유지 형상 STL 내보내기</td></tr>
+<tr><td><code>export_fields.py</code></td><td>뷰어용 전체 필드(주응력·변위·SF·keep-out) 추출 — 재솔브 없음</td></tr>
+<tr><td><code>merge_setup.py</code></td><td>링크별 셋업+결과를 뷰어 페이로드로 병합(링크별 파일 + 인덱스)</td></tr>
+</table>
+
+<h2>문서</h2>
+<table>
+<tr><th>문서</th><th>내용</th></tr>
+<tr><td><code>docs/78_link_structural_final_report.md</code></td><td><b>최종 리포트</b> — 판정·모터 브래킷·체결부·최적화·검증·조치 우선순위</td></tr>
+<tr><td><code>docs/fea_verdicts_current.md</code></td><td>자동 생성 판정표(리비전·필드·초과 절점 포함)</td></tr>
+<tr><td><code>docs/77_structural_fea_lightweighting.md</code></td><td>캠페인 전 과정 — §17 정지 원인 전수, §18 판정 방법론, §19 볼트, §20 검증, §21 하중 분배 버그, §22 최종 판정</td></tr>
+<tr><td><code>docs/76_ankle_2rsu_design_summary.md</code></td><td>발목 2-RSU 설계 요약</td></tr>
+<tr><td><code>docs/64_joint_bearing_design_inputs.md</code></td><td>측정 렌치 원자료(§7b 표, §8i 모멘트 기준점 이슈)</td></tr>
+</table>
+
+<div class="note warn">
+ <b>산출물 위치</b> — 해석 결과는 리포지토리가 아니라 <code>~/pyg_fea/work/&lt;링크&gt;/</code>에 있다:
+ <code>envelope_P99.json</code>(판정), <code>fields.json</code>(뷰어 필드),
+ <code>lightweight.json</code>(경량화), <code>&lt;링크&gt;_retained_SF1.5.stl</code>(유지 형상),
+ <code>&lt;링크&gt;_mesh.inp</code>(메시). 캠페인 로그는 <code>~/pyg_fea/work/autorun.log</code>.
+</div>
+
+</main>
+</body>
+</html>
