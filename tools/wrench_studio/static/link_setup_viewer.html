@@ -62,6 +62,8 @@
  <button id="bbrg" class="on">Bearings</button>
  <button id="bmot" class="on">Motors</button>
  <button id="bres">Result (envelope vM)</button>
+ <button id="bweak">Weak only</button>
+ <label>below SF <select id="usf"><option value="2">2</option><option value="1.5">1.5</option><option value="1">1</option></select></label>
  <button id="bspin">Spin</button>
  <button id="bfit">Fit</button>
  <button id="btoginfo" class="mobonly on">Info</button>
@@ -72,8 +74,10 @@
 <div id="load">loading…</div>
 <div class="panel" id="leg"></div>
 <div class="panel" id="info"></div>
+<div class="panel" id="weakinfo" style="left:12px;bottom:auto;top:64px;max-width:520px"></div>
 <script>
 const RAD=Math.PI/180;
+const YIELD=276.0;   // 6061-T6 [MPa]
 const isMobile=()=>innerWidth<820||innerHeight<520;
 let D=null, cur=null, res=null;
 const cv=document.getElementById('gl');
@@ -81,17 +85,17 @@ const gl=cv.getContext('webgl',{antialias:true});
 gl.getExtension('OES_element_index_uint');
 const VS=`attribute vec3 p;attribute vec3 n;attribute vec3 c;uniform mat4 mvp;uniform mat4 mv;
 varying vec3 vc;varying vec3 vn;void main(){gl_Position=mvp*vec4(p,1.0);vc=c;vn=mat3(mv)*n;}`;
-const FS=`precision mediump float;varying vec3 vc;varying vec3 vn;uniform float flat_;
-void main(){vec3 N=normalize(vn);float l=flat_>0.5?1.0:(0.42+0.58*abs(N.z));gl_FragColor=vec4(vc*l,1.0);}`;
+const FS=`precision mediump float;varying vec3 vc;varying vec3 vn;uniform float flat_;uniform float alpha;
+void main(){vec3 N=normalize(vn);float l=flat_>0.5?1.0:(0.42+0.58*abs(N.z));gl_FragColor=vec4(vc*l,alpha);}`;
 function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
  if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(o);return o;}
 const prog=gl.createProgram();
 gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));
 gl.linkProgram(prog);gl.useProgram(prog);
 const loc={p:gl.getAttribLocation(prog,'p'),n:gl.getAttribLocation(prog,'n'),c:gl.getAttribLocation(prog,'c'),
- mvp:gl.getUniformLocation(prog,'mvp'),mv:gl.getUniformLocation(prog,'mv'),flat:gl.getUniformLocation(prog,'flat_')};
+ mvp:gl.getUniformLocation(prog,'mvp'),mv:gl.getUniformLocation(prog,'mv'),flat:gl.getUniformLocation(prog,'flat_'),alpha:gl.getUniformLocation(prog,'alpha')};
 function mkbuf(){return {v:gl.createBuffer(),n:gl.createBuffer(),c:gl.createBuffer(),i:gl.createBuffer(),count:0};}
-const B={mesh:mkbuf(),fix:mkbuf(),load:mkbuf(),screw:mkbuf(),brg:mkbuf(),bolt:mkbuf(),mot:mkbuf()};
+const B={mesh:mkbuf(),meshSafe:mkbuf(),fix:mkbuf(),load:mkbuf(),screw:mkbuf(),brg:mkbuf(),bolt:mkbuf(),mot:mkbuf()};
 function fill(b,V,N,C,I){
  gl.bindBuffer(gl.ARRAY_BUFFER,b.v);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
  gl.bindBuffer(gl.ARRAY_BUFFER,b.n);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(N),gl.STATIC_DRAW);
@@ -165,6 +169,7 @@ const COL={mesh:[0.55,0.60,0.66],fix:[0.20,0.55,1.0],F:[1.0,0.30,0.25],M:[1.0,0.
            screw:[0.85,0.85,0.30],screw5:[1.0,0.55,0.15],brg:[0.35,0.95,0.75],
            boltM4:[0.95,0.80,0.25],boltM5:[1.0,0.50,0.10],boltM3:[0.75,0.85,0.95],
            lowhead:[1.0,0.25,0.85],thread:[0.55,0.45,0.20],
+           ghost:[0.62,0.66,0.72],
            motor:[0.30,0.42,0.62],motorRim:[0.55,0.68,0.90],res:null};
 function build(){
  const s=cur;
@@ -182,18 +187,42 @@ function build(){
   const fixed=new Set(s.fixed);
   const loadN=new Set(); for(const lp of s.load_points) for(const i of lp.nids) loadN.add(i);
   const useRes=res&&document.getElementById('bres').classList.contains('on');
+  // "weak only": material that fails the chosen safety factor stays solid, the
+  // rest goes translucent, so the vulnerable regions are the only thing you see
+  const weakOn=res&&document.getElementById('bweak').classList.contains('on');
+  const allow=YIELD/parseFloat(document.getElementById('usf').value);
   let lo=0,hi=1;
   if(useRes){lo=Math.min(...res);hi=Math.max(...res);}
   for(let i=0;i<P.length;i++){
    V.push(...P[i]); N.push(nn[i*3],nn[i*3+1],nn[i*3+2]);
    let col=COL.mesh;
-   if(useRes){const t=(res[i]-lo)/Math.max(1e-9,hi-lo);col=turbo(t);}
+   if(weakOn){
+    // solid part keeps the stress colour; the safe part is a neutral ghost
+    col = res[i]>=allow ? turbo(Math.min(1,(res[i]-allow)/Math.max(1e-9,hi-allow)*0.75+0.25))
+                        : COL.ghost;
+   }
+   else if(useRes){const t=(res[i]-lo)/Math.max(1e-9,hi-lo);col=turbo(t);}
    else if(fixed.has(i))col=COL.fix;
    else if(loadN.has(i))col=COL.F;
    C.push(...col);
   }
-  for(const t of s.tris)I.push(t[0],t[1],t[2]);
-  fill(B.mesh,V,N,C,I);
+  if(weakOn){
+   const Iw=[],Is=[];
+   for(const t of s.tris){
+    // a face counts as weak if any of its nodes is over the allowable
+    (Math.max(res[t[0]],res[t[1]],res[t[2]])>=allow?Iw:Is).push(t[0],t[1],t[2]);
+   }
+   fill(B.mesh,V,N,C,Iw); fill(B.meshSafe,V,N,C,Is);
+   const nW=res.filter(v=>v>=allow).length;
+   document.getElementById('weakinfo').innerHTML=
+     `<b>weak-only view</b>: ${(YIELD/parseFloat(document.getElementById('usf').value)).toFixed(0)} MPa `
+     +`allowable (SF ${document.getElementById('usf').value}) · solid = over it `
+     +`(${nW} of ${res.length} surface nodes, ${(100*nW/res.length).toFixed(2)} %) · max ${hi.toFixed(1)} MPa`;
+  } else {
+   for(const t of s.tris)I.push(t[0],t[1],t[2]);
+   fill(B.mesh,V,N,C,I); fill(B.meshSafe,[],[],[],[]);
+   document.getElementById('weakinfo').innerHTML='';
+  }
  }
  // load arrows: all six components, both signs (the envelope covers sign combos)
  {
@@ -339,7 +368,11 @@ function info(){
    <tr><td>screws (CAD)</td><td>${Object.entries(scr).map(([k,v])=>k+'×'+v).join(', ')||'—'}</td></tr>
    <tr><td>bolts (detected)</td><td>${boltSummary(s)}</td></tr>
    <tr><td>bearings</td><td>${(s.bearings||[]).map(b=>b.type).join(', ')||'—'}</td></tr>
-   <tr><td>motors</td><td>${(s.actuators||[]).map(m=>m.name.replace('robstride_','')+` (r${m.r}×${m.len})`).join(', ')||'—'}</td></tr></table>
+   <tr><td>motors</td><td>${(s.actuators||[]).map(m=>m.name.replace('robstride_','')+` (r${m.r}×${m.len})`).join(', ')||'—'}</td></tr>
+   <tr><td>motors in the solve</td><td>${s.motors_in_analysis==='auto'?'all of the above, as rigid bodies bolted to their flange pads'
+       :((s.motors_in_analysis||[]).length?s.motors_in_analysis.join(', ')
+       :'<b style="color:#e8a33d">none — modelled as CAD only for this link</b>')}</td></tr></table>
+   ${s.stale_result?'<div style="color:#e8564a;margin-top:5px">no current result: the last solve was superseded by a setup change, this link is being re-run</div>':''}
    ${e.max_vM?`<b>envelope (${Math.pow(2,(e.comps||['Fx','Fy','Fz','Mx','My','Mz']).length)} sign combos over ${(e.comps||[]).join(', ')||'6 components'})</b>: max ${e.max_vM.toFixed(1)} MPa (SF ${e.SF.toFixed(2)})
     · filtered ${e.max_vM_filtered?e.max_vM_filtered.toFixed(1):'—'} MPa (SF ${e.SF_filtered?e.SF_filtered.toFixed(2):'—'})<br>
     <span class="hint">governing signs ${Object.entries(e.governing_signs||{}).map(([k,v])=>k+(v>0?'+':'−')).join(' ')} · worst at ${(e.argmax_xyz||[]).join(', ')}</span>`:''}`;
@@ -373,9 +406,10 @@ function mats(){
  const P=[f/a,0,0,0,0,f,0,0,0,0,(zf+zn)/(zn-zf),-1,0,0,2*zf*zn/(zn-zf),0];
  return {MV,MVP:mul(MV,P)};
 }
-function drawBuf(b,flat){
+function drawBuf(b,flat,alpha){
  if(!b.count)return;
  gl.uniform1f(loc.flat,flat?1:0);
+ gl.uniform1f(loc.alpha,alpha===undefined?1:alpha);
  for(const [buf,l] of [[b.v,loc.p],[b.n,loc.n],[b.c,loc.c]]){
   gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,3,gl.FLOAT,false,0,0);}
  if(b.indexed){gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,b.i);gl.drawElements(gl.TRIANGLES,b.count,gl.UNSIGNED_INT,0);}
@@ -399,6 +433,14 @@ function draw(){
   if(document.getElementById('bbolt').classList.contains('on'))drawBuf(B.bolt,false);
   if(document.getElementById('bbrg').classList.contains('on'))drawBuf(B.brg,false);
   if(document.getElementById('bmot').classList.contains('on'))drawBuf(B.mot,false);
+  // translucent pass last, with depth writes off so the solid weak regions stay
+  // visible through the ghost shell around them
+  if(B.meshSafe.count&&document.getElementById('bmesh').classList.contains('on')){
+   gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+   gl.depthMask(false);
+   drawBuf(B.meshSafe,false,0.14);
+   gl.depthMask(true); gl.disable(gl.BLEND);
+  }
  }
  requestAnimationFrame(draw);
 }
@@ -449,6 +491,12 @@ for(const [b,el] of [['btoginfo','info'],['btogleg','leg']])
 for(const id of ['bmesh','bfix','bload','bscrew','bbolt','bbrg','bmot'])
  document.getElementById(id).addEventListener('click',e=>{e.target.classList.toggle('on');});
 document.getElementById('bres').addEventListener('click',e=>{e.target.classList.toggle('on');build();});
+document.getElementById('bweak').addEventListener('click',e=>{
+ e.target.classList.toggle('on');
+ // the weak view is a result view: turn the stress field on with it
+ if(e.target.classList.contains('on'))document.getElementById('bres').classList.add('on');
+ build();});
+document.getElementById('usf').addEventListener('change',build);
 document.getElementById('bspin').addEventListener('click',e=>{spin=!spin;e.target.classList.toggle('on',spin);});
 document.getElementById('ulink').addEventListener('input',e=>load(e.target.value));
 document.getElementById('ucase').addEventListener('input',()=>load(document.getElementById('ulink').value));

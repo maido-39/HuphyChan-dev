@@ -8,6 +8,7 @@ Decimates the surface mesh for links whose surface is huge, so the viewer stays
 responsive (structure display only -- numbers always come from the full model).
 """
 import glob
+import hashlib
 import json
 import os
 
@@ -70,11 +71,39 @@ def main():
             j = json.load(open(jf))
             s['bolts'] = j.get('detected_bolts', [])
             s['bearings'] = j.get('bearings', s.get('bearings', []))
+        # A result counts only if it came from the CURRENT spec. Stale artefacts of
+        # a superseded run made the viewer announce L4 as "solved, 1.0 MPa, SF 288"
+        # - the very short-circuited result the analysis had already rejected.
         env = f'{os.path.dirname(f)}/envelope_{stat}.json'
+        fresh = False
         if os.path.exists(env):
-            s['envelope'] = json.load(open(env))
+            ed = json.load(open(env))
+            try:
+                spec_all = json.load(open(os.path.join(os.path.dirname(
+                    os.path.abspath(__file__)), 'link_specs.json')))
+                h = hashlib.sha1(json.dumps(spec_all[link], sort_keys=True)
+                                 .encode()).hexdigest()[:12]
+                fresh = ed.get('spec_hash') == h
+            except Exception:
+                fresh = False
+            if fresh:
+                s['envelope'] = ed
+            else:
+                s['stale_result'] = True
+        elif stat == 'P99':
+            s['stale_result'] = True
+        # which motors the SOLVER actually carried (rigid bodies), vs CAD-only ones
+        try:
+            spec_all = json.load(open(os.path.join(os.path.dirname(
+                os.path.abspath(__file__)), 'link_specs.json')))
+            sp = spec_all[link]
+            act = sp.get('actuators', sp['envelope'].get('actuators'))
+            s['motors_in_analysis'] = ([a.get('name') for a in act]
+                                       if isinstance(act, list) else 'auto')
+        except Exception:
+            s['motors_in_analysis'] = 'auto'
         case = f'{os.path.dirname(f)}/case_{link}_env.json'
-        if os.path.exists(case) and not s.get('result_vM'):
+        if fresh and os.path.exists(case) and not s.get('result_vM'):
             c = json.load(open(case))
             k = next(iter(c))
             if len(c[k]['nodes']) == len(s['nodes']):
@@ -115,7 +144,8 @@ def main():
                          bolts=len(any_s.get('bolts', [])),
                          bearings=len(any_s.get('bearings', [])),
                          size_mb=round(os.path.getsize(f'{STATIC}/{f}') / 1e6, 2),
-                         solved=bool(any_s.get('result_vM')))
+                         solved=bool(any_s.get('result_vM')),
+                         stale=bool(any_s.get('stale_result')))
         print(f'   {f}: {idx[link]["size_mb"]} MB')
     json.dump(dict(links=idx), open(INDEX, 'w'), indent=1)
     print(f'index -> {INDEX}')

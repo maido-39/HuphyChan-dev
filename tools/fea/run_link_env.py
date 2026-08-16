@@ -73,7 +73,10 @@ def main():
     spec_hash = hashlib.sha1(json.dumps(spec, sort_keys=True).encode()).hexdigest()[:12]
     W = f'{WORK}/{link}'
     os.makedirs(W, exist_ok=True)
-    step = f'{STEPS}/link_{link}.step'
+    # a link may be analysed under more than one load case (the foot is loaded
+    # at the heel and again at the forefoot); the extra entry names the same CAD
+    geo = spec.get('geometry_of', link)
+    step = f'{STEPS}/link_{geo}.step'
     if spec.get('subset'):
         sols = F.load_solids(step, min_vol_cm3=spec['subset'].get('min_vol_cm3', 0.0))
         keep = [s for i, s in enumerate(sols) if i in set(spec['subset']['indices'])]
@@ -107,7 +110,11 @@ def main():
         print('motors (rigid + point mass): ' + ', '.join(
             f"{m['name'].replace('robstride_','')} {m.get('mass_kg', 1.5)} kg" for m in motors),
             flush=True)
-    MAX_NODES = int(os.environ.get('PYG_MAX_NODES', 420000))
+    # a link may declare its own budget: L3 only meshes at all near 21.6 mm, so
+    # blindly coarsening it to fit the global budget just walked it into the
+    # PLC errors it had already failed on
+    MAX_NODES = int(spec['mesh'].get('max_nodes')
+                    or os.environ.get('PYG_MAX_NODES', 420000))
     if not os.path.exists(mesh_inp):
         size = spec['mesh']['size_far']
         ref = [tuple(r) for r in spec['mesh'].get('refine', [])]
@@ -148,13 +155,19 @@ def main():
                 print(f'   still over budget at {m["nodes"]} nodes - proceeding '
                       'with the coarsest mesh', flush=True)   # run with no mesh file at all
                 break
-            size *= 1.35
-            # the BC balls dominate the node count on big links: relax them with
-            # the global size, otherwise coarsening barely moves the total
-            # (L3: 14 mm -> 786k, 18.9 mm -> 717k, then the mesher core-dumped)
-            ref = [(x, y, z, r * 0.85, sz * 1.35) for (x, y, z, r, sz) in ref]
-            print(f'   over the {MAX_NODES} node budget - remeshing at {size:.1f} mm',
-                  flush=True)
+            # Relax the refinement balls FIRST and only then the global size:
+            # they dominate the node count on a big link, and the global size is
+            # the parameter that decides whether the geometry meshes at all
+            # (L3 meshes at 21.6 mm and throws PLC errors when coarsened).
+            if attempt < 2 and ref:
+                ref = [(x, y, z, r * 0.7, sz * 1.45) for (x, y, z, r, sz) in ref]
+                print(f'   over the {MAX_NODES} node budget - relaxing the local '
+                      f'refinement, keeping size_far at {size:.1f} mm', flush=True)
+            else:
+                size *= 1.35
+                ref = [(x, y, z, r * 0.85, sz * 1.35) for (x, y, z, r, sz) in ref]
+                print(f'   over the {MAX_NODES} node budget - remeshing at {size:.1f} mm',
+                      flush=True)
             os.remove(mesh_inp)
         spec['mesh']['size_far'] = round(size, 2)
         spec['mesh']['refine'] = [[x, y, z, r, round(sz, 2)] for (x, y, z, r, sz) in ref]
@@ -199,7 +212,7 @@ def main():
             # prefer the real bolt pattern of this actuator (detected bolts whose
             # parts/links name it); a fat cylindrical grab rigidified 15,040 nodes
             # of the thigh on the first try, which is neither physical nor solvable
-            jf = f'{STEPS}/link_{link}_joints.json'
+            jf = f'{STEPS}/link_{geo}_joints.json'
             pads = []
             if os.path.exists(jf):
                 short = m['name'].replace('robstride_', '')
@@ -328,7 +341,7 @@ def main():
         # export BC/load/fastener setup without solving (visualisation pass)
         idx0 = {n: k for k, n in enumerate(sorted({t for tri in tris for t in tri}))}
         used0 = sorted(idx0)
-        jf0 = f'{STEPS}/link_{link}_joints.json'
+        jf0 = f'{STEPS}/link_{geo}_joints.json'
         joints0 = json.load(open(jf0)) if os.path.exists(jf0) else {}
         d0 = LOADS[env_spec['joint']][stat]
         setup0 = dict(link=link,
@@ -549,7 +562,7 @@ def main():
     json.dump({f'{link}_env_{stat}': case}, open(f'{W}/case_{link}_env.json', 'w'),
               separators=(',', ':'))
 
-    jf = f'{STEPS}/link_{link}_joints.json'
+    jf = f'{STEPS}/link_{geo}_joints.json'
     joints = json.load(open(jf)) if os.path.exists(jf) else {}
     setup = dict(link=link,
                  nodes=[[round(float(v), 2) for v in nodes[n]] for n in used],
