@@ -32,12 +32,34 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import thread_check as TC  # noqa: E402
 
+LOADS = json.load(open(f'{HERE}/loads.json'))
 W = '/home/syaro/pyg_fea/work'
 STEPS = '/home/syaro/pyg_fea/steps'
 MU = 0.35              # aluminium-aluminium, machined dry
 SF_THREAD = 2.0        # thread stripping reserve on the preload
 GRADE = '4.6'          # what the CAD calls out today (ISO 4762 class 4.6)
 STRESS_AREA = {3: 5.03, 4: 8.78, 5: 14.2, 6: 20.1, 8: 36.6}     # mm^2, ISO metric coarse
+
+
+def load_centre(env):
+    """Where the wrench is applied, from the spec alone (no mesh needed)."""
+    pts = env.get('points') or []
+    acc = []
+    for p in pts:
+        if p.get('type') == 'bolt_pads' and p.get('points'):
+            acc.append(np.asarray(p['points'], float).mean(0))
+        elif p.get('ctr'):
+            acc.append(np.asarray(p['ctr'], float))
+        elif p.get('type') == 'plane':
+            ax = 'xyz'.index(p['axis'])
+            box = p.get('box') or {}
+            q = np.zeros(3)
+            q[ax] = float(p['value'])
+            for k, a in (('x', 0), ('y', 1), ('z', 2)):
+                if a != ax and k in box:
+                    q[a] = 0.5 * (box[k][0] + box[k][1])
+            acc.append(q)
+    return np.mean(acc, axis=0) if acc else None
 
 
 def bolt_capacity(nominal, Le_mm):
@@ -74,11 +96,16 @@ def group_check(P, n, F, M, sizes, Le):
         if s > 1e-9:
             T = T + np.linalg.norm(Mb) * dd / s
 
-    # shear: uniform part + torsion about the normal
-    V = np.full(N, np.linalg.norm(Ft) / N)
+    # shear: uniform part + torsion about the normal. These are worth keeping apart:
+    # a centring register (a bearing seat or spigot, which most of these flanges have)
+    # carries the in-plane FORCE as a form fit, but a smooth cylinder cannot carry
+    # TORQUE about its own axis - that part has only friction or dowels behind it.
+    Vf = np.full(N, np.linalg.norm(Ft) / N)
+    Vt = np.zeros(N)
     s2 = float((r ** 2).sum())
     if s2 > 1e-9 and abs(Mn) > 1e-9:
-        V = np.hypot(V, abs(Mn) * r / s2)
+        Vt = abs(Mn) * r / s2
+    V = np.hypot(Vf, Vt)
 
     rows = []
     for i in range(N):
@@ -86,9 +113,11 @@ def group_check(P, n, F, M, sizes, Le):
         slip = MU * max(0.0, F_pre - max(0.0, T[i]))
         rows.append(dict(
             i=i, size=f'M{int(sizes[i])}', T_N=round(float(T[i]), 1), V_N=round(float(V[i]), 1),
+            V_force_N=round(float(Vf[i]), 1), V_torsion_N=round(float(Vt[i]), 1),
             preload_N=round(F_pre, 1), strip_N=round(F_strip, 1), proof_N=round(F_proof, 1),
             sep_margin=round(float(F_pre / max(1e-9, T[i])), 2) if T[i] > 0 else None,
             slip_margin=round(float(slip / max(1e-9, V[i])), 2),
+            slip_margin_with_register=round(float(slip / max(1e-9, Vt[i])), 2),
             shear_margin=round(float(0.6 * F_proof / max(1e-9, V[i])), 2)))
     return rows, c
 
@@ -108,8 +137,14 @@ def main():
             continue
         bolts = json.load(open(jf)).get('detected_bolts', [])
         env = spec['envelope']
-        mg = env.get('magnitudes_N', {})
+        # Same source and same factor the FEA uses: measured P99 from loads.json,
+        # overridden per link where the spec says so (the foot uses measured GRF).
+        base = LOADS.get(env['joint'], {}).get('P99', {})
+        mg = {**base, **(env.get('magnitudes_N') or {})}
         F = np.array([mg.get('Fx', 0.0), mg.get('Fy', 0.0), mg.get('Fz', 0.0)]) * 1.25
+        if not F.any():
+            print(f'{link}: no measured wrench for joint {env["joint"]!r} - skipped')
+            continue
         tau = float(env.get('axial_torque_Nm', 0.0)) * 1000.0      # N.mm
 
         for blk in list(env.get('fix', [])) + list(env.get('points', [])):
@@ -136,21 +171,32 @@ def main():
                 n = {'x': [1, 0, 0], 'y': [0, 1, 0], 'z': [0, 0, 1]}[blk['axis']]
                 n = np.asarray(n, float)
             c = np.asarray(P, float).mean(0)
-            jc = np.asarray(env.get('joint_ctr') or c, float)
-            M = np.cross(jc - c, F) + tau * n / max(1e-9, np.linalg.norm(n))
+            # The moment at a bolted interface is what the load does about it. Using
+            # a non-existent 'joint_ctr' key made the arm zero, so every bolt came out
+            # at zero tension - the one number a cantilevered flange is all about.
+            lc = load_centre(env)
+            arm = (lc - c) if lc is not None else np.zeros(3)
+            M = np.cross(arm, F) + tau * n / max(1e-9, np.linalg.norm(n))
+            if blk in env.get('points', []):
+                M = tau * n / max(1e-9, np.linalg.norm(n))   # the load enters here
             rows, ctr = group_check(P, n, F, M, sizes, Le)
             worst = min(rows, key=lambda r: min(r['slip_margin'],
                                                 r['sep_margin'] if r['sep_margin'] else 9e9))
+            tmax = max(rows, key=lambda r: r['T_N'])
             key = f"{link}:{blk.get('name', blk.get('type'))}"
             out[key] = dict(bolts=len(rows), centre=[round(float(v), 1) for v in ctr],
                             normal=[round(float(v), 2) for v in n],
                             F_N=[round(float(v), 1) for v in F],
                             M_Nmm=[round(float(v), 1) for v in M], rows=rows)
-            print(f"{key}\n   {len(rows)} x M{int(np.median(sizes))} · worst bolt: "
+            print(f"{key}\n   {len(rows)} x M{int(np.median(sizes))} · most tensioned: "
+                  f"T {tmax['T_N']:.0f} N vs preload {tmax['preload_N']:.0f} N "
+                  f"(separation margin {tmax['sep_margin']}) · worst bolt: "
                   f"T {worst['T_N']:.0f} N, V {worst['V_N']:.0f} N vs preload "
                   f"{worst['preload_N']:.0f} N → separation margin "
-                  f"{worst['sep_margin']}, slip margin {worst['slip_margin']}, "
-                  f"shear margin {worst['shear_margin']}")
+                  f"{worst['sep_margin']}, slip margin {worst['slip_margin']} "
+                  f"(V force {worst['V_force_N']:.0f} N + torsion {worst['V_torsion_N']:.0f} N; "
+                  f"with a centring register only the torsion part needs friction -> "
+                  f"{worst['slip_margin_with_register']}), shear margin {worst['shear_margin']}")
     json.dump(out, open(f'{W}/bolt_groups.json', 'w'), indent=1)
     print(f'\n{len(out)} bolted interfaces -> {W}/bolt_groups.json')
 

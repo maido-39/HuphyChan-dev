@@ -148,10 +148,7 @@ while true; do
       setstate "$L" 1 done
       log "STAGE1 $L DONE $($PY -c "
 import json;d=json.load(open('$RES'))
-o=d.get('over_allowable',{}).get('SF>2.0',{})
-print('raw %.1f MPa SF %.2f | design %.1f SF %.2f | over SF>2: %s nodes'%(
- d['max_vM'],d['SF'],d.get('max_vM_design',d['max_vM']),
- d.get('SF_design',d['SF']),o.get('nodes_design','?')))" 2>/dev/null)"
+print('max %.1f MPa SF %.2f | filtered %.1f SF %.2f'%(d['max_vM'],d['SF'],d.get('max_vM_filtered',0),d.get('SF_filtered',0)))" 2>/dev/null)"
       $PY tools/fea/merge_setup.py >> "$W/merge.log" 2>&1
     elif [ "$rc" -eq 0 ] && [ -f "$RES" ]; then
       # solved fine, but the spec changed while it was running -> not a failure,

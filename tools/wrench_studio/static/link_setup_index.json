@@ -56,6 +56,20 @@
    "solved": true,
    "stale": false
   },
+  "L3_thigh": {
+   "file": "link_setup_L3_thigh.json",
+   "stats": [
+    "P99"
+   ],
+   "joint": "knee",
+   "tris": 31224,
+   "nodes": 15348,
+   "bolts": 58,
+   "bearings": 2,
+   "size_mb": 1.02,
+   "solved": true,
+   "stale": false
+  },
   "L4_hip_yaw": {
    "file": "link_setup_L4_hip_yaw.json",
    "stats": [
