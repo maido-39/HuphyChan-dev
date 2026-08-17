@@ -37,7 +37,10 @@ W = '/home/syaro/pyg_fea/work'
 STEPS = '/home/syaro/pyg_fea/steps'
 MU = 0.35              # aluminium-aluminium, machined dry
 SF_THREAD = 2.0        # thread stripping reserve on the preload
-GRADE = '4.6'          # what the CAD calls out today (ISO 4762 class 4.6)
+# ASSUMPTION, not a CAD readout: no property class is recorded in the STEP. 4.6 is the
+# conservative reading of a plain ISO 4762 callout. Override with --grade=8.8 to see the
+# sensitivity; note the aluminium thread, not the bolt, caps the preload either way.
+GRADE = os.environ.get('PYG_BOLT_GRADE', '4.6')
 STRESS_AREA = {3: 5.03, 4: 8.78, 5: 14.2, 6: 20.1, 8: 36.6}     # mm^2, ISO metric coarse
 
 
@@ -159,7 +162,15 @@ def main():
                 k = int(np.argmin([np.linalg.norm(np.asarray(b['head_point'], float) - q)
                                    for b in bolts]))
                 b = bolts[k]
-                if np.linalg.norm(np.asarray(b['head_point'], float) - q) > 12.0:
+                # A bolt head sits at the far end of its grip, so on a thick flange the
+                # head is legitimately far from the pad. Match on the distance ACROSS the
+                # pad normal, and allow the head to be anywhere along it.
+                hp = np.asarray(b['head_point'], float)
+                nrm = np.asarray(b.get('axis') or [0, 0, 1], float)
+                nrm = nrm / max(np.linalg.norm(nrm), 1e-9)
+                lateral = np.linalg.norm((hp - q) - np.dot(hp - q, nrm) * nrm)
+                along = abs(float(np.dot(hp - q, nrm)))
+                if lateral > 6.0 or along > 60.0:
                     continue
                 P.append(b['head_point'])
                 sizes.append(b['nominal'])
@@ -183,7 +194,7 @@ def main():
             worst = min(rows, key=lambda r: min(r['slip_margin'],
                                                 r['sep_margin'] if r['sep_margin'] else 9e9))
             tmax = max(rows, key=lambda r: r['T_N'])
-            key = f"{link}:{blk.get('name', blk.get('type'))}"
+            key = f"{link}:{blk.get('name', blk.get('type'))}#{len(out)}"
             out[key] = dict(bolts=len(rows), centre=[round(float(v), 1) for v in ctr],
                             normal=[round(float(v), 2) for v in n],
                             F_N=[round(float(v), 1) for v in F],
