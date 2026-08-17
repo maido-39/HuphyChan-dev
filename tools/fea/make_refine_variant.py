@@ -28,6 +28,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 SPECS = f'{HERE}/link_specs.json'
 W = '/home/syaro/pyg_fea/work'
+STEPS = '/home/syaro/pyg_fea/steps'
 # base link -> (variant name, local element size mm, sphere radius mm)
 AUTO = {
     'L6_pelvis': ('L6f_pelvis_peakfine', 2.0, 14.0),
@@ -97,6 +98,13 @@ def make(base, variant, h, r, max_nodes, specs):
     ref.append([xyz[0], xyz[1], xyz[2], r, h])
     mesh['max_nodes'] = max_nodes
     mesh['auto_refine'] = False
+    # the runner resolves the CAD as steps/link_<geometry_of or link name>.step, so a
+    # variant with a new name MUST point back at the base geometry or it looks for a
+    # STEP that was never exported (this is exactly how the first attempt failed)
+    spec['geometry_of'] = specs[base].get('geometry_of', base)
+    assert os.path.exists(f"{STEPS}/link_{spec['geometry_of']}.step"), (
+        f"{variant}: geometry_of={spec['geometry_of']} has no STEP at "
+        f"{STEPS}/link_{spec['geometry_of']}.step")
     spec['_refines'] = base
     spec['_note'] = (f'mesh-refinement twin of {base}: same case, hot spot at {xyz} '
                      f'refined from h {old_h} to {h} mm. Built to decide whether that '

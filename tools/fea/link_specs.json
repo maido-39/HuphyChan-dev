@@ -9556,7 +9556,8 @@
   },
   "_doc": "pelvis. The two actuators previously listed here sit 30-90 mm off this geometry (hip_p is on the leg side at x=-124, hip_r_1_ is above the pelvis top) and were silently skipped, so the \"motors included\" model never had any. They are removed rather than pretended.",
   "_refines": "L6_pelvis",
-  "_note": "mesh-refinement twin of L6_pelvis: same case, hot spot at [-0.1, 132.5, 60.0] refined from h 8.79 to 2.0 mm. Built to decide whether that link's point maximum is a geometric singularity."
+  "_note": "mesh-refinement twin of L6_pelvis: same case, hot spot at [-0.1, 132.5, 60.0] refined from h 8.79 to 2.0 mm. Built to decide whether that link's point maximum is a geometric singularity.",
+  "geometry_of": "L6_pelvis"
  },
  "L6cf_pelvis_nomotor_fine": {
   "mesh": {
