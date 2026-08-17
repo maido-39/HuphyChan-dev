@@ -34,6 +34,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import envelope as E  # noqa: E402
 import femlib as F  # noqa: E402
+from assembly_check import pad_backing  # noqa: E402
 from rejudge import deck_node_sets  # noqa: E402
 
 W = '/home/syaro/pyg_fea/work'
@@ -331,9 +332,20 @@ def main():
                   'element deletion', flush=True)
             break
         cut, acc, comp, ncomp, lost_vol, step = taken
+        # A shape is only acceptable if it can still be BOLTED. Stress alone would happily
+        # leave a pad floating on a skin: check that every bolt pad keeps its backing metal
+        # before the step is accepted (the assembly loop the user asked for).
+        pb = pad_backing(link, spec, nodes, elems, comp)
+        bad = [q for q in pb if not q['ok']]
+        if bad:
+            print(f'    rejected: {len(bad)} bolt pad(s) would lose their backing metal '
+                  f'(min {min(q["backing_mm"] for q in pb):.1f} mm) - the part would pass the '
+                  'stress check and be unbuildable', flush=True)
+            break
         print(f'    removed {len(cut)} elems ({acc/1000:.1f} cm3, step {100*step:.1f} %); '
               f'{len(kept)-len(comp)} orphaned elems ({lost_vol/1000:.1f} cm3) dropped '
-              f'from {ncomp} pieces', flush=True)
+              f'from {ncomp} pieces; bolt-pad backing min '
+              f'{min([q["backing_mm"] for q in pb] or [99]):.1f} mm', flush=True)
         active = comp
 
     out = dict(link=link, target_SF=target, V0_cm3=round(V0 / 1000, 1), history=history)
