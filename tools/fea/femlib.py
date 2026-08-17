@@ -355,6 +355,12 @@ def mesh_assembly(step_paths, out_inp, size_far=4.0, refine=None, fragment=True,
                 print(f'  (mesh succeeded on attempt {i + 1}: algo3d={a["algo3d"]}, '
                       f'size_far={a["size_far"]}, curv={a.get("curv")}, tol={a["tol"]}'
                       f'{", NO fragment - parts tied instead of bonded" if a.get("no_fragment") else ""})')
+            # Report what was ACTUALLY used. The ladder can fall back to a coarser,
+            # unrefined attempt while the caller writes the size it asked for into the
+            # spec, so the recorded mesh no longer describes the solved model.
+            m['used'] = dict(attempt=i + 1, size_far=a['size_far'], curv=a.get('curv'),
+                             algo3d=a['algo3d'], no_fragment=bool(a.get('no_fragment')),
+                             refined=bool(refine) and not a.get('no_refine'))
             return m
         except Exception as e:                      # noqa: BLE001
             last = e

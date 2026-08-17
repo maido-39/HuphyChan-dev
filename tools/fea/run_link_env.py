@@ -260,7 +260,13 @@ def main():
                 print(f'   over the {MAX_NODES} node budget - remeshing at {size:.1f} mm',
                       flush=True)
             os.remove(mesh_inp)
-        spec['mesh']['size_far'] = round(size, 2)
+        used = (m or {}).get('used') or {}
+        if used and abs(float(used.get('size_far', size)) - size) > 1e-6:
+            print(f"   NOTE: the ladder solved at size_far {used['size_far']} "
+                  f'(attempt {used.get("attempt")}), not the requested {size:.2f} - '
+                  'recording what was used', flush=True)
+        spec['mesh']['size_far'] = round(float(used.get('size_far', size)), 2)
+        spec['mesh']['_used'] = used
         spec['mesh']['refine'] = [[x, y, z, r, round(sz, 2)] for (x, y, z, r, sz) in ref]
         allspec = json.load(open(f'{HERE}/link_specs.json'))
         allspec[link]['mesh'] = spec['mesh']
