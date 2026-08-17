@@ -16,7 +16,9 @@ import json
 import os
 import re
 
-YIELD = 276.0
+YIELD = 276.0          # the basis the user chose (typical 6061-T6)
+YIELD_MIN = 240.0      # ASTM B221 MINIMUM specified for 6061-T6 - every SF above is 15 %
+                       # more optimistic than a purchased-material guarantee
 LEVELS = (1.0, 1.5, 2.0)
 W = '/home/syaro/pyg_fea/work'
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -41,7 +43,8 @@ def main():
         oa = (e.get('over_allowable') or {}).get('SF>2.0', {})
         rows.append(dict(link=L, joint=e.get('joint'), rev=e.get('analysis_rev', '?'),
                          nodes=e.get('mesh_nodes'), raw=e['max_vM'], design=des,
-                         SF=YIELD / des, p99=e.get('p99_vM'), over=oa.get('nodes_design'),
+                         SF=YIELD / des, SF_min=YIELD_MIN / des,
+                         p99=e.get('p99_vM'), over=oa.get('nodes_design'),
                          over_pct=oa.get('pct_design'), argmax=e.get('argmax_design',
                                                                     e.get('argmax_xyz')),
                          lw=lw.get('levels', {}), rein=lw.get('reinforce', {}),
@@ -62,15 +65,17 @@ def main():
     out = [f'# 링크 구조 판정 (현행) — 해석 리비전 `{rev}`', '',
            '`tools/fea/report.py`가 생성. 6061-T6 항복 276 MPa,',
            '허용 276 (SF>1) / 184 (SF>1.5) / 138 MPa (SF>2).', '',
+           '> 276 MPa는 6061-T6의 **typical** 항복이다. ASTM B221 **최소보증치는 240 MPa**이므로 ',
+           '> 구매 소재 보증 기준으로는 모든 SF가 **15 % 낮다**. 두 값을 병기한다.', '',
            '설계 응력 = 하중 주입 절점과 구속 절점 근방을 **모두** 제외한 최대값.',
            '초과 절점 수는 특이점(절점 몇 개)과 실제 과부하(영역)를 가른다.', '',
-           '| 링크 | 성격 | 관절 | 노드 | raw MPa | **설계 MPa** | **SF** | p99 MPa | SF>1 | SF>1.5 | SF>2 | SF>2 초과 | 최대점 |',
-           '|---|---|---|---|---|---|---|---|---|---|---|---|---|']
+           '| 링크 | 성격 | 관절 | 노드 | raw MPa | **설계 MPa** | **SF (276)** | SF (240 최소보증) | p99 MPa | SF>1 | SF>1.5 | SF>2 | SF>2 초과 | 최대점 |',
+           '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|']
     for r in rows:
         v = {f'SF>{L}': ('PASS' if r['SF'] >= L else '**FAIL**') for L in LEVELS}
         ov = '—' if not r['over'] else f"{r['over']}개 ({r['over_pct']} %)"
         out.append(f"| {r['link']} | {r['kind']} | {r['joint']} | {r['nodes'] or '?'} | {r['raw']:.1f} | "
-                   f"**{r['design']:.1f}** | **{r['SF']:.2f}** | "
+                   f"**{r['design']:.1f}** | **{r['SF']:.2f}** | {r['SF_min']:.2f} | "
                    f"{r['p99']:.1f} | {v['SF>1.0']} | {v['SF>1.5']} | "
                    f"{v['SF>2.0']} | {ov} | {r['argmax']} |")
 
