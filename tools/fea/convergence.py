@@ -95,7 +95,7 @@ def main():
 
     print(f"{'family':16s} {'link':26s} {'h[mm]':>6s} {'nodes':>8s} {'point':>8s} "
           f"{'field p99':>10s}")
-    verdict = {}
+    verdict, plot_rows = {}, {}
     for name, rows in fam.items():
         rows.sort(key=lambda r: -r['h'])            # coarse -> fine
         # A twin is only interpretable if everything EXCEPT the hot spot is unchanged. The
@@ -134,6 +134,7 @@ def main():
         # vanishing however fine the mesh gets, because the yielded volume tends to zero.
         ov = np.array([r['over_pct'] for r in rows])
         ovn = np.array([r['over_n'] for r in rows])
+        plot_rows[name] = rows
         verdict[name] = dict(point_drift=float(dp), field_drift=float(df),
                              h_coarse=float(h[0]), h_fine=float(h[-1]), lam=lam,
                              over_pct=float(ov[-1]), over_n=int(ovn[-1]),
@@ -153,7 +154,9 @@ def main():
 
     # the figure: point vs field against mesh density, normalised to the coarsest mesh
     plt.rcParams.update({'figure.dpi': 135, 'font.size': 9})
-    fig, axes = plt.subplots(1, len(fam) + 1, figsize=(3.6 * (len(fam) + 1), 4.0))
+    fam = plot_rows                       # only what was actually classified
+    assert set(fam) == set(verdict), 'plot set and verdict set diverged'
+    fig, axes = plt.subplots(1, len(fam) + 1, figsize=(3.4 * (len(fam) + 1), 4.0))
     for ax, (name, rows) in zip(axes, fam.items()):
         n = np.array([r['h'] for r in rows])
         o = np.argsort(-n)                          # coarse (left) -> fine (right)
