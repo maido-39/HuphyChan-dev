@@ -207,6 +207,11 @@ def main():
     target = float(next((a.split('=')[1] for a in sys.argv if a.startswith('--target-sf=')), 2.0))
     iters = int(next((a.split('=')[1] for a in sys.argv if a.startswith('--iters=')), 6))
     frac = float(next((a.split('=')[1] for a in sys.argv if a.startswith('--frac=')), 0.12))
+    # Which stress the target is measured on. The point maximum is a mesh-dependent
+    # singularity on most of these links (the foot's peak went 197->242->323 MPa under
+    # refinement while its field held at 93), so gating removal on it froze the optimiser
+    # at iteration 0. `--criterion=p99` judges the FIELD, which is what the verdicts use.
+    crit = next((a.split('=')[1] for a in sys.argv if a.startswith('--criterion=')), 'max')
 
     specs = json.load(open(f'{HERE}/link_specs.json'))
     spec = specs[link]
@@ -265,7 +270,8 @@ def main():
     active = list(eids)
     V0 = vol.sum()
     print(f'{link}: {len(eids)} elements, {V0/1000:.1f} cm3, '
-          f'{int(protected.sum())} protected, target SF>{target}', flush=True)
+          f'{int(protected.sum())} protected, target SF>{target} on the '
+          f'{"field p99" if crit == "p99" else "point maximum"}', flush=True)
 
     history, best = [], None
     for it in range(iters + 1):
@@ -276,7 +282,8 @@ def main():
         if r is None:
             print(f'  iter {it}: solve failed - stopping', flush=True)
             break
-        des = r['summ'].get('max_vM_design', r['summ']['max_vM'])
+        des = (r['summ']['p99_vM'] if crit == 'p99'
+               else r['summ'].get('max_vM_design', r['summ']['max_vM']))
         sf = YIELD / des
         vnow = vol[[pos[e] for e in active]].sum()
         print(f'  iter {it}: {len(active):6d} elems, {vnow/1000:6.1f} cm3 '
@@ -348,7 +355,8 @@ def main():
               f'{min([q["backing_mm"] for q in pb] or [99]):.1f} mm', flush=True)
         active = comp
 
-    out = dict(link=link, target_SF=target, V0_cm3=round(V0 / 1000, 1), history=history)
+    out = dict(link=link, target_SF=target, criterion=crit,
+               V0_cm3=round(V0 / 1000, 1), history=history)
     if best:
         out['final'] = dict(iter=best['iter'], SF=round(best['sf'], 2),
                             volume_cm3=round(best['vol'] / 1000, 1),
