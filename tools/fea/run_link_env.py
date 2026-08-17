@@ -417,9 +417,18 @@ def main():
         pending.pop(idx)
 
     # ---- load points and their node sets
+    # tributary area per surface node, so a load patch can be shared by area
+    area_of = {}
+    for (_, _, tri) in bf.values():
+        q = [np.asarray(nodes[t], float) for t in tri]
+        a_t = 0.5 * float(np.linalg.norm(np.cross(q[1] - q[0], q[2] - q[0])))
+        for t in tri:
+            area_of[t] = area_of.get(t, 0.0) + a_t / 3.0
+
     pts = env_spec['points']
     for p in pts:
         p['nids'] = sel_bore(nodes, surf, p)
+        p['_area'] = {n: area_of.get(n, 0.0) for n in p['nids']}
         # If a load region sits inside a motor's rigid housing, pushing on those
         # nodes just feeds the rigid body and the structure sees almost nothing
         # (L4: 836 N applied, 0.96 MPa peak). The physical statement is that the
@@ -602,7 +611,16 @@ def main():
                     Fv = np.zeros(3)
                     Fv[k] = E.UNIT_F * share
                     if p.get('type') in ('plane', 'bolt_pads'):   # flat/bolted interface
-                        d = {n: Fv / len(p['nids']) for n in p['nids']}
+                        # Distribute by tributary AREA, not per node. Splitting equally per
+                        # node makes the pressure a map of mesh density: a locally refined
+                        # patch quietly takes a larger share of the ground reaction, which
+                        # is exactly the governing foot cases.
+                        w_a = p.get('_area')
+                        if w_a:
+                            tot_a = sum(w_a.get(n, 0.0) for n in p['nids']) or 1.0
+                            d = {n: Fv * (w_a.get(n, 0.0) / tot_a) for n in p['nids']}
+                        else:
+                            d = {n: Fv / len(p['nids']) for n in p['nids']}
                         # ground can only PUSH. The couple that used to be applied at the
                         # contact patch pulled the sole down over 43.6 % of it, which no
                         # floor does - a plane load point is compression-only from here.

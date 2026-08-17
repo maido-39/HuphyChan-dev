@@ -120,6 +120,11 @@ def group_check(P, n, F, M, sizes, Le):
             preload_N=round(F_pre, 1), strip_N=round(F_strip, 1), proof_N=round(F_proof, 1),
             sep_margin=round(float(F_pre / max(1e-9, T[i])), 2) if T[i] > 0 else None,
             slip_margin=round(float(slip / max(1e-9, V[i])), 2),
+            # mu = 0.35 and a nominal preload are both best-case. Torque-controlled
+            # assembly scatters the preload about +-25 %, and machined aluminium runs
+            # mu = 0.2-0.5, so the pessimistic corner is what a joint has to survive.
+            slip_margin_worst=round(float(0.20 * max(0.0, 0.75 * F_pre - max(0.0, T[i]))
+                                          / max(1e-9, V[i])), 2),
             slip_margin_with_register=round(float(slip / max(1e-9, Vt[i])), 2),
             shear_margin=round(float(0.6 * F_proof / max(1e-9, V[i])), 2)))
     return rows, c
@@ -156,11 +161,15 @@ def main():
             pads = np.asarray(blk['points'], float)
             # the bolts of this pad group: nearest detected bolt to each pad
             sizes, Le, P = [], [], []
+            claimed = set()          # one bolt cannot serve two pads
             for q in pads:
                 if not bolts:
                     break
                 k = int(np.argmin([np.linalg.norm(np.asarray(b['head_point'], float) - q)
                                    for b in bolts]))
+                if k in claimed:
+                    continue
+                claimed.add(k)
                 b = bolts[k]
                 # A bolt head sits at the far end of its grip, so on a thick flange the
                 # head is legitimately far from the pad. Match on the distance ACROSS the
