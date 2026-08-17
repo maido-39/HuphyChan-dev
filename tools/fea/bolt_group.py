@@ -161,6 +161,7 @@ def main():
             pads = np.asarray(blk['points'], float)
             # the bolts of this pad group: nearest detected bolt to each pad
             sizes, Le, P = [], [], []
+            assumed_Le = False
             claimed = set()          # one bolt cannot serve two pads
             for q in pads:
                 if not bolts:
@@ -183,7 +184,11 @@ def main():
                     continue
                 P.append(b['head_point'])
                 sizes.append(b['nominal'])
+                # 2xD is an ASSUMPTION when the CAD gave no tapped depth. Flag it so a
+                # margin computed on a guess is not read as a measurement.
                 Le.append(b.get('engagement_mm') or 2.0 * b['nominal'])
+                if not b.get('engagement_mm'):
+                    assumed_Le = True
             if len(P) < 3:
                 continue
             n = np.asarray(blk.get('axis_vec') or [0, 0, 1], float)
@@ -204,7 +209,8 @@ def main():
                                                 r['sep_margin'] if r['sep_margin'] else 9e9))
             tmax = max(rows, key=lambda r: r['T_N'])
             key = f"{link}:{blk.get('name', blk.get('type'))}#{len(out)}"
-            out[key] = dict(bolts=len(rows), centre=[round(float(v), 1) for v in ctr],
+            out[key] = dict(bolts=len(rows), engagement_assumed=assumed_Le,
+                            centre=[round(float(v), 1) for v in ctr],
                             normal=[round(float(v), 2) for v in n],
                             F_N=[round(float(v), 1) for v in F],
                             M_Nmm=[round(float(v), 1) for v in M], rows=rows)

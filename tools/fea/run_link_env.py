@@ -23,7 +23,7 @@ STEPS = '/home/syaro/pyg_fea/steps'
 # carry it, and the campaign re-runs anything produced by an older revision - L2 was
 # solved before loads inside a rigid housing moved to the motor reference node, so
 # its number was not comparable with the links solved after it.
-ANALYSIS_REV = '2026-08-17i'
+ANALYSIS_REV = '2026-08-17j'
 WORK = '/home/syaro/pyg_fea/work'
 LOADS = json.load(open(f'{HERE}/loads.json'))
 

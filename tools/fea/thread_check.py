@@ -42,6 +42,16 @@ def strip_force(d, Le):
 
 def main():
     bolts = json.load(open(BOLTS))
+    # Bolts whose engagement was never measured are NOT evidence of compliance: they are
+    # simply unknown, and bolt_group's 2xD default silently turned them into passes. Count
+    # and name them so the gap is visible.
+    unknown = [b for b in bolts if not b.get('engagement_mm')]
+    if unknown:
+        from collections import Counter
+        c = Counter(b['size'] for b in unknown)
+        print(f'  {len(unknown)} bolts have NO measured engagement '
+              f'({", ".join(f"{k}x{v}" for k, v in sorted(c.items()))}) - they are excluded '
+              'from this check, and bolt_group assumes 2xD for them', flush=True)
     paired = [b for b in bolts if b.get('engagement_mm')]
     rows = []
     for b in paired:
