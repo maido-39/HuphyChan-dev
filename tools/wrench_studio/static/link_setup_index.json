@@ -3,7 +3,7 @@
   "L1_ankle_foot": {
    "file": "link_setup_L1_ankle_foot.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "ankle_roll",
    "tris": 52288,
@@ -17,91 +17,119 @@
   "L1b_foot_toeoff": {
    "file": "link_setup_L1b_foot_toeoff.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "ankle_roll",
    "tris": 45556,
    "nodes": 22714,
    "bolts": 0,
    "bearings": 4,
-   "size_mb": 4.17,
+   "size_mb": 4.19,
    "solved": true,
    "stale": false
   },
   "L1d_foot_toeoff_fine": {
    "file": "link_setup_L1d_foot_toeoff_fine.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "ankle_roll",
    "tris": 55508,
    "nodes": 27690,
    "bolts": 0,
    "bearings": 4,
-   "size_mb": 5.08,
+   "size_mb": 5.1,
    "solved": true,
    "stale": false
   },
   "L1e_foot_toeoff_finer": {
    "file": "link_setup_L1e_foot_toeoff_finer.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "ankle_roll",
    "tris": 49086,
    "nodes": 24479,
    "bolts": 0,
    "bearings": 4,
-   "size_mb": 1.65,
+   "size_mb": 1.66,
    "solved": true,
    "stale": false
   },
   "L1f_foot_lateral_edge": {
    "file": "link_setup_L1f_foot_lateral_edge.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "ankle_roll",
    "tris": 45556,
    "nodes": 22714,
    "bolts": 0,
    "bearings": 4,
-   "size_mb": 1.5,
+   "size_mb": 1.51,
    "solved": true,
    "stale": false
   },
   "L1g_foot_corner": {
    "file": "link_setup_L1g_foot_corner.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "ankle_roll",
    "tris": 45556,
    "nodes": 22714,
    "bolts": 0,
    "bearings": 4,
-   "size_mb": 4.16,
+   "size_mb": 4.18,
+   "solved": true,
+   "stale": false
+  },
+  "L1gf_foot_corner_fine": {
+   "file": "link_setup_L1gf_foot_corner_fine.json",
+   "stats": [
+    "peak"
+   ],
+   "joint": "ankle_roll",
+   "tris": 45968,
+   "nodes": 22920,
+   "bolts": 0,
+   "bearings": 4,
+   "size_mb": 1.54,
+   "solved": true,
+   "stale": false
+  },
+  "L1h_foot_toeoff_clean": {
+   "file": "link_setup_L1h_foot_toeoff_clean.json",
+   "stats": [
+    "peak"
+   ],
+   "joint": "ankle_roll",
+   "tris": 48412,
+   "nodes": 24142,
+   "bolts": 0,
+   "bearings": 4,
+   "size_mb": 1.64,
    "solved": true,
    "stale": false
   },
   "L2_shin": {
    "file": "link_setup_L2_shin.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "ankle_pitch",
    "tris": 27518,
    "nodes": 13519,
    "bolts": 60,
    "bearings": 2,
-   "size_mb": 2.46,
+   "size_mb": 2.47,
    "solved": true,
    "stale": false
   },
   "L2b_shin_cornerfine": {
    "file": "link_setup_L2b_shin_cornerfine.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "ankle_pitch",
    "tris": 27516,
@@ -143,7 +171,7 @@
   "L3_thigh": {
    "file": "link_setup_L3_thigh.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "knee",
    "tris": 31224,
@@ -157,7 +185,7 @@
   "L3c_thigh_nomotor": {
    "file": "link_setup_L3c_thigh_nomotor.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "knee",
    "tris": 31224,
@@ -165,6 +193,20 @@
    "bolts": 0,
    "bearings": 2,
    "size_mb": 2.78,
+   "solved": true,
+   "stale": false
+  },
+  "L3cf_thigh_nomotor_fine": {
+   "file": "link_setup_L3cf_thigh_nomotor_fine.json",
+   "stats": [
+    "peak"
+   ],
+   "joint": "knee",
+   "tris": 32236,
+   "nodes": 15854,
+   "bolts": 0,
+   "bearings": 2,
+   "size_mb": 1.05,
    "solved": true,
    "stale": false
   },
@@ -185,21 +227,21 @@
   "L4_hip_yaw": {
    "file": "link_setup_L4_hip_yaw.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "hip_yaw",
    "tris": 47054,
    "nodes": 23423,
    "bolts": 22,
    "bearings": 0,
-   "size_mb": 4.19,
+   "size_mb": 4.2,
    "solved": true,
    "stale": false
   },
   "L5_hip_pitchroll": {
    "file": "link_setup_L5_hip_pitchroll.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "hip_roll",
    "tris": 34538,
@@ -213,7 +255,7 @@
   "L5c_hip_nomotor": {
    "file": "link_setup_L5c_hip_nomotor.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "hip_roll",
    "tris": 37578,
@@ -221,6 +263,20 @@
    "bolts": 0,
    "bearings": 4,
    "size_mb": 3.37,
+   "solved": true,
+   "stale": false
+  },
+  "L5cf_hip_nomotor_fine": {
+   "file": "link_setup_L5cf_hip_nomotor_fine.json",
+   "stats": [
+    "peak"
+   ],
+   "joint": "hip_roll",
+   "tris": 38782,
+   "nodes": 19307,
+   "bolts": 0,
+   "bearings": 4,
+   "size_mb": 1.26,
    "solved": true,
    "stale": false
   },
@@ -252,10 +308,38 @@
    "solved": true,
    "stale": false
   },
+  "L5ef_hip_elastic_fine": {
+   "file": "link_setup_L5ef_hip_elastic_fine.json",
+   "stats": [
+    "peak"
+   ],
+   "joint": "hip_roll",
+   "tris": 24872,
+   "nodes": 12340,
+   "bolts": 0,
+   "bearings": 4,
+   "size_mb": 0.78,
+   "solved": true,
+   "stale": false
+  },
+  "L5eh_hip_elastic_clean": {
+   "file": "link_setup_L5eh_hip_elastic_clean.json",
+   "stats": [
+    "peak"
+   ],
+   "joint": "hip_roll",
+   "tris": 24872,
+   "nodes": 12340,
+   "bolts": 0,
+   "bearings": 4,
+   "size_mb": 0.78,
+   "solved": true,
+   "stale": false
+  },
   "L6_pelvis": {
    "file": "link_setup_L6_pelvis.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "hip_pitch",
    "tris": 67530,
@@ -269,7 +353,7 @@
   "L6c_pelvis_nomotor": {
    "file": "link_setup_L6c_pelvis_nomotor.json",
    "stats": [
-    "P99"
+    "peak"
    ],
    "joint": "hip_pitch",
    "tris": 61456,
@@ -277,6 +361,34 @@
    "bolts": 0,
    "bearings": 0,
    "size_mb": 5.39,
+   "solved": true,
+   "stale": false
+  },
+  "L6cf_pelvis_nomotor_fine": {
+   "file": "link_setup_L6cf_pelvis_nomotor_fine.json",
+   "stats": [
+    "peak"
+   ],
+   "joint": "hip_pitch",
+   "tris": 62000,
+   "nodes": 30788,
+   "bolts": 0,
+   "bearings": 0,
+   "size_mb": 1.97,
+   "solved": true,
+   "stale": false
+  },
+  "L6f_pelvis_peakfine": {
+   "file": "link_setup_L6f_pelvis_peakfine.json",
+   "stats": [
+    "peak"
+   ],
+   "joint": "hip_pitch",
+   "tris": 68758,
+   "nodes": 34167,
+   "bolts": 0,
+   "bearings": 0,
+   "size_mb": 2.2,
    "solved": true,
    "stale": false
   }
