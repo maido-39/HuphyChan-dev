@@ -115,6 +115,28 @@ def main():
         print('motors (rigid + point mass): ' + ', '.join(
             f"{m['name'].replace('robstride_','')} {m.get('mass_kg', 1.5)} kg" for m in motors),
             flush=True)
+    # ELASTIC HOUSING option. Rigid housings and absent housings bracket the answer by a
+    # factor of 3.5-5.5 (L2 cannot even be assembled without them), so the bracket is too
+    # wide to size hardware from. `housing: "elastic"` meshes the measured envelope
+    # cylinder as ALUMINIUM instead: stiff enough to close the load path, soft enough not
+    # to hide the bracket's own stress.
+    if spec.get('housing') == 'elastic' and motors:
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+        from OCP.gp import gp_Pnt, gp_Ax2, gp_Dir
+        cyl_solids = []
+        for m in motors:
+            a = {'x': (1, 0, 0), 'y': (0, 1, 0), 'z': (0, 0, 1)}[m['axis']]
+            c = np.asarray(m['ctr'], float) - 0.5 * m['len'] * np.asarray(a, float)
+            ax2 = gp_Ax2(gp_Pnt(*c), gp_Dir(*a))
+            cyl_solids.append(dict(
+                shape=BRepPrimAPI_MakeCylinder(ax2, float(m['r']), float(m['len'])).Shape(),
+                name=m['name']))
+        hstep = f'{W}/{link}_housings.step'
+        F.write_step(cyl_solids, hstep)
+        steps.append(hstep)
+        print(f'elastic housings: {len(cyl_solids)} aluminium envelope cylinders meshed '
+              'with the link', flush=True)
+        motors = []          # no rigid bodies: the metal now carries it
     # a link may declare its own budget: L3 only meshes at all near 21.6 mm, so
     # blindly coarsening it to fit the global budget just walked it into the
     # PLC errors it had already failed on
