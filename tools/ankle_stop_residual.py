@@ -57,8 +57,9 @@ def analyse(npz):
     dat = mujoco.MjData(m)
     Q = np.asarray(d['qpos_full'])
     n = len(Q)
-    step = max(1, n // 6000)
-    idx = np.arange(0, n, step)
+    # full rate: a peak is a single frame and does not survive decimation
+    # (that is exactly the bug that made recompute_moments.py report subsample peaks)
+    idx = np.arange(n)
 
     res = {}
     for joint, link in JOINTS.items():
@@ -121,7 +122,11 @@ def main():
     if arg:
         files = [f if os.path.isabs(f) else os.path.join(OUTDIR, f) for f in arg.split(',')]
     else:
-        files = [os.path.join(OUTDIR, 'rough.npz')] + sorted(glob.glob(f'{OUTDIR}/*_fcp.npz'))[:6]
+        # current-regime measurements only (the *_fc / *_fcp 15 s-dwell + PYG_BOX rule);
+        # rough.npz is kept as the tie to docs/64 §8e, which was measured on it
+        files = ([os.path.join(OUTDIR, 'rough.npz')] +
+                 sorted(glob.glob(f'{OUTDIR}/*_fc.npz')) +
+                 sorted(glob.glob(f'{OUTDIR}/*_fcp.npz')))
     files = [f for f in files if os.path.exists(f) and
              os.path.exists(f.replace('.npz', '_model.mjb'))]
 

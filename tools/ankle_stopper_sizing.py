@@ -58,12 +58,13 @@ BEARING_ALLOW = 1.5 * YIELD   # confined bearing on a machined face, 414 MPa
 JS6_C0 = 5003.0               # N, rod-end static rating (docs/76 SS7-5, 510 kgf catalogue)
 JS6_S0 = 1.875                # static safety the design constrains the rod end to
 RS03_PEAK = 60.0              # N.m per motor
-# measured stop residual, on-limit frames only, envelope over 7 rollouts x L/R
-# (tools/ankle_stop_residual.py; §8i-corrected). peak governs, P99 is the duty figure.
-M_PITCH_PEAK = 279.6          # N.m, worst at bent_fcp/L_ankle_pitch
-M_ROLL_PEAK = 93.3            # N.m, worst at flat25p1_fcp/L_ankle_roll
-M_PITCH_P99 = 142.7           # N.m, on-limit P99 envelope
-M_ROLL_P99 = 89.3
+# Measured stop residual, ON-LIMIT frames only, envelope over the current-regime demand
+# pool: 31 rollouts (rough + every *_fc / *_fcp) x L/R, FULL rate, §8i-corrected
+# (tools/ankle_stop_residual.py). Peak governs the section; P99 is the duty/fatigue figure.
+M_PITCH_PEAK = 379.0          # N.m, worst at bent_fcp/L_ankle_pitch
+M_ROLL_PEAK = 153.8           # N.m, worst at p2b_v2_fc/L_ankle_roll
+M_PITCH_P99 = 172.5           # N.m, on-limit P99 envelope (flat25p1_fcp/R)
+M_ROLL_P99 = 82.1             # N.m, on-limit P99 envelope (flat25p1_fcp/L)
 
 
 def jacobian(p_deg, r_deg, h=0.05):
@@ -124,9 +125,16 @@ def selfcheck_statics(tol=2e-6):
           f'over 14 crank/pose combinations')
 
 
-def rod_force(tau_crank, side='A'):
-    """Rod axial force for a crank torque [N]. The crank radius is the lever."""
-    return tau_crank * 1000.0 / (P['A_r'] if side == 'A' else P['B_r'])
+def rod_force(tau_crank, side, p_deg, r_deg):
+    """Rod AXIAL force for a crank torque [N].
+
+    The lever is NOT the crank radius. The rod is not perpendicular to the crank, so the
+    true arm is the perpendicular distance from the crank axis to the rod LINE, r_c*cos(th),
+    which is always <= r_c - i.e. using r_c understates the rod force. docs/72 T0-6 caps
+    min(arm/r) at 0.45, so the amplification reaches 2.2x. statics_direct() already computes
+    the true arm; this just reuses it.
+    """
+    return abs(tau_crank) * abs(statics_direct(side, p_deg, r_deg, 1.0)[1])
 
 
 def edge_poses(n=61):
@@ -144,6 +152,7 @@ def worst_cases():
     tau_at = None
     M_worst = 0.0            # motor-driven joint moment the RP stop must hold
     M_at = None
+    rod_worst = [0.0, 0.0, 0.0, '', 0.0]     # F_rod, pitch, roll, crank, tau
     ratio_min = np.inf
     for p, r in edge_poses():
         J = jacobian(p, r)
@@ -156,6 +165,12 @@ def worst_cases():
                 tau = np.linalg.solve(J.T, M)
                 if np.abs(tau).max() > tau_worst:
                     tau_worst, tau_at = float(np.abs(tau).max()), (p, r, tau.copy())
+                # the rod force peaks where the ARM is worst, not where the torque is -
+                # a different crank and a different pose, so it needs its own search
+                for i, side in enumerate(('A', 'B')):
+                    f = rod_force(tau[i], side, p, r)
+                    if f > rod_worst[0]:
+                        rod_worst[:] = [f, p, r, side, float(tau[i])]
         # motor driven: both motors at peak, worst sign combination
         for sa in (+1, -1):
             for sb in (+1, -1):
@@ -163,7 +178,7 @@ def worst_cases():
                 if np.linalg.norm(M) > M_worst:
                     M_worst, M_at = float(np.linalg.norm(M)), (p, r, M.copy())
         ratio_min = min(ratio_min, float(1.0 / np.abs(np.linalg.inv(J.T)).max()))
-    return tau_worst, tau_at, M_worst, M_at, ratio_min
+    return tau_worst, tau_at, M_worst, M_at, ratio_min, rod_worst
 
 
 def main():
@@ -172,7 +187,7 @@ def main():
                os.path.join(HERE, '..', 'docs', 'img'))
     selfcheck()
     selfcheck_statics()
-    tau_g, tau_at, M_m, M_at, ratio = worst_cases()
+    tau_g, tau_at, M_m, M_at, ratio, rw = worst_cases()
     tau_a, brg_a = TAU_ALLOW / sf, BEARING_ALLOW / sf
 
     print(f'\nmechanism, worst over the ROM boundary')
@@ -260,10 +275,18 @@ def main():
         print(f'  {name}: {c["why"]}')
 
     # where the over-travel load goes decides which stop is the right one
-    Fr = rod_force(tau_g, 'A')
+    Fr, rp, rr, rside, rtau = rw
+    naive = abs(rtau) * 1000.0 / (P['A_r'] if rside == 'A' else P['B_r'])
     print(f'\nrod end, if the stop is on the CRANK: the whole over-travel load goes through '
-          f'the rod\n  F_rod {Fr:.0f} N -> s0 = C0/F = {JS6_C0/Fr:.2f} vs the design floor '
-          f'{JS6_S0:.3f} ({"BELOW" if JS6_C0/Fr < JS6_S0 else "ok"})')
+          f'the rod')
+    print(f'  worst at crank {rside}, pitch {rp:.0f} / roll {rr:.0f}: tau {rtau:+.1f} N.m, '
+          f'true arm {1000*abs(rtau)/Fr:.1f} mm (crank radius would say '
+          f'{P["A_r"] if rside == "A" else P["B_r"]:.0f} mm)')
+    print(f'  F_rod {Fr:.0f} N (naive r_c lever would understate it as {naive:.0f} N) -> '
+          f's0 = C0/F = {JS6_C0/Fr:.2f}')
+    print(f'  the JS6 static rating is C0 = {JS6_C0:.0f} N, so s0 < 1 means the rod end is '
+          f'past its rating outright - and docs/64 §8k notes a rigid stop arrests the joint '
+          f'harder than the soft sim limit, so this is a LOWER bound.')
     print(f'rod end, if the stop is on the RP GIMBAL: the load short-circuits foot -> gimbal '
           f'-> stop\n  the rods stay at their walking load (P99 1.10 kN, s0 4.5)')
 

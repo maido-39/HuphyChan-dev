@@ -59,14 +59,14 @@
   "L1f_foot_lateral_edge": {
    "file": "link_setup_L1f_foot_lateral_edge.json",
    "stats": [
-    "peak"
+    "P99"
    ],
    "joint": "ankle_roll",
    "tris": 45556,
    "nodes": 22714,
    "bolts": 0,
    "bearings": 4,
-   "size_mb": 1.51,
+   "size_mb": 1.5,
    "solved": true,
    "stale": false
   },

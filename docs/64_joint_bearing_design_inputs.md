@@ -201,8 +201,9 @@ GRF: RMS 0.70 / P99 1.48 / peak 6.39 BW · knee tau RMS 17.3 P99 59.2
 $M_{joint}=M_{com}+(p_{com}-p_{joint})\times F$ 전송을 적용해 재계산하면 아래 표의
 **M_pitch 스톱 P99 213 → 45 (21 %) · peak 1056 → 280 (26 %)**, **M_roll 135 → 11 (8 %) ·
 554 → 93 (17 %)**다. 확정 설계기준(캡 접촉 프레임만·7롤아웃 포락)은
-**pitch 상시 143 / 설계 peak 280 · roll 89 / 93 N·m** — 재계산 도구
-`tools/ankle_stop_residual.py`, 사이징·판정은 **docs/76 §12**가 대체한다.
+**pitch 상시 172.5 / 설계 peak 379.0 · roll 82.1 / 153.8 N·m**(31 롤아웃·전 프레임) —
+재계산 도구 `tools/ankle_stop_residual.py`, 사이징·판정은
+**docs/78_ankle_stopper_derivation §12~§14**가 대체한다.
 본 절의 **결론(하드스톱을 십자핀 밖 발↔정강이 패드로)은 보정 후에도 유지**된다.
 경로분해: 정상작동 pitch/roll 모멘트=로드 몫 → 짐벌 = 힘 3성분(전량) + M_yaw(상시) + **스톱잔여모멘트**(=제약모멘트−모터토크: 리밋접촉+발 관성 성분). worst=rough:
 | 하중 | RMS(동/수명) | P99 | 설계값(P99×1.25) | raw peak |
