@@ -125,13 +125,20 @@
 <tr><td><code>merge_setup.py</code></td><td>링크별 셋업+결과를 뷰어 페이로드로 병합(링크별 파일 + 인덱스)</td></tr>
 </table>
 
+<b style="font-size:13px">발목 2-RSU 기구 <span class="sub">(<code>tools/</code>, <code>tools/fea/</code> 아님)</span></b>
+<table>
+<tr><th>스크립트</th><th>역할</th></tr>
+<tr><td><code>ankle_rom_map.py</code></td><td>설계 ROM 커버리지 맵 — 어떤 제약(로드 도달·발측/크랭크측 볼조인트 요동)이 어디를 자르는지. §10c 크랭크각 자기검증</td></tr>
+<tr><td><code>ankle_stopper_sizing.py</code></td><td>하드 스토퍼 하중·요구 단면적 — AB(크랭크)측 vs RP(짐벌)측, 야코비안을 명시적 로드 정역학으로 교차검증</td></tr>
+</table>
+
 <h2>문서</h2>
 <table>
 <tr><th>문서</th><th>내용</th></tr>
 <tr><td><code>docs/78_link_structural_final_report.md</code></td><td><b>최종 리포트</b> — 판정·모터 브래킷·체결부·최적화·검증·조치 우선순위</td></tr>
 <tr><td><code>docs/fea_verdicts_current.md</code></td><td>자동 생성 판정표(리비전·필드·초과 절점 포함)</td></tr>
 <tr><td><code>docs/77_structural_fea_lightweighting.md</code></td><td>캠페인 전 과정 — §17 정지 원인 전수, §18 판정 방법론, §19 볼트, §20 검증, §21 하중 분배 버그, §22 최종 판정</td></tr>
-<tr><td><code>docs/76_ankle_2rsu_design_summary.md</code></td><td>발목 2-RSU 설계 요약</td></tr>
+<tr><td><code>docs/76_ankle_2rsu_design_summary.md</code></td><td>발목 2-RSU 설계 요약 — §11 ROM 커버리지, §12 하드 스토퍼 하중·단면적</td></tr>
 <tr><td><code>docs/64_joint_bearing_design_inputs.md</code></td><td>측정 렌치 원자료(§7b 표, §8i 모멘트 기준점 이슈)</td></tr>
 </table>
 
