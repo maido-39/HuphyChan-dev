@@ -23,7 +23,7 @@ STEPS = '/home/syaro/pyg_fea/steps'
 # carry it, and the campaign re-runs anything produced by an older revision - L2 was
 # solved before loads inside a rigid housing moved to the motor reference node, so
 # its number was not comparable with the links solved after it.
-ANALYSIS_REV = '2026-08-17g'
+ANALYSIS_REV = '2026-08-17h'
 WORK = '/home/syaro/pyg_fea/work'
 LOADS = json.load(open(f'{HERE}/loads.json'))
 
@@ -506,6 +506,14 @@ def main():
                     Fv[k] = E.UNIT_F * share
                     if p.get('type') in ('plane', 'bolt_pads'):   # flat/bolted interface
                         d = {n: Fv / len(p['nids']) for n in p['nids']}
+                        # ground can only PUSH. The couple that used to be applied at the
+                        # contact patch pulled the sole down over 43.6 % of it, which no
+                        # floor does - a plane load point is compression-only from here.
+                        if p.get('type') == 'plane' and p.get('ground', True):
+                            ax_g = 'xyz'.index(p.get('axis', 'z'))
+                            for n in list(d):
+                                if d[n][ax_g] < 0:
+                                    d[n] = d[n] * 0.0
                     else:
                         d = F.bearing_load(nodes, p['nids'], p['axis'], p['ctr'], Fv)
                 else:

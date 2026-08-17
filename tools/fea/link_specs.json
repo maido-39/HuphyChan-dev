@@ -236,7 +236,7 @@
    "joint": "ankle_roll",
    "moment_mode": "geometry",
    "joint_axis": "y",
-   "axial_torque_Nm": 60.0,
+   "axial_torque_Nm": 17.0,
    "inertia_g": 3.0,
    "pattern": false,
    "magnitudes_N": {
@@ -383,7 +383,8 @@
     "Fy": 966.4,
     "Fz": 3227.0,
     "_doc": "measured peak GRF 6.39 BW = 3227 N (loads.json _grf), scaled component-wise from the design-level set; the peak tier carries no extra factor (docs/64 \u00a710.1)"
-   }
+   },
+   "_axial_src": "measured M_axis P99 13.6 N\u00b7m x1.25, capped at the 60 N\u00b7m motor rating; was 60.0 (the rating used as if it were the load)"
   },
   "extra_steps": []
  },
@@ -626,7 +627,7 @@
    ],
    "moment_mode": "geometry",
    "joint_axis": "x",
-   "axial_torque_Nm": 60.0,
+   "axial_torque_Nm": 60,
    "pattern": true,
    "joint_centre": [
     -123.7,
@@ -636,7 +637,8 @@
    "_note": "distal = the 8 x M4 upper half of the PCD98 circle that bolts the RS03 ankle_a housing to L2 (review)",
    "inertia_g": 3.0,
    "transverse_moment_Nm": 25.4,
-   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %"
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 56.0 N\u00b7m x1.25, capped at the 60 N\u00b7m motor rating; was 60.0 (the rating used as if it were the load)"
   },
   "extra_steps": [
    "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_ankle_a.step",
@@ -787,7 +789,7 @@
    "joint": "knee",
    "moment_mode": "geometry",
    "joint_axis": "x",
-   "axial_torque_Nm": 120.0,
+   "axial_torque_Nm": 120,
    "pattern": true,
    "joint_centre": [
     -123.7,
@@ -1015,7 +1017,8 @@
    "_note": "thigh hangs from the yaw bearing; the knee wrench from the shin enters at the knee housing seats",
    "inertia_g": 3.0,
    "transverse_moment_Nm": 49.5,
-   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %"
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 107.3 N\u00b7m x1.25, capped at the 120 N\u00b7m motor rating; was 120.0 (the rating used as if it were the load)"
   },
   "extra_steps": [
    "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_hip_y.step",
@@ -1146,7 +1149,7 @@
    "joint": "hip_roll",
    "moment_mode": "geometry",
    "joint_axis": "y",
-   "axial_torque_Nm": 120.0,
+   "axial_torque_Nm": 94.0,
    "pattern": true,
    "joint_centre": [
     -123.7,
@@ -1398,7 +1401,8 @@
    "_note": "upper (pelvis-side) interface is held; the wrench enters at the next link's joint",
    "inertia_g": 3.0,
    "transverse_moment_Nm": 99.6,
-   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %"
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 75.2 N\u00b7m x1.25, capped at the 120 N\u00b7m motor rating; was 120.0 (the rating used as if it were the load)"
   },
   "extra_steps": [
    "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs04_hip_p.step",
@@ -1877,7 +1881,7 @@
    "joint": "hip_yaw",
    "moment_mode": "geometry",
    "joint_axis": "z",
-   "axial_torque_Nm": 60.0,
+   "axial_torque_Nm": 47.4,
    "inertia_g": 3.0,
    "pattern": true,
    "joint_centre": [
@@ -2035,7 +2039,8 @@
    ],
    "_note": "distal = the 8 x M4 bolt circle clamping the RS03 hip_Y housing at z=-40 (no bearing on this side)",
    "transverse_moment_Nm": 82.0,
-   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %"
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 37.9 N\u00b7m x1.25, capped at the 60 N\u00b7m motor rating; was 60.0 (the rating used as if it were the load)"
   }
  },
  "L6_pelvis": {
@@ -2234,7 +2239,7 @@
    "joint": "hip_pitch",
    "moment_mode": "geometry",
    "joint_axis": "x",
-   "axial_torque_Nm": 120.0,
+   "axial_torque_Nm": 105.2,
    "inertia_g": 3.0,
    "pattern": true,
    "joint_centre": [
@@ -2477,7 +2482,8 @@
    ],
    "_note": "pelvis has no proximal joint - held at the trunk attachments; the LEFT hip_pitch flange takes the leg wrench (right side is the mirror case)",
    "transverse_moment_Nm": 86.7,
-   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %"
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 84.2 N\u00b7m x1.25, capped at the 120 N\u00b7m motor rating; was 120.0 (the rating used as if it were the load)"
   }
  },
  "L1b_foot_toeoff": {
@@ -2772,7 +2778,7 @@
    "joint": "ankle_roll",
    "moment_mode": "geometry",
    "joint_axis": "y",
-   "axial_torque_Nm": 60.0,
+   "axial_torque_Nm": 17.0,
    "inertia_g": 3.0,
    "pattern": false,
    "magnitudes_N": {
@@ -2919,7 +2925,8 @@
     "Fy": 966.4,
     "Fz": 3227.0,
     "_doc": "measured peak GRF 6.39 BW = 3227 N (loads.json _grf), scaled component-wise from the design-level set; the peak tier carries no extra factor (docs/64 \u00a710.1)"
-   }
+   },
+   "_axial_src": "measured M_axis P99 13.6 N\u00b7m x1.25, capped at the 60 N\u00b7m motor rating; was 60.0 (the rating used as if it were the load)"
   },
   "extra_steps": [],
   "geometry_of": "L1_ankle_foot",
@@ -3180,7 +3187,7 @@
    ],
    "moment_mode": "geometry",
    "joint_axis": "x",
-   "axial_torque_Nm": 60.0,
+   "axial_torque_Nm": 60,
    "pattern": true,
    "joint_centre": [
     -123.7,
@@ -3190,7 +3197,8 @@
    "_note": "distal = the 8 x M4 upper half of the PCD98 circle that bolts the RS03 ankle_a housing to L2 (review)",
    "inertia_g": 3.0,
    "transverse_moment_Nm": 25.4,
-   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %"
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 56.0 N\u00b7m x1.25, capped at the 60 N\u00b7m motor rating; was 60.0 (the rating used as if it were the load)"
   },
   "extra_steps": [
    "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_ankle_a.step",
@@ -3555,7 +3563,7 @@
    ],
    "moment_mode": "geometry",
    "joint_axis": "x",
-   "axial_torque_Nm": 60.0,
+   "axial_torque_Nm": 60,
    "pattern": true,
    "joint_centre": [
     -123.7,
@@ -3565,7 +3573,8 @@
    "_note": "distal = the 8 x M4 upper half of the PCD98 circle that bolts the RS03 ankle_a housing to L2 (review)",
    "inertia_g": 3.0,
    "transverse_moment_Nm": 25.4,
-   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %"
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 56.0 N\u00b7m x1.25, capped at the 60 N\u00b7m motor rating; was 60.0 (the rating used as if it were the load)"
   },
   "extra_steps": [
    "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_ankle_a.step",
@@ -3852,7 +3861,7 @@
    "joint": "hip_roll",
    "moment_mode": "geometry",
    "joint_axis": "y",
-   "axial_torque_Nm": 120.0,
+   "axial_torque_Nm": 94.0,
    "pattern": true,
    "joint_centre": [
     -123.7,
@@ -4104,7 +4113,8 @@
    "_note": "upper (pelvis-side) interface is held; the wrench enters at the next link's joint",
    "inertia_g": 3.0,
    "transverse_moment_Nm": 99.6,
-   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %"
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 75.2 N\u00b7m x1.25, capped at the 120 N\u00b7m motor rating; was 120.0 (the rating used as if it were the load)"
   },
   "extra_steps": [
    "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs04_hip_p.step",
@@ -4419,7 +4429,7 @@
    "joint": "hip_pitch",
    "moment_mode": "geometry",
    "joint_axis": "x",
-   "axial_torque_Nm": 120.0,
+   "axial_torque_Nm": 105.2,
    "inertia_g": 3.0,
    "pattern": true,
    "joint_centre": [
@@ -4662,7 +4672,8 @@
    ],
    "_note": "pelvis has no proximal joint - held at the trunk attachments; the LEFT hip_pitch flange takes the leg wrench (right side is the mirror case)",
    "transverse_moment_Nm": 86.7,
-   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %"
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 84.2 N\u00b7m x1.25, capped at the 120 N\u00b7m motor rating; was 120.0 (the rating used as if it were the load)"
   },
   "geometry_of": "L6_pelvis",
   "_doc": "same link and same wrench as L6_pelvis, with the actuator housings left out. A rigid housing bolted across the structure is a parallel load path, so the pair brackets the answer: with motors = lower bound on stress, without = conservative upper bound. L2 moved 311 -> 60 MPa when the load began entering through the rigid housing, which is exactly the effect this isolates."
@@ -5101,7 +5112,7 @@
    "joint": "ankle_roll",
    "moment_mode": "geometry",
    "joint_axis": "y",
-   "axial_torque_Nm": 60.0,
+   "axial_torque_Nm": 17.0,
    "inertia_g": 3.0,
    "pattern": false,
    "magnitudes_N": {
@@ -5248,7 +5259,8 @@
     "Fy": 966.4,
     "Fz": 3227.0,
     "_doc": "measured peak GRF 6.39 BW = 3227 N (loads.json _grf), scaled component-wise from the design-level set; the peak tier carries no extra factor (docs/64 \u00a710.1)"
-   }
+   },
+   "_axial_src": "measured M_axis P99 13.6 N\u00b7m x1.25, capped at the 60 N\u00b7m motor rating; was 60.0 (the rating used as if it were the load)"
   },
   "extra_steps": [],
   "geometry_of": "L1_ankle_foot",
@@ -5393,7 +5405,7 @@
    "joint": "knee",
    "moment_mode": "geometry",
    "joint_axis": "x",
-   "axial_torque_Nm": 120.0,
+   "axial_torque_Nm": 120,
    "pattern": true,
    "joint_centre": [
     -123.7,
@@ -5621,7 +5633,8 @@
    "_note": "thigh hangs from the yaw bearing; the knee wrench from the shin enters at the knee housing seats",
    "inertia_g": 3.0,
    "transverse_moment_Nm": 49.5,
-   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %"
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 107.3 N\u00b7m x1.25, capped at the 120 N\u00b7m motor rating; was 120.0 (the rating used as if it were the load)"
   },
   "extra_steps": [
    "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_hip_y.step",
@@ -6111,7 +6124,7 @@
    "joint": "ankle_roll",
    "moment_mode": "geometry",
    "joint_axis": "y",
-   "axial_torque_Nm": 60.0,
+   "axial_torque_Nm": 17.0,
    "inertia_g": 3.0,
    "pattern": false,
    "magnitudes_N": {
@@ -6258,7 +6271,8 @@
     "Fy": 966.4,
     "Fz": 3227.0,
     "_doc": "measured peak GRF 6.39 BW = 3227 N (loads.json _grf), scaled component-wise from the design-level set; the peak tier carries no extra factor (docs/64 \u00a710.1)"
-   }
+   },
+   "_axial_src": "measured M_axis P99 13.6 N\u00b7m x1.25, capped at the 60 N\u00b7m motor rating; was 60.0 (the rating used as if it were the load)"
   },
   "extra_steps": [],
   "geometry_of": "L1_ankle_foot",
