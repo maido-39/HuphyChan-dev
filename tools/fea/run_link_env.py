@@ -139,6 +139,29 @@ def main():
         keep_ids = spec.get('subset', {}).get('indices')
         pool = ([link_solids[i] for i in keep_ids if i < len(link_solids)]
                 if keep_ids else link_solids)
+        from OCP.TopExp import TopExp_Explorer
+        from OCP.TopAbs import TopAbs_SOLID
+        from OCP.TopoDS import TopoDS
+        from OCP.GProp import GProp_GProps
+        from OCP.BRepGProp import BRepGProp
+
+        def biggest_solid(sh):
+            """Cutting a cylinder against a bracket leaves slivers: keep the real body.
+
+            The first attempt handed all of them to the mesher, which produced 12
+            disconnected components and a singular solve that wrote a stress-less frd.
+            """
+            ex = TopExp_Explorer(sh, TopAbs_SOLID)
+            best, bestv = None, 0.0
+            while ex.More():
+                sol = TopoDS.Solid_s(ex.Current())
+                g = GProp_GProps()
+                BRepGProp.VolumeProperties_s(sol, g)
+                if g.Mass() > bestv:
+                    best, bestv = sol, g.Mass()
+                ex.Next()
+            return best if best is not None else sh, bestv / 1000.0
+
         trimmed = []
         for cs in cyl_solids:
             sh = cs['shape']
@@ -147,6 +170,9 @@ def main():
                 cut.Build()
                 if cut.IsDone():
                     sh = cut.Shape()
+            sh, v = biggest_solid(sh)
+            print(f"   housing {cs['name'].replace('robstride_','')}: {v:.1f} cm3 after "
+                  'trimming against the link', flush=True)
             trimmed.append(dict(shape=sh, name=cs['name']))
         hstep = f'{W}/{link}_housings.step'
         F.write_step(trimmed, hstep)
@@ -620,7 +646,16 @@ def main():
             if not r['ok']:
                 raise SystemExit(f'unit case {comp} failed: {r["errors"][:3]}')
         coords, blocks = F.parse_frd(f'{W}/{job}.frd')
-        S = [d for nm, d in blocks if nm == 'STRESS'][-1]
+        sblocks = [d for nm, d in blocks if nm == 'STRESS']
+        if not sblocks:
+            # ccx can leave a non-empty .frd with no stress block when the solve dies;
+            # run_ccx only checks that the file exists, so the failure surfaced as an
+            # IndexError three steps later instead of naming the case.
+            raise SystemExit(
+                f'unit case {comp}: the solver wrote no stress block. The model is likely '
+                'singular (a body attached only by a few nodes) or ran out of memory - '
+                f'see {W}/{job}.log')
+        S = sblocks[-1]
         ids = sorted(S)
         unit_stress.append(np.array([S[i] for i in ids]))
     ids = np.array(ids)
