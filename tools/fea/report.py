@@ -93,6 +93,33 @@ def main():
                        f"{r['design']:.1f} MPa (SF {r['SF']:.2f}) | "
                        f"×{r['design'] / max(1e-9, b['design']):.2f} |")
 
+    # one row per link with every tier the campaign now runs, so a reader does not have
+    # to cross-reference four files to see whether a part is acceptable
+    fat = (load(f'{W}/fatigue.json') or {}).get('links', {})
+    asm = load(f'{W}/assembly_check.json') or {}
+    out += ['', '## 티어 통합 (설계 P99 · 과부하 peak · 피로 · 조립)', '',
+            '| 링크 | 설계 SF | peak SF | peak 항복초과 | 피로 SF@P99 | 피로 SF@RMS | 조립 판정 |',
+            '|---|---|---|---|---|---|---|']
+    for r in rows:
+        if r['kind'] != '설계 판정':
+            continue
+        # a peak result from an older revision is worse than no number: L6 showed
+        # peak SF 1.97 against a design SF of 0.65, which is impossible for a larger load
+        pk = load(f"{W}/{r['link']}/envelope_peak.json")
+        if pk and pk.get('analysis_rev') != rev:
+            pk = None
+        pkv = (YIELD / pk.get('max_vM_design', pk['max_vM'])) if pk else None
+        pkn = (pk.get('over_allowable', {}).get('SF>1.0', {}).get('nodes_design')
+               if pk else None)
+        f = fat.get(r['link'], {})
+        a = asm.get(r['link'], {}).get('verdict', '—')
+        out.append(f"| {r['link']} | **{r['SF']:.2f}** | "
+                   f"{('%.2f' % pkv) if pkv else '—'} | {pkn if pkn is not None else '—'} | "
+                   f"{f.get('SF_fatigue_P99', '—')} | {f.get('SF_fatigue_RMS', '—')} | "
+                   f"{a.split(':')[0]} |")
+    out += ['', '> peak은 정적 사이징 기준이 아니라 **소성 미발생 확인**용이다(docs/62 §3c–4). ',
+            '> 항복 초과 절점이 수천이면 국부가 아니라 형상 조치 대상이다.', '']
+
     bg = load(f'{W}/bolt_groups.json') or {}
     if bg:
         out += ['', '## 체결부 (측정 렌치 하 볼트 그룹)', '',
