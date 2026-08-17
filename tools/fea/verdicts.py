@@ -41,6 +41,32 @@ for _fam, _links in {'foot toe-off': ('L1b_foot_toeoff', 'L1d_foot_toeoff_fine',
                      'shin corner': ('L2_shin', 'L2b_shin_cornerfine')}.items():
     for _l in _links:
         _FAMILY_OF[_l] = _fam
+# every twin make_refine_variant.py made, using the SAME family key convergence.py builds,
+# so a new twin is classified without editing either file
+try:
+    _SPECS = json.load(open(f'{os.path.dirname(os.path.abspath(__file__))}/link_specs.json'))
+except Exception:                                            # noqa: BLE001
+    _SPECS = {}
+for _n, _sp in _SPECS.items():
+    _b = isinstance(_sp, dict) and _sp.get('_refines')
+    if not _b:
+        continue
+    _key = _b.split('_')[0] + ' ' + _b.split('_', 1)[1].replace('_', ' ')
+    _FAMILY_OF[_n] = _FAMILY_OF[_b] = _key
+assert any(v == 'foot toe-off' for v in _FAMILY_OF.values()), 'hand-listed families lost'
+
+
+def _hot_h(link):
+    m = (_SPECS.get(link) or {}).get('mesh', {})
+    return min((b[4] for b in m.get('refine', [])), default=m.get('size_far', 1e9))
+
+
+# per family, the member with the smallest hot-spot element size governs; the coarser
+# members of the same family are superseded and must not be read as separate verdicts
+_FINEST = {}
+for _l, _f in _FAMILY_OF.items():
+    if _f not in _FINEST or _hot_h(_l) < _hot_h(_FINEST[_f]):
+        _FINEST[_f] = _l
 
 
 def main():
@@ -77,7 +103,9 @@ def main():
         sff = r['SF_field']
         # a point failure with a passing field and a vanishing over-yield fraction is a
         # geometric singularity, not an overloaded section (convergence.py proves it per link)
-        cvg = _CVG.get(_FAMILY_OF.get(r['link'], ''), {})
+        famk = _FAMILY_OF.get(r['link'], '')
+        cvg = _CVG.get(famk, {})
+        superseded = famk and _FINEST.get(famk) not in (None, r['link'])
         tiny = (r.get('over_SF1_pct') or 0) < 1.0        # yield exceeded on <1 % of nodes
         if sff is None:
             note = '?'
@@ -92,6 +120,8 @@ def main():
             note = '재검토'
         else:
             note = '**FAIL**'
+        if superseded:
+            note = f"~~{note.replace('*','')}~~ <span title=\"coarser mesh\">← {_FINEST[famk]}</span>"
         print(f"| {r['link']} | {r['max_vM_filtered']:.1f} | {r['SF_filtered']:.2f} | "
               f"{(r['p99'] or 0):.1f} | **{(sff or 0):.2f}** | {ext} | {note} |")
     print(f'\n6061-T6 allowable: {YIELD:.0f} (SF>1) / {YIELD/1.5:.0f} (SF>1.5) / '

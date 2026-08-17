@@ -9301,7 +9301,15 @@
     ]
    ],
    "max_nodes": 520000,
-   "auto_refine": false
+   "auto_refine": false,
+   "_used": {
+    "attempt": 1,
+    "size_far": 44.29,
+    "curv": 10,
+    "algo3d": 1,
+    "no_fragment": false,
+    "refined": true
+   }
   },
   "actuators": [],
   "envelope": {
@@ -9866,7 +9874,15 @@
     ]
    ],
    "max_nodes": 520000,
-   "auto_refine": false
+   "auto_refine": false,
+   "_used": {
+    "attempt": 1,
+    "size_far": 59.79,
+    "curv": 10,
+    "algo3d": 1,
+    "no_fragment": false,
+    "refined": true
+   }
   },
   "actuators": [],
   "envelope": {
@@ -10139,7 +10155,15 @@
     ]
    ],
    "max_nodes": 520000,
-   "_doc": "proven configuration measured on this geometry: curvature refinement off, 16 mm, no local balls -> 128k nodes. Adding refinement balls made gmsh report duplicated facets, so the interfaces are resolved by the 16 mm mesh and the design stress excludes the clamped nodes instead."
+   "_doc": "proven configuration measured on this geometry: curvature refinement off, 16 mm, no local balls -> 128k nodes. Adding refinement balls made gmsh report duplicated facets, so the interfaces are resolved by the 16 mm mesh and the design stress excludes the clamped nodes instead.",
+   "_used": {
+    "attempt": 5,
+    "size_far": 16.0,
+    "curv": 0,
+    "algo3d": 1,
+    "no_fragment": true,
+    "refined": true
+   }
   },
   "threads": 6,
   "cases": [
@@ -10525,144 +10549,152 @@
  },
  "L2cf_shin_nomotor_fine": {
   "mesh": {
-   "size_far": 16.4,
+   "size_far": 44.28,
    "refine": [
     [
      -123.7,
      145.0,
      -550.0,
      40,
-     5.41
+     7.03
     ],
     [
      -123.7,
      115.0,
      -332.0,
      40,
-     5.41
+     7.03
     ],
     [
      -92.95,
      115.0,
      -310.0,
      36.989999999999995,
-     5.47
+     7.11
     ],
     [
      -150.45,
      130.59,
      -301.0,
      14.0,
-     5.47
+     7.11
     ],
     [
      -150.45,
      115.0,
      -292.0,
      14.0,
-     5.47
+     7.11
     ],
     [
      -150.45,
      99.41,
      -301.0,
      14.0,
-     5.47
+     7.11
     ],
     [
      -150.45,
      99.41,
      -319.0,
      14.0,
-     5.47
+     7.11
     ],
     [
      -150.45,
      115.0,
      -328.0,
      14.0,
-     5.47
+     7.11
     ],
     [
      -150.45,
      130.59,
      -319.0,
      14.0,
-     5.47
+     7.11
     ],
     [
      -159.45,
      130.59,
      -301.0,
      14.0,
-     5.47
+     7.11
     ],
     [
      -159.45,
      115.0,
      -292.0,
      14.0,
-     5.47
+     7.11
     ],
     [
      -159.45,
      99.41,
      -301.0,
      14.0,
-     5.47
+     7.11
     ],
     [
      -159.45,
      99.41,
      -319.0,
      14.0,
-     5.47
+     7.11
     ],
     [
      -159.45,
      115.0,
      -328.0,
      14.0,
-     5.47
+     7.11
     ],
     [
      -159.45,
      130.59,
      -319.0,
      14.0,
-     5.47
+     7.11
     ],
     [
      -143.45,
      190.27,
      -581.25,
      14.0,
-     5.47
+     7.11
     ],
     [
      -143.45,
      163.75,
      -554.73,
      14.0,
-     5.47
+     7.11
     ],
     [
      -143.45,
      126.25,
      -554.73,
      14.0,
-     5.47
+     7.11
     ],
     [
      -151.4,
      158.5,
      -554.7,
      12.0,
-     1.5
+     1.95
     ]
    ],
    "max_nodes": 520000,
-   "auto_refine": false
+   "auto_refine": false,
+   "_used": {
+    "attempt": 4,
+    "size_far": 32.8,
+    "curv": 0,
+    "algo3d": 1,
+    "no_fragment": false,
+    "refined": true
+   }
   },
   "threads": 6,
   "cases": [
@@ -11102,7 +11134,15 @@
     ]
    ],
    "max_nodes": 520000,
-   "auto_refine": false
+   "auto_refine": false,
+   "_used": {
+    "attempt": 1,
+    "size_far": 10.94,
+    "curv": 10,
+    "algo3d": 1,
+    "no_fragment": false,
+    "refined": true
+   }
   },
   "threads": 6,
   "cases": [
@@ -11460,7 +11500,7 @@
  },
  "L5ef_hip_elastic_fine": {
   "mesh": {
-   "size_far": 19.94,
+   "size_far": 29.91,
    "refine": [
     [
      -52.7,
@@ -11990,7 +12030,15 @@
    ],
    "fragment": false,
    "max_nodes": 520000,
-   "auto_refine": false
+   "auto_refine": false,
+   "_used": {
+    "attempt": 3,
+    "size_far": 29.910000000000004,
+    "curv": 8,
+    "algo3d": 10,
+    "no_fragment": false,
+    "refined": true
+   }
   },
   "threads": 6,
   "cases": [
@@ -12504,7 +12552,15 @@
     ]
    ],
    "max_nodes": 520000,
-   "auto_refine": false
+   "auto_refine": false,
+   "_used": {
+    "attempt": 1,
+    "size_far": 10.12,
+    "curv": 10,
+    "algo3d": 1,
+    "no_fragment": false,
+    "refined": true
+   }
   },
   "threads": 6,
   "cases": [

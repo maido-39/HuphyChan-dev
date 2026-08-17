@@ -32,12 +32,27 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 W = '/home/syaro/pyg_fea/work'
 ALLOW = 276.0
-# refinement families: the same physical case re-meshed. Order = coarse -> fine.
+# Refinement families: the same physical case re-meshed. Hand-listed ones first (these
+# predate the `_refines` convention), then every twin make_refine_variant.py produced,
+# discovered from the `_refines` key so a new twin needs no edit here.
 FAMILIES = {
     'foot toe-off': ['L1b_foot_toeoff', 'L1d_foot_toeoff_fine', 'L1e_foot_toeoff_finer'],
     'hip pitch/roll': ['L5_hip_pitchroll', 'L5d_hip_peakfine'],
     'shin corner': ['L2_shin', 'L2b_shin_cornerfine'],
 }
+
+
+def discover_families(specs):
+    """base -> [base, twin] for every twin tagged with `_refines`."""
+    found = {}
+    for name, spec in specs.items():
+        base = isinstance(spec, dict) and spec.get('_refines')
+        if not base:
+            continue
+        assert base in specs, f'{name}: _refines points at {base!r}, which is not a spec'
+        found.setdefault(base.split('_')[0] + ' ' + base.split('_', 1)[1].replace('_', ' '),
+                         [base]).append(name)
+    return found
 
 
 SPECS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -61,8 +76,16 @@ def load(link, tier='P99'):
 def main():
     out = next((a.split('=')[1] for a in sys.argv if a.startswith('--out=')),
                '/home/syaro/MikuchanRemote/Human-Pygmalion/docs/img')
-    fam = {k: [r for r in (load(l) for l in v) if r] for k, v in FAMILIES.items()}
+    families = dict(FAMILIES)
+    for k, v in discover_families(SPECS).items():
+        if k not in families:
+            families[k] = v
+    fam = {k: [r for r in (load(l) for l in v) if r] for k, v in families.items()}
+    skipped = {k: [l for l in families[k] if not load(l)] for k in families}
     fam = {k: v for k, v in fam.items() if len(v) >= 2}
+    for k, miss in skipped.items():
+        if miss and k not in fam:
+            print(f'{k:22s} not yet classifiable - still unsolved: {", ".join(miss)}')
 
     print(f"{'family':16s} {'link':26s} {'h[mm]':>6s} {'nodes':>8s} {'point':>8s} "
           f"{'field p99':>10s}")
