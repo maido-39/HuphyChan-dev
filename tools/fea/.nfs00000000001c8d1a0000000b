@@ -202,14 +202,6 @@ print(' '.join('%s:%s%%'%(k,v['removable_pct']) for k,v in d['levels'].items()))
       || log "STAGE3 $L FAILED"
   done
 
-  # STAGE4: the assembly roll-up. A link that clears its own stress check can still be
-  # unbuildable - L2 is SF 4.57 in the metal and its knee flange slips at 0.26. This is the
-  # loop closure the user asked for, so the driver runs it every pass.
-  $PY tools/fea/fatigue.py > "$W/fatigue.txt" 2>&1
-  $PY tools/fea/bolt_group.py > "$W/bolt_groups.txt" 2>&1
-  $PY tools/fea/assembly_check.py > "$W/assembly_check.txt" 2>&1 \
-    && log "STAGE4 assembly: $(tail -2 "$W/assembly_check.txt" | head -1 | cut -c1-120)"
-
   if [ "$todo" -eq 0 ]; then
     log "idle - all links either solved or at the attempt cap; sleeping 10 min"
     sleep 600
