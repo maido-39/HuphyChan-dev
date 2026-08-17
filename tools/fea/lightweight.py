@@ -128,6 +128,11 @@ def main():
     # keep-outs: joint seats, bolt pads, load/fix regions
     spec = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                        'link_specs.json')))[link]
+    # A derived case (L1b, L1g, L2b...) shares its CAD with the base link, so its
+    # joints file lives under that name. Looking it up by CASE name silently found
+    # nothing, which meant bearing seats and bolt pads were NOT protected on exactly
+    # the cases that govern.
+    geo = spec.get('geometry_of', link)
     keep = np.zeros(len(evol), bool)
     zones = []
     for blk in list(spec['envelope'].get('fix', [])) + list(spec['envelope'].get('points', [])):
@@ -136,7 +141,7 @@ def main():
         c = np.asarray(blk.get('ctr', [0, 0, 0]), float)
         r = float(blk.get('r', 10)) + 12.0
         zones.append((c, r))
-    jf = f'{STEPS}/link_{link}_joints.json'
+    jf = f'{STEPS}/link_{geo}_joints.json'
     if os.path.exists(jf):
         J = json.load(open(jf))
         for b in J.get('detected_bolts', []):
