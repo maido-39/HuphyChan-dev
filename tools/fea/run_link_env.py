@@ -254,9 +254,14 @@ def main():
                 flange = [n for n in flange
                           if float(np.linalg.norm(fp - nodes[n], axis=1).min()) > 15.0]
             if len(flange) < 20:
-                print(f"   WARNING: motor {m['name']} found only {len(flange)} flange nodes "
-                      '- check the proxy placement', flush=True)
-                continue
+                # Skipping silently produced a "motors included" L6 that contained NO
+                # motors, so its bracket against the no-motor case compared two meshes of
+                # the same model and reported the difference as a x4.14 motor effect.
+                raise SystemExit(
+                    f"motor {m['name']} found only {len(flange)} flange nodes on {link}: "
+                    'the proxy is not on this link\'s geometry. Fix the proxy placement or '
+                    'remove the actuator from the spec - a model must not claim a motor it '
+                    'does not have.')
             ref = nid0 + k
             mot_nodes[ref] = c
             mot_patch[ref] = list(flange)      # needed to turn a moment into a real couple

@@ -2231,10 +2231,7 @@
     ]
    ]
   },
-  "actuators": [
-   "robstride_rs04_hip_p",
-   "robstride_rs04_hip_r_1_"
-  ],
+  "actuators": [],
   "envelope": {
    "joint": "hip_pitch",
    "moment_mode": "geometry",
@@ -2484,7 +2481,8 @@
    "transverse_moment_Nm": 86.7,
    "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
    "_axial_src": "measured M_axis P99 84.2 N\u00b7m x1.25, capped at the 120 N\u00b7m motor rating; was 120.0 (the rating used as if it were the load)"
-  }
+  },
+  "_doc": "pelvis. The two actuators previously listed here sit 30-90 mm off this geometry (hip_p is on the leg side at x=-124, hip_r_1_ is above the pelvis top) and were silently skipped, so the \"motors included\" model never had any. They are removed rather than pretended."
  },
  "L1b_foot_toeoff": {
   "mesh": {
@@ -4676,7 +4674,7 @@
    "_axial_src": "measured M_axis P99 84.2 N\u00b7m x1.25, capped at the 120 N\u00b7m motor rating; was 120.0 (the rating used as if it were the load)"
   },
   "geometry_of": "L6_pelvis",
-  "_doc": "same link and same wrench as L6_pelvis, with the actuator housings left out. A rigid housing bolted across the structure is a parallel load path, so the pair brackets the answer: with motors = lower bound on stress, without = conservative upper bound. L2 moved 311 -> 60 MPa when the load began entering through the rigid housing, which is exactly the effect this isolates."
+  "_doc": "same pelvis, second mesh density. It was set up as the no-motor half of a bracket, but L6 has no attachable motor, so this is really a MESH CONVERGENCE control: 284k vs 319k nodes on an identical model gave 342.6 vs 82.8 MPa, which is a mesh-sensitivity finding, not a motor effect."
  },
  "L1d_foot_toeoff_fine": {
   "mesh": {
