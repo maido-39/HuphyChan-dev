@@ -23,7 +23,7 @@ STEPS = '/home/syaro/pyg_fea/steps'
 # carry it, and the campaign re-runs anything produced by an older revision - L2 was
 # solved before loads inside a rigid housing moved to the motor reference node, so
 # its number was not comparable with the links solved after it.
-ANALYSIS_REV = '2026-08-17h'
+ANALYSIS_REV = '2026-08-17i'
 WORK = '/home/syaro/pyg_fea/work'
 LOADS = json.load(open(f'{HERE}/loads.json'))
 
@@ -296,7 +296,11 @@ def main():
         guard += 1
         best = None
         for idx, c in enumerate(pending):
-            for g in (3.0, 6.0, 12.0, 25.0, 40.0):
+            # A node-pair MPC is a WELD. Two shin plates were being joined across 40 mm
+            # of empty space (41 and 113 pairs), which invents stiffness the hardware does
+            # not have. A bolted flange contact is a fraction of a millimetre; 12 mm is
+            # already generous for mesh tolerance, so that is the ceiling.
+            for g in (3.0, 6.0, 12.0):
                 txt, n = F.node_pair_equations(nodes, elems, joined, c, gap=g,
                                                exclude=set(fix) | rigid_nodes)
                 if n:
@@ -315,8 +319,11 @@ def main():
                       'housing bolted across the joint', flush=True)
                 joined |= set(pending.pop(k))
                 continue
-            raise SystemExit(f'{len(pending)} component(s) cannot be joined to the '
-                             'assembly (nothing within 40 mm) - check the geometry')
+            raise SystemExit(
+                f'{len(pending)} component(s) cannot be joined within 12 mm. They are '
+                'separate parts in the CAD: either the fastener that joins them is missing '
+                'from this subset, or they are held by a component that was excluded. '
+                'Welding them across the gap would invent stiffness - fix the subset.')
         idx, txt, n, g = best
         tie_txt += txt
         joined |= set(pending[idx])
