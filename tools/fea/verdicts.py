@@ -34,6 +34,13 @@ try:
     _CVG = json.load(open(f'{W}/convergence.json'))
 except Exception:                                            # noqa: BLE001
     _CVG = {}
+# volume-weighted field percentile, where field_volume.py has computed it. This is the
+# mesh-independent field basis: on the pelvis pair the node percentile drifts +17.1 %
+# under refinement while the volume-weighted one moves +1.9 %.
+try:
+    _VOL = {r['link']: r for r in json.load(open(f'{W}/field_volume.json'))}
+except Exception:                                            # noqa: BLE001
+    _VOL = {}
 _FAMILY_OF = {}
 for _fam, _links in {'foot toe-off': ('L1b_foot_toeoff', 'L1d_foot_toeoff_fine',
                                       'L1e_foot_toeoff_finer'),
@@ -90,13 +97,17 @@ def main():
             moment_model=d.get('moment_model'),
             over_SF2_nodes=oa.get('nodes_design'), over_SF2_pct=oa.get('pct_design'),
             p99=d.get('p99_vM'),
+            p99_vol=(_VOL.get(link) or {}).get('p99_vol'),
+            over_vol_pct=(_VOL.get(link) or {}).get('over_vol_pct'),
             SF_field=(YIELD / d['p99_vM']) if d.get('p99_vM') else None,
+            SF_field_vol=(YIELD / _VOL[link]['p99_vol']) if link in _VOL else None,
             over_SF1_pct=(d.get('over_allowable') or {}).get('SF>1.0', {}).get('pct_design'),
         ))
     json.dump(rows, open(f'{W}/verdicts.json', 'w'), indent=1)
 
-    print('| link | point [MPa] | SF point | field p99 | SF field | **항복 초과** | 판정 |')
-    print('|---|---|---|---|---|---|---|')
+    print('| link | point [MPa] | SF point | 필드 p99 (절점) | **필드 p99 (체적)** | '
+          '**SF 필드** | 항복 절점 / **체적** | 판정 |')
+    print('|---|---|---|---|---|---|---|---|')
     for r in rows:
         ext = ('—' if not r.get('over_SF1_pct') else f"{r['over_SF1_pct']:.3f} %")
         sff = r['SF_field']
@@ -130,8 +141,13 @@ def main():
             note = '**FAIL**'
         if superseded:
             note = f"~~{note.replace('*','')}~~ <span title=\"coarser mesh\">← {_FINEST[famk]}</span>"
+        pv, sfv = r.get('p99_vol'), r.get('SF_field_vol')
+        ovv = r.get('over_vol_pct')
         print(f"| {r['link']} | {r['max_vM_filtered']:.1f} | {r['SF_filtered']:.2f} | "
-              f"{(r['p99'] or 0):.1f} | **{(sff or 0):.2f}** | {ext} | {note} |")
+              f"{(r['p99'] or 0):.1f} | "
+              f"{('**%.1f**' % pv) if pv else '—'} | "
+              f"{('**%.2f**' % sfv) if sfv else ('%.2f' % (sff or 0))} | "
+              f"{ext} / {('**%.4f %%**' % ovv) if ovv is not None else '—'} | {note} |")
     print(f'\n6061-T6 allowable: {YIELD:.0f} (SF>1) / {YIELD/1.5:.0f} (SF>1.5) / '
           f'{YIELD/2:.0f} MPa (SF>2)')
     print(f'{len(rows)} links solved')
