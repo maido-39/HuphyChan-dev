@@ -69,8 +69,10 @@ def load(link, tier='P99'):
     # overall and a coarser hot spot (L1d has 340k nodes at h 2.6, L1e 296k at h 1.5).
     r = SPECS.get(link, {}).get('mesh', {}).get('refine', [])
     h = min((b[4] for b in r), default=SPECS.get(link, {}).get('mesh', {}).get('size_far'))
+    oa = (d.get('over_allowable') or {}).get('SF>1.0', {})
     return dict(link=link, nodes=d.get('mesh_nodes', 0), h=h, point=d.get('max_vM_design'),
-                field=d.get('p99_vM'), rev=d.get('analysis_rev'))
+                field=d.get('p99_vM'), rev=d.get('analysis_rev'),
+                over_n=oa.get('nodes_design') or 0, over_pct=oa.get('pct_design') or 0.0)
 
 
 def main():
@@ -103,14 +105,27 @@ def main():
         # a geometric singularity has sigma ~ h^-lambda with lambda > 0; a converged
         # solution has lambda -> 0. Fit on the two ends (log-log slope).
         lam = float(-np.log(p[-1] / p[0]) / np.log(h[-1] / h[0]))
+        # How much MATERIAL is actually over yield. This is the discriminator the field p99
+        # cannot give: p99 is a percentile over NODES, so refining a hot spot adds nodes
+        # exactly where the stress is high and inflates it (L6f +17 % on a +2.9 % node
+        # count). The over-yield fraction has no such bias - at a true singularity it stays
+        # vanishing however fine the mesh gets, because the yielded volume tends to zero.
+        ov = np.array([r['over_pct'] for r in rows])
+        ovn = np.array([r['over_n'] for r in rows])
         verdict[name] = dict(point_drift=float(dp), field_drift=float(df),
                              h_coarse=float(h[0]), h_fine=float(h[-1]), lam=lam,
-                             singular=bool(lam > 0.2 and abs(df) < 10),
+                             over_pct=float(ov[-1]), over_n=int(ovn[-1]),
+                             # singular = the point runs away while the yielded material
+                             # stays a vanishing fraction. The field drift is NOT used as a
+                             # gate any more: it is mesh-density biased (see above).
+                             singular=bool(lam > 0.2 and ov[-1] < 0.05),
                              field=float(f[-1]), sf=float(ALLOW / f[-1]))
-        tag = ('SINGULAR - sigma ~ h^-lambda, field holds' if verdict[name]['singular']
-               else 'converging' if lam < 0.2 else 'unclear - both move')
+        tag = ('SINGULAR - point runs away, yielded material vanishing'
+               if verdict[name]['singular'] else 'converging' if lam < 0.2
+               else 'DIVERGENT + real yielded volume - not just a singularity')
         print(f"{'':16s} -> h {h[0]:.2f} -> {h[-1]:.2f} mm: point {dp:+.0f} %, "
-              f"field {df:+.0f} %, exponent lambda {lam:+.2f}: {tag}")
+              f"field {df:+.0f} %, lambda {lam:+.2f}, over-yield {ovn[-1]} nodes "
+              f"({ov[-1]:.4f} %): {tag}")
         print(f"{'':16s}    field verdict SF {verdict[name]['sf']:.2f} "
               f"(allowable {ALLOW:.0f} MPa)\n")
 

@@ -95,9 +95,8 @@ def main():
         ))
     json.dump(rows, open(f'{W}/verdicts.json', 'w'), indent=1)
 
-    print('| link | joint | point [MPa] | SF point | field p99 | **SF field** | '
-          'yield 초과 절점 | 판정 |')
-    print('|---|---|---|---|---|---|---|---|')
+    print('| link | point [MPa] | SF point | field p99 | SF field | **항복 초과** | 판정 |')
+    print('|---|---|---|---|---|---|---|')
     for r in rows:
         ext = ('—' if not r.get('over_SF1_pct') else f"{r['over_SF1_pct']:.3f} %")
         sff = r['SF_field']
@@ -106,16 +105,25 @@ def main():
         famk = _FAMILY_OF.get(r['link'], '')
         cvg = _CVG.get(famk, {})
         superseded = famk and _FINEST.get(famk) not in (None, r['link'])
+        # yielded MATERIAL, not a percentile over nodes: p99 is mesh-density biased
+        # (refining a hot spot adds nodes exactly where stress is high), the over-yield
+        # fraction is not. Under 0.05 % means isolated nodes, i.e. a stress concentration
+        # that yields locally and redistributes - not an overloaded section.
+        ovp = r.get('over_SF1_pct') or 0.0
         tiny = (r.get('over_SF1_pct') or 0) < 1.0        # yield exceeded on <1 % of nodes
         if sff is None:
             note = '?'
         elif r['SF_filtered'] >= 2.0:
             note = 'PASS'
+        elif cvg.get('singular'):
+            note = '**필렛**'
         elif cvg.get('singular') is False:
-            # the point value converged: it is a real local stress, judge it directly
-            note = '주의(수렴·실하중)' if r['SF_filtered'] >= 1.5 else '**FAIL(수렴)**'
+            # the point value converged, so it is a real local stress - but if the yielded
+            # material is a handful of nodes it yields locally and redistributes
+            note = ('주의(수렴·실하중)' if r['SF_filtered'] >= 1.5
+                    else f'국부항복 {ovp:.3f} %' if ovp < 0.05 else '**FAIL(수렴)**')
         elif sff >= 2.0 and tiny:
-            note = ('**필렛**' if cvg.get('singular') else '필렛?(미검증)')
+            note = '필렛?(미검증)'
         elif sff >= 2.0:
             note = '재검토'
         else:
