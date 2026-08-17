@@ -23,7 +23,7 @@ STEPS = '/home/syaro/pyg_fea/steps'
 # carry it, and the campaign re-runs anything produced by an older revision - L2 was
 # solved before loads inside a rigid housing moved to the motor reference node, so
 # its number was not comparable with the links solved after it.
-ANALYSIS_REV = '2026-08-17d'
+ANALYSIS_REV = '2026-08-17e'
 WORK = '/home/syaro/pyg_fea/work'
 LOADS = json.load(open(f'{HERE}/loads.json'))
 
@@ -567,7 +567,11 @@ def main():
         elif c == 'Maxial':
             mags.append(axial)
         elif c in ('Mt1', 'Mt2'):
-            mags.append(float(env_spec['transverse_moment_Nm']) * factor)
+            # docs/64 reports |M_perp| as a SCALAR magnitude. Putting the full value on
+            # both transverse axes and letting the sign envelope combine them gives a
+            # resultant of sqrt(2)x the measured moment, so each axis carries M/sqrt(2)
+            # and the worst sign combination then reproduces exactly |M_perp|.
+            mags.append(float(env_spec['transverse_moment_Nm']) * factor / np.sqrt(2.0))
         elif c == 'Gbody':
             mags.append(gfac)                # unit solve = 1 g; envelope covers +-gfac g
         else:
