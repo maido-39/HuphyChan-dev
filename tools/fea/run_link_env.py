@@ -55,6 +55,14 @@ def sel_bore(nodes, surf, s):
     n = [i for i in surf if p(nodes[i])]
     if len(n) < 12:
         raise SystemExit(f'selection too small ({len(n)}): {s}')
+    # A bearing seat that reacts the whole link must not rest on a handful of nodes:
+    # L2's 6810 inner-ring seat (O50 x 7.1 mm wide) resolved to 14 clamped nodes out of
+    # 184, which is a point support pretending to be a raceway and it manufactures the
+    # local peaks the verdict then has to explain away.
+    if s.get('type') != 'plane' and len(n) < 40:
+        print(f"   WARNING: '{str(s.get('name', s.get('type')))[:44]}' resolved to only "
+              f'{len(n)} nodes - a seat this coarse behaves as a point support. Refine the '
+              'mesh there or widen the selector.', flush=True)
     return n
 
 
