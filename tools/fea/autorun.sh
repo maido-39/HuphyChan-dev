@@ -172,6 +172,22 @@ print('raw %.1f MPa SF %.2f | design %.1f SF %.2f | over SF>2: %s nodes'%(
     fi
   done
 
+  # STAGE1P: the `peak` tier. docs/62 defines three tiers (RMS / in-DR P99 / peak) and
+  # the campaign only ever solved P99 - the red team caught it. Runs once per link after
+  # its P99 result is current, so the driver carries this work instead of a human.
+  for L in $(links); do
+    [ "$(uptodate "$L")" = "yes" ] || continue
+    PK="$W/$L/envelope_peak.json"
+    [ -f "$PK" ] && [ "$PK" -nt "$W/$L/envelope_P99.json" ] && continue
+    log "STAGE1P $L (peak tier)"
+    timeout 10800 $PY tools/fea/run_link_env.py "$L" --peak >> "$W/${L}_peak.log" 2>&1 \
+      && log "STAGE1P $L DONE $($PY -c "
+import json;d=json.load(open('$PK'))
+print('raw %.1f SF %.2f | design %.1f SF %.2f'%(d['max_vM'],d['SF'],
+ d.get('max_vM_design',d['max_vM']),d.get('SF_design',d['SF'])))" 2>/dev/null)" \
+      || log "STAGE1P $L FAILED"
+  done
+
   # stages 2 and 3 run on whatever solved - never gated on a failing link
   $PY tools/fea/verdicts.py > "$W/verdicts.md" 2>>"$W/verdicts.log" && log "STAGE2 verdict table refreshed"
   for L in $(links); do
