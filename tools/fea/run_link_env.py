@@ -131,8 +131,25 @@ def main():
             cyl_solids.append(dict(
                 shape=BRepPrimAPI_MakeCylinder(ax2, float(m['r']), float(m['len'])).Shape(),
                 name=m['name']))
+        # The envelope cylinder OVERLAPS the bracket it bolts to, and gmsh answers that
+        # with "a segment and a facet intersect". Cut the link out of each cylinder so the
+        # two only touch, which is also what the real parts do.
+        from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
+        link_solids = F.load_solids(step)
+        keep_ids = spec.get('subset', {}).get('indices')
+        pool = ([link_solids[i] for i in keep_ids if i < len(link_solids)]
+                if keep_ids else link_solids)
+        trimmed = []
+        for cs in cyl_solids:
+            sh = cs['shape']
+            for ls in pool:
+                cut = BRepAlgoAPI_Cut(sh, ls['shape'])
+                cut.Build()
+                if cut.IsDone():
+                    sh = cut.Shape()
+            trimmed.append(dict(shape=sh, name=cs['name']))
         hstep = f'{W}/{link}_housings.step'
-        F.write_step(cyl_solids, hstep)
+        F.write_step(trimmed, hstep)
         steps.append(hstep)
         print(f'elastic housings: {len(cyl_solids)} aluminium envelope cylinders meshed '
               'with the link', flush=True)
