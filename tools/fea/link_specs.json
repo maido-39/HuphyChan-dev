@@ -6275,5 +6275,905 @@
   "extra_steps": [],
   "geometry_of": "L1_ankle_foot",
   "_doc": "third mesh density for the foot convergence study: the transition band at y~120 is meshed at 1.3 mm. L1b (10 mm) gave 245.6 MPa and L1d (2.6 mm) gave 368.1 - if this one climbs again the peak is a singularity at an unfilleted step and the verdict must come from the surrounding field, not the peak."
+ },
+ "L1f_foot_lateral_edge": {
+  "mesh": {
+   "size_far": 10.12,
+   "refine": [
+    [
+     -123.7,
+     163.05,
+     -800,
+     8.329999999999998,
+     5.11
+    ],
+    [
+     -123.7,
+     126.95,
+     -800,
+     8.329999999999998,
+     5.11
+    ],
+    [
+     -86.2,
+     195,
+     -810,
+     6.663999999999999,
+     3.97
+    ],
+    [
+     -161.2,
+     195,
+     -810,
+     6.663999999999999,
+     3.97
+    ],
+    [
+     -123.7,
+     163.05,
+     -800.0,
+     9.583664999999998,
+     7.1
+    ],
+    [
+     -123.7,
+     126.95,
+     -800.0,
+     9.583664999999998,
+     7.1
+    ],
+    [
+     -86.2,
+     195.0,
+     -810.0,
+     6.047579999999999,
+     7.1
+    ],
+    [
+     -86.2,
+     195.0,
+     -810.0,
+     6.2475,
+     7.1
+    ],
+    [
+     -161.2,
+     195.0,
+     -810.0,
+     6.047579999999999,
+     7.1
+    ],
+    [
+     -161.2,
+     195.0,
+     -810.0,
+     6.2475,
+     7.1
+    ],
+    [
+     -74.2,
+     195.0,
+     -810.0,
+     5.830999999999999,
+     7.1
+    ],
+    [
+     -173.2,
+     195.0,
+     -810.0,
+     5.830999999999999,
+     7.1
+    ]
+   ]
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "stance_P99",
+    "desc": "ankle_roll wrench P99x1.25 into the two roll-axis 6900 seats + measured rod forces at the JS6 balls; ground support at the sole",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -843.0,
+      "tol": 0.3
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "ankle_roll",
+      "stat": "P99",
+      "factor": 0.625,
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       160.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       155.0,
+       166.5
+      ],
+      "rtol": 0.8
+     },
+     {
+      "kind": "wrench",
+      "joint": "ankle_roll",
+      "stat": "P99",
+      "factor": 0.625,
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       130.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       123.5,
+       135.0
+      ],
+      "rtol": 0.8
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -86.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -100.0,
+       -66.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -169.8,
+       -481.8,
+       1116.2
+      ]
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -161.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -181.0,
+       -147.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -103.7,
+       -320.9,
+       805.4
+      ]
+     }
+    ]
+   },
+   {
+    "name": "heelstrike_peak",
+    "desc": "GRF peak 6.39 BW (3227 N) on the rear third of the sole; held at the two roll-axis 6900 seats (the foot's only tie to the shin) + measured rod forces",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       160.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       155.0,
+       166.5
+      ],
+      "rtol": 0.8
+     },
+     {
+      "type": "bore",
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       130.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       123.5,
+       135.0
+      ],
+      "rtol": 0.8
+     }
+    ],
+    "patch_loads": [
+     {
+      "axis": "z",
+      "value": -843.0,
+      "tol": 0.3,
+      "box": {
+       "y": [
+        145.0,
+        260.0
+       ]
+      },
+      "F": [
+       0.0,
+       0.0,
+       3227.0
+      ]
+     }
+    ],
+    "loads": [
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -86.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -100.0,
+       -66.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -169.8,
+       -481.8,
+       1116.2
+      ]
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -161.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -181.0,
+       -147.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -103.7,
+       -320.9,
+       805.4
+      ]
+     }
+    ]
+   }
+  ],
+  "subset": {
+   "indices": [
+    19,
+    20,
+    21,
+    24
+   ],
+   "_doc": "FEET sole + AnkleFeetPillowAB/A/B. The UJ core, shin plates, cranks and rod ends belong to other links; the foot connects upward ONLY through the two roll-axis 6900 seats in the pillows."
+  },
+  "envelope": {
+   "joint": "ankle_roll",
+   "moment_mode": "geometry",
+   "joint_axis": "y",
+   "axial_torque_Nm": 17.0,
+   "inertia_g": 3.0,
+   "pattern": false,
+   "magnitudes_N": {
+    "Fx": 280.0,
+    "Fy": 280.0,
+    "Fz": 935.0
+   },
+   "fix_desc": "ankle attachments: two 6900 roll seats + both M6 clevis stacks (tap block, ear bore, head pad)",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      163.05,
+      -800.0
+     ],
+     "r": 11.01,
+     "span": [
+      159.8,
+      166.2
+     ],
+     "rtol": 0.9,
+     "name": "6900ZZ ankle_roll seat +y - housing bore in pillow #20, shoulder at y="
+    },
+    {
+     "type": "bore",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      126.95,
+      -800.0
+     ],
+     "r": 11.01,
+     "span": [
+      123.8,
+      130.2
+     ],
+     "rtol": 0.9,
+     "name": "6900ZZ ankle_roll seat -y - housing bore in pillow #21, shoulder at y="
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -86.2,
+      195.0,
+      -810.0
+     ],
+     "r": 2.52,
+     "span": [
+      -109.4,
+      -94.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor A - M6 tapped block, d5.04 tap drill, 15.0 mm engagement"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -86.2,
+      195.0,
+      -810.0
+     ],
+     "r": 3.0,
+     "span": [
+      -78.4,
+      -74.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor A - M6 close-fit hole d6.00 in the 4 mm outer ear"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -161.2,
+      195.0,
+      -810.0
+     ],
+     "r": 2.52,
+     "span": [
+      -153.4,
+      -138.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor B - M6 tapped block, d5.04 tap drill, 15.0 mm engagement"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -161.2,
+      195.0,
+      -810.0
+     ],
+     "r": 3.0,
+     "span": [
+      -173.4,
+      -169.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor B - M6 close-fit hole d6.00 in the 4 mm outer ear"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -74.2,
+       195.0,
+       -810.0
+      ],
+      [
+       -173.2,
+       195.0,
+       -810.0
+      ]
+     ],
+     "r_pad": 5.0,
+     "depth": 2.0,
+     "name": "M6 ISO4762 head seats (head d10 -> r_pad 5.0) on the outer ear faces x"
+    }
+   ],
+   "points": [
+    {
+     "name": "ground contact patch - lateral edge",
+     "type": "plane",
+     "axis": "z",
+     "value": -843.0,
+     "tol": 0.3,
+     "box": {
+      "x": [
+       -174.0,
+       -154.0
+      ],
+      "y": [
+       40.0,
+       150.0
+      ]
+     }
+    }
+   ],
+   "_note": "primary = measured GRF P99x1.25 (935 N vertical, +-280 N tangential at mu 0.3) on the heel third of the sole, reacted at the four real ankle attachments. Review flagged that mixing the ankle_roll wrench with the LC3 rod forces double-counts the same load path.",
+   "magnitudes_peak_N": {
+    "Fx": 966.4,
+    "Fy": 966.4,
+    "Fz": 3227.0,
+    "_doc": "measured peak GRF 6.39 BW = 3227 N (loads.json _grf), scaled component-wise from the design-level set; the peak tier carries no extra factor (docs/64 \u00a710.1)"
+   },
+   "_axial_src": "measured M_axis P99 13.6 N\u00b7m x1.25, capped at the 60 N\u00b7m motor rating; was 60.0 (the rating used as if it were the load)"
+  },
+  "extra_steps": [],
+  "geometry_of": "L1_ankle_foot",
+  "_doc": "stepping on an edge or landing on the outside of the foot: the whole GRF passes through the lateral 20 mm strip of the sole. The heel-only case hid the forefoot problem; this is the same class of omission in the lateral direction."
+ },
+ "L1g_foot_corner": {
+  "mesh": {
+   "size_far": 10.12,
+   "refine": [
+    [
+     -123.7,
+     163.05,
+     -800,
+     8.329999999999998,
+     5.11
+    ],
+    [
+     -123.7,
+     126.95,
+     -800,
+     8.329999999999998,
+     5.11
+    ],
+    [
+     -86.2,
+     195,
+     -810,
+     6.663999999999999,
+     3.97
+    ],
+    [
+     -161.2,
+     195,
+     -810,
+     6.663999999999999,
+     3.97
+    ],
+    [
+     -123.7,
+     163.05,
+     -800.0,
+     9.583664999999998,
+     7.1
+    ],
+    [
+     -123.7,
+     126.95,
+     -800.0,
+     9.583664999999998,
+     7.1
+    ],
+    [
+     -86.2,
+     195.0,
+     -810.0,
+     6.047579999999999,
+     7.1
+    ],
+    [
+     -86.2,
+     195.0,
+     -810.0,
+     6.2475,
+     7.1
+    ],
+    [
+     -161.2,
+     195.0,
+     -810.0,
+     6.047579999999999,
+     7.1
+    ],
+    [
+     -161.2,
+     195.0,
+     -810.0,
+     6.2475,
+     7.1
+    ],
+    [
+     -74.2,
+     195.0,
+     -810.0,
+     5.830999999999999,
+     7.1
+    ],
+    [
+     -173.2,
+     195.0,
+     -810.0,
+     5.830999999999999,
+     7.1
+    ]
+   ]
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "stance_P99",
+    "desc": "ankle_roll wrench P99x1.25 into the two roll-axis 6900 seats + measured rod forces at the JS6 balls; ground support at the sole",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -843.0,
+      "tol": 0.3
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "ankle_roll",
+      "stat": "P99",
+      "factor": 0.625,
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       160.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       155.0,
+       166.5
+      ],
+      "rtol": 0.8
+     },
+     {
+      "kind": "wrench",
+      "joint": "ankle_roll",
+      "stat": "P99",
+      "factor": 0.625,
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       130.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       123.5,
+       135.0
+      ],
+      "rtol": 0.8
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -86.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -100.0,
+       -66.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -169.8,
+       -481.8,
+       1116.2
+      ]
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -161.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -181.0,
+       -147.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -103.7,
+       -320.9,
+       805.4
+      ]
+     }
+    ]
+   },
+   {
+    "name": "heelstrike_peak",
+    "desc": "GRF peak 6.39 BW (3227 N) on the rear third of the sole; held at the two roll-axis 6900 seats (the foot's only tie to the shin) + measured rod forces",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       160.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       155.0,
+       166.5
+      ],
+      "rtol": 0.8
+     },
+     {
+      "type": "bore",
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       130.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       123.5,
+       135.0
+      ],
+      "rtol": 0.8
+     }
+    ],
+    "patch_loads": [
+     {
+      "axis": "z",
+      "value": -843.0,
+      "tol": 0.3,
+      "box": {
+       "y": [
+        145.0,
+        260.0
+       ]
+      },
+      "F": [
+       0.0,
+       0.0,
+       3227.0
+      ]
+     }
+    ],
+    "loads": [
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -86.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -100.0,
+       -66.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -169.8,
+       -481.8,
+       1116.2
+      ]
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -161.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -181.0,
+       -147.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -103.7,
+       -320.9,
+       805.4
+      ]
+     }
+    ]
+   }
+  ],
+  "subset": {
+   "indices": [
+    19,
+    20,
+    21,
+    24
+   ],
+   "_doc": "FEET sole + AnkleFeetPillowAB/A/B. The UJ core, shin plates, cranks and rod ends belong to other links; the foot connects upward ONLY through the two roll-axis 6900 seats in the pillows."
+  },
+  "envelope": {
+   "joint": "ankle_roll",
+   "moment_mode": "geometry",
+   "joint_axis": "y",
+   "axial_torque_Nm": 17.0,
+   "inertia_g": 3.0,
+   "pattern": false,
+   "magnitudes_N": {
+    "Fx": 280.0,
+    "Fy": 280.0,
+    "Fz": 935.0
+   },
+   "fix_desc": "ankle attachments: two 6900 roll seats + both M6 clevis stacks (tap block, ear bore, head pad)",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      163.05,
+      -800.0
+     ],
+     "r": 11.01,
+     "span": [
+      159.8,
+      166.2
+     ],
+     "rtol": 0.9,
+     "name": "6900ZZ ankle_roll seat +y - housing bore in pillow #20, shoulder at y="
+    },
+    {
+     "type": "bore",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      126.95,
+      -800.0
+     ],
+     "r": 11.01,
+     "span": [
+      123.8,
+      130.2
+     ],
+     "rtol": 0.9,
+     "name": "6900ZZ ankle_roll seat -y - housing bore in pillow #21, shoulder at y="
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -86.2,
+      195.0,
+      -810.0
+     ],
+     "r": 2.52,
+     "span": [
+      -109.4,
+      -94.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor A - M6 tapped block, d5.04 tap drill, 15.0 mm engagement"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -86.2,
+      195.0,
+      -810.0
+     ],
+     "r": 3.0,
+     "span": [
+      -78.4,
+      -74.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor A - M6 close-fit hole d6.00 in the 4 mm outer ear"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -161.2,
+      195.0,
+      -810.0
+     ],
+     "r": 2.52,
+     "span": [
+      -153.4,
+      -138.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor B - M6 tapped block, d5.04 tap drill, 15.0 mm engagement"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -161.2,
+      195.0,
+      -810.0
+     ],
+     "r": 3.0,
+     "span": [
+      -173.4,
+      -169.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor B - M6 close-fit hole d6.00 in the 4 mm outer ear"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -74.2,
+       195.0,
+       -810.0
+      ],
+      [
+       -173.2,
+       195.0,
+       -810.0
+      ]
+     ],
+     "r_pad": 5.0,
+     "depth": 2.0,
+     "name": "M6 ISO4762 head seats (head d10 -> r_pad 5.0) on the outer ear faces x"
+    }
+   ],
+   "points": [
+    {
+     "name": "ground contact patch - corner",
+     "type": "plane",
+     "axis": "z",
+     "value": -843.0,
+     "tol": 0.3,
+     "box": {
+      "x": [
+       -174.0,
+       -152.0
+      ],
+      "y": [
+       -35.0,
+       -5.0
+      ]
+     }
+    }
+   ],
+   "_note": "primary = measured GRF P99x1.25 (935 N vertical, +-280 N tangential at mu 0.3) on the heel third of the sole, reacted at the four real ankle attachments. Review flagged that mixing the ankle_roll wrench with the LC3 rod forces double-counts the same load path.",
+   "magnitudes_peak_N": {
+    "Fx": 966.4,
+    "Fy": 966.4,
+    "Fz": 3227.0,
+    "_doc": "measured peak GRF 6.39 BW = 3227 N (loads.json _grf), scaled component-wise from the design-level set; the peak tier carries no extra factor (docs/64 \u00a710.1)"
+   },
+   "_axial_src": "measured M_axis P99 13.6 N\u00b7m x1.25, capped at the 60 N\u00b7m motor rating; was 60.0 (the rating used as if it were the load)"
+  },
+  "extra_steps": [],
+  "geometry_of": "L1_ankle_foot",
+  "_doc": "corner contact - the outer toe corner takes the whole GRF, which is what happens stepping onto a rock or landing mid-turn. Longest lever from the ankle in both directions at once."
  }
 }
