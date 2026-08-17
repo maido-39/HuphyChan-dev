@@ -35,8 +35,10 @@ ALLOW = 276.0
 # Refinement families: the same physical case re-meshed. Hand-listed ones first (these
 # predate the `_refines` convention), then every twin make_refine_variant.py produced,
 # discovered from the `_refines` key so a new twin needs no edit here.
+# 'foot toe-off' (L1b/L1d/L1e) is RETIRED: those three differ in far-field size as well as
+# hot-spot size, so they were never a pure refinement sequence. The clean replacement is the
+# discovered L1b + L1h_foot_toeoff_clean pair, which shares size_far 10.12 exactly.
 FAMILIES = {
-    'foot toe-off': ['L1b_foot_toeoff', 'L1d_foot_toeoff_fine', 'L1e_foot_toeoff_finer'],
     'hip pitch/roll': ['L5_hip_pitchroll', 'L5d_hip_peakfine'],
     'shin corner': ['L2_shin', 'L2b_shin_cornerfine'],
 }
@@ -100,11 +102,19 @@ def main():
         # runner honours max_nodes by coarsening the far field, so a twin can come back
         # with a finer hot spot AND a coarser everywhere-else, which moves the total volume
         # and the field percentile for reasons unrelated to the hot spot. Refuse those.
-        fars = [r['far'] for r in rows if r['far']]
-        if fars and max(fars) / min(fars) > 1.02:
-            print(f"{name:16s} CONTAMINATED - far field varies {min(fars):.2f}..{max(fars):.2f} mm "
-                  f"({max(fars)/min(fars):.2f}x) across the family. max_nodes made the mesher "
-                  f"coarsen elsewhere; not a pure refinement. Skipped.\n")
+        # Drop the contaminated MEMBERS, not the whole family: a family can hold both a
+        # contaminated twin and a clean replacement (L5e has L5ef at 29.91 and L5eh at
+        # 19.94), and rejecting it wholesale throws away the good pair with the bad.
+        base_far = rows[0]['far']
+        bad = [r for r in rows if r['far'] and base_far and
+               max(r['far'], base_far) / min(r['far'], base_far) > 1.02]
+        if bad:
+            print(f"{name:16s} dropped {len(bad)} contaminated member(s) - far field "
+                  f"{', '.join(f'{r['link']} {r['far']:.2f}' for r in bad)} vs base "
+                  f"{base_far:.2f} mm (max_nodes coarsened the mesh elsewhere)")
+            rows = [r for r in rows if r not in bad]
+        if len(rows) < 2:
+            print(f"{'':16s} -> fewer than 2 clean members left, cannot classify\n")
             continue
         for r in rows:
             print(f"{name:16s} {r['link']:26s} {r['h']:6.2f} {r['nodes']:8d} "

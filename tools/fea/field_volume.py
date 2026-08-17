@@ -156,7 +156,20 @@ def main():
         bias = 100 * (r['p99_node'] - r['p99_vol']) / r['p99_vol']
         print(f"{r['link']:28s} {r['n_tets']:8d} {r['vol_mm3']/1000:9.1f} "
               f"{r['p99_vol']:9.1f} {r['p99_node']:9.1f} {bias:+6.1f}% {r['over_vol_pct']:11.4f}")
-    json.dump(got, open(f'{W}/field_volume.json', 'w'), indent=1)
+    # MERGE, never overwrite: running this on one link used to wipe the other 25, and the
+    # verdict table silently lost its volume-weighted column for every link but that one
+    out = f'{W}/field_volume.json'
+    prev = {}
+    if os.path.exists(out):
+        try:
+            prev = {r['link']: r for r in json.load(open(out))}
+        except Exception:                                    # noqa: BLE001
+            prev = {}
+    n_before = len(prev)
+    prev.update({r['link']: r for r in got})
+    assert len(prev) >= n_before, 'merge lost entries'
+    json.dump(sorted(prev.values(), key=lambda r: r['link']), open(out, 'w'), indent=1)
+    print(f'  merged {len(got)} into {n_before} -> {len(prev)} links')
     print(f'\n-> {W}/field_volume.json')
 
 

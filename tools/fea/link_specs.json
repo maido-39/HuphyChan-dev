@@ -13920,7 +13920,15 @@
     ]
    ],
    "fragment": false,
-   "auto_refine": false
+   "auto_refine": false,
+   "_used": {
+    "attempt": 3,
+    "size_far": 29.910000000000004,
+    "curv": 8,
+    "algo3d": 10,
+    "no_fragment": false,
+    "refined": true
+   }
   },
   "threads": 6,
   "cases": [
