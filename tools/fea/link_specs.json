@@ -1011,7 +1011,9 @@
     }
    ],
    "_note": "thigh hangs from the yaw bearing; the knee wrench from the shin enters at the knee housing seats",
-   "inertia_g": 3.0
+   "inertia_g": 3.0,
+   "transverse_moment_Nm": 46.0,
+   "_tm_src": "docs/64 \u00a78i corrected M-perp P99; x1.25 applied by the runner"
   },
   "extra_steps": [
    "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_hip_y.step",
@@ -1392,7 +1394,9 @@
     }
    ],
    "_note": "upper (pelvis-side) interface is held; the wrench enters at the next link's joint",
-   "inertia_g": 3.0
+   "inertia_g": 3.0,
+   "transverse_moment_Nm": 106.0,
+   "_tm_src": "docs/64 \u00a78i corrected M-perp P99; x1.25 applied by the runner"
   },
   "extra_steps": [
    "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs04_hip_p.step",
@@ -2027,7 +2031,9 @@
      "name": "bolt_pads"
     }
    ],
-   "_note": "distal = the 8 x M4 bolt circle clamping the RS03 hip_Y housing at z=-40 (no bearing on this side)"
+   "_note": "distal = the 8 x M4 bolt circle clamping the RS03 hip_Y housing at z=-40 (no bearing on this side)",
+   "transverse_moment_Nm": 84.0,
+   "_tm_src": "docs/64 \u00a78i corrected M-perp P99; x1.25 applied by the runner"
   }
  },
  "L6_pelvis": {
@@ -4088,7 +4094,9 @@
     }
    ],
    "_note": "upper (pelvis-side) interface is held; the wrench enters at the next link's joint",
-   "inertia_g": 3.0
+   "inertia_g": 3.0,
+   "transverse_moment_Nm": 106.0,
+   "_tm_src": "docs/64 \u00a78i corrected M-perp P99; x1.25 applied by the runner"
   },
   "extra_steps": [
    "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs04_hip_p.step",
@@ -5601,7 +5609,9 @@
     }
    ],
    "_note": "thigh hangs from the yaw bearing; the knee wrench from the shin enters at the knee housing seats",
-   "inertia_g": 3.0
+   "inertia_g": 3.0,
+   "transverse_moment_Nm": 46.0,
+   "_tm_src": "docs/64 \u00a78i corrected M-perp P99; x1.25 applied by the runner"
   },
   "extra_steps": [
    "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_hip_y.step",

@@ -23,7 +23,7 @@ STEPS = '/home/syaro/pyg_fea/steps'
 # carry it, and the campaign re-runs anything produced by an older revision - L2 was
 # solved before loads inside a rigid housing moved to the motor reference node, so
 # its number was not comparable with the links solved after it.
-ANALYSIS_REV = '2026-08-17c'
+ANALYSIS_REV = '2026-08-17d'
 WORK = '/home/syaro/pyg_fea/work'
 LOADS = json.load(open(f'{HERE}/loads.json'))
 
@@ -386,6 +386,15 @@ def main():
     axial = env_spec.get('axial_torque_Nm')
     if mode == 'geometry' and axial:
         comps.append('Maxial')
+    # The two joint moments PERPENDICULAR to the joint axis. They were dropped wholesale
+    # because docs/64 §7b's moment columns carry the reference-point bug, but §8i has
+    # corrected values for some joints and the omission is not conservative: the distal
+    # structure really does hand a transverse moment to the anchor. Opt in per link with
+    # `transverse_moment_Nm`, so a link only carries it once its number is trustworthy.
+    tm = env_spec.get('transverse_moment_Nm')
+    if mode == 'geometry' and tm:
+        for c in ('Mt1', 'Mt2'):
+            comps.append(c)
     gfac = env_spec.get('inertia_g', 3.0)      # +-3 g envelope on self weight
     if gfac:
         comps.append('Gbody')
@@ -428,6 +437,9 @@ def main():
                 Fv['xyz'.index(comp[1])] = E.UNIT_F
             elif comp == 'Maxial':
                 Mv[axmap[env_spec['joint_axis']]] = E.UNIT_M * 1000.0
+            elif comp in ('Mt1', 'Mt2'):
+                oth = [i for i in range(3) if i != axmap[env_spec['joint_axis']]]
+                Mv[oth[0 if comp == 'Mt1' else 1]] = E.UNIT_M * 1000.0
             else:
                 Mv['xyz'.index(comp[1])] = E.UNIT_M * 1000.0
             # Statics transport: the joint wrench is defined at the joint centre,
@@ -502,8 +514,13 @@ def main():
                     # instead of ankle_roll about y, and that mis-axed couple supplied
                     # 39 % of the only failing stress in the whole campaign.
                     Mv = np.zeros(3)
-                    ax_i = (axmap[env_spec['joint_axis']] if comp == 'Maxial'
-                            else 'xyz'.index(comp[1]))
+                    if comp == 'Maxial':
+                        ax_i = axmap[env_spec['joint_axis']]
+                    elif comp in ('Mt1', 'Mt2'):
+                        oth = [i for i in range(3) if i != axmap[env_spec['joint_axis']]]
+                        ax_i = oth[0 if comp == 'Mt1' else 1]
+                    else:
+                        ax_i = 'xyz'.index(comp[1])
                     Mv[ax_i] = E.UNIT_M * 1000.0 * share       # N*m -> N*mm
                     d = F.moment_load(nodes, p['nids'], p['ctr'], Mv)
                 for n, f in d.items():
@@ -549,6 +566,8 @@ def main():
             mags.append(float(ovr[c]))
         elif c == 'Maxial':
             mags.append(axial)
+        elif c in ('Mt1', 'Mt2'):
+            mags.append(float(env_spec['transverse_moment_Nm']) * factor)
         elif c == 'Gbody':
             mags.append(gfac)                # unit solve = 1 g; envelope covers +-gfac g
         else:
