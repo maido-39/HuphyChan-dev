@@ -23,7 +23,7 @@ STEPS = '/home/syaro/pyg_fea/steps'
 # carry it, and the campaign re-runs anything produced by an older revision - L2 was
 # solved before loads inside a rigid housing moved to the motor reference node, so
 # its number was not comparable with the links solved after it.
-ANALYSIS_REV = '2026-08-17f'
+ANALYSIS_REV = '2026-08-17g'
 WORK = '/home/syaro/pyg_fea/work'
 LOADS = json.load(open(f'{HERE}/loads.json'))
 
@@ -205,7 +205,7 @@ def main():
 
     # ---- motors: flange node sets, reference nodes, point masses
     tie_txt = ''            # deck fragment: motor rigid bodies + component ties
-    mot_txt, mot_nodes, mot_mass = '', {}, {}
+    mot_txt, mot_nodes, mot_mass, mot_patch = '', {}, {}, {}
     # CalculiX refuses a node that sits in a *RIGID BODY and in an *EQUATION at
     # the same time ("dof ... to a rigid body is detected in another equation"),
     # which killed every L2 solve. Track rigid membership and keep the ties off.
@@ -259,6 +259,7 @@ def main():
                 continue
             ref = nid0 + k
             mot_nodes[ref] = c
+            mot_patch[ref] = list(flange)      # needed to turn a moment into a real couple
             mot_mass[ref] = m.get('mass_kg', 1.5) / 1000.0        # tonne
             rigid_nodes.update(flange)
             mot_txt += F.rigid_motor(nodes, flange, ref, str(k))
@@ -531,11 +532,25 @@ def main():
                 grav = (0.0, 0.0, -9810.0)                  # 1 g, -z
                 for ref, mt in mot_mass.items():            # motor weight
                     cl[ref] = np.array([0.0, 0.0, -mt * 9810.0])
+            # CalculiX SILENTLY DISCARDS a moment written on the rotational DOFs of a
+            # *RIGID BODY reference node: L2's whole 60 N.m ankle torque sat on DOF 4 and
+            # its unit case came back at 0.00 MPa, so the shin has been solved without its
+            # motor torque all along (L3 and L5 lost most of theirs the same way).
+            # Convert every such moment into a force couple over the patch the rigid body
+            # covers, which is what the housing physically does to the flange anyway.
             extra_cl = ''
             for nid, mv in mom_extra.items():
-                for k3 in range(3):
-                    if abs(mv[k3]) > 1e-9:
-                        extra_cl += f'{nid}, {k3 + 4}, {mv[k3]:.6f}\n'
+                if np.linalg.norm(mv) <= 1e-9:
+                    continue
+                patch = sorted(mot_patch.get(nid, ()))
+                if len(patch) >= 6:
+                    ctr = np.mean([nodes[n] for n in patch], axis=0)
+                    for n, f in F.moment_load(nodes, patch, ctr, np.asarray(mv, float)).items():
+                        cl[n] = cl.get(n, np.zeros(3)) + f
+                else:
+                    raise SystemExit(
+                        f'moment at node {nid} has no rigid patch to convert it into a '
+                        'couple, and CalculiX would drop it on the rotational DOFs')
             F.write_deck(f'{W}/{job}.inp', nodes, elems, elsets,
                          {e: F.AL for e in elsets}, fix, cl, extra=tie_txt,
                          gravity=grav, extra_nodes=mot_nodes, extra_cload=extra_cl)
