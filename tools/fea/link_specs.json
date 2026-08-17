@@ -3580,7 +3580,8 @@
   ],
   "actuators": [],
   "geometry_of": "L2_shin",
-  "_doc": "same link and same wrench as L2_shin, with the actuator housings left out. A rigid housing bolted across the structure is a parallel load path, so the pair brackets the answer: with motors = lower bound on stress, without = conservative upper bound. L2 moved 311 -> 60 MPa when the load began entering through the rigid housing, which is exactly the effect this isolates."
+  "_doc": "INVALID as a model, and that is the finding: without the RS03 housings four bodies of the shin have nothing joining them within 12 mm. The actuator housings are structural members of this link, not just masses, so a \"conservative no-motor\" bracket cannot be built for L2 at all. The correct next step is a housing modelled with REAL stiffness (aluminium case + flange bolts), not rigid and not absent.",
+  "skip": true
  },
  "L5c_hip_nomotor": {
   "mesh": {

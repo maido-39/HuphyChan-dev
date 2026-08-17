@@ -46,8 +46,7 @@ log() { echo "[$(date +%m-%d\ %H:%M:%S)] $*"; date +%s > "$HB"; }
 
 links() { $PY -c "
 import json;d=json.load(open('$SPEC'))
-print(' '.join(k for k,v in d.items()
-      if isinstance(v,dict) and 'envelope' in v and not v.get('skip')))"; }
+print(' '.join(k for k,v in d.items() if isinstance(v,dict) and 'envelope' in v))"; }
 
 tries() { $PY -c "
 import json,os
