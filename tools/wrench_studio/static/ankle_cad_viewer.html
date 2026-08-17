@@ -39,7 +39,7 @@
  <button class="bpre" data-p="2" data-r="-20" title="foot-side swing max">Max swing</button>
  <button id="banim">ROM sweep</button>
  <label>Show <select id="ushow" multiple size="1" style="display:none"></select>
- <button id="bshin" class="on">Shin</button><button id="bfoot" class="on">Foot</button><button id="barrow" class="on">Force arrows</button><button id="barc" class="on">ROM arcs</button></label>
+ <button id="bshin" class="on">Shin</button><button id="bfoot" class="on">Foot</button><button id="barrow" class="on">Force arrows</button><button id="barc" class="on">ROM arcs</button><button id="btilt" class="on" title="rod tilt off vertical, measured in the side (YZ) view">Rod tilt</button></label>
  <span class="hint">drag rotate · Shift pan · wheel zoom</span>
 </div>
 <canvas id="gl"></canvas>
@@ -193,6 +193,10 @@ function setPose(p,r,fromUI){
  const xf=[cr,-sp*sr,-cp*sr];
  const swF=u=>Math.asin(Math.min(1,Math.abs(u[0]*xf[0]+u[1]*xf[1]+u[2]*xf[2])))/RAD;
  const swC=u=>Math.asin(Math.min(1,Math.abs(u[0])))/RAD;
+ // Tilt off the vertical, read in the side (YZ) view - the angle you see looking
+ // along x. Datum is straight DOWN because the rods hang downward (the phi0=0
+ // crank placement was chosen to make them near-vertical, docs/72 SS3a).
+ const tiltZ=u=>Math.atan2(u[1],-u[2])/RAD;
  // rod force tint (bin worst)
  const fA=binVal('rodA'), fB=binVal('rodB'), n=binVal('cnt');
  const tintF=f=>{const a=Math.min(1,Math.abs(f)/1500);
@@ -200,6 +204,7 @@ function setPose(p,r,fromUI){
  groups.rodA.tint=n?tintF(fA):[1,1,1]; groups.rodB.tint=n?tintF(fB):[1,1,1];
  world={pinA,pinB,ancA,ancB,phiA,phiB,
   swFA:swF(rA.u),swFB:swF(rB.u),swCA:swC(rA.u),swCB:swC(rB.u),
+  tzA:tiltZ(rA.u),tzB:tiltZ(rB.u),
   closure:Math.max(rA.closure,rB.closure),
   midA:[(pinA[0]+ancA[0])/2,(pinA[1]+ancA[1])/2,(pinA[2]+ancA[2])/2],
   midB:[(pinB[0]+ancB[0])/2,(pinB[1]+ancB[1])/2,(pinB[2]+ancB[2])/2],
@@ -251,6 +256,18 @@ function buildLines(){
    }
   }
  }
+ if(document.getElementById('btilt').classList.contains('on')&&world.pinA){
+   // straight-down datum from each crank pin, rod length long, so the angle between it
+   // and the rod IS the number in the panel
+   for(const [pin,anc] of [[world.pinA,world.ancA],[world.pinB,world.ancB]]){
+    const L=Math.hypot(anc[0]-pin[0],anc[1]-pin[1],anc[2]-pin[2]);
+    push(pin,[pin[0],pin[1],pin[2]-L],[.55,.55,.62]);
+    for(let i=1;i<=6;i++){
+     const z=pin[2]-L*i/7;
+     push([pin[0],pin[1]-2.5,z],[pin[0],pin[1]+2.5,z],[.42,.42,.5]);
+    }
+   }
+  }
  lineN=V.length/3;
  if(!lineBuf)lineBuf={v:gl.createBuffer(),c:gl.createBuffer(),n:gl.createBuffer()};
  gl.bindBuffer(gl.ARRAY_BUFFER,lineBuf.v);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.DYNAMIC_DRAW);
@@ -270,6 +287,7 @@ function info(){
  <tr><td><b style="color:#7fb3ff">Motor B (low)</b></td><td>φ ${(w.phiB/RAD).toFixed(1)}°</td><td class="hint">neutral ${D.cad.phiB0_cad}° · ROM [${e.phiB.min.toFixed(1)}, ${e.phiB.max.toFixed(1)}] · <b>${travel(w.phiB/RAD,e.phiB)}</b></td></tr>
  <tr><td>Foot-side swing A/B</td><td colspan=2>${sw(w.swFA,e.swF_A.max)} · ${sw(w.swFB,e.swF_B.max)}</td></tr>
  <tr><td>Crank-side swing A/B</td><td colspan=2>${sw(w.swCA,e.swC_A.max)} · ${sw(w.swCB,e.swC_B.max)}</td></tr>
+ <tr><td><b>Rod tilt off vertical</b><br><span class="hint">side (YZ) view</span></td><td colspan=2>A <b>${w.tzA.toFixed(2)}°</b> · B <b>${w.tzB.toFixed(2)}°</b><br><span class="hint">+ = anchor further back (+y) · from horizontal ${(90-Math.abs(w.tzA)).toFixed(2)}° / ${(90-Math.abs(w.tzB)).toFixed(2)}°<br>over the ROM box: A −5.88…+0.19° · B −6.57…−0.93° (neutral −2.17 / −2.82)</span></td></tr>
  </table>
  <div style="border-top:1px solid #3a4450;margin:5px 0;padding-top:5px">
  <b>Worst measured demand @ pose cell</b> <span class="hint">(v41 pool 2° bin, center p${(Math.round((pose.p+50)/2)*2-50)}° r${(Math.round((pose.r+20)/2)*2-20)}°, n=${w.nbin})</span><br>
@@ -290,16 +308,16 @@ function travel(phi,ex){
 }
 const badges={};
 function mkBadge(id){const d=document.createElement('div');d.className='badge';d.id=id;document.body.appendChild(d);badges[id]=d;return d;}
-['bFA','bFB','bCA','bCB','bMA','bMB','bRP'].forEach(mkBadge);
+['bFA','bFB','bCA','bCB','bMA','bMB','bRP','btA','btB'].forEach(mkBadge);
 const leadSvg=document.createElementNS('http://www.w3.org/2000/svg','svg');
 leadSvg.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:3;width:100vw;height:100vh';
 document.body.appendChild(leadSvg);
 function updBadges(MVP){
  if(!world.pinA)return;
  const items=[];
- const put=(id,pos,txt,warn)=>{
+ const put=(id,pos,txt,warn,hide)=>{
   const d=badges[id],s=project(pos,MVP);
-  if(!s){d.style.display='none';return;}
+  if(hide||!s){d.style.display='none';return;}
   d.style.display='block';
   if(d.textContent!==txt)d.textContent=txt;
   d.classList.toggle('warn',!!warn);
@@ -309,6 +327,9 @@ function updBadges(MVP){
  put('bFA',w.ancA,`foot A swing ${w.swFA.toFixed(1)}°/20`,w.swFA>19);
  put('bFB',w.ancB,`foot B swing ${w.swFB.toFixed(1)}°/20`,w.swFB>19);
  put('bCA',w.pinA,`crank A ${w.swCA.toFixed(1)}°/20`,false);
+ const tf=document.getElementById('btilt').classList.contains('on');
+ put('btA',w.midA,`rod A ${w.tzA>=0?'+':''}${w.tzA.toFixed(2)}° off vert`,false,!tf);
+ put('btB',w.midB,`rod B ${w.tzB>=0?'+':''}${w.tzB.toFixed(2)}° off vert`,false,!tf);
  put('bCB',w.pinB,`crank B ${w.swCB.toFixed(1)}°/20`,false);
  put('bMA',D.cad.pivA,`motor A φ ${(w.phiA/RAD).toFixed(1)}°`,false);
  put('bMB',D.cad.pivB,`motor B φ ${(w.phiB/RAD).toFixed(1)}°`,false);
@@ -510,7 +531,7 @@ for(const[id,gn]of[['bshin',['shin']],['bfoot',['foot']]]){
   e.target.classList.toggle('on');
   for(const g of gn)groups[g].vis=e.target.classList.contains('on');});
 }
-for(const id of['barrow','barc'])
+for(const id of['barrow','barc','btilt'])
  document.getElementById(id).addEventListener('click',e=>{e.target.classList.toggle('on');buildLines();});
 document.getElementById('uhf').addEventListener('input',drawHeat);
 // ---------- load ----------
