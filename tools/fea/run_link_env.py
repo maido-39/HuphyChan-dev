@@ -122,15 +122,27 @@ def main():
     # to hide the bracket's own stress.
     if spec.get('housing') == 'elastic' and motors:
         from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+        from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
         from OCP.gp import gp_Pnt, gp_Ax2, gp_Dir
         cyl_solids = []
         for m in motors:
             a = {'x': (1, 0, 0), 'y': (0, 1, 0), 'z': (0, 0, 1)}[m['axis']]
             c = np.asarray(m['ctr'], float) - 0.5 * m['len'] * np.asarray(a, float)
             ax2 = gp_Ax2(gp_Pnt(*c), gp_Dir(*a))
-            cyl_solids.append(dict(
-                shape=BRepPrimAPI_MakeCylinder(ax2, float(m['r']), float(m['len'])).Shape(),
-                name=m['name']))
+            # A SOLID cylinder is far stiffer than a real motor case (thin aluminium shell
+            # plus rotor/stator, largely non-structural in bending): it drove L5's field
+            # p99 from 106 down to 12.5, which is the optimistic extreme. `housing_wall_mm`
+            # makes it a tube instead, which is what the hardware actually is.
+            wall = float(spec.get('housing_wall_mm') or 0)
+            outer = BRepPrimAPI_MakeCylinder(ax2, float(m['r']), float(m['len'])).Shape()
+            if wall > 0 and wall < float(m['r']) - 2.0:
+                inner = BRepPrimAPI_MakeCylinder(ax2, float(m['r']) - wall,
+                                                 float(m['len'])).Shape()
+                cut = BRepAlgoAPI_Cut(outer, inner)
+                cut.Build()
+                if cut.IsDone():
+                    outer = cut.Shape()
+            cyl_solids.append(dict(shape=outer, name=m['name']))
         # The envelope cylinder OVERLAPS the bracket it bolts to, and gmsh answers that
         # with "a segment and a facet intersect". Cut the link out of each cylinder so the
         # two only touch, which is also what the real parts do.
