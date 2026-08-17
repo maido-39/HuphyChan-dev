@@ -18,13 +18,24 @@ Two things drive a stop, and they are not the same size:
 
   motor driven  - a control fault runs the actuators into the limit. Bounded by the
                   RS03 peak, 60 N.m per motor.
-  ground driven - the foot is already at the limit and the ground hits it (a trip, a
-                  landing on an edge). Bounded by the measured worst ankle moment,
-                  152.1 N.m pitch / 44.4 N.m roll. This one back-drives the cranks and
-                  is much the larger of the two - which is the point of the exercise.
+  ground driven - the foot is on the limit and the ground loads it. Bounded by the MEASURED
+                  STOP RESIDUAL - the joint-axis constraint moment the motor did not make,
+                  sampled only on frames where the joint is against its cap
+                  (tools/ankle_stop_residual.py). This back-drives the cranks and is much
+                  the larger of the two - which is the point of the exercise.
 
-A stop is an abuse-load element, not in the walking load path, so it is sized on the
-peak tier (docs/62) rather than on P99.
+The stop is NOT an abuse-only element. Measured over 7 rollouts the ankle pitch joint sits
+against its cap 1.9-7.8 % of the time (roll 0.1-6.5 %), so stop contact is an ordinary
+walking load, exactly as docs/72 §3d warned. It is therefore sized on the measured on-limit
+peak, with the on-limit P99 reported for the fatigue/duty argument.
+
+Load-basis history - two earlier bases were both wrong:
+  docs/64 §8e (2026-07-24) pitch P99 213 / peak 1056 N.m - carries the §8i moment
+    reference-point bug (moments about the robot CoM, not the joint). Recomputing the same
+    rollout with the transport applied gives 18-26 % of those figures.
+  my own first cut (2026-08-17) used the TOTAL joint moment peak 152.1 / 44.4 N.m from
+    moments_8i.json - too small, because at impact the constraint moment and the motor
+    torque oppose, so the residual the stop absorbs EXCEEDS the joint moment itself.
 
 Usage: ankle_stopper_sizing.py [--sf=2.0] [--out=docs/img]
 """
@@ -47,8 +58,12 @@ BEARING_ALLOW = 1.5 * YIELD   # confined bearing on a machined face, 414 MPa
 JS6_C0 = 5003.0               # N, rod-end static rating (docs/76 SS7-5, 510 kgf catalogue)
 JS6_S0 = 1.875                # static safety the design constrains the rod end to
 RS03_PEAK = 60.0              # N.m per motor
-M_PITCH_PEAK = 152.1          # N.m, measured worst frame at the joint axis (moments_8i)
-M_ROLL_PEAK = 44.4
+# measured stop residual, on-limit frames only, envelope over 7 rollouts x L/R
+# (tools/ankle_stop_residual.py; §8i-corrected). peak governs, P99 is the duty figure.
+M_PITCH_PEAK = 279.6          # N.m, worst at bent_fcp/L_ankle_pitch
+M_ROLL_PEAK = 93.3            # N.m, worst at flat25p1_fcp/L_ankle_roll
+M_PITCH_P99 = 142.7           # N.m, on-limit P99 envelope
+M_ROLL_P99 = 89.3
 
 
 def jacobian(p_deg, r_deg, h=0.05):
