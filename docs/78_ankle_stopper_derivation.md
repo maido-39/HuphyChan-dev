@@ -279,7 +279,7 @@ $$F_{rod} = \frac{\tau_{crank}}{r_c\cos\theta}$$
 로드 **직선**까지의 수직거리다. 최악은 **크랭크 B, pitch −50 / roll +20**에서 실제 팔
 **46.1 mm**(반경 62 mm를 쓰면 −26 % 과소):
 
-$$F_{rod} = \frac{429.8\times10^3}{46.1} = \mathbf{9{,}325\ N}
+$$F_{rod} = \frac{443.4\times10^3}{46.1} = \mathbf{9{,}620\ N}
 \quad\Rightarrow\quad s_0 = \frac{C_0}{F} = \frac{5003}{9620} = \mathbf{0.52}$$
 
 **JS6 정적 정격을 1.9배 초과**한다(§7-5 확정 $C_0 = 5{,}003$ N = 510 kgf).
