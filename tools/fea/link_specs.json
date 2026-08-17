@@ -10682,7 +10682,7 @@
      158.5,
      -554.7,
      12.0,
-     1.95
+     2.6
     ]
    ],
    "max_nodes": 520000,
@@ -10694,7 +10694,8 @@
     "algo3d": 1,
     "no_fragment": false,
     "refined": true
-   }
+   },
+   "repair_overlaps": true
   },
   "threads": 6,
   "cases": [
