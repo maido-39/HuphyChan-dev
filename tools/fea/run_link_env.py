@@ -540,7 +540,11 @@ def main():
     j = env_spec['joint']
     d = LOADS[j][stat] if j in LOADS else {}
     for c in comps:
-        ovr = env_spec.get('magnitudes_N') or {}
+        # A link that overrides its magnitudes (the foot uses measured GRF, not a joint
+        # wrench) must override them PER TIER too, otherwise `--peak` silently re-runs the
+        # P99 numbers: the foot's peak GRF is 6.39 BW = 3227 N against a P99 of 748 N.
+        ovr = (env_spec.get(f'magnitudes_{stat}_N') if stat != 'P99' else None) \
+            or env_spec.get('magnitudes_N') or {}
         if c in ovr:
             mags.append(float(ovr[c]))
         elif c == 'Maxial':
