@@ -67,10 +67,12 @@ def load(link, tier='P99'):
     # The refinement axis is the LOCAL element size at the refined hot spot, not the node
     # count: these variants refine different regions, so a variant can have more nodes
     # overall and a coarser hot spot (L1d has 340k nodes at h 2.6, L1e 296k at h 1.5).
-    r = SPECS.get(link, {}).get('mesh', {}).get('refine', [])
-    h = min((b[4] for b in r), default=SPECS.get(link, {}).get('mesh', {}).get('size_far'))
+    m = SPECS.get(link, {}).get('mesh', {})
+    r = m.get('refine', [])
+    h = min((b[4] for b in r), default=m.get('size_far'))
     oa = (d.get('over_allowable') or {}).get('SF>1.0', {})
-    return dict(link=link, nodes=d.get('mesh_nodes', 0), h=h, point=d.get('max_vM_design'),
+    return dict(link=link, nodes=d.get('mesh_nodes', 0), h=h, far=m.get('size_far'),
+                point=d.get('max_vM_design'),
                 field=d.get('p99_vM'), rev=d.get('analysis_rev'),
                 over_n=oa.get('nodes_design') or 0, over_pct=oa.get('pct_design') or 0.0)
 
@@ -94,6 +96,16 @@ def main():
     verdict = {}
     for name, rows in fam.items():
         rows.sort(key=lambda r: -r['h'])            # coarse -> fine
+        # A twin is only interpretable if everything EXCEPT the hot spot is unchanged. The
+        # runner honours max_nodes by coarsening the far field, so a twin can come back
+        # with a finer hot spot AND a coarser everywhere-else, which moves the total volume
+        # and the field percentile for reasons unrelated to the hot spot. Refuse those.
+        fars = [r['far'] for r in rows if r['far']]
+        if fars and max(fars) / min(fars) > 1.02:
+            print(f"{name:16s} CONTAMINATED - far field varies {min(fars):.2f}..{max(fars):.2f} mm "
+                  f"({max(fars)/min(fars):.2f}x) across the family. max_nodes made the mesher "
+                  f"coarsen elsewhere; not a pure refinement. Skipped.\n")
+            continue
         for r in rows:
             print(f"{name:16s} {r['link']:26s} {r['h']:6.2f} {r['nodes']:8d} "
                   f"{r['point']:8.1f} {r['field']:10.1f}")

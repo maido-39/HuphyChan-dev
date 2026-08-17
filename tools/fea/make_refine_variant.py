@@ -96,8 +96,18 @@ def make(base, variant, h, r, max_nodes, specs):
         f'{variant}: hot spot {xyz} is {d:.1f} mm from the nearest mesh node of {base} - '
         'that coordinate is not on the part, check it before spending a solve on it')
     ref.append([xyz[0], xyz[1], xyz[2], r, h])
-    mesh['max_nodes'] = max_nodes
+    # Do NOT cap max_nodes. The runner honours the cap by coarsening the FAR field, which
+    # makes the twin differ from its base in two ways at once and destroys the comparison
+    # (it silently contaminated the foot family 10.12 -> 18.00 mm and L5e 19.94 -> 29.91).
+    # A refinement twin must change the hot spot and nothing else.
+    if max_nodes:
+        mesh['max_nodes'] = max_nodes
+    else:
+        mesh.pop('max_nodes', None)
     mesh['auto_refine'] = False
+    assert mesh.get('size_far') == specs[base]['mesh'].get('size_far'), (
+        f"{variant}: size_far {mesh.get('size_far')} != base "
+        f"{specs[base]['mesh'].get('size_far')} - the far field must be identical")
     # the runner resolves the CAD as steps/link_<geometry_of or link name>.step, so a
     # variant with a new name MUST point back at the base geometry or it looks for a
     # STEP that was never exported (this is exactly how the first attempt failed)
@@ -120,7 +130,7 @@ def main():
     made = []
     if '--auto' in sys.argv:
         mx = int(next((a.split('=')[1] for a in sys.argv
-                       if a.startswith('--max-nodes=')), 520000))
+                       if a.startswith('--max-nodes=')), 0))
         for base, (variant, h, r) in AUTO.items():
             if variant in specs:
                 print(f'{variant:28s} exists - skipped')
@@ -135,7 +145,7 @@ def main():
         h = float(next((a.split('=')[1] for a in sys.argv if a.startswith('--h=')), 2.0))
         r = float(next((a.split('=')[1] for a in sys.argv if a.startswith('--r=')), 14.0))
         mx = int(next((a.split('=')[1] for a in sys.argv
-                       if a.startswith('--max-nodes=')), 520000))
+                       if a.startswith('--max-nodes=')), 0))
         made.append(make(args[0], args[1], h, r, mx, specs))
 
     if not made:
