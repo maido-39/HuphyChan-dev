@@ -92,9 +92,10 @@ def main():
                 fresh = ed.get('spec_hash') == h
             except Exception:
                 fresh = False
-            if fresh:
-                s['envelope'] = ed
-            else:
+            s['envelope'] = ed
+            if not fresh:
+                # still show it - the viewer banners it as superseded. Hiding the field
+                # entirely meant a spec typo could blank every result mid-investigation.
                 s['stale_result'] = True
         elif stat == 'P99':
             s['stale_result'] = True
@@ -109,7 +110,7 @@ def main():
         except Exception:
             s['motors_in_analysis'] = 'auto'
         case = f'{os.path.dirname(f)}/case_{link}_env.json'
-        if fresh and os.path.exists(case) and not s.get('result_vM'):
+        if os.path.exists(case) and not s.get('result_vM'):
             c = json.load(open(case))
             k = next(iter(c))
             if len(c[k]['nodes']) == len(s['nodes']):
@@ -117,7 +118,7 @@ def main():
         # the full post-processing field set (displacement, principal stresses,
         # safety factor, keep-out mask) exported by export_fields.py
         ff = f'{os.path.dirname(f)}/fields.json'
-        if fresh and os.path.exists(ff):
+        if os.path.exists(ff):
             fd = json.load(open(ff))
             if len(fd['fields']['vM_env']) == len(s['nodes']):
                 s['fields'] = fd['fields']
