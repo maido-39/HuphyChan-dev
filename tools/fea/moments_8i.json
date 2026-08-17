@@ -1,0 +1,109 @@
+{
+ "source": "rough.npz",
+ "samples": 7200,
+ "note": "M transported from the recorded CoM reference to the joint anchor: M_joint = M_com + (p_com - p_joint) x F. Validated against docs/64 SS8i for hip_roll / hip_yaw / knee.",
+ "joints": {
+  "hip_pitch": {
+   "M_perp": {
+    "rms": 29.3,
+    "p99": 86.7,
+    "peak": 360.2
+   },
+   "M_axis": {
+    "rms": 24.0,
+    "p99": 84.2,
+    "peak": 302.5
+   },
+   "M_perp_old": {
+    "rms": 32.9,
+    "p99": 95.5,
+    "peak": 409.3
+   }
+  },
+  "hip_roll": {
+   "M_perp": {
+    "rms": 33.8,
+    "p99": 99.6,
+    "peak": 377.0
+   },
+   "M_axis": {
+    "rms": 25.2,
+    "p99": 75.2,
+    "peak": 309.9
+   },
+   "M_perp_old": {
+    "rms": 31.4,
+    "p99": 96.0,
+    "peak": 421.1
+   }
+  },
+  "hip_yaw": {
+   "M_perp": {
+    "rms": 29.7,
+    "p99": 82.0,
+    "peak": 306.6
+   },
+   "M_axis": {
+    "rms": 10.9,
+    "p99": 37.9,
+    "peak": 163.6
+   },
+   "M_perp_old": {
+    "rms": 39.4,
+    "p99": 113.1,
+    "peak": 454.3
+   }
+  },
+  "knee": {
+   "M_perp": {
+    "rms": 14.8,
+    "p99": 49.5,
+    "peak": 167.9
+   },
+   "M_axis": {
+    "rms": 29.3,
+    "p99": 107.3,
+    "peak": 417.6
+   },
+   "M_perp_old": {
+    "rms": 32.3,
+    "p99": 91.9,
+    "peak": 338.5
+   }
+  },
+  "ankle_pitch": {
+   "M_perp": {
+    "rms": 7.9,
+    "p99": 25.4,
+    "peak": 112.3
+   },
+   "M_axis": {
+    "rms": 27.7,
+    "p99": 56.0,
+    "peak": 152.1
+   },
+   "M_perp_old": {
+    "rms": 37.3,
+    "p99": 130.6,
+    "peak": 384.7
+   }
+  },
+  "ankle_roll": {
+   "M_perp": {
+    "rms": 29.4,
+    "p99": 58.7,
+    "peak": 155.6
+   },
+   "M_axis": {
+    "rms": 4.3,
+    "p99": 13.6,
+    "peak": 44.4
+   },
+   "M_perp_old": {
+    "rms": 40.4,
+    "p99": 157.6,
+    "peak": 567.4
+   }
+  }
+ }
+}
