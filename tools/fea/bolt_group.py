@@ -191,10 +191,32 @@ def main():
                     assumed_Le = True
             if len(P) < 3:
                 continue
-            n = np.asarray(blk.get('axis_vec') or [0, 0, 1], float)
-            if isinstance(blk.get('axis'), str):
-                n = {'x': [1, 0, 0], 'y': [0, 1, 0], 'z': [0, 0, 1]}[blk['axis']]
-                n = np.asarray(n, float)
+            # The interface normal decides what is tension and what is shear, so taking
+            # it from a global-axis STRING is only right when the flange happens to be
+            # perpendicular to that axis. Fit it to the bolt pattern instead, and say so
+            # when the pattern is not planar (then no single normal is correct).
+            # Fit to the PAD points, not the bolt heads: heads sit at different depths
+            # along their own axes, so they are never coplanar and fitting to them gave a
+            # normal 90 deg off the truth (my own first version of this check).
+            Pn = np.asarray(pads, float)
+            c_fit = Pn.mean(0)
+            _, sv, vt = np.linalg.svd(Pn - c_fit)
+            n = vt[-1] / max(np.linalg.norm(vt[-1]), 1e-9)
+            flat = sv[-1] / max(sv[0], 1e-9)
+            hint = blk.get('axis')
+            if isinstance(hint, str):
+                nh = np.asarray({'x': [1, 0, 0], 'y': [0, 1, 0], 'z': [0, 0, 1]}[hint], float)
+                if float(n @ nh) < 0:
+                    n = -n
+                ang = np.degrees(np.arccos(min(1.0, abs(float(n @ nh)))))
+                if ang > 10.0:
+                    print(f'   NOTE: {link} pad group normal is {ang:.0f} deg off the '
+                          f"declared '{hint}' axis - using the fitted normal "
+                          f'{np.round(n, 2)}', flush=True)
+            if flat > 0.15:
+                print(f'   WARNING: {link} pad group is NOT planar (out-of-plane / span = '
+                      f'{flat:.2f}); a single interface normal cannot describe it, so its '
+                      'tension/shear split is approximate', flush=True)
             c = np.asarray(P, float).mean(0)
             # The moment at a bolted interface is what the load does about it. Using
             # a non-existent 'joint_ctr' key made the arm zero, so every bolt came out
