@@ -9105,5 +9105,3766 @@
   "housing": "elastic",
   "_doc": "third point of the housing bracket: the actuator envelope meshed as ALUMINIUM instead of rigid or absent. Rigid vs absent differ by 3.5-5.5x on this link (and L2 cannot be assembled without housings at all), which is too wide a bracket to size hardware from. Housing modelled as a 5 mm-wall aluminium TUBE, not a solid cylinder: the solid version drove L5 field p99 from 106 to 12.5, i.e. it was as stiff as the rigid body and made the bracket meaningless. Rigid (stiffest) / 5 mm tube (realistic) / absent (softest) is the useful three-point bracket. Meshed without boolean fragment; the tube is trimmed against the link so material is not double counted.",
   "housing_wall_mm": 5.0
+ },
+ "L6f_pelvis_peakfine": {
+  "mesh": {
+   "size_far": 44.29,
+   "refine": [
+    [
+     0.0,
+     70.0,
+     60.0,
+     60,
+     10.99
+    ],
+    [
+     0.0,
+     70.0,
+     132.0,
+     55,
+     10.99
+    ],
+    [
+     0.0,
+     70.0,
+     132.0,
+     60.0,
+     8.79
+    ],
+    [
+     50.41,
+     86.38,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     31.15,
+     112.88,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     0.0,
+     123.0,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     -31.15,
+     112.88,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     -50.41,
+     86.38,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     -50.41,
+     53.62,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     -31.15,
+     27.12,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     0.0,
+     17.0,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     31.15,
+     27.12,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     50.41,
+     53.62,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     -56.7,
+     7.5,
+     85.23,
+     14.0,
+     8.79
+    ],
+    [
+     -56.7,
+     7.5,
+     100.22,
+     14.0,
+     8.79
+    ],
+    [
+     -56.7,
+     7.5,
+     115.22,
+     14.0,
+     8.79
+    ],
+    [
+     56.7,
+     7.5,
+     85.23,
+     14.0,
+     8.79
+    ],
+    [
+     56.7,
+     7.5,
+     100.22,
+     14.0,
+     8.79
+    ],
+    [
+     56.7,
+     7.5,
+     115.22,
+     14.0,
+     8.79
+    ],
+    [
+     -56.7,
+     132.5,
+     85.23,
+     14.0,
+     8.79
+    ],
+    [
+     -56.7,
+     132.5,
+     100.22,
+     14.0,
+     8.79
+    ],
+    [
+     -56.7,
+     132.5,
+     115.22,
+     14.0,
+     8.79
+    ],
+    [
+     56.7,
+     132.5,
+     85.23,
+     14.0,
+     8.79
+    ],
+    [
+     56.7,
+     132.5,
+     100.22,
+     14.0,
+     8.79
+    ],
+    [
+     56.7,
+     132.5,
+     115.22,
+     14.0,
+     8.79
+    ],
+    [
+     0.0,
+     70.0,
+     60.0,
+     60.0,
+     8.79
+    ],
+    [
+     -0.1,
+     132.5,
+     60.0,
+     14.0,
+     2.0
+    ]
+   ],
+   "max_nodes": 520000,
+   "auto_refine": false
+  },
+  "actuators": [],
+  "envelope": {
+   "joint": "hip_pitch",
+   "moment_mode": "geometry",
+   "joint_axis": "x",
+   "axial_torque_Nm": 105.2,
+   "inertia_g": 3.0,
+   "pattern": true,
+   "joint_centre": [
+    -13.7,
+    70.0,
+    60.0
+   ],
+   "fix_desc": "trunk side: the 2020-profile bore + its 10-bolt ring at z=138 and the two 6-bolt side rails",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "z",
+     "ctr": [
+      0.0,
+      70.0,
+      132.0
+     ],
+     "r": 48.0,
+     "span": [
+      126.0,
+      138.0
+     ],
+     "rtol": 0.9,
+     "name": "bore"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "z",
+     "points": [
+      [
+       50.41,
+       86.38,
+       138.0
+      ],
+      [
+       31.15,
+       112.88,
+       138.0
+      ],
+      [
+       0.0,
+       123.0,
+       138.0
+      ],
+      [
+       -31.15,
+       112.88,
+       138.0
+      ],
+      [
+       -50.41,
+       86.38,
+       138.0
+      ],
+      [
+       -50.41,
+       53.62,
+       138.0
+      ],
+      [
+       -31.15,
+       27.12,
+       138.0
+      ],
+      [
+       0.0,
+       17.0,
+       138.0
+      ],
+      [
+       31.15,
+       27.12,
+       138.0
+      ],
+      [
+       50.41,
+       53.62,
+       138.0
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "y",
+     "points": [
+      [
+       -56.7,
+       7.5,
+       85.23
+      ],
+      [
+       -56.7,
+       7.5,
+       100.22
+      ],
+      [
+       -56.7,
+       7.5,
+       115.22
+      ],
+      [
+       56.7,
+       7.5,
+       85.23
+      ],
+      [
+       56.7,
+       7.5,
+       100.22
+      ],
+      [
+       56.7,
+       7.5,
+       115.22
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "y",
+     "points": [
+      [
+       -56.7,
+       132.5,
+       85.23
+      ],
+      [
+       -56.7,
+       132.5,
+       100.22
+      ],
+      [
+       -56.7,
+       132.5,
+       115.22
+      ],
+      [
+       56.7,
+       132.5,
+       85.23
+      ],
+      [
+       56.7,
+       132.5,
+       100.22
+      ],
+      [
+       56.7,
+       132.5,
+       115.22
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    }
+   ],
+   "points": [
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      0.0,
+      70.0,
+      60.0
+     ],
+     "r": 48.0,
+     "span": [
+      -13.7,
+      -0.1
+     ],
+     "rtol": 0.9,
+     "name": "bore"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -13.7,
+       17.65,
+       51.71
+      ],
+      [
+       -13.7,
+       22.78,
+       84.06
+      ],
+      [
+       -13.7,
+       32.52,
+       22.52
+      ],
+      [
+       -13.7,
+       45.94,
+       107.22
+      ],
+      [
+       -13.7,
+       61.71,
+       7.65
+      ],
+      [
+       -13.7,
+       78.29,
+       112.35
+      ],
+      [
+       -13.7,
+       94.06,
+       12.78
+      ],
+      [
+       -13.7,
+       107.48,
+       97.48
+      ],
+      [
+       -13.7,
+       117.22,
+       35.94
+      ],
+      [
+       -13.7,
+       122.35,
+       68.29
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    }
+   ],
+   "_note": "pelvis has no proximal joint - held at the trunk attachments; the LEFT hip_pitch flange takes the leg wrench (right side is the mirror case)",
+   "transverse_moment_Nm": 86.7,
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 84.2 x1.25, capped at the joint capability 120.0 N\u00b7m (the ankle is a 2-RSU parallel mechanism: both RS03 drive pitch together)"
+  },
+  "_doc": "pelvis. The two actuators previously listed here sit 30-90 mm off this geometry (hip_p is on the leg side at x=-124, hip_r_1_ is above the pelvis top) and were silently skipped, so the \"motors included\" model never had any. They are removed rather than pretended.",
+  "_refines": "L6_pelvis",
+  "_note": "mesh-refinement twin of L6_pelvis: same case, hot spot at [-0.1, 132.5, 60.0] refined from h 8.79 to 2.0 mm. Built to decide whether that link's point maximum is a geometric singularity."
+ },
+ "L6cf_pelvis_nomotor_fine": {
+  "mesh": {
+   "size_far": 59.79,
+   "refine": [
+    [
+     0.0,
+     70.0,
+     60.0,
+     24.99,
+     31.19
+    ],
+    [
+     0.0,
+     70.0,
+     132.0,
+     22.9075,
+     31.19
+    ],
+    [
+     0.0,
+     70.0,
+     132.0,
+     24.99,
+     24.95
+    ],
+    [
+     50.41,
+     86.38,
+     138.0,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     31.15,
+     112.88,
+     138.0,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     0.0,
+     123.0,
+     138.0,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     -31.15,
+     112.88,
+     138.0,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     -50.41,
+     86.38,
+     138.0,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     -50.41,
+     53.62,
+     138.0,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     -31.15,
+     27.12,
+     138.0,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     0.0,
+     17.0,
+     138.0,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     31.15,
+     27.12,
+     138.0,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     50.41,
+     53.62,
+     138.0,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     -56.7,
+     7.5,
+     85.23,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     -56.7,
+     7.5,
+     100.22,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     -56.7,
+     7.5,
+     115.22,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     56.7,
+     7.5,
+     85.23,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     56.7,
+     7.5,
+     100.22,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     56.7,
+     7.5,
+     115.22,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     -56.7,
+     132.5,
+     85.23,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     -56.7,
+     132.5,
+     100.22,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     -56.7,
+     132.5,
+     115.22,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     56.7,
+     132.5,
+     85.23,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     56.7,
+     132.5,
+     100.22,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     56.7,
+     132.5,
+     115.22,
+     5.830999999999999,
+     24.95
+    ],
+    [
+     0.0,
+     70.0,
+     60.0,
+     24.99,
+     24.95
+    ],
+    [
+     0.0,
+     70.0,
+     132.0,
+     24.99,
+     17.03
+    ],
+    [
+     50.41,
+     86.38,
+     138.0,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     31.15,
+     112.88,
+     138.0,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     0.0,
+     123.0,
+     138.0,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     -31.15,
+     112.88,
+     138.0,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     -50.41,
+     86.38,
+     138.0,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     -50.41,
+     53.62,
+     138.0,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     -31.15,
+     27.12,
+     138.0,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     0.0,
+     17.0,
+     138.0,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     31.15,
+     27.12,
+     138.0,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     50.41,
+     53.62,
+     138.0,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     -56.7,
+     7.5,
+     85.23,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     -56.7,
+     7.5,
+     100.22,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     -56.7,
+     7.5,
+     115.22,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     56.7,
+     7.5,
+     85.23,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     56.7,
+     7.5,
+     100.22,
+     5.830999999999999,
+     17.03
+    ],
+    [
+     24.2,
+     130.6,
+     134.1,
+     14.0,
+     2.0
+    ]
+   ],
+   "max_nodes": 520000,
+   "auto_refine": false
+  },
+  "actuators": [],
+  "envelope": {
+   "joint": "hip_pitch",
+   "moment_mode": "geometry",
+   "joint_axis": "x",
+   "axial_torque_Nm": 105.2,
+   "inertia_g": 3.0,
+   "pattern": true,
+   "joint_centre": [
+    -13.7,
+    70.0,
+    60.0
+   ],
+   "fix_desc": "trunk side: the 2020-profile bore + its 10-bolt ring at z=138 and the two 6-bolt side rails",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "z",
+     "ctr": [
+      0.0,
+      70.0,
+      132.0
+     ],
+     "r": 48.0,
+     "span": [
+      126.0,
+      138.0
+     ],
+     "rtol": 0.9,
+     "name": "bore"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "z",
+     "points": [
+      [
+       50.41,
+       86.38,
+       138.0
+      ],
+      [
+       31.15,
+       112.88,
+       138.0
+      ],
+      [
+       0.0,
+       123.0,
+       138.0
+      ],
+      [
+       -31.15,
+       112.88,
+       138.0
+      ],
+      [
+       -50.41,
+       86.38,
+       138.0
+      ],
+      [
+       -50.41,
+       53.62,
+       138.0
+      ],
+      [
+       -31.15,
+       27.12,
+       138.0
+      ],
+      [
+       0.0,
+       17.0,
+       138.0
+      ],
+      [
+       31.15,
+       27.12,
+       138.0
+      ],
+      [
+       50.41,
+       53.62,
+       138.0
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "y",
+     "points": [
+      [
+       -56.7,
+       7.5,
+       85.23
+      ],
+      [
+       -56.7,
+       7.5,
+       100.22
+      ],
+      [
+       -56.7,
+       7.5,
+       115.22
+      ],
+      [
+       56.7,
+       7.5,
+       85.23
+      ],
+      [
+       56.7,
+       7.5,
+       100.22
+      ],
+      [
+       56.7,
+       7.5,
+       115.22
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "y",
+     "points": [
+      [
+       -56.7,
+       132.5,
+       85.23
+      ],
+      [
+       -56.7,
+       132.5,
+       100.22
+      ],
+      [
+       -56.7,
+       132.5,
+       115.22
+      ],
+      [
+       56.7,
+       132.5,
+       85.23
+      ],
+      [
+       56.7,
+       132.5,
+       100.22
+      ],
+      [
+       56.7,
+       132.5,
+       115.22
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    }
+   ],
+   "points": [
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      0.0,
+      70.0,
+      60.0
+     ],
+     "r": 48.0,
+     "span": [
+      -13.7,
+      -0.1
+     ],
+     "rtol": 0.9,
+     "name": "bore"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -13.7,
+       17.65,
+       51.71
+      ],
+      [
+       -13.7,
+       22.78,
+       84.06
+      ],
+      [
+       -13.7,
+       32.52,
+       22.52
+      ],
+      [
+       -13.7,
+       45.94,
+       107.22
+      ],
+      [
+       -13.7,
+       61.71,
+       7.65
+      ],
+      [
+       -13.7,
+       78.29,
+       112.35
+      ],
+      [
+       -13.7,
+       94.06,
+       12.78
+      ],
+      [
+       -13.7,
+       107.48,
+       97.48
+      ],
+      [
+       -13.7,
+       117.22,
+       35.94
+      ],
+      [
+       -13.7,
+       122.35,
+       68.29
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    }
+   ],
+   "_note": "pelvis has no proximal joint - held at the trunk attachments; the LEFT hip_pitch flange takes the leg wrench (right side is the mirror case)",
+   "transverse_moment_Nm": 86.7,
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 84.2 x1.25, capped at the joint capability 120.0 N\u00b7m (the ankle is a 2-RSU parallel mechanism: both RS03 drive pitch together)"
+  },
+  "geometry_of": "L6_pelvis",
+  "_doc": "same pelvis, second mesh density. It was set up as the no-motor half of a bracket, but L6 has no attachable motor, so this is really a MESH CONVERGENCE control: 284k vs 319k nodes on an identical model gave 342.6 vs 82.8 MPa, which is a mesh-sensitivity finding, not a motor effect.",
+  "_refines": "L6c_pelvis_nomotor",
+  "_note": "mesh-refinement twin of L6c_pelvis_nomotor: same case, hot spot at [24.2, 130.6, 134.1] refined from h 17.03 to 2.0 mm. Built to decide whether that link's point maximum is a geometric singularity."
+ },
+ "L3cf_thigh_nomotor_fine": {
+  "mesh": {
+   "size_far": 16.0,
+   "curv": 0,
+   "auto_refine": false,
+   "refine": [
+    [
+     -98.3,
+     129.0,
+     -248.1,
+     12.0,
+     1.5
+    ]
+   ],
+   "max_nodes": 520000,
+   "_doc": "proven configuration measured on this geometry: curvature refinement off, 16 mm, no local balls -> 128k nodes. Adding refinement balls made gmsh report duplicated facets, so the interfaces are resolved by the 16 mm mesh and the design stress excludes the clamped nodes instead."
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "hipyaw_cantilever_P99",
+    "desc": "hip_yaw wrench P99x1.25 on the 6814 yaw bearing seat (z-axis, r45) - the flagged cantilever case; supported at the knee bearing seat",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "hip_yaw",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "z",
+      "ctr": [
+       -123.7,
+       70.0,
+       -97.0
+      ],
+      "r": 45.01,
+      "span": [
+       -108.0,
+       -86.0
+      ],
+      "rtol": 1.0
+     }
+    ]
+   },
+   {
+    "name": "knee_P99_at_thigh",
+    "desc": "knee wrench P99x1.25 into the knee seat, supported at the yaw bearing seat",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "z",
+      "ctr": [
+       -123.7,
+       70.0,
+       -97.0
+      ],
+      "r": 45.01,
+      "span": [
+       -108.0,
+       -86.0
+      ],
+      "rtol": 1.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "knee",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   },
+   {
+    "name": "hipyaw_cantilever_peak",
+    "desc": "hip_yaw peak wrench (reference)",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "hip_yaw",
+      "stat": "peak",
+      "factor": 1.0,
+      "axis": "z",
+      "ctr": [
+       -123.7,
+       70.0,
+       -97.0
+      ],
+      "r": 45.01,
+      "span": [
+       -108.0,
+       -86.0
+      ],
+      "rtol": 1.0
+     }
+    ]
+   }
+  ],
+  "envelope": {
+   "joint": "knee",
+   "moment_mode": "geometry",
+   "joint_axis": "x",
+   "axial_torque_Nm": 120,
+   "pattern": true,
+   "joint_centre": [
+    -123.7,
+    115.0,
+    -310.0
+   ],
+   "fix_desc": "hip_yaw interface: RS03 hip_Y output seat r34.925 + 6 x M4 flange pads + 3 x M3 dowel/screw pads",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "z",
+     "ctr": [
+      -123.7,
+      70.0,
+      -102.75
+     ],
+     "r": 34.925,
+     "span": [
+      -107.5,
+      -98.0
+     ],
+     "rtol": 0.9,
+     "name": "bore"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "z",
+     "points": [
+      [
+       -123.7,
+       85.18,
+       -97.0
+      ],
+      [
+       -110.55,
+       77.59,
+       -97.0
+      ],
+      [
+       -110.55,
+       62.41,
+       -97.0
+      ],
+      [
+       -123.7,
+       54.82,
+       -97.0
+      ],
+      [
+       -136.85,
+       62.41,
+       -97.0
+      ],
+      [
+       -136.85,
+       77.59,
+       -97.0
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "z",
+     "points": [
+      [
+       -108.52,
+       70.0,
+       -97.0
+      ],
+      [
+       -131.29,
+       83.15,
+       -97.0
+      ],
+      [
+       -131.29,
+       56.85,
+       -97.0
+      ]
+     ],
+     "r_pad": 3.0,
+     "depth": 6.0,
+     "name": "bolt_pads"
+    }
+   ],
+   "points": [
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -92.95,
+      115.0,
+      -310.0
+     ],
+     "r": 32.52,
+     "span": [
+      -96.45,
+      -89.45
+     ],
+     "rtol": 0.9,
+     "name": "bore"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -97.45,
+       62.07,
+       -307.23
+      ],
+      [
+       -97.45,
+       70.55,
+       -338.87
+      ],
+      [
+       -97.45,
+       73.81,
+       -276.65
+      ],
+      [
+       -97.45,
+       96.01,
+       -359.48
+      ],
+      [
+       -97.45,
+       101.28,
+       -258.81
+      ],
+      [
+       -97.45,
+       128.72,
+       -361.19
+      ],
+      [
+       -97.45,
+       133.99,
+       -260.52
+      ],
+      [
+       -97.45,
+       156.19,
+       -343.35
+      ],
+      [
+       -97.45,
+       159.45,
+       -281.13
+      ],
+      [
+       -97.45,
+       167.93,
+       -312.77
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -149.95,
+       62.07,
+       -307.23
+      ],
+      [
+       -149.95,
+       70.55,
+       -338.87
+      ],
+      [
+       -149.95,
+       73.81,
+       -276.65
+      ],
+      [
+       -149.95,
+       96.01,
+       -359.48
+      ],
+      [
+       -149.95,
+       101.28,
+       -258.81
+      ],
+      [
+       -149.95,
+       128.72,
+       -361.19
+      ],
+      [
+       -149.95,
+       133.99,
+       -260.52
+      ],
+      [
+       -149.95,
+       156.19,
+       -343.35
+      ],
+      [
+       -149.95,
+       159.45,
+       -281.13
+      ],
+      [
+       -149.95,
+       167.93,
+       -312.77
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    }
+   ],
+   "_note": "thigh hangs from the yaw bearing; the knee wrench from the shin enters at the knee housing seats",
+   "inertia_g": 3.0,
+   "transverse_moment_Nm": 49.5,
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 107.3 x1.25, capped at the joint capability 120.0 N\u00b7m (the ankle is a 2-RSU parallel mechanism: both RS03 drive pitch together)"
+  },
+  "extra_steps": [
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_hip_y.step",
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs04_knee_p.step"
+  ],
+  "actuators": [],
+  "subset": {
+   "indices": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+   ],
+   "_doc": "3 pins of 0.15 cm3 at z=-96 (indices 0,1,2) interfere with the hub solids; together they make gmsh emit self-intersecting facets (PLC error). 0.45 cm3 of 489 - structurally irrelevant, but a CAD interference to report."
+  },
+  "geometry_of": "L3_thigh",
+  "_doc": "same thigh and wrench as L3, actuator housings left out - the knee load enters through the RS04 housing, so this is the conservative half of the bracket.",
+  "_refines": "L3c_thigh_nomotor",
+  "_note": "mesh-refinement twin of L3c_thigh_nomotor: same case, hot spot at [-98.3, 129.0, -248.1] refined from h 16.0 to 1.5 mm. Built to decide whether that link's point maximum is a geometric singularity."
+ },
+ "L2cf_shin_nomotor_fine": {
+  "mesh": {
+   "size_far": 16.4,
+   "refine": [
+    [
+     -123.7,
+     145.0,
+     -550.0,
+     40,
+     5.41
+    ],
+    [
+     -123.7,
+     115.0,
+     -332.0,
+     40,
+     5.41
+    ],
+    [
+     -92.95,
+     115.0,
+     -310.0,
+     36.989999999999995,
+     5.47
+    ],
+    [
+     -150.45,
+     130.59,
+     -301.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     115.0,
+     -292.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     99.41,
+     -301.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     99.41,
+     -319.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     115.0,
+     -328.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     130.59,
+     -319.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     130.59,
+     -301.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     115.0,
+     -292.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     99.41,
+     -301.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     99.41,
+     -319.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     115.0,
+     -328.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     130.59,
+     -319.0,
+     14.0,
+     5.47
+    ],
+    [
+     -143.45,
+     190.27,
+     -581.25,
+     14.0,
+     5.47
+    ],
+    [
+     -143.45,
+     163.75,
+     -554.73,
+     14.0,
+     5.47
+    ],
+    [
+     -143.45,
+     126.25,
+     -554.73,
+     14.0,
+     5.47
+    ],
+    [
+     -151.4,
+     158.5,
+     -554.7,
+     12.0,
+     1.5
+    ]
+   ],
+   "max_nodes": 520000,
+   "auto_refine": false
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "knee_P99",
+    "desc": "knee wrench P99x1.25 on the 6810 knee seat; supported at the ankle-motor end of the module",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -550.0,
+      "tol": 3.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "knee",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   },
+   {
+    "name": "knee_peak",
+    "desc": "knee peak wrench (reference case)",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -550.0,
+      "tol": 3.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "knee",
+      "stat": "peak",
+      "factor": 1.0,
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   }
+  ],
+  "envelope": {
+   "joint": "ankle_pitch",
+   "fix_desc": "knee interface: 6810 inner-ring seat (r24.99) + 6 x M5 flange pads (mating face and head seats)",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -92.95,
+      115.0,
+      -310.0
+     ],
+     "r": 24.99,
+     "span": [
+      -96.5,
+      -89.4
+     ],
+     "rtol": 0.9,
+     "name": "6810ZZ INNER-ring seat (shaft OD Phi49.98, 7.10 mm wide, measured area"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -150.45,
+       130.59,
+       -301.0
+      ],
+      [
+       -150.45,
+       115.0,
+       -292.0
+      ],
+      [
+       -150.45,
+       99.41,
+       -301.0
+      ],
+      [
+       -150.45,
+       99.41,
+       -319.0
+      ],
+      [
+       -150.45,
+       115.0,
+       -328.0
+      ],
+      [
+       -150.45,
+       130.59,
+       -319.0
+      ]
+     ],
+     "r_pad": 4.25,
+     "depth": 2.0,
+     "name": "6 x M5, PCD Phi36.0 about (115.0,-310.0). CLAMPING/MATING face against"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -159.45,
+       130.59,
+       -301.0
+      ],
+      [
+       -159.45,
+       115.0,
+       -292.0
+      ],
+      [
+       -159.45,
+       99.41,
+       -301.0
+      ],
+      [
+       -159.45,
+       99.41,
+       -319.0
+      ],
+      [
+       -159.45,
+       115.0,
+       -328.0
+      ],
+      [
+       -159.45,
+       130.59,
+       -319.0
+      ]
+     ],
+     "r_pad": 4.25,
+     "depth": 2.0,
+     "name": "the SAME 6 x M5 at the head-seat plane x=-159.45 (7 plane faces, 3275."
+    }
+   ],
+   "points": [
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -143.45,
+       190.27,
+       -581.25
+      ],
+      [
+       -143.45,
+       163.75,
+       -554.73
+      ],
+      [
+       -143.45,
+       126.25,
+       -554.73
+      ],
+      [
+       -143.45,
+       99.73,
+       -581.25
+      ],
+      [
+       -103.95,
+       190.27,
+       -581.25
+      ],
+      [
+       -103.95,
+       163.75,
+       -554.73
+      ],
+      [
+       -103.95,
+       126.25,
+       -554.73
+      ],
+      [
+       -103.95,
+       99.73,
+       -581.25
+      ]
+     ],
+     "r_pad": 3.5,
+     "depth": 2.0,
+     "name": "DISTAL joint load - L2 -> RS03 ankle_a housing -> L1_ankle_foot. Upper"
+    }
+   ],
+   "moment_mode": "geometry",
+   "joint_axis": "x",
+   "axial_torque_Nm": 70.0,
+   "pattern": true,
+   "joint_centre": [
+    -123.7,
+    145.0,
+    -800.0
+   ],
+   "_note": "distal = the 8 x M4 upper half of the PCD98 circle that bolts the RS03 ankle_a housing to L2 (review)",
+   "inertia_g": 3.0,
+   "transverse_moment_Nm": 25.4,
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 56.0 x1.25, capped at the joint capability 120.0 N\u00b7m (the ankle is a 2-RSU parallel mechanism: both RS03 drive pitch together)"
+  },
+  "extra_steps": [
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_ankle_a.step",
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_ankle_b.step"
+  ],
+  "actuators": [],
+  "geometry_of": "L2_shin",
+  "_doc": "INVALID as a model, and that is the finding: without the RS03 housings four bodies of the shin have nothing joining them within 12 mm. The actuator housings are structural members of this link, not just masses, so a \"conservative no-motor\" bracket cannot be built for L2 at all. The correct next step is a housing modelled with REAL stiffness (aluminium case + flange bolts), not rigid and not absent.",
+  "skip": true,
+  "_refines": "L2c_shin_nomotor",
+  "_note": "mesh-refinement twin of L2c_shin_nomotor: same case, hot spot at [-151.4, 158.5, -554.7] refined from h 5.41 to 1.5 mm. Built to decide whether that link's point maximum is a geometric singularity."
+ },
+ "L5cf_hip_nomotor_fine": {
+  "mesh": {
+   "size_far": 10.94,
+   "refine": [
+    [
+     -52.7,
+     70.0,
+     60.0,
+     50,
+     4.06
+    ],
+    [
+     -123.7,
+     96.25,
+     60.0,
+     40,
+     3.38
+    ],
+    [
+     -57.2,
+     70.0,
+     60.0,
+     51.99,
+     3.65
+    ],
+    [
+     -59.78,
+     52.0,
+     60.0,
+     14.0,
+     3.65
+    ],
+    [
+     -59.78,
+     61.0,
+     75.59,
+     14.0,
+     3.65
+    ],
+    [
+     -59.78,
+     79.0,
+     75.59,
+     14.0,
+     3.65
+    ],
+    [
+     -59.78,
+     88.0,
+     60.0,
+     14.0,
+     3.65
+    ],
+    [
+     -59.78,
+     79.0,
+     44.41,
+     14.0,
+     3.65
+    ],
+    [
+     -59.78,
+     61.0,
+     44.41,
+     14.0,
+     3.65
+    ],
+    [
+     -54.95,
+     54.41,
+     69.0,
+     15.01,
+     3.65
+    ],
+    [
+     -54.95,
+     70.0,
+     42.0,
+     15.01,
+     3.65
+    ],
+    [
+     -54.95,
+     85.59,
+     69.0,
+     15.01,
+     3.65
+    ],
+    [
+     -123.7,
+     100.75,
+     60.0,
+     44.51,
+     3.65
+    ],
+    [
+     -71.28,
+     39.75,
+     52.17,
+     14.0,
+     3.65
+    ],
+    [
+     -76.69,
+     39.75,
+     84.47,
+     14.0,
+     3.65
+    ],
+    [
+     -85.9,
+     39.75,
+     22.85,
+     14.0,
+     3.65
+    ],
+    [
+     -100.05,
+     39.75,
+     107.43,
+     14.0,
+     3.65
+    ],
+    [
+     -114.95,
+     39.75,
+     7.73,
+     14.0,
+     3.65
+    ],
+    [
+     -132.45,
+     39.75,
+     112.27,
+     14.0,
+     3.65
+    ],
+    [
+     -147.35,
+     39.75,
+     12.57,
+     14.0,
+     3.65
+    ],
+    [
+     -161.5,
+     39.75,
+     97.15,
+     14.0,
+     3.65
+    ],
+    [
+     -170.71,
+     39.75,
+     35.53,
+     14.0,
+     3.65
+    ],
+    [
+     -176.12,
+     39.75,
+     67.83,
+     14.0,
+     3.65
+    ],
+    [
+     -71.28,
+     100.2,
+     52.17,
+     14.0,
+     3.65
+    ],
+    [
+     -76.69,
+     100.2,
+     84.47,
+     14.0,
+     3.65
+    ],
+    [
+     -85.9,
+     100.2,
+     22.85,
+     14.0,
+     3.65
+    ],
+    [
+     -100.6,
+     35.8,
+     103.9,
+     16.0,
+     1.4
+    ]
+   ],
+   "max_nodes": 520000,
+   "auto_refine": false
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "hip_pitch_P99",
+    "desc": "hip_pitch wrench P99x1.25 on the CRBS808 crossed-roller seat (x-axis, r48); supported at the roll 6810 seat",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       96.25,
+       60.0
+      ],
+      "r": 32.51,
+      "span": [
+       90.0,
+       103.0
+      ],
+      "rtol": 0.9
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "hip_pitch",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "x",
+      "ctr": [
+       -52.7,
+       70.0,
+       60.0
+      ],
+      "r": 48.02,
+      "span": [
+       -60.0,
+       -45.0
+      ],
+      "rtol": 1.0
+     }
+    ]
+   },
+   {
+    "name": "hip_roll_P99",
+    "desc": "hip_roll wrench P99x1.25 on the 6810 roll seat (y-axis, r32.5); supported at the pitch CRBS seat",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "x",
+      "ctr": [
+       -52.7,
+       70.0,
+       60.0
+      ],
+      "r": 48.02,
+      "span": [
+       -60.0,
+       -45.0
+      ],
+      "rtol": 1.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "hip_roll",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       96.25,
+       60.0
+      ],
+      "r": 32.51,
+      "span": [
+       90.0,
+       103.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   }
+  ],
+  "envelope": {
+   "joint": "hip_roll",
+   "moment_mode": "geometry",
+   "joint_axis": "y",
+   "axial_torque_Nm": 94.0,
+   "pattern": true,
+   "joint_centre": [
+    -123.7,
+    100.75,
+    60.0
+   ],
+   "fix_desc": "hip_pitch interface: CRBS/RS04 seat r39.99 + 6 x M5 flange pads + 2 dowel bores",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -57.2,
+      70.0,
+      60.0
+     ],
+     "r": 39.99,
+     "span": [
+      -61.2,
+      -53.2
+     ],
+     "rtol": 0.9,
+     "name": "bore"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -59.78,
+       52.0,
+       60.0
+      ],
+      [
+       -59.78,
+       61.0,
+       75.59
+      ],
+      [
+       -59.78,
+       79.0,
+       75.59
+      ],
+      [
+       -59.78,
+       88.0,
+       60.0
+      ],
+      [
+       -59.78,
+       79.0,
+       44.41
+      ],
+      [
+       -59.78,
+       61.0,
+       44.41
+      ]
+     ],
+     "r_pad": 5.0,
+     "depth": 6.58,
+     "name": "bolt_pads"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -54.95,
+      54.41,
+      69.0
+     ],
+     "r": 3.01,
+     "span": [
+      -56.7,
+      -53.2
+     ],
+     "rtol": 0.6,
+     "name": "bore"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -54.95,
+      70.0,
+      42.0
+     ],
+     "r": 3.01,
+     "span": [
+      -56.7,
+      -53.2
+     ],
+     "rtol": 0.6,
+     "name": "bore"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -54.95,
+      85.59,
+      69.0
+     ],
+     "r": 3.01,
+     "span": [
+      -56.7,
+      -53.2
+     ],
+     "rtol": 0.6,
+     "name": "bore"
+    }
+   ],
+   "points": [
+    {
+     "type": "bore",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      100.75,
+      60.0
+     ],
+     "r": 32.51,
+     "span": [
+      97.2,
+      104.3
+     ],
+     "rtol": 0.9,
+     "name": "bore"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "y",
+     "points": [
+      [
+       -71.28,
+       39.75,
+       52.17
+      ],
+      [
+       -76.69,
+       39.75,
+       84.47
+      ],
+      [
+       -85.9,
+       39.75,
+       22.85
+      ],
+      [
+       -100.05,
+       39.75,
+       107.43
+      ],
+      [
+       -114.95,
+       39.75,
+       7.73
+      ],
+      [
+       -132.45,
+       39.75,
+       112.27
+      ],
+      [
+       -147.35,
+       39.75,
+       12.57
+      ],
+      [
+       -161.5,
+       39.75,
+       97.15
+      ],
+      [
+       -170.71,
+       39.75,
+       35.53
+      ],
+      [
+       -176.12,
+       39.75,
+       67.83
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 4.0,
+     "name": "bolt_pads"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "y",
+     "points": [
+      [
+       -71.28,
+       100.2,
+       52.17
+      ],
+      [
+       -76.69,
+       100.2,
+       84.47
+      ],
+      [
+       -85.9,
+       100.2,
+       22.85
+      ],
+      [
+       -100.05,
+       100.2,
+       107.43
+      ],
+      [
+       -114.95,
+       100.2,
+       7.73
+      ],
+      [
+       -132.45,
+       100.2,
+       112.27
+      ],
+      [
+       -147.35,
+       100.2,
+       12.57
+      ],
+      [
+       -161.5,
+       100.2,
+       97.15
+      ],
+      [
+       -170.71,
+       100.2,
+       35.53
+      ],
+      [
+       -176.12,
+       100.2,
+       67.83
+      ]
+     ],
+     "r_pad": 4.5,
+     "depth": 4.1,
+     "name": "bolt_pads"
+    }
+   ],
+   "_note": "upper (pelvis-side) interface is held; the wrench enters at the next link's joint",
+   "inertia_g": 3.0,
+   "transverse_moment_Nm": 99.6,
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 75.2 x1.25, capped at the joint capability 120.0 N\u00b7m (the ankle is a 2-RSU parallel mechanism: both RS03 drive pitch together)"
+  },
+  "extra_steps": [
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs04_hip_p.step",
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs04_hip_r.step"
+  ],
+  "actuators": [],
+  "geometry_of": "L5_hip_pitchroll",
+  "_doc": "same link and same wrench as L5_hip_pitchroll, with the actuator housings left out. A rigid housing bolted across the structure is a parallel load path, so the pair brackets the answer: with motors = lower bound on stress, without = conservative upper bound. L2 moved 311 -> 60 MPa when the load began entering through the rigid housing, which is exactly the effect this isolates.",
+  "_refines": "L5c_hip_nomotor",
+  "_note": "mesh-refinement twin of L5c_hip_nomotor: same case, hot spot at [-100.6, 35.8, 103.9] refined from h 3.38 to 1.4 mm. Built to decide whether that link's point maximum is a geometric singularity."
+ },
+ "L5ef_hip_elastic_fine": {
+  "mesh": {
+   "size_far": 19.94,
+   "refine": [
+    [
+     -52.7,
+     70.0,
+     60.0,
+     35.0,
+     9.96
+    ],
+    [
+     -123.7,
+     96.25,
+     60.0,
+     28.0,
+     8.28
+    ],
+    [
+     -57.2,
+     70.0,
+     60.0,
+     36.393,
+     8.94
+    ],
+    [
+     -59.78,
+     52.0,
+     60.0,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -59.78,
+     61.0,
+     75.59,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -59.78,
+     79.0,
+     75.59,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -59.78,
+     88.0,
+     60.0,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -59.78,
+     79.0,
+     44.41,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -59.78,
+     61.0,
+     44.41,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -54.95,
+     54.41,
+     69.0,
+     10.507,
+     8.94
+    ],
+    [
+     -54.95,
+     70.0,
+     42.0,
+     10.507,
+     8.94
+    ],
+    [
+     -54.95,
+     85.59,
+     69.0,
+     10.507,
+     8.94
+    ],
+    [
+     -123.7,
+     100.75,
+     60.0,
+     31.156999999999996,
+     8.94
+    ],
+    [
+     -71.28,
+     39.75,
+     52.17,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -76.69,
+     39.75,
+     84.47,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -85.9,
+     39.75,
+     22.85,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -100.05,
+     39.75,
+     107.43,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -114.95,
+     39.75,
+     7.73,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -132.45,
+     39.75,
+     112.27,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -147.35,
+     39.75,
+     12.57,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -161.5,
+     39.75,
+     97.15,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -170.71,
+     39.75,
+     35.53,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -176.12,
+     39.75,
+     67.83,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -71.28,
+     100.2,
+     52.17,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -76.69,
+     100.2,
+     84.47,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -85.9,
+     100.2,
+     22.85,
+     9.799999999999999,
+     8.94
+    ],
+    [
+     -57.2,
+     70.0,
+     60.0,
+     51.99,
+     6.4
+    ],
+    [
+     -59.78,
+     52.0,
+     60.0,
+     14.0,
+     6.4
+    ],
+    [
+     -59.78,
+     61.0,
+     75.59,
+     14.0,
+     6.4
+    ],
+    [
+     -59.78,
+     79.0,
+     75.59,
+     14.0,
+     6.4
+    ],
+    [
+     -59.78,
+     88.0,
+     60.0,
+     14.0,
+     6.4
+    ],
+    [
+     -59.78,
+     79.0,
+     44.41,
+     14.0,
+     6.4
+    ],
+    [
+     -59.78,
+     61.0,
+     44.41,
+     14.0,
+     6.4
+    ],
+    [
+     -54.95,
+     54.41,
+     69.0,
+     15.01,
+     6.4
+    ],
+    [
+     -54.95,
+     70.0,
+     42.0,
+     15.01,
+     6.4
+    ],
+    [
+     -54.95,
+     85.59,
+     69.0,
+     15.01,
+     6.4
+    ],
+    [
+     -123.7,
+     100.75,
+     60.0,
+     44.51,
+     6.4
+    ],
+    [
+     -71.28,
+     39.75,
+     52.17,
+     14.0,
+     6.4
+    ],
+    [
+     -76.69,
+     39.75,
+     84.47,
+     14.0,
+     6.4
+    ],
+    [
+     -85.9,
+     39.75,
+     22.85,
+     14.0,
+     6.4
+    ],
+    [
+     -100.05,
+     39.75,
+     107.43,
+     14.0,
+     6.4
+    ],
+    [
+     -114.95,
+     39.75,
+     7.73,
+     14.0,
+     6.4
+    ],
+    [
+     -57.2,
+     70.0,
+     60.0,
+     51.99,
+     6.0
+    ],
+    [
+     -59.78,
+     52.0,
+     60.0,
+     14.0,
+     6.0
+    ],
+    [
+     -59.78,
+     61.0,
+     75.59,
+     14.0,
+     6.0
+    ],
+    [
+     -59.78,
+     79.0,
+     75.59,
+     14.0,
+     6.0
+    ],
+    [
+     -59.78,
+     88.0,
+     60.0,
+     14.0,
+     6.0
+    ],
+    [
+     -59.78,
+     79.0,
+     44.41,
+     14.0,
+     6.0
+    ],
+    [
+     -59.78,
+     61.0,
+     44.41,
+     14.0,
+     6.0
+    ],
+    [
+     -54.95,
+     54.41,
+     69.0,
+     15.01,
+     6.0
+    ],
+    [
+     -54.95,
+     70.0,
+     42.0,
+     15.01,
+     6.0
+    ],
+    [
+     -54.95,
+     85.59,
+     69.0,
+     15.01,
+     6.0
+    ],
+    [
+     -123.7,
+     100.75,
+     60.0,
+     44.51,
+     6.0
+    ],
+    [
+     -71.28,
+     39.75,
+     52.17,
+     14.0,
+     6.0
+    ],
+    [
+     -76.69,
+     39.75,
+     84.47,
+     14.0,
+     6.0
+    ],
+    [
+     -85.9,
+     39.75,
+     22.85,
+     14.0,
+     6.0
+    ],
+    [
+     -100.05,
+     39.75,
+     107.43,
+     14.0,
+     6.0
+    ],
+    [
+     -114.95,
+     39.75,
+     7.73,
+     14.0,
+     6.0
+    ],
+    [
+     -57.2,
+     70.0,
+     60.0,
+     51.99,
+     6.0
+    ],
+    [
+     -59.78,
+     52.0,
+     60.0,
+     14.0,
+     6.0
+    ],
+    [
+     -59.78,
+     61.0,
+     75.59,
+     14.0,
+     6.0
+    ],
+    [
+     -59.78,
+     79.0,
+     75.59,
+     14.0,
+     6.0
+    ],
+    [
+     -59.78,
+     88.0,
+     60.0,
+     14.0,
+     6.0
+    ],
+    [
+     -59.78,
+     79.0,
+     44.41,
+     14.0,
+     6.0
+    ],
+    [
+     -59.78,
+     61.0,
+     44.41,
+     14.0,
+     6.0
+    ],
+    [
+     -54.95,
+     54.41,
+     69.0,
+     15.01,
+     6.0
+    ],
+    [
+     -54.95,
+     70.0,
+     42.0,
+     15.01,
+     6.0
+    ],
+    [
+     -54.95,
+     85.59,
+     69.0,
+     15.01,
+     6.0
+    ],
+    [
+     -123.7,
+     100.75,
+     60.0,
+     44.51,
+     6.0
+    ],
+    [
+     -71.28,
+     39.75,
+     52.17,
+     14.0,
+     6.0
+    ],
+    [
+     -76.69,
+     39.75,
+     84.47,
+     14.0,
+     6.0
+    ],
+    [
+     -85.9,
+     39.75,
+     22.85,
+     14.0,
+     6.0
+    ],
+    [
+     -100.05,
+     39.75,
+     107.43,
+     14.0,
+     6.0
+    ],
+    [
+     -114.95,
+     39.75,
+     7.73,
+     14.0,
+     6.0
+    ],
+    [
+     -183.1,
+     43.8,
+     52.0,
+     16.0,
+     1.4
+    ]
+   ],
+   "fragment": false,
+   "max_nodes": 520000,
+   "auto_refine": false
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "hip_pitch_P99",
+    "desc": "hip_pitch wrench P99x1.25 on the CRBS808 crossed-roller seat (x-axis, r48); supported at the roll 6810 seat",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       96.25,
+       60.0
+      ],
+      "r": 32.51,
+      "span": [
+       90.0,
+       103.0
+      ],
+      "rtol": 0.9
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "hip_pitch",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "x",
+      "ctr": [
+       -52.7,
+       70.0,
+       60.0
+      ],
+      "r": 48.02,
+      "span": [
+       -60.0,
+       -45.0
+      ],
+      "rtol": 1.0
+     }
+    ]
+   },
+   {
+    "name": "hip_roll_P99",
+    "desc": "hip_roll wrench P99x1.25 on the 6810 roll seat (y-axis, r32.5); supported at the pitch CRBS seat",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "x",
+      "ctr": [
+       -52.7,
+       70.0,
+       60.0
+      ],
+      "r": 48.02,
+      "span": [
+       -60.0,
+       -45.0
+      ],
+      "rtol": 1.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "hip_roll",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       96.25,
+       60.0
+      ],
+      "r": 32.51,
+      "span": [
+       90.0,
+       103.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   }
+  ],
+  "envelope": {
+   "joint": "hip_roll",
+   "moment_mode": "geometry",
+   "joint_axis": "y",
+   "axial_torque_Nm": 94.0,
+   "pattern": true,
+   "joint_centre": [
+    -123.7,
+    100.75,
+    60.0
+   ],
+   "fix_desc": "hip_pitch interface: CRBS/RS04 seat r39.99 + 6 x M5 flange pads + 2 dowel bores",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -57.2,
+      70.0,
+      60.0
+     ],
+     "r": 39.99,
+     "span": [
+      -61.2,
+      -53.2
+     ],
+     "rtol": 0.9,
+     "name": "bore"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -59.78,
+       52.0,
+       60.0
+      ],
+      [
+       -59.78,
+       61.0,
+       75.59
+      ],
+      [
+       -59.78,
+       79.0,
+       75.59
+      ],
+      [
+       -59.78,
+       88.0,
+       60.0
+      ],
+      [
+       -59.78,
+       79.0,
+       44.41
+      ],
+      [
+       -59.78,
+       61.0,
+       44.41
+      ]
+     ],
+     "r_pad": 5.0,
+     "depth": 6.58,
+     "name": "bolt_pads"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -54.95,
+      54.41,
+      69.0
+     ],
+     "r": 3.01,
+     "span": [
+      -56.7,
+      -53.2
+     ],
+     "rtol": 0.6,
+     "name": "bore"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -54.95,
+      70.0,
+      42.0
+     ],
+     "r": 3.01,
+     "span": [
+      -56.7,
+      -53.2
+     ],
+     "rtol": 0.6,
+     "name": "bore"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -54.95,
+      85.59,
+      69.0
+     ],
+     "r": 3.01,
+     "span": [
+      -56.7,
+      -53.2
+     ],
+     "rtol": 0.6,
+     "name": "bore"
+    }
+   ],
+   "points": [
+    {
+     "type": "bore",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      100.75,
+      60.0
+     ],
+     "r": 32.51,
+     "span": [
+      97.2,
+      104.3
+     ],
+     "rtol": 0.9,
+     "name": "bore"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "y",
+     "points": [
+      [
+       -71.28,
+       39.75,
+       52.17
+      ],
+      [
+       -76.69,
+       39.75,
+       84.47
+      ],
+      [
+       -85.9,
+       39.75,
+       22.85
+      ],
+      [
+       -100.05,
+       39.75,
+       107.43
+      ],
+      [
+       -114.95,
+       39.75,
+       7.73
+      ],
+      [
+       -132.45,
+       39.75,
+       112.27
+      ],
+      [
+       -147.35,
+       39.75,
+       12.57
+      ],
+      [
+       -161.5,
+       39.75,
+       97.15
+      ],
+      [
+       -170.71,
+       39.75,
+       35.53
+      ],
+      [
+       -176.12,
+       39.75,
+       67.83
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 4.0,
+     "name": "bolt_pads"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "y",
+     "points": [
+      [
+       -71.28,
+       100.2,
+       52.17
+      ],
+      [
+       -76.69,
+       100.2,
+       84.47
+      ],
+      [
+       -85.9,
+       100.2,
+       22.85
+      ],
+      [
+       -100.05,
+       100.2,
+       107.43
+      ],
+      [
+       -114.95,
+       100.2,
+       7.73
+      ],
+      [
+       -132.45,
+       100.2,
+       112.27
+      ],
+      [
+       -147.35,
+       100.2,
+       12.57
+      ],
+      [
+       -161.5,
+       100.2,
+       97.15
+      ],
+      [
+       -170.71,
+       100.2,
+       35.53
+      ],
+      [
+       -176.12,
+       100.2,
+       67.83
+      ]
+     ],
+     "r_pad": 4.5,
+     "depth": 4.1,
+     "name": "bolt_pads"
+    }
+   ],
+   "_note": "upper (pelvis-side) interface is held; the wrench enters at the next link's joint",
+   "inertia_g": 3.0,
+   "transverse_moment_Nm": 99.6,
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 75.2 x1.25, capped at the joint capability 120.0 N\u00b7m (the ankle is a 2-RSU parallel mechanism: both RS03 drive pitch together)"
+  },
+  "extra_steps": [
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs04_hip_p.step",
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs04_hip_r.step"
+  ],
+  "actuators": [
+   "robstride_rs04_hip_p",
+   "robstride_rs04_hip_r"
+  ],
+  "geometry_of": "L5_hip_pitchroll",
+  "housing": "elastic",
+  "_doc": "third point of the housing bracket: the actuator envelope meshed as ALUMINIUM instead of rigid or absent. Rigid vs absent differ by 3.5-5.5x on this link (and L2 cannot be assembled without housings at all), which is too wide a bracket to size hardware from. Housing modelled as a 5 mm-wall aluminium TUBE, not a solid cylinder: the solid version drove L5 field p99 from 106 to 12.5, i.e. it was as stiff as the rigid body and made the bracket meaningless. Rigid (stiffest) / 5 mm tube (realistic) / absent (softest) is the useful three-point bracket. Meshed without boolean fragment; the tube is trimmed against the link so material is not double counted.",
+  "housing_wall_mm": 5.0,
+  "_refines": "L5e_hip_elastic",
+  "_note": "mesh-refinement twin of L5e_hip_elastic: same case, hot spot at [-183.1, 43.8, 52.0] refined from h 6.0 to 1.4 mm. Built to decide whether that link's point maximum is a geometric singularity."
+ },
+ "L1gf_foot_corner_fine": {
+  "mesh": {
+   "size_far": 10.12,
+   "refine": [
+    [
+     -123.7,
+     163.05,
+     -800,
+     4.081699999999999,
+     10.74
+    ],
+    [
+     -123.7,
+     126.95,
+     -800,
+     4.081699999999999,
+     10.74
+    ],
+    [
+     -86.2,
+     195,
+     -810,
+     3.265359999999999,
+     8.35
+    ],
+    [
+     -161.2,
+     195,
+     -810,
+     3.265359999999999,
+     8.35
+    ],
+    [
+     -123.7,
+     163.05,
+     -800.0,
+     4.695995849999998,
+     14.93
+    ],
+    [
+     -123.7,
+     126.95,
+     -800.0,
+     4.695995849999998,
+     14.93
+    ],
+    [
+     -86.2,
+     195.0,
+     -810.0,
+     2.9633141999999992,
+     14.93
+    ],
+    [
+     -86.2,
+     195.0,
+     -810.0,
+     3.0612749999999997,
+     14.93
+    ],
+    [
+     -161.2,
+     195.0,
+     -810.0,
+     2.9633141999999992,
+     14.93
+    ],
+    [
+     -161.2,
+     195.0,
+     -810.0,
+     3.0612749999999997,
+     14.93
+    ],
+    [
+     -74.2,
+     195.0,
+     -810.0,
+     2.857189999999999,
+     14.93
+    ],
+    [
+     -173.2,
+     195.0,
+     -810.0,
+     2.857189999999999,
+     14.93
+    ],
+    [
+     -123.7,
+     163.05,
+     -800.0,
+     11.274899999999999,
+     7.09
+    ],
+    [
+     -123.7,
+     126.95,
+     -800.0,
+     11.274899999999999,
+     7.09
+    ],
+    [
+     -86.2,
+     195.0,
+     -810.0,
+     7.114799999999999,
+     7.09
+    ],
+    [
+     -86.2,
+     195.0,
+     -810.0,
+     7.35,
+     7.09
+    ],
+    [
+     -161.2,
+     195.0,
+     -810.0,
+     7.114799999999999,
+     7.09
+    ],
+    [
+     -161.2,
+     195.0,
+     -810.0,
+     7.35,
+     7.09
+    ],
+    [
+     -74.2,
+     195.0,
+     -810.0,
+     6.8599999999999985,
+     7.09
+    ],
+    [
+     -173.2,
+     195.0,
+     -810.0,
+     6.8599999999999985,
+     7.09
+    ],
+    [
+     -164.2,
+     -6.1,
+     -843.0,
+     12.0,
+     1.5
+    ]
+   ],
+   "max_nodes": 520000,
+   "auto_refine": false
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "stance_P99",
+    "desc": "ankle_roll wrench P99x1.25 into the two roll-axis 6900 seats + measured rod forces at the JS6 balls; ground support at the sole",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -843.0,
+      "tol": 0.3
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "ankle_roll",
+      "stat": "P99",
+      "factor": 0.625,
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       160.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       155.0,
+       166.5
+      ],
+      "rtol": 0.8
+     },
+     {
+      "kind": "wrench",
+      "joint": "ankle_roll",
+      "stat": "P99",
+      "factor": 0.625,
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       130.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       123.5,
+       135.0
+      ],
+      "rtol": 0.8
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -86.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -100.0,
+       -66.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -169.8,
+       -481.8,
+       1116.2
+      ]
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -161.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -181.0,
+       -147.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -103.7,
+       -320.9,
+       805.4
+      ]
+     }
+    ]
+   },
+   {
+    "name": "heelstrike_peak",
+    "desc": "GRF peak 6.39 BW (3227 N) on the rear third of the sole; held at the two roll-axis 6900 seats (the foot's only tie to the shin) + measured rod forces",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       160.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       155.0,
+       166.5
+      ],
+      "rtol": 0.8
+     },
+     {
+      "type": "bore",
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       130.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       123.5,
+       135.0
+      ],
+      "rtol": 0.8
+     }
+    ],
+    "patch_loads": [
+     {
+      "axis": "z",
+      "value": -843.0,
+      "tol": 0.3,
+      "box": {
+       "y": [
+        145.0,
+        260.0
+       ]
+      },
+      "F": [
+       0.0,
+       0.0,
+       3227.0
+      ]
+     }
+    ],
+    "loads": [
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -86.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -100.0,
+       -66.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -169.8,
+       -481.8,
+       1116.2
+      ]
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -161.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -181.0,
+       -147.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -103.7,
+       -320.9,
+       805.4
+      ]
+     }
+    ]
+   }
+  ],
+  "subset": {
+   "indices": [
+    19,
+    20,
+    21,
+    24
+   ],
+   "_doc": "FEET sole + AnkleFeetPillowAB/A/B. The UJ core, shin plates, cranks and rod ends belong to other links; the foot connects upward ONLY through the two roll-axis 6900 seats in the pillows."
+  },
+  "envelope": {
+   "joint": "ankle_roll",
+   "moment_mode": "geometry",
+   "joint_axis": "y",
+   "axial_torque_Nm": 17.0,
+   "inertia_g": 3.0,
+   "pattern": false,
+   "magnitudes_N": {
+    "Fx": 280.0,
+    "Fy": 280.0,
+    "Fz": 935.0
+   },
+   "fix_desc": "ankle attachments: two 6900 roll seats + both M6 clevis stacks (tap block, ear bore, head pad)",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      163.05,
+      -800.0
+     ],
+     "r": 11.01,
+     "span": [
+      159.8,
+      166.2
+     ],
+     "rtol": 0.9,
+     "name": "6900ZZ ankle_roll seat +y - housing bore in pillow #20, shoulder at y="
+    },
+    {
+     "type": "bore",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      126.95,
+      -800.0
+     ],
+     "r": 11.01,
+     "span": [
+      123.8,
+      130.2
+     ],
+     "rtol": 0.9,
+     "name": "6900ZZ ankle_roll seat -y - housing bore in pillow #21, shoulder at y="
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -86.2,
+      195.0,
+      -810.0
+     ],
+     "r": 2.52,
+     "span": [
+      -109.4,
+      -94.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor A - M6 tapped block, d5.04 tap drill, 15.0 mm engagement"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -86.2,
+      195.0,
+      -810.0
+     ],
+     "r": 3.0,
+     "span": [
+      -78.4,
+      -74.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor A - M6 close-fit hole d6.00 in the 4 mm outer ear"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -161.2,
+      195.0,
+      -810.0
+     ],
+     "r": 2.52,
+     "span": [
+      -153.4,
+      -138.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor B - M6 tapped block, d5.04 tap drill, 15.0 mm engagement"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -161.2,
+      195.0,
+      -810.0
+     ],
+     "r": 3.0,
+     "span": [
+      -173.4,
+      -169.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor B - M6 close-fit hole d6.00 in the 4 mm outer ear"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -74.2,
+       195.0,
+       -810.0
+      ],
+      [
+       -173.2,
+       195.0,
+       -810.0
+      ]
+     ],
+     "r_pad": 5.0,
+     "depth": 2.0,
+     "name": "M6 ISO4762 head seats (head d10 -> r_pad 5.0) on the outer ear faces x"
+    }
+   ],
+   "points": [
+    {
+     "name": "ground contact patch - corner",
+     "type": "plane",
+     "axis": "z",
+     "value": -843.0,
+     "tol": 0.3,
+     "box": {
+      "x": [
+       -174.0,
+       -152.0
+      ],
+      "y": [
+       -35.0,
+       -5.0
+      ]
+     }
+    }
+   ],
+   "_note": "primary = measured GRF P99x1.25 (935 N vertical, +-280 N tangential at mu 0.3) on the heel third of the sole, reacted at the four real ankle attachments. Review flagged that mixing the ankle_roll wrench with the LC3 rod forces double-counts the same load path.",
+   "magnitudes_peak_N": {
+    "Fx": 966.4,
+    "Fy": 966.4,
+    "Fz": 3227.0,
+    "_doc": "measured peak GRF 6.39 BW = 3227 N (loads.json _grf), scaled component-wise from the design-level set; the peak tier carries no extra factor (docs/64 \u00a710.1)"
+   },
+   "_axial_src": "measured M_axis P99 13.6 x1.25, capped at the joint capability 60.0 N\u00b7m (the ankle is a 2-RSU parallel mechanism: both RS03 drive pitch together)"
+  },
+  "extra_steps": [],
+  "geometry_of": "L1_ankle_foot",
+  "_doc": "corner contact - the outer toe corner takes the whole GRF, which is what happens stepping onto a rock or landing mid-turn. Longest lever from the ankle in both directions at once.",
+  "_refines": "L1g_foot_corner",
+  "_note": "mesh-refinement twin of L1g_foot_corner: same case, hot spot at [-164.2, -6.1, -843.0] refined from h 7.09 to 1.5 mm. Built to decide whether that link's point maximum is a geometric singularity."
  }
 }
