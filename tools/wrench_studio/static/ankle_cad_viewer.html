@@ -32,10 +32,10 @@
  <label>pitch <input id="up" type="range" min="-50" max="30" step="0.5" value="0" style="width:130px"><span id="upv" style="display:inline-block;width:44px">0.0°</span></label>
  <label>roll <input id="ur" type="range" min="-20" max="20" step="0.5" value="0" style="width:100px"><span id="urv" style="display:inline-block;width:44px">0.0°</span></label>
  <button id="bneu">Neutral</button>
- <button class="bpre" data-p="-50" data-r="-20">p−50 r−20</button>
- <button class="bpre" data-p="-50" data-r="20">p−50 r+20</button>
- <button class="bpre" data-p="30" data-r="-20">p+30 r−20</button>
- <button class="bpre" data-p="30" data-r="20">p+30 r+20</button>
+ <button class="bpre" data-p="-50" data-r="-20" title="crank A hits its MAX here, +27.2°">p−50 r−20 · <b>φA max</b></button>
+ <button class="bpre" data-p="-50" data-r="20" title="crank B hits its MAX here, +35.4°">p−50 r+20 · <b>φB max</b></button>
+ <button class="bpre" data-p="30" data-r="-20" title="crank B hits its MIN here, −55.9°">p+30 r−20 · <b>φB min</b></button>
+ <button class="bpre" data-p="30" data-r="20" title="crank A hits its MIN here, −61.9°">p+30 r+20 · <b>φA min</b></button>
  <button class="bpre" data-p="2" data-r="-20" title="foot-side swing max">Max swing</button>
  <button id="banim">ROM sweep</button>
  <label>Show <select id="ushow" multiple size="1" style="display:none"></select>
@@ -266,8 +266,8 @@ function info(){
  document.getElementById('info').innerHTML=
  `<b>Pose</b> pitch ${pose.p.toFixed(1)}° · roll ${pose.r.toFixed(1)}°  <span class="hint">closure err ${w.closure.toFixed(3)}mm</span><br>
  <table style="font-size:12px;border-spacing:0">
- <tr><td><b style="color:#ff8c85">Motor A (up)</b></td><td>φ ${(w.phiA/RAD).toFixed(1)}°</td><td class="hint">neutral ${D.cad.phiA0_cad}° · ROM [${e.phiA.min.toFixed(1)}, ${e.phiA.max.toFixed(1)}]</td></tr>
- <tr><td><b style="color:#7fb3ff">Motor B (low)</b></td><td>φ ${(w.phiB/RAD).toFixed(1)}°</td><td class="hint">neutral ${D.cad.phiB0_cad}° · ROM [${e.phiB.min.toFixed(1)}, ${e.phiB.max.toFixed(1)}]</td></tr>
+ <tr><td><b style="color:#ff8c85">Motor A (up)</b></td><td>φ ${(w.phiA/RAD).toFixed(1)}°</td><td class="hint">neutral ${D.cad.phiA0_cad}° · ROM [${e.phiA.min.toFixed(1)}, ${e.phiA.max.toFixed(1)}] · <b>${travel(w.phiA/RAD,e.phiA)}</b></td></tr>
+ <tr><td><b style="color:#7fb3ff">Motor B (low)</b></td><td>φ ${(w.phiB/RAD).toFixed(1)}°</td><td class="hint">neutral ${D.cad.phiB0_cad}° · ROM [${e.phiB.min.toFixed(1)}, ${e.phiB.max.toFixed(1)}] · <b>${travel(w.phiB/RAD,e.phiB)}</b></td></tr>
  <tr><td>Foot-side swing A/B</td><td colspan=2>${sw(w.swFA,e.swF_A.max)} · ${sw(w.swFB,e.swF_B.max)}</td></tr>
  <tr><td>Crank-side swing A/B</td><td colspan=2>${sw(w.swCA,e.swC_A.max)} · ${sw(w.swCB,e.swC_B.max)}</td></tr>
  </table>
@@ -279,6 +279,14 @@ function info(){
  B <b style="color:${w.fB>=0?'#ff8c85':'#7fb3ff'}">${w.fB>=0?'+':''}${w.fB.toFixed(0)}N ${w.fB>=0?'tension':'compression'}</b> <span class="hint">(design limit P99×1.875≤5000)</span>`
  :'<span class="hint">no measured samples in this cell</span>'}</div>
  <div class="hint">Design: A_r 65 · B_r 62 · RP_B 50.5 · RP_r 43.6 · A_h 41 · B2RP 200 · RP_h 10 · A_L 289 · B_L 195 (CAD verified)</div>`;
+}
+function travel(phi,ex){
+  const f=(phi-ex.min)/(ex.max-ex.min);           // 0 at min, 1 at max
+  const near=Math.min(f,1-f)<0.02;
+  const reach=Math.max(f,1-f)*100;                // how far toward the nearer end
+  return `<span style="color:${near?'#7CFC9A':'#c9d1d9'}">travel ${(f*100).toFixed(0)} %`
+    + (near?' — AT AN END':` · ${reach.toFixed(0)} % toward the ${f>0.5?'max':'min'} end`)
+    + '</span>';
 }
 const badges={};
 function mkBadge(id){const d=document.createElement('div');d.className='badge';d.id=id;document.body.appendChild(d);badges[id]=d;return d;}
