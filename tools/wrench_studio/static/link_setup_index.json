@@ -73,14 +73,14 @@
   "L1g_foot_corner": {
    "file": "link_setup_L1g_foot_corner.json",
    "stats": [
-    "peak"
+    "P99"
    ],
    "joint": "ankle_roll",
    "tris": 45556,
    "nodes": 22714,
    "bolts": 0,
    "bearings": 4,
-   "size_mb": 4.18,
+   "size_mb": 4.16,
    "solved": true,
    "stale": false
   },

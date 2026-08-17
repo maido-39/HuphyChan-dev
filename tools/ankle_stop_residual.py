@@ -38,6 +38,8 @@ sys.path.insert(0, '/home/syaro/MikuchanRemote/Human-Pygmalion/mujoco-sim/mjlab/
 import mujoco  # noqa: E402
 
 JOINTS = {'ankle_pitch': 'ankle_pitch_link', 'ankle_roll': 'foot_link'}
+# the ROM the MECHANISM is designed for (docs/76 §11) - the sim model is looser on pitch
+DESIGN_ROM = {'ankle_pitch': (-50.0, 30.0), 'ankle_roll': (-20.0, 20.0)}
 # docs/64 §8e, the numbers this recomputation is testing [N.m]
 S8E = {'ankle_pitch': dict(rms=52, p99=213, peak=1056),
        'ankle_roll': dict(rms=36, p99=135, peak=554)}
@@ -96,6 +98,11 @@ def analyse(npz):
             near = None
             if q is not None and m.jnt_limited[jid]:
                 near = (q <= lo + np.radians(3.0)) | (q >= hi - np.radians(3.0))
+            # the DESIGN cap is tighter than the sim cap on pitch (+30 vs +40), so the sim
+            # understates how much a real stop would be loaded. Measure that gap directly.
+            dlo, dhi = DESIGN_ROM[joint]
+            over = (float(((q < np.radians(dlo)) | (q > np.radians(dhi))).mean())
+                    if q is not None else None)
             # do not assume the sign convention - pick the one the data supports
             s = 1.0 if np.corrcoef(a_new, tau)[0, 1] >= 0 else -1.0
             res[f'{side}_{joint}'] = dict(
@@ -109,6 +116,7 @@ def analyse(npz):
                 q_range=[float(np.degrees(q.min())), float(np.degrees(q.max()))]
                 if q is not None else None,
                 on_limit_frac=float(near.mean()) if near is not None else None,
+                design_over_frac=over, design_rom=[dlo, dhi],
                 stop_on_limit=stat((s * a_new - tau)[near]) if near is not None and near.any()
                 else None,
                 tau=stat(tau))
@@ -233,6 +241,17 @@ def main():
                   f"limited={v['limited']}  travel {v['q_range'][0]:+6.1f}..{v['q_range'][1]:+6.1f}"
                   f"  on-limit {100*(v['on_limit_frac'] or 0):5.2f} %"
                   + (f"  -> M_stop|limit P99 {g['p99']:6.1f} peak {g['peak']:7.1f}" if g else ''))
+    print('\nDESIGN cap vs SIM cap - how much of the walk is outside the DESIGNED ROM')
+    for j in js:
+        vals = [(f'{n}/{k}', v['design_over_frac']) for n, r in per_file.items()
+                for k, v in r.items() if v['joint'] == j and v['design_over_frac'] is not None]
+        vals.sort(key=lambda x: -x[1])
+        med = float(np.median([v for _, v in vals]))
+        print(f"  {j:12s} design ROM {DESIGN_ROM[j]}  outside it: "
+              f"worst {100*vals[0][1]:5.1f} % ({vals[0][0]}) · median {100*med:5.2f} % · "
+              f"n={len(vals)} channels")
+        for name, v in vals[:4]:
+            print(f"      {name:28s} {100*v:5.1f} %")
     print('\n-> docs/img/ankle_stop_residual.png')
 
 

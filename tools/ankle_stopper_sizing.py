@@ -61,10 +61,12 @@ RS03_PEAK = 60.0              # N.m per motor
 # Measured stop residual, ON-LIMIT frames only, envelope over the current-regime demand
 # pool: 31 rollouts (rough + every *_fc / *_fcp) x L/R, FULL rate, §8i-corrected
 # (tools/ankle_stop_residual.py). Peak governs the section; P99 is the duty/fatigue figure.
-M_PITCH_PEAK = 379.0          # N.m, worst at bent_fcp/L_ankle_pitch
-M_ROLL_PEAK = 153.8           # N.m, worst at p2b_v2_fc/L_ankle_roll
-M_PITCH_P99 = 172.5           # N.m, on-limit P99 envelope (flat25p1_fcp/R)
-M_ROLL_P99 = 82.1             # N.m, on-limit P99 envelope (flat25p1_fcp/L)
+# The section is sized on the docs/65 §5 overload tier, max(peak, P99 x 2) - raw peak alone
+# is banned there (+-47 % CI, clip artefacts). Pitch is peak-governed, roll is P99-governed.
+M_PITCH_P99 = 172.5           # N.m, on-limit P99 envelope (flat25p1_fcp/R, at 3.84 % duty)
+M_ROLL_P99 = 82.1             # N.m, on-limit P99 envelope (flat25p1_fcp/L, at 0.27 % duty)
+M_PITCH_PEAK = max(379.0, 2 * M_PITCH_P99)      # 379.0, peak-governed (bent_fcp/L)
+M_ROLL_PEAK = max(153.8, 2 * M_ROLL_P99)        # 164.2, P99-governed (peak 153.8 p2b_v2_fc/L)
 
 
 def jacobian(p_deg, r_deg, h=0.05):
