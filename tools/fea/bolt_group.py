@@ -210,11 +210,13 @@ def main():
                     n = -n
                 ang = np.degrees(np.arccos(min(1.0, abs(float(n @ nh)))))
                 if ang > 10.0:
-                    print(f'   NOTE: {link} pad group normal is {ang:.0f} deg off the '
+                    print(f'   NOTE: {link} / {str(blk.get("name", blk.get("type")))[:38]} '
+                          f'normal is {ang:.0f} deg off the '
                           f"declared '{hint}' axis - using the fitted normal "
                           f'{np.round(n, 2)}', flush=True)
             if flat > 0.15:
-                print(f'   WARNING: {link} pad group is NOT planar (out-of-plane / span = '
+                print(f'   WARNING: {link} / {str(blk.get("name", blk.get("type")))[:38]} '
+                      f'is NOT planar (out-of-plane / span = '
                       f'{flat:.2f}); a single interface normal cannot describe it, so its '
                       'tension/shear split is approximate', flush=True)
             c = np.asarray(P, float).mean(0)
