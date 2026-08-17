@@ -7468,7 +7468,8 @@
      40,
      5.41
     ]
-   ]
+   ],
+   "fragment": false
   },
   "threads": 6,
   "cases": [
@@ -7713,7 +7714,7 @@
   ],
   "geometry_of": "L2_shin",
   "housing": "elastic",
-  "_doc": "third point of the housing bracket: the actuator envelope meshed as ALUMINIUM instead of rigid or absent. Rigid vs absent differ by 3.5-5.5x on this link (and L2 cannot be assembled without housings at all), which is too wide a bracket to size hardware from."
+  "_doc": "third point of the housing bracket: the actuator envelope meshed as ALUMINIUM instead of rigid or absent. Rigid vs absent differ by 3.5-5.5x on this link (and L2 cannot be assembled without housings at all), which is too wide a bracket to size hardware from. Meshed WITHOUT boolean fragment: the housing is a separate body joined by node-pair MPCs at the flange, because fragmenting an envelope cylinder against the bracket makes gmsh report intersecting facets. The cylinder is still trimmed so the material is not double counted."
  },
  "L3e_thigh_elastic": {
   "mesh": {
@@ -7722,7 +7723,8 @@
    "auto_refine": false,
    "refine": [],
    "max_nodes": 320000,
-   "_doc": "proven configuration measured on this geometry: curvature refinement off, 16 mm, no local balls -> 128k nodes. Adding refinement balls made gmsh report duplicated facets, so the interfaces are resolved by the 16 mm mesh and the design stress excludes the clamped nodes instead."
+   "_doc": "proven configuration measured on this geometry: curvature refinement off, 16 mm, no local balls -> 128k nodes. Adding refinement balls made gmsh report duplicated facets, so the interfaces are resolved by the 16 mm mesh and the design stress excludes the clamped nodes instead.",
+   "fragment": false
   },
   "threads": 6,
   "cases": [
@@ -8106,7 +8108,7 @@
   },
   "geometry_of": "L3_thigh",
   "housing": "elastic",
-  "_doc": "third point of the housing bracket: the actuator envelope meshed as ALUMINIUM instead of rigid or absent. Rigid vs absent differ by 3.5-5.5x on this link (and L2 cannot be assembled without housings at all), which is too wide a bracket to size hardware from."
+  "_doc": "third point of the housing bracket: the actuator envelope meshed as ALUMINIUM instead of rigid or absent. Rigid vs absent differ by 3.5-5.5x on this link (and L2 cannot be assembled without housings at all), which is too wide a bracket to size hardware from. Meshed WITHOUT boolean fragment: the housing is a separate body joined by node-pair MPCs at the flange, because fragmenting an envelope cylinder against the bracket makes gmsh report intersecting facets. The cylinder is still trimmed so the material is not double counted."
  },
  "L5e_hip_elastic": {
   "mesh": {
@@ -8294,7 +8296,8 @@
      9.799999999999999,
      6.88
     ]
-   ]
+   ],
+   "fragment": false
   },
   "threads": 6,
   "cases": [
@@ -8650,6 +8653,6 @@
   ],
   "geometry_of": "L5_hip_pitchroll",
   "housing": "elastic",
-  "_doc": "third point of the housing bracket: the actuator envelope meshed as ALUMINIUM instead of rigid or absent. Rigid vs absent differ by 3.5-5.5x on this link (and L2 cannot be assembled without housings at all), which is too wide a bracket to size hardware from."
+  "_doc": "third point of the housing bracket: the actuator envelope meshed as ALUMINIUM instead of rigid or absent. Rigid vs absent differ by 3.5-5.5x on this link (and L2 cannot be assembled without housings at all), which is too wide a bracket to size hardware from. Meshed WITHOUT boolean fragment: the housing is a separate body joined by node-pair MPCs at the flange, because fragmenting an envelope cylinder against the bracket makes gmsh report intersecting facets. The cylinder is still trimmed so the material is not double counted."
  }
 }
