@@ -13,10 +13,15 @@
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | L1_ankle_foot | 설계 판정 | ankle_roll | 307071 | 16.3 | **6.9** | **40.04** | 34.82 | 3.3 | PASS | PASS | PASS | — | [-78.2, 186.9, -823.0] |
 | L1b_foot_toeoff | 설계 판정 | ankle_roll | 258384 | 196.8 | **196.8** | **1.40** | 1.22 | 93.0 | PASS | **FAIL** | **FAIL** | 193개 (0.0839 %) | [-137.8, 121.4, -843.0] |
+| L1e_foot_toeoff_finer | 설계 판정 | ankle_roll | 296001 | 323.2 | **323.2** | **0.85** | 0.74 | 95.3 | **FAIL** | **FAIL** | **FAIL** | 322개 (0.1215 %) | [-103.7, 118.0, -834.4] |
+| L1f_foot_lateral_edge | 설계 판정 | ankle_roll | 258403 | 103.6 | **103.6** | **2.66** | 2.32 | 36.0 | PASS | PASS | PASS | — | [-141.4, 123.2, -843.0] |
+| L1g_foot_corner | 설계 판정 | ankle_roll | 258403 | 368.2 | **261.1** | **1.06** | 0.92 | 114.6 | PASS | **FAIL** | **FAIL** | 793개 (0.3143 %) | [-137.8, 121.4, -843.0] |
 | L2_shin | 설계 판정 | ankle_pitch | 112769 | 135.7 | **135.7** | **2.03** | 1.77 | 36.4 | PASS | PASS | PASS | — | [-151.4, 95.3, -391.2] |
 | L3_thigh | 설계 판정 | knee | 127984 | 109.7 | **109.7** | **2.52** | 2.19 | 33.9 | PASS | PASS | PASS | — | [-97.5, 14.7, -116.6] |
+| L3e_thigh_elastic | 설계 판정 | knee | 131430 | 239.7 | **239.7** | **1.15** | 1.00 | 32.6 | PASS | **FAIL** | **FAIL** | 4개 (0.0032 %) | [-153.9, 73.4, -278.6] |
 | L4_hip_yaw | 설계 판정 | hip_yaw | 218670 | 130.9 | **130.9** | **2.11** | 1.83 | 34.8 | PASS | PASS | PASS | — | [-172.7, 104.9, -26.0] |
 | L5_hip_pitchroll | 설계 판정 | hip_roll | 161119 | 348.0 | **348.0** | **0.79** | 0.69 | 106.1 | **FAIL** | **FAIL** | **FAIL** | 275개 (0.2035 %) | [-73.3, 43.8, 48.1] |
+| L5d_hip_peakfine | 설계 판정 | hip_roll | 190366 | 444.3 | **444.3** | **0.62** | 0.54 | 103.1 | **FAIL** | **FAIL** | **FAIL** | 317개 (0.1986 %) | [-71.7, 43.8, 46.9] |
 | L6_pelvis | 설계 판정 | hip_pitch | 318937 | 426.7 | **426.7** | **0.65** | 0.56 | 45.0 | **FAIL** | **FAIL** | **FAIL** | 21개 (0.0076 %) | [-0.1, 132.5, 60.0] |
 | L1d_foot_toeoff_fine | 대조 (메시 수렴) | ankle_roll | 340587 | 241.7 | **241.7** | **1.14** | 0.99 | 91.4 | PASS | **FAIL** | **FAIL** | 229개 (0.0739 %) | [-103.7, 118.0, -834.0] |
 | L2b_shin_cornerfine | 대조 (메시 수렴) | ankle_pitch | 113180 | 143.6 | **143.6** | **1.92** | 1.67 | 36.5 | PASS | PASS | **FAIL** | 1개 (0.0009 %) | [-104.0, 187.1, -548.5] |
@@ -40,13 +45,18 @@
 
 | 링크 | 설계 SF | peak SF | peak 항복초과 | 피로 SF@P99 | 피로 SF@RMS | 조립 판정 |
 |---|---|---|---|---|---|---|
-| L1_ankle_foot | **40.04** | — | — | 22.72 | 55.29 | HOLDS |
+| L1_ankle_foot | **40.04** | 16.52 | 0 | 22.72 | 55.29 | HOLDS |
 | L1b_foot_toeoff | **1.40** | 0.44 | 4501 | 0.8 | 1.94 | FAILS |
-| L2_shin | **2.03** | — | — | 1.2 | 2.98 | FAILS |
-| L3_thigh | **2.52** | — | — | 1.43 | 3.39 | FAILS |
-| L4_hip_yaw | **2.11** | — | — | 1.2 | 3.09 | HOLDS |
-| L5_hip_pitchroll | **0.79** | — | — | 0.45 | 1.11 | FAILS |
-| L6_pelvis | **0.65** | — | — | 0.37 | 0.84 | FAILS |
+| L1e_foot_toeoff_finer | **0.85** | 0.29 | 6372 | 0.48 | 1.18 | FAILS |
+| L1f_foot_lateral_edge | **2.66** | 0.94 | 9 | 1.51 | 3.68 | HOLDS |
+| L1g_foot_corner | **1.06** | 0.32 | 14098 | 0.6 | 1.46 | FAILS |
+| L2_shin | **2.03** | 0.48 | 84 | 1.15 | 2.88 | FAILS |
+| L3_thigh | **2.52** | 1.64 | 0 | 1.43 | 3.39 | FAILS |
+| L3e_thigh_elastic | **1.15** | 1.13 | 0 | 0.65 | 1.55 | FAILS |
+| L4_hip_yaw | **2.11** | 1.78 | 0 | 1.2 | 3.09 | HOLDS |
+| L5_hip_pitchroll | **0.79** | 0.69 | 8 | 0.45 | 1.11 | FAILS |
+| L5d_hip_peakfine | **0.62** | 0.55 | 15 | 0.35 | 0.87 | FAILS |
+| L6_pelvis | **0.65** | 0.68 | 2 | 0.37 | 0.84 | FAILS |
 
 > peak은 정적 사이징 기준이 아니라 **소성 미발생 확인**용이다(docs/62 §3c–4). 
 > 항복 초과 절점이 수천이면 국부가 아니라 형상 조치 대상이다.
@@ -71,10 +81,15 @@
 |---|---|---|---|---|
 | L1_ankle_foot | 262.01 cm³ | 83.9 % | 83.9 % | — |
 | L1b_foot_toeoff | 261.98 cm³ | 판정 미달 — 보강 먼저 | 판정 미달 — 보강 먼저 | 0.0 cm³, 두께 ×1.1 |
+| L1e_foot_toeoff_finer | 261.66 cm³ | 판정 미달 — 보강 먼저 | 판정 미달 — 보강 먼저 | 0.01 cm³, 두께 ×1.15 |
+| L1f_foot_lateral_edge | 261.98 cm³ | 92.0 % | 92.0 % | — |
+| L1g_foot_corner | 261.98 cm³ | 판정 미달 — 보강 먼저 | 판정 미달 — 보강 먼저 | 0.03 cm³, 두께 ×1.24 |
 | L2_shin | 323.05 cm³ | 71.5 % | 71.5 % | — |
 | L3_thigh | 493.89 cm³ | 55.6 % | 55.6 % | — |
+| L3e_thigh_elastic | 1593.79 cm³ | 판정 미달 — 보강 먼저 | 판정 미달 — 보강 먼저 | — |
 | L4_hip_yaw | 209.32 cm³ | 75.7 % | 75.7 % | — |
 | L5_hip_pitchroll | 242.52 cm³ | 판정 미달 — 보강 먼저 | 판정 미달 — 보강 먼저 | 0.1 cm³, 두께 ×1.33 |
+| L5d_hip_peakfine | 242.53 cm³ | 판정 미달 — 보강 먼저 | 판정 미달 — 보강 먼저 | 0.07 cm³, 두께 ×1.35 |
 | L6_pelvis | 292.82 cm³ | 판정 미달 — 보강 먼저 | 판정 미달 — 보강 먼저 | — |
 | L1d_foot_toeoff_fine | 261.87 cm³ | 판정 미달 — 보강 먼저 | 판정 미달 — 보강 먼저 | 0.0 cm³, 두께 ×1.1 |
 | L2b_shin_cornerfine | 323.06 cm³ | 93.9 % | 판정 미달 — 보강 먼저 | — |
@@ -90,10 +105,15 @@
 
 - **L1_ankle_foot** (액추에이터 자동) — 기본 케이스
 - **L1b_foot_toeoff** (액추에이터 자동) — same foot as L1, loaded at the forefoot instead of the heel: the ankle axis sits at y=145, so the forefoot patch is 100-180 mm away against the heel's 0-80 mm and is the longer bending lever
+- **L1e_foot_toeoff_finer** (액추에이터 자동) — third mesh density for the foot convergence study: the transition band at y~120 is meshed at 1.3 mm. L1b (10 mm) gave 245.6 MPa and L1d (2.6 mm) gave 368.1 - if this one climbs again the peak is a singularity at an unfilleted step and the verdict must come from the surrounding field, not the peak.
+- **L1f_foot_lateral_edge** (액추에이터 자동) — stepping on an edge or landing on the outside of the foot: the whole GRF passes through the lateral 20 mm strip of the sole. The heel-only case hid the forefoot problem; this is the same class of omission in the lateral direction.
+- **L1g_foot_corner** (액추에이터 자동) — corner contact - the outer toe corner takes the whole GRF, which is what happens stepping onto a rock or landing mid-turn. Longest lever from the ankle in both directions at once.
 - **L2_shin** (액추에이터 3개 강체) — 기본 케이스
 - **L3_thigh** (액추에이터 2개 강체) — 기본 케이스
+- **L3e_thigh_elastic** (액추에이터 2개 강체) — third point of the housing bracket: the actuator envelope meshed as ALUMINIUM instead of rigid or absent. Rigid vs absent differ by 3.5-5.5x on this link (and L2 cannot be assembled without housings at all), which is too wide a bracket to size hardware from. Meshed WITHOUT boolean fragment: the housing is a separate body joined by node-pair MPCs at the flange, because fragmenting an envelope cylinder against the bracket makes gmsh report intersecting facets. The cylinder is still trimmed so the material is not double counted.
 - **L4_hip_yaw** (액추에이터 없음) — 기본 케이스
 - **L5_hip_pitchroll** (액추에이터 2개 강체) — 기본 케이스
+- **L5d_hip_peakfine** (액추에이터 2개 강체) — L5 convergence control: 1.4 mm around the 348 MPa peak (6.1 mm from a bolt hole, 14.8 mm from the clamped flange) and its mirror. The base mesh puts only 4 of the 1324 nodes within 25 mm over the allowable, which is the signature of a local concentration - this settles whether the peak is real before anything is redesigned.
 - **L6_pelvis** (액추에이터 없음) — pelvis. The two actuators previously listed here sit 30-90 mm off this geometry (hip_p is on the leg side at x=-124, hip_r_1_ is above the pelvis top) and were silently skipped, so the "motors included" model never had any. They are removed rather than pretended.
 - **L1d_foot_toeoff_fine** (액추에이터 자동) — mesh-convergence check on the only failing case: the forefoot bending band is meshed at 2.6 mm instead of ~10 mm. If 289.5 MPa holds, the verdict is real; if it climbs, the sole needs a finer study; if it drops, the coarse mesh over-read it.
 - **L2b_shin_cornerfine** (액추에이터 3개 강체) — same shin as L2, with a 2 mm mesh at the four symmetric corners that carry its 311 MPa peak. If the peak climbs with refinement the corner is a geometric singularity (an unfilleted internal corner) and the verdict must come from the nominal field; if it converges, the corner is a real stress riser.
