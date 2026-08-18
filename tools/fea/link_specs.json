@@ -15595,5 +15595,453 @@
    "Volume2"
   ],
   "_hybrid_of": "L1gf_foot_corner_fine"
+ },
+ "L6h_pelvis_pla": {
+  "mesh": {
+   "size_far": 44.29,
+   "refine": [
+    [
+     0.0,
+     70.0,
+     60.0,
+     60,
+     10.99
+    ],
+    [
+     0.0,
+     70.0,
+     132.0,
+     55,
+     10.99
+    ],
+    [
+     0.0,
+     70.0,
+     132.0,
+     60.0,
+     8.79
+    ],
+    [
+     50.41,
+     86.38,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     31.15,
+     112.88,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     0.0,
+     123.0,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     -31.15,
+     112.88,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     -50.41,
+     86.38,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     -50.41,
+     53.62,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     -31.15,
+     27.12,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     0.0,
+     17.0,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     31.15,
+     27.12,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     50.41,
+     53.62,
+     138.0,
+     14.0,
+     8.79
+    ],
+    [
+     -56.7,
+     7.5,
+     85.23,
+     14.0,
+     8.79
+    ],
+    [
+     -56.7,
+     7.5,
+     100.22,
+     14.0,
+     8.79
+    ],
+    [
+     -56.7,
+     7.5,
+     115.22,
+     14.0,
+     8.79
+    ],
+    [
+     56.7,
+     7.5,
+     85.23,
+     14.0,
+     8.79
+    ],
+    [
+     56.7,
+     7.5,
+     100.22,
+     14.0,
+     8.79
+    ],
+    [
+     56.7,
+     7.5,
+     115.22,
+     14.0,
+     8.79
+    ],
+    [
+     -56.7,
+     132.5,
+     85.23,
+     14.0,
+     8.79
+    ],
+    [
+     -56.7,
+     132.5,
+     100.22,
+     14.0,
+     8.79
+    ],
+    [
+     -56.7,
+     132.5,
+     115.22,
+     14.0,
+     8.79
+    ],
+    [
+     56.7,
+     132.5,
+     85.23,
+     14.0,
+     8.79
+    ],
+    [
+     56.7,
+     132.5,
+     100.22,
+     14.0,
+     8.79
+    ],
+    [
+     56.7,
+     132.5,
+     115.22,
+     14.0,
+     8.79
+    ],
+    [
+     0.0,
+     70.0,
+     60.0,
+     60.0,
+     8.79
+    ]
+   ]
+  },
+  "actuators": [],
+  "envelope": {
+   "joint": "hip_pitch",
+   "moment_mode": "geometry",
+   "joint_axis": "x",
+   "axial_torque_Nm": 105.2,
+   "inertia_g": 3.0,
+   "pattern": true,
+   "joint_centre": [
+    -13.7,
+    70.0,
+    60.0
+   ],
+   "fix_desc": "trunk side: the 2020-profile bore + its 10-bolt ring at z=138 and the two 6-bolt side rails",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "z",
+     "ctr": [
+      0.0,
+      70.0,
+      132.0
+     ],
+     "r": 48.0,
+     "span": [
+      126.0,
+      138.0
+     ],
+     "rtol": 0.9,
+     "name": "bore"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "z",
+     "points": [
+      [
+       50.41,
+       86.38,
+       138.0
+      ],
+      [
+       31.15,
+       112.88,
+       138.0
+      ],
+      [
+       0.0,
+       123.0,
+       138.0
+      ],
+      [
+       -31.15,
+       112.88,
+       138.0
+      ],
+      [
+       -50.41,
+       86.38,
+       138.0
+      ],
+      [
+       -50.41,
+       53.62,
+       138.0
+      ],
+      [
+       -31.15,
+       27.12,
+       138.0
+      ],
+      [
+       0.0,
+       17.0,
+       138.0
+      ],
+      [
+       31.15,
+       27.12,
+       138.0
+      ],
+      [
+       50.41,
+       53.62,
+       138.0
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "y",
+     "points": [
+      [
+       -56.7,
+       7.5,
+       85.23
+      ],
+      [
+       -56.7,
+       7.5,
+       100.22
+      ],
+      [
+       -56.7,
+       7.5,
+       115.22
+      ],
+      [
+       56.7,
+       7.5,
+       85.23
+      ],
+      [
+       56.7,
+       7.5,
+       100.22
+      ],
+      [
+       56.7,
+       7.5,
+       115.22
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "y",
+     "points": [
+      [
+       -56.7,
+       132.5,
+       85.23
+      ],
+      [
+       -56.7,
+       132.5,
+       100.22
+      ],
+      [
+       -56.7,
+       132.5,
+       115.22
+      ],
+      [
+       56.7,
+       132.5,
+       85.23
+      ],
+      [
+       56.7,
+       132.5,
+       100.22
+      ],
+      [
+       56.7,
+       132.5,
+       115.22
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    }
+   ],
+   "points": [
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      0.0,
+      70.0,
+      60.0
+     ],
+     "r": 48.0,
+     "span": [
+      -13.7,
+      -0.1
+     ],
+     "rtol": 0.9,
+     "name": "bore"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -13.7,
+       17.65,
+       51.71
+      ],
+      [
+       -13.7,
+       22.78,
+       84.06
+      ],
+      [
+       -13.7,
+       32.52,
+       22.52
+      ],
+      [
+       -13.7,
+       45.94,
+       107.22
+      ],
+      [
+       -13.7,
+       61.71,
+       7.65
+      ],
+      [
+       -13.7,
+       78.29,
+       112.35
+      ],
+      [
+       -13.7,
+       94.06,
+       12.78
+      ],
+      [
+       -13.7,
+       107.48,
+       97.48
+      ],
+      [
+       -13.7,
+       117.22,
+       35.94
+      ],
+      [
+       -13.7,
+       122.35,
+       68.29
+      ]
+     ],
+     "r_pad": 4.0,
+     "depth": 2.0,
+     "name": "bolt_pads"
+    }
+   ],
+   "_note": "pelvis has no proximal joint - held at the trunk attachments; the LEFT hip_pitch flange takes the leg wrench (right side is the mirror case)",
+   "transverse_moment_Nm": 86.7,
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 84.2 x1.25, capped at the joint capability 120.0 N\u00b7m (the ankle is a 2-RSU parallel mechanism: both RS03 drive pitch together)"
+  },
+  "_doc": "pelvis. The two actuators previously listed here sit 30-90 mm off this geometry (hip_p is on the leg side at x=-124, hip_r_1_ is above the pelvis top) and were silently skipped, so the \"motors included\" model never had any. They are removed rather than pretended.",
+  "geometry_of": "L6_pelvis",
+  "pla_parts": [
+   "Volume5",
+   "Volume6"
+  ],
+  "_hybrid_of": "L6_pelvis",
+  "_note": "hybrid: 61.6+9.4 cm3 (8.3/9.2 MPa) as PLA. Thermally DISQUALIFIED (wraps the RS04 hip roll housing, -39/-6 mm) - run to establish whether temperature is the ONLY blocker."
  }
 }
