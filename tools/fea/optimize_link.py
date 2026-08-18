@@ -367,6 +367,11 @@ def main():
         from lightweight import write_voxel_stl
         write_voxel_stl(cen_k, f'{d}/{link}_optimised_SF{target}.stl', 3.0)
         out['stl'] = f'{d}/{link}_optimised_SF{target}.stl'
+        # The retained ELEMENT ids, so a viewer can shade exactly what survived instead of
+        # falling back on a plain stress threshold. Without this the only record of the
+        # result was a voxel STL, and the viewer kept showing the retracted threshold study.
+        out['retained_elements'] = [int(e) for e in best['active']]
+        assert len(out['retained_elements']) == len(best['active']), 'retained set lost'
     json.dump(out, open(f'{d}/optimise.json', 'w'), indent=1)
     print(json.dumps(out.get('final', {}), indent=1))
     print(f'-> {d}/optimise.json')

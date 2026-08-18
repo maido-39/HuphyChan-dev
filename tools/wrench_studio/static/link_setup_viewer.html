@@ -118,7 +118,8 @@
  <tr><td>show</td><td><select id="umode">
    <option value="all">all material</option>
    <option value="weak">only below SF …</option>
-   <option value="light">lightweighting (removable / keep)</option></select>
+   <option value="light">⚠살빼기 (단순 임계값 — 철회됨)</option>
+   <option value="beso">★BESO 유지 형상 (검증됨)</option></select>
    <select id="usf"><option value="2">SF 2</option><option value="1.5">SF 1.5</option>
    <option value="1">SF 1</option></select></td></tr>
  <tr><td><b>material</b></td><td><select id="umat">
@@ -355,6 +356,13 @@ function classify(V){
  } else if(mode==='light'){
   const vm=stressArr()||[],ko=s.keepout||[];
   for(let i=0;i<n;i++)cls[i]=(vm[i]<allow/1.6 && !ko[i])?1:0;   // 1 = removable
+ } else if(mode==='beso'){
+  // What the verified optimiser actually kept. Note the surface keeps ~89 % while the
+  // VOLUME keeps 61 % - BESO hollows the interior, so a surface view understates the
+  // removal by construction. The solid itself is the honest artefact.
+  const kp=s.beso_keep;
+  if(kp){for(let i=0;i<n;i++)cls[i]=kp[i]?0:1;}
+  else{for(let i=0;i<n;i++)cls[i]=0;}
  }
  return cls;
 }
@@ -418,7 +426,21 @@ function postInfo(V,cls){
  if(mode==='light'&&cls){
   let k=0; for(let i=0;i<cls.length;i++)if(cls[i])k++;
   const lw=s.lightweight&&s.lightweight[`SF>${L}`];
-  txt+=`\nremovable surface: ${k} of ${cls.length} nodes (${(100*k/cls.length).toFixed(1)} %)`;
+  // This overlay is a plain stress threshold with NO connectivity and NO load-path check.
+  // It produced disconnected islands when it was first shown and was retracted; the real
+  // answer comes from BESO (re-solve + load-path repair + bolt-pad backing each step),
+  // which removed 39 % of the foot, not the 64-72 % this threshold claims.
+  txt += `\n⚠ 이 오버레이는 연결성·하중경로 검사가 없는 단순 임계값이며 철회된 방식이다.`
+       + `\n   실제 BESO 결과(발 L1g): 262.0 → 159.7 cm³, 39.0 % 제거, SF 2.04`
+       + `\n   산출물: L1g_foot_corner_optimised_SF2.0.stl`;
+  txt+=`\n(참고, 철회된 값) removable surface: ${k} of ${cls.length} nodes (${(100*k/cls.length).toFixed(1)} %)`;
+ } else if(mode==='beso'){
+  const b=s.beso;
+  txt += b ? `\n★BESO 검증 결과: ${b.V0_cm3} → ${b.volume_cm3} cm³ · ${b.removed_pct} % 제거 · SF ${b.SF}`
+           + `\n   제거는 내부에서 일어난다 — 표면은 ${b.surface_kept_pct} % 유지, 체적은 `
+           + `${(100-b.removed_pct).toFixed(0)} % 유지`
+           + `\n   실제 형상: ${b.stl} (뷰어 폴더에 배포됨)`
+           : `\n이 케이스에는 BESO 결과가 없다 — 현재 L1g_foot_corner 만 최적화됨`;
   if(lw)txt+=`\nvolume study: ${lw.removable_cm3} cm³ of ${s.lightweight.total_cm3} cm³ `
             +`(${lw.removable_pct} %) below ${lw.keep_threshold_MPa} MPa and outside every keep-out`;
   const re=s.reinforce&&s.reinforce[`SF>${L}`];

@@ -99,7 +99,11 @@ def main():
         # check, not a design basis. Every verdict in this campaign is on P99 x 1.25, so
         # rebuild that field and judge on it; the peak one stays available in the viewer.
         vmP99 = read_vm(link)
-        assert vmP99, f'{link}: cannot rebuild the P99 field - the unit .frd files are gone'
+        if not vmP99:
+            # some old runs had their unit .frd cleaned up; the design field cannot be
+            # rebuilt without them, so skip rather than silently judging the peak tier
+            print(f'{link:28s} SKIPPED - unit .frd gone, cannot rebuild the design field')
+            continue
         full = np.array([vmP99.get(i, 0.0) for i in ids])
         vm = full[k]
         S.setdefault('fields', {})['vM_P99'] = [round(float(v), 2) for v in vm]
