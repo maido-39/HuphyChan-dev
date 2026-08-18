@@ -680,8 +680,23 @@ def main():
                     raise SystemExit(
                         f'moment at node {nid} has no rigid patch to convert it into a '
                         'couple, and CalculiX would drop it on the rotational DOFs')
+            # A hybrid build assigns PLA to named element sets (= CAD solids). This is not
+            # a post-hoc allowable swap: a PLA part is 30x more compliant, so it SHEDS load
+            # to its neighbours and the whole field changes. The only honest way to judge a
+            # substitution is to re-solve with the substituted part actually soft.
+            # element-set names come back upper-cased from the reader, so match case-blind
+            want = {x.upper() for x in (spec.get('pla_parts') or [])}
+            have = {e.upper(): e for e in elsets}
+            assert want <= set(have), (
+                f'pla_parts {sorted(want - set(have))} are not element sets of this mesh - '
+                f'available: {sorted(have)[:8]}...')
+            sub = {have[x] for x in want}
+            matmap = {e: (F.PLA if e in sub else F.AL) for e in elsets}
+            if sub:
+                print(f'  hybrid: {len(sub)} solid(s) as PLA (E {F.PLA["E"]:.0f} MPa): '
+                      f'{sorted(sub)}', flush=True)
             F.write_deck(f'{W}/{job}.inp', nodes, elems, elsets,
-                         {e: F.AL for e in elsets}, fix, cl, extra=tie_txt,
+                         matmap, fix, cl, extra=tie_txt,
                          gravity=grav, extra_nodes=mot_nodes, extra_cload=extra_cl)
             t0 = time.time()
             r = F.run_ccx(W, job, threads=spec.get('threads', 6))

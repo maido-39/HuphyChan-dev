@@ -14288,5 +14288,1312 @@
   "housing_wall_mm": 5.0,
   "_refines": "L5e_hip_elastic",
   "_note": "mesh-refinement twin of L5e_hip_elastic: same case, hot spot at [-183.1, 43.8, 52.0] refined from h 6.0 to 1.4 mm. Built to decide whether that link's point maximum is a geometric singularity."
+ },
+ "L2h_shin_pla_low": {
+  "mesh": {
+   "size_far": 32.8,
+   "refine": [
+    [
+     -123.7,
+     145.0,
+     -550.0,
+     40,
+     5.41
+    ],
+    [
+     -123.7,
+     115.0,
+     -332.0,
+     40,
+     5.41
+    ],
+    [
+     -92.95,
+     115.0,
+     -310.0,
+     36.989999999999995,
+     5.47
+    ],
+    [
+     -150.45,
+     130.59,
+     -301.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     115.0,
+     -292.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     99.41,
+     -301.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     99.41,
+     -319.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     115.0,
+     -328.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     130.59,
+     -319.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     130.59,
+     -301.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     115.0,
+     -292.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     99.41,
+     -301.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     99.41,
+     -319.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     115.0,
+     -328.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     130.59,
+     -319.0,
+     14.0,
+     5.47
+    ],
+    [
+     -143.45,
+     190.27,
+     -581.25,
+     14.0,
+     5.47
+    ],
+    [
+     -143.45,
+     163.75,
+     -554.73,
+     14.0,
+     5.47
+    ],
+    [
+     -143.45,
+     126.25,
+     -554.73,
+     14.0,
+     5.47
+    ]
+   ],
+   "_used": {
+    "attempt": 4,
+    "size_far": 32.8,
+    "curv": 0,
+    "algo3d": 1,
+    "no_fragment": false,
+    "refined": true
+   }
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "knee_P99",
+    "desc": "knee wrench P99x1.25 on the 6810 knee seat; supported at the ankle-motor end of the module",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -550.0,
+      "tol": 3.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "knee",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   },
+   {
+    "name": "knee_peak",
+    "desc": "knee peak wrench (reference case)",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -550.0,
+      "tol": 3.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "knee",
+      "stat": "peak",
+      "factor": 1.0,
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   }
+  ],
+  "envelope": {
+   "joint": "ankle_pitch",
+   "fix_desc": "knee interface: 6810 inner-ring seat (r24.99) + 6 x M5 flange pads (mating face and head seats)",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -92.95,
+      115.0,
+      -310.0
+     ],
+     "r": 24.99,
+     "span": [
+      -96.5,
+      -89.4
+     ],
+     "rtol": 0.9,
+     "name": "6810ZZ INNER-ring seat (shaft OD Phi49.98, 7.10 mm wide, measured area"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -150.45,
+       130.59,
+       -301.0
+      ],
+      [
+       -150.45,
+       115.0,
+       -292.0
+      ],
+      [
+       -150.45,
+       99.41,
+       -301.0
+      ],
+      [
+       -150.45,
+       99.41,
+       -319.0
+      ],
+      [
+       -150.45,
+       115.0,
+       -328.0
+      ],
+      [
+       -150.45,
+       130.59,
+       -319.0
+      ]
+     ],
+     "r_pad": 4.25,
+     "depth": 2.0,
+     "name": "6 x M5, PCD Phi36.0 about (115.0,-310.0). CLAMPING/MATING face against"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -159.45,
+       130.59,
+       -301.0
+      ],
+      [
+       -159.45,
+       115.0,
+       -292.0
+      ],
+      [
+       -159.45,
+       99.41,
+       -301.0
+      ],
+      [
+       -159.45,
+       99.41,
+       -319.0
+      ],
+      [
+       -159.45,
+       115.0,
+       -328.0
+      ],
+      [
+       -159.45,
+       130.59,
+       -319.0
+      ]
+     ],
+     "r_pad": 4.25,
+     "depth": 2.0,
+     "name": "the SAME 6 x M5 at the head-seat plane x=-159.45 (7 plane faces, 3275."
+    }
+   ],
+   "points": [
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -143.45,
+       190.27,
+       -581.25
+      ],
+      [
+       -143.45,
+       163.75,
+       -554.73
+      ],
+      [
+       -143.45,
+       126.25,
+       -554.73
+      ],
+      [
+       -143.45,
+       99.73,
+       -581.25
+      ],
+      [
+       -103.95,
+       190.27,
+       -581.25
+      ],
+      [
+       -103.95,
+       163.75,
+       -554.73
+      ],
+      [
+       -103.95,
+       126.25,
+       -554.73
+      ],
+      [
+       -103.95,
+       99.73,
+       -581.25
+      ]
+     ],
+     "r_pad": 3.5,
+     "depth": 2.0,
+     "name": "DISTAL joint load - L2 -> RS03 ankle_a housing -> L1_ankle_foot. Upper"
+    }
+   ],
+   "moment_mode": "geometry",
+   "joint_axis": "x",
+   "axial_torque_Nm": 70.0,
+   "pattern": true,
+   "joint_centre": [
+    -123.7,
+    145.0,
+    -800.0
+   ],
+   "_note": "distal = the 8 x M4 upper half of the PCD98 circle that bolts the RS03 ankle_a housing to L2 (review)",
+   "inertia_g": 3.0,
+   "transverse_moment_Nm": 25.4,
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 56.0 x1.25, capped at the joint capability 120.0 N\u00b7m (the ankle is a 2-RSU parallel mechanism: both RS03 drive pitch together)"
+  },
+  "extra_steps": [
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_ankle_a.step",
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_ankle_b.step"
+  ],
+  "actuators": [
+   "robstride_rs03_ankle_a",
+   "robstride_rs03_ankle_b",
+   "robstride_rs04_knee_p"
+  ],
+  "geometry_of": "L2_shin",
+  "pla_parts": [
+   "Volume16",
+   "Volume19"
+  ],
+  "_hybrid_of": "L2_shin",
+  "_note": "hybrid: Volume16, Volume19 printed in PLA (E 2.3 GPa). \ucd5c\uc800\uc751\ub825 \ub300\uce6d\uc30d 6.8/7.3 MPa \u00b7 15.9 cm3 x2 \u00b7 \ub2e8 RS03 \ubc1c\ubaa9\uc5d0\uc11c 18 mm (\uc5f4 \uacbd\uacc4)"
+ },
+ "L2h_shin_pla_mid": {
+  "mesh": {
+   "size_far": 32.8,
+   "refine": [
+    [
+     -123.7,
+     145.0,
+     -550.0,
+     40,
+     5.41
+    ],
+    [
+     -123.7,
+     115.0,
+     -332.0,
+     40,
+     5.41
+    ],
+    [
+     -92.95,
+     115.0,
+     -310.0,
+     36.989999999999995,
+     5.47
+    ],
+    [
+     -150.45,
+     130.59,
+     -301.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     115.0,
+     -292.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     99.41,
+     -301.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     99.41,
+     -319.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     115.0,
+     -328.0,
+     14.0,
+     5.47
+    ],
+    [
+     -150.45,
+     130.59,
+     -319.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     130.59,
+     -301.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     115.0,
+     -292.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     99.41,
+     -301.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     99.41,
+     -319.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     115.0,
+     -328.0,
+     14.0,
+     5.47
+    ],
+    [
+     -159.45,
+     130.59,
+     -319.0,
+     14.0,
+     5.47
+    ],
+    [
+     -143.45,
+     190.27,
+     -581.25,
+     14.0,
+     5.47
+    ],
+    [
+     -143.45,
+     163.75,
+     -554.73,
+     14.0,
+     5.47
+    ],
+    [
+     -143.45,
+     126.25,
+     -554.73,
+     14.0,
+     5.47
+    ]
+   ],
+   "_used": {
+    "attempt": 4,
+    "size_far": 32.8,
+    "curv": 0,
+    "algo3d": 1,
+    "no_fragment": false,
+    "refined": true
+   }
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "knee_P99",
+    "desc": "knee wrench P99x1.25 on the 6810 knee seat; supported at the ankle-motor end of the module",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -550.0,
+      "tol": 3.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "knee",
+      "stat": "P99",
+      "factor": 1.25,
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   },
+   {
+    "name": "knee_peak",
+    "desc": "knee peak wrench (reference case)",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -550.0,
+      "tol": 3.0
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "knee",
+      "stat": "peak",
+      "factor": 1.0,
+      "axis": "x",
+      "ctr": [
+       -97.45,
+       115.0,
+       -310.0
+      ],
+      "r": 32.52,
+      "span": [
+       -104.0,
+       -90.0
+      ],
+      "rtol": 0.9
+     }
+    ]
+   }
+  ],
+  "envelope": {
+   "joint": "ankle_pitch",
+   "fix_desc": "knee interface: 6810 inner-ring seat (r24.99) + 6 x M5 flange pads (mating face and head seats)",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -92.95,
+      115.0,
+      -310.0
+     ],
+     "r": 24.99,
+     "span": [
+      -96.5,
+      -89.4
+     ],
+     "rtol": 0.9,
+     "name": "6810ZZ INNER-ring seat (shaft OD Phi49.98, 7.10 mm wide, measured area"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -150.45,
+       130.59,
+       -301.0
+      ],
+      [
+       -150.45,
+       115.0,
+       -292.0
+      ],
+      [
+       -150.45,
+       99.41,
+       -301.0
+      ],
+      [
+       -150.45,
+       99.41,
+       -319.0
+      ],
+      [
+       -150.45,
+       115.0,
+       -328.0
+      ],
+      [
+       -150.45,
+       130.59,
+       -319.0
+      ]
+     ],
+     "r_pad": 4.25,
+     "depth": 2.0,
+     "name": "6 x M5, PCD Phi36.0 about (115.0,-310.0). CLAMPING/MATING face against"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -159.45,
+       130.59,
+       -301.0
+      ],
+      [
+       -159.45,
+       115.0,
+       -292.0
+      ],
+      [
+       -159.45,
+       99.41,
+       -301.0
+      ],
+      [
+       -159.45,
+       99.41,
+       -319.0
+      ],
+      [
+       -159.45,
+       115.0,
+       -328.0
+      ],
+      [
+       -159.45,
+       130.59,
+       -319.0
+      ]
+     ],
+     "r_pad": 4.25,
+     "depth": 2.0,
+     "name": "the SAME 6 x M5 at the head-seat plane x=-159.45 (7 plane faces, 3275."
+    }
+   ],
+   "points": [
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -143.45,
+       190.27,
+       -581.25
+      ],
+      [
+       -143.45,
+       163.75,
+       -554.73
+      ],
+      [
+       -143.45,
+       126.25,
+       -554.73
+      ],
+      [
+       -143.45,
+       99.73,
+       -581.25
+      ],
+      [
+       -103.95,
+       190.27,
+       -581.25
+      ],
+      [
+       -103.95,
+       163.75,
+       -554.73
+      ],
+      [
+       -103.95,
+       126.25,
+       -554.73
+      ],
+      [
+       -103.95,
+       99.73,
+       -581.25
+      ]
+     ],
+     "r_pad": 3.5,
+     "depth": 2.0,
+     "name": "DISTAL joint load - L2 -> RS03 ankle_a housing -> L1_ankle_foot. Upper"
+    }
+   ],
+   "moment_mode": "geometry",
+   "joint_axis": "x",
+   "axial_torque_Nm": 70.0,
+   "pattern": true,
+   "joint_centre": [
+    -123.7,
+    145.0,
+    -800.0
+   ],
+   "_note": "distal = the 8 x M4 upper half of the PCD98 circle that bolts the RS03 ankle_a housing to L2 (review)",
+   "inertia_g": 3.0,
+   "transverse_moment_Nm": 25.4,
+   "_tm_src": "recompute_moments.py: M transported to the joint anchor from the stored rollout; reproduces docs/64 \u00a78i within 8 %",
+   "_axial_src": "measured M_axis P99 56.0 x1.25, capped at the joint capability 120.0 N\u00b7m (the ankle is a 2-RSU parallel mechanism: both RS03 drive pitch together)"
+  },
+  "extra_steps": [
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_ankle_a.step",
+   "/home/syaro/pyg_fea/steps/link_ACT_robstride_rs03_ankle_b.step"
+  ],
+  "actuators": [
+   "robstride_rs03_ankle_a",
+   "robstride_rs03_ankle_b",
+   "robstride_rs04_knee_p"
+  ],
+  "geometry_of": "L2_shin",
+  "pla_parts": [
+   "Volume14"
+  ],
+  "_hybrid_of": "L2_shin",
+  "_note": "hybrid: Volume14 printed in PLA (E 2.3 GPa). 18.9 MPa \u00b7 17.9 cm3 \u00b7 RS04 \ubb34\ub98e\uc5d0\uc11c 44 mm (\uc5f4 \uc5ec\uc720 \uc720\uc77c)"
+ },
+ "L1h_foot_pla": {
+  "mesh": {
+   "size_far": 10.12,
+   "refine": [
+    [
+     -123.7,
+     163.05,
+     -800,
+     4.081699999999999,
+     10.74
+    ],
+    [
+     -123.7,
+     126.95,
+     -800,
+     4.081699999999999,
+     10.74
+    ],
+    [
+     -86.2,
+     195,
+     -810,
+     3.265359999999999,
+     8.35
+    ],
+    [
+     -161.2,
+     195,
+     -810,
+     3.265359999999999,
+     8.35
+    ],
+    [
+     -123.7,
+     163.05,
+     -800.0,
+     4.695995849999998,
+     14.93
+    ],
+    [
+     -123.7,
+     126.95,
+     -800.0,
+     4.695995849999998,
+     14.93
+    ],
+    [
+     -86.2,
+     195.0,
+     -810.0,
+     2.9633141999999992,
+     14.93
+    ],
+    [
+     -86.2,
+     195.0,
+     -810.0,
+     3.0612749999999997,
+     14.93
+    ],
+    [
+     -161.2,
+     195.0,
+     -810.0,
+     2.9633141999999992,
+     14.93
+    ],
+    [
+     -161.2,
+     195.0,
+     -810.0,
+     3.0612749999999997,
+     14.93
+    ],
+    [
+     -74.2,
+     195.0,
+     -810.0,
+     2.857189999999999,
+     14.93
+    ],
+    [
+     -173.2,
+     195.0,
+     -810.0,
+     2.857189999999999,
+     14.93
+    ],
+    [
+     -123.7,
+     163.05,
+     -800.0,
+     11.274899999999999,
+     7.09
+    ],
+    [
+     -123.7,
+     126.95,
+     -800.0,
+     11.274899999999999,
+     7.09
+    ],
+    [
+     -86.2,
+     195.0,
+     -810.0,
+     7.114799999999999,
+     7.09
+    ],
+    [
+     -86.2,
+     195.0,
+     -810.0,
+     7.35,
+     7.09
+    ],
+    [
+     -161.2,
+     195.0,
+     -810.0,
+     7.114799999999999,
+     7.09
+    ],
+    [
+     -161.2,
+     195.0,
+     -810.0,
+     7.35,
+     7.09
+    ],
+    [
+     -74.2,
+     195.0,
+     -810.0,
+     6.8599999999999985,
+     7.09
+    ],
+    [
+     -173.2,
+     195.0,
+     -810.0,
+     6.8599999999999985,
+     7.09
+    ],
+    [
+     -164.2,
+     -6.1,
+     -843.0,
+     12.0,
+     1.5
+    ]
+   ],
+   "max_nodes": 520000,
+   "auto_refine": false,
+   "_used": {
+    "attempt": 1,
+    "size_far": 10.12,
+    "curv": 10,
+    "algo3d": 1,
+    "no_fragment": false,
+    "refined": true
+   }
+  },
+  "threads": 6,
+  "cases": [
+   {
+    "name": "stance_P99",
+    "desc": "ankle_roll wrench P99x1.25 into the two roll-axis 6900 seats + measured rod forces at the JS6 balls; ground support at the sole",
+    "fix": [
+     {
+      "type": "plane",
+      "axis": "z",
+      "value": -843.0,
+      "tol": 0.3
+     }
+    ],
+    "loads": [
+     {
+      "kind": "wrench",
+      "joint": "ankle_roll",
+      "stat": "P99",
+      "factor": 0.625,
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       160.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       155.0,
+       166.5
+      ],
+      "rtol": 0.8
+     },
+     {
+      "kind": "wrench",
+      "joint": "ankle_roll",
+      "stat": "P99",
+      "factor": 0.625,
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       130.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       123.5,
+       135.0
+      ],
+      "rtol": 0.8
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -86.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -100.0,
+       -66.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -169.8,
+       -481.8,
+       1116.2
+      ]
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -161.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -181.0,
+       -147.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -103.7,
+       -320.9,
+       805.4
+      ]
+     }
+    ]
+   },
+   {
+    "name": "heelstrike_peak",
+    "desc": "GRF peak 6.39 BW (3227 N) on the rear third of the sole; held at the two roll-axis 6900 seats (the foot's only tie to the shin) + measured rod forces",
+    "fix": [
+     {
+      "type": "bore",
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       160.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       155.0,
+       166.5
+      ],
+      "rtol": 0.8
+     },
+     {
+      "type": "bore",
+      "axis": "y",
+      "ctr": [
+       -123.7,
+       130.0,
+       -800.0
+      ],
+      "r": 11.01,
+      "span": [
+       123.5,
+       135.0
+      ],
+      "rtol": 0.8
+     }
+    ],
+    "patch_loads": [
+     {
+      "axis": "z",
+      "value": -843.0,
+      "tol": 0.3,
+      "box": {
+       "y": [
+        145.0,
+        260.0
+       ]
+      },
+      "F": [
+       0.0,
+       0.0,
+       3227.0
+      ]
+     }
+    ],
+    "loads": [
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -86.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -100.0,
+       -66.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -169.8,
+       -481.8,
+       1116.2
+      ]
+     },
+     {
+      "kind": "force",
+      "axis": "x",
+      "ctr": [
+       -161.2,
+       195.0,
+       -810.0
+      ],
+      "r": 3.0,
+      "span": [
+       -181.0,
+       -147.0
+      ],
+      "rtol": 0.45,
+      "F": [
+       -103.7,
+       -320.9,
+       805.4
+      ]
+     }
+    ]
+   }
+  ],
+  "subset": {
+   "indices": [
+    19,
+    20,
+    21,
+    24
+   ],
+   "_doc": "FEET sole + AnkleFeetPillowAB/A/B. The UJ core, shin plates, cranks and rod ends belong to other links; the foot connects upward ONLY through the two roll-axis 6900 seats in the pillows."
+  },
+  "envelope": {
+   "joint": "ankle_roll",
+   "moment_mode": "geometry",
+   "joint_axis": "y",
+   "axial_torque_Nm": 17.0,
+   "inertia_g": 3.0,
+   "pattern": false,
+   "magnitudes_N": {
+    "Fx": 280.0,
+    "Fy": 280.0,
+    "Fz": 935.0
+   },
+   "fix_desc": "ankle attachments: two 6900 roll seats + both M6 clevis stacks (tap block, ear bore, head pad)",
+   "fix": [
+    {
+     "type": "bore",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      163.05,
+      -800.0
+     ],
+     "r": 11.01,
+     "span": [
+      159.8,
+      166.2
+     ],
+     "rtol": 0.9,
+     "name": "6900ZZ ankle_roll seat +y - housing bore in pillow #20, shoulder at y="
+    },
+    {
+     "type": "bore",
+     "axis": "y",
+     "ctr": [
+      -123.7,
+      126.95,
+      -800.0
+     ],
+     "r": 11.01,
+     "span": [
+      123.8,
+      130.2
+     ],
+     "rtol": 0.9,
+     "name": "6900ZZ ankle_roll seat -y - housing bore in pillow #21, shoulder at y="
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -86.2,
+      195.0,
+      -810.0
+     ],
+     "r": 2.52,
+     "span": [
+      -109.4,
+      -94.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor A - M6 tapped block, d5.04 tap drill, 15.0 mm engagement"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -86.2,
+      195.0,
+      -810.0
+     ],
+     "r": 3.0,
+     "span": [
+      -78.4,
+      -74.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor A - M6 close-fit hole d6.00 in the 4 mm outer ear"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -161.2,
+      195.0,
+      -810.0
+     ],
+     "r": 2.52,
+     "span": [
+      -153.4,
+      -138.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor B - M6 tapped block, d5.04 tap drill, 15.0 mm engagement"
+    },
+    {
+     "type": "bore",
+     "axis": "x",
+     "ctr": [
+      -161.2,
+      195.0,
+      -810.0
+     ],
+     "r": 3.0,
+     "span": [
+      -173.4,
+      -169.0
+     ],
+     "rtol": 0.6,
+     "name": "JS6 anchor B - M6 close-fit hole d6.00 in the 4 mm outer ear"
+    },
+    {
+     "type": "bolt_pads",
+     "axis": "x",
+     "points": [
+      [
+       -74.2,
+       195.0,
+       -810.0
+      ],
+      [
+       -173.2,
+       195.0,
+       -810.0
+      ]
+     ],
+     "r_pad": 5.0,
+     "depth": 2.0,
+     "name": "M6 ISO4762 head seats (head d10 -> r_pad 5.0) on the outer ear faces x"
+    }
+   ],
+   "points": [
+    {
+     "name": "ground contact patch - corner",
+     "type": "plane",
+     "axis": "z",
+     "value": -843.0,
+     "tol": 0.3,
+     "box": {
+      "x": [
+       -174.0,
+       -152.0
+      ],
+      "y": [
+       -35.0,
+       -5.0
+      ]
+     }
+    }
+   ],
+   "_note": "primary = measured GRF P99x1.25 (935 N vertical, +-280 N tangential at mu 0.3) on the heel third of the sole, reacted at the four real ankle attachments. Review flagged that mixing the ankle_roll wrench with the LC3 rod forces double-counts the same load path.",
+   "magnitudes_peak_N": {
+    "Fx": 966.4,
+    "Fy": 966.4,
+    "Fz": 3227.0,
+    "_doc": "measured peak GRF 6.39 BW = 3227 N (loads.json _grf), scaled component-wise from the design-level set; the peak tier carries no extra factor (docs/64 \u00a710.1)"
+   },
+   "_axial_src": "measured M_axis P99 13.6 x1.25, capped at the joint capability 60.0 N\u00b7m (the ankle is a 2-RSU parallel mechanism: both RS03 drive pitch together)"
+  },
+  "extra_steps": [],
+  "geometry_of": "L1_ankle_foot",
+  "_doc": "corner contact - the outer toe corner takes the whole GRF, which is what happens stepping onto a rock or landing mid-turn. Longest lever from the ankle in both directions at once.",
+  "_refines": "L1g_foot_corner",
+  "_note": "hybrid: Volume1, Volume2 printed in PLA (E 2.3 GPa). 18.6/19.1 MPa \u00b7 35.3+14.5 cm3 \u00b7 \ubc1c\uc740 \ubaa8\ud130 \uc5c6\uc74c \u2192 \uc5f4 \uc81c\uc57d \uc5c6\uc74c",
+  "pla_parts": [
+   "Volume1",
+   "Volume2"
+  ],
+  "_hybrid_of": "L1gf_foot_corner_fine"
  }
 }

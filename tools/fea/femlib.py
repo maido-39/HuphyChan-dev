@@ -24,6 +24,11 @@ LOCK_MESH = '/tmp/pyg_mesh.lock'
 LOCK_SOLVE = '/tmp/pyg_ccx.lock'
 AL = dict(name='ALU', E=68900.0, nu=0.33, yield_=276.0)   # 6061-T6
 STEEL = dict(name='STEEL', E=210000.0, nu=0.30, yield_=640.0)
+# FDM PLA, printed specimens: modulus 2.3 GPa (Prusament TDS, ISO 527-1 - the 3.5 GPa
+# often quoted is the bulk resin). The 'yield' carried here is the fatigue design
+# allowable from docs/79 §10, not a static yield, because that is what governs a part
+# on a walking robot; the solver only uses E and nu.
+PLA = dict(name='PLA', E=2300.0, nu=0.36, yield_=3.9)
 
 # C3D10 face -> corner-node local indices, CalculiX convention
 C3D10_FACES = [(0, 1, 2), (0, 3, 1), (1, 3, 2), (2, 3, 0)]
