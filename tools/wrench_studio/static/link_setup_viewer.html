@@ -135,6 +135,13 @@
  <tr><td colspan=2><div id="partsbox" style="display:none;max-height:280px;overflow:auto;
    background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px;
    margin-top:4px;font-size:11px"></div></td></tr>
+ <tr><td colspan=2><div id="preview" style="display:flex;gap:8px;align-items:flex-start;
+   margin:3px 0"><img id="thumb" style="width:120px;height:120px;object-fit:contain;
+   background:#0d1117;border:1px solid #30363d;border-radius:6px" alt="">
+   <div style="flex:1;min-width:0"><div id="thumbinfo" class="hint"></div>
+   <a id="sheet" href="#" target="_blank" class="hint"
+      style="color:#7fb3ff;text-decoration:underline">부품 위치 시트 열기 ↗</a></div></div></td></tr>
+ <tr><td colspan=2><span class="hint" id="basisline"></span></td></tr>
  <tr><td>tier</td><td><select id="utier">
    <option value="vM_P99">설계층 P99×1.25 (판정 기준)</option>
    <option value="">저장된 층 (peak / 과부하 점검)</option></select>
@@ -285,8 +292,21 @@ const CMAP={
 const UNIT={SF:'',U_mag:'mm',Ux:'mm',Uy:'mm',Uz:'mm'};
 const $=id=>document.getElementById(id);
 function fieldName(){return $('ufield').value;}
+// The one stress array everything else must agree with: design tier if the tier selector
+// asks for it, else whatever the payload stored. Before this existed, the coloured field
+// followed the tier while the weak/lightweight classifiers read vM_env directly, so the
+// colours and the pass/fail shading came from different load tiers.
+function stressArr(){
+ const s=cur;if(!s)return null;
+ const t=$('utier')?$('utier').value:'';
+ if(t&&s.fields&&s.fields[t])return s.fields[t];
+ return (s.fields&&s.fields.vM_env)||res||null;
+}
 function fieldArr(){
  const s=cur,f=fieldName();
+ // SF is stored precomputed at 276 MPa, so it would ignore the material selector.
+ // Recompute it from the active stress and the selected material instead.
+ if(f==='SF'){const V=stressArr();if(V)return V.map(v=>v>0?YIELDv()/v:999);}
  // the stored payload is the PEAK tier; every verdict in the campaign is on P99 x 1.25,
  // so when the tier selector asks for the design tier, serve that instead
  const t=$('utier')?$('utier').value:'';
@@ -324,11 +344,16 @@ function colorbar(lo,hi,cm,bands){
 function classify(V){
  const s=cur,mode=$('umode').value,L=sfLevel(),allow=YIELDv()/L;
  const n=V.length,cls=new Uint8Array(n);      // 0 = shown solid, 1 = ghosted
+ if(isoPart && s.part_id && s.part_names){
+  const k=s.part_names.indexOf(isoPart);
+  for(let i=0;i<n;i++)cls[i]=(s.part_id[i]===k)?0:1;
+  return cls;                                 // isolation overrides the other modes
+ }
  if(mode==='weak'){
   const isSF=fieldName()==='SF';
   for(let i=0;i<n;i++)cls[i]=(isSF?(V[i]<=L):(V[i]>=allow))?0:1;
  } else if(mode==='light'){
-  const vm=(s.fields&&s.fields.vM_env)||res||[],ko=s.keepout||[];
+  const vm=stressArr()||[],ko=s.keepout||[];
   for(let i=0;i<n;i++)cls[i]=(vm[i]<allow/1.6 && !ko[i])?1:0;   // 1 = removable
  }
  return cls;
@@ -604,6 +629,35 @@ function boltSummary(s){
         (lh?` · <b style="color:#ff7fdf">low-head 소두 ×${lh}</b>`:'')+
         ' <span class="hint">(* = mating tap outside this part set)</span>';
 }
+let isoPart = null;        // part name to isolate, or null for the whole link
+function setIso(name){
+ isoPart = (isoPart === name) ? null : name;
+ paint(); partsPanel();
+ const b = $('isoline');
+ if(b) b.innerHTML = isoPart
+   ? `격리 중: <b style="color:#ffb86b">${isoPart.replace('VOLUME','V')}</b> — 다시 누르면 해제`
+   : '';
+}
+function preview(link){
+ const t=$('thumb'), i=$('thumbinfo'), a=$('sheet');
+ if(!t)return;
+ t.src=`thumb_${link}.png`; t.alt=link;
+ t.onerror=()=>{t.style.visibility='hidden';};
+ t.onload=()=>{t.style.visibility='visible';};
+ const n=(cur&&cur.parts)?cur.parts.length:0;
+ const v=(cur&&cur.parts)?cur.parts.reduce((s,p)=>s+(p.vol_cm3||0),0):0;
+ if(i)i.innerHTML=`<b>${link}</b><br>${n} 솔리드 · ${v.toFixed(0)} cm³<br>`
+   +`<span id="isoline"></span>`;
+ if(a)a.href=`thumbpart_${link}.png`;
+}
+function basisLine(){
+ const e=$('basisline');if(!e||!cur)return;
+ const t=$('utier').value, has=cur.fields&&cur.fields[t];
+ const mat=$('umat').selectedOptions[0].text;
+ e.innerHTML=`기준: <b>${t&&has?'설계층 P99×1.25':'저장된 층 ('+(cur.stat||'peak')+')'}</b>`
+  +` · 재료 <b>${mat}</b> · 허용 <b>${(YIELDv()/sfLevel()).toFixed(2)} MPa</b>`
+  +(t&&!has?' <span style="color:#ff8c85">(이 케이스에 설계층 필드 없음 — 저장된 층으로 표시)</span>':'');
+}
 function partsPanel(){
  const d=$('partsbox'); if(!d||d.style.display==='none')return;
  const s=cur;
@@ -612,7 +666,9 @@ function partsPanel(){
  const allow=YIELDv()/sfLevel(), mat=$('umat').selectedOptions[0].text;
  const rows=s.parts.slice().sort((a,b)=>b.p99-a.p99).map(p=>{
    const sf=p.p99>0?allow/p.p99:Infinity, bad=sf<1;
-   return `<tr style="color:${bad?'#ff8c85':'#7CFC9A'}">`
+   const on = isoPart===p.name;
+   return `<tr onclick="setIso('${p.name}')" style="cursor:pointer;`
+     +`background:${on?'#243040':'transparent'};color:${bad?'#ff8c85':'#7CFC9A'}">`
      +`<td>${p.name.replace('Volume','V')}</td><td>${p.label||''}</td>`
      +`<td align=right>${p.vol_cm3.toFixed(1)}</td>`
      +`<td align=right>${p.p99.toFixed(2)}</td>`
@@ -620,6 +676,7 @@ function partsPanel(){
      +`<td align=right>${p.over_pla.toFixed(0)} %</td></tr>`;});
  const nbad=s.parts.filter(p=>p.p99>0&&allow/p.p99<1).length;
  d.innerHTML=`<b>부품별 판정 — ${mat}, SF ${sfLevel()} → 허용 ${allow.toFixed(2)} MPa</b><br>`
+  +`<span class="hint">행을 누르면 그 솔리드만 3D에서 남긴다</span><br>`
   +`<span class="hint">${nbad} / ${s.parts.length} 부품이 미달 · p99 = 체적가중 (설계층)</span>`
   +`<table class="pt"><tr><th>부품</th><th>위치</th><th>cm³</th><th>p99</th><th>SF</th>`
   +`<th>표면 초과</th></tr>${rows.join('')}</table>`;
@@ -788,8 +845,8 @@ document.getElementById('bpost').addEventListener('click',e=>{
 $('ufield').addEventListener('change',()=>{
  $('urmin').value='';$('urmax').value='';
  $('bres').classList.add('on');paint();});
-for(const id of ['ucmap','ubands','usf','umat'])$(id).addEventListener('change',()=>{paint();partsPanel();});
-$('utier').addEventListener('change',()=>{paint();partsPanel();});
+for(const id of ['ucmap','ubands','usf','umat'])$(id).addEventListener('change',()=>{paint();partsPanel();basisLine();});
+$('utier').addEventListener('change',()=>{paint();partsPanel();basisLine();});
 $('bparts').addEventListener('click',()=>{const d=$('partsbox');
   d.style.display=(d.style.display==='none'||!d.style.display)?'block':'none';partsPanel();});
 for(const id of ['urmin','urmax'])$(id).addEventListener('change',paint);
@@ -831,6 +888,7 @@ function show(link){
  cur=stats[st]||stats.P99||stats[Object.keys(stats)[0]];
  res=cur.result_vM||null;
  build();
+ isoPart=null; preview(link); basisLine(); partsPanel();
  if(isMobile()){view.dist=1.5;}
 }
 function load(link){
