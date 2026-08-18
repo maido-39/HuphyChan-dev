@@ -59,6 +59,9 @@
  table{border-spacing:0} td{padding:0 8px 1px 0}
  .badge{position:fixed;z-index:4;pointer-events:none;font-size:10.5px;font-weight:600;color:#fff;
         background:#0d1117dd;border:1px solid #4a5568;border-radius:5px;padding:2px 6px;white-space:pre}
+.pt{border-collapse:collapse;width:100%;margin-top:4px}
+.pt td,.pt th{padding:1px 4px;border-bottom:1px solid #21262d;font-size:10.5px}
+.pt th{color:#8b949e;text-align:left}
 </style>
 </head>
 <body>
@@ -118,6 +121,24 @@
    <option value="light">lightweighting (removable / keep)</option></select>
    <select id="usf"><option value="2">SF 2</option><option value="1.5">SF 1.5</option>
    <option value="1">SF 1</option></select></td></tr>
+ <tr><td><b>material</b></td><td><select id="umat">
+   <option value="276">6061-T6 · yield 276 MPa</option>
+   <option value="51">PLA 출력 XY 항복 51</option>
+   <option value="17">PLA 층간(실측) 17</option>
+   <option value="11.3">PLA 정적·층간 허용 11.3</option>
+   <option value="5">PLA 피로·면내 상한 5.0</option>
+   <option value="4">PLA 피로 (SF1 층간 1.7 x SF…) 4.0</option>
+   <option value="2">★PLA 피로 설계허용 2.0</option>
+   <option value="1">PLA 피로 현실값 1.0</option>
+   <option value="90">PETG 대략 50 → 90 참고</option></select>
+   <span class="hint">SF 필드와 allowable 버튼이 이 값을 따라간다 (docs/79 §8a)</span></td></tr>
+ <tr><td colspan=2><div id="partsbox" style="display:none;max-height:280px;overflow:auto;
+   background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:6px;
+   margin-top:4px;font-size:11px"></div></td></tr>
+ <tr><td>tier</td><td><select id="utier">
+   <option value="vM_P99">설계층 P99×1.25 (판정 기준)</option>
+   <option value="">저장된 층 (peak / 과부하 점검)</option></select>
+   <button id="bparts">부품별 표 ▾</button></td></tr>
  <tr><td>deform ×</td><td><input type="range" id="udef" min="0" max="500" value="0" step="5">
    <span id="udefv">0</span></td></tr>
  <tr><td>section</td><td><select id="uclip"><option value="">off</option>
@@ -133,7 +154,10 @@
 
 <script>
 const RAD=Math.PI/180;
-const YIELD=276.0;   // 6061-T6 [MPa]
+// The allowable is no longer a constant: the material selector drives it, so the same
+// solved field can be judged as 6061-T6 or as PLA without re-running anything.
+const YIELD_AL=276.0;
+function YIELDv(){const e=$('umat');return e?parseFloat(e.value):YIELD_AL;}
 const isMobile=()=>innerWidth<820||innerHeight<520;
 let D=null, cur=null, res=null;
 const cv=document.getElementById('gl');
@@ -263,6 +287,10 @@ const $=id=>document.getElementById(id);
 function fieldName(){return $('ufield').value;}
 function fieldArr(){
  const s=cur,f=fieldName();
+ // the stored payload is the PEAK tier; every verdict in the campaign is on P99 x 1.25,
+ // so when the tier selector asks for the design tier, serve that instead
+ const t=$('utier')?$('utier').value:'';
+ if(t&&(f==='vM_env'||f==='vM')&&s.fields&&s.fields[t])return s.fields[t];
  if(s.fields&&s.fields[f])return s.fields[f];
  if(f==='vM_env'&&res)return res;
  return null;
@@ -294,7 +322,7 @@ function colorbar(lo,hi,cm,bands){
 }
 // the two display modes that hide material: weak-only and the lightweighting study
 function classify(V){
- const s=cur,mode=$('umode').value,L=sfLevel(),allow=YIELD/L;
+ const s=cur,mode=$('umode').value,L=sfLevel(),allow=YIELDv()/L;
  const n=V.length,cls=new Uint8Array(n);      // 0 = shown solid, 1 = ghosted
  if(mode==='weak'){
   const isSF=fieldName()==='SF';
@@ -355,7 +383,7 @@ function paint(){
 }
 function postInfo(V,cls){
  if(!V){$('postinfo').textContent='no result field for this link — showing the setup';return;}
- const s=cur,mode=$('umode').value,L=sfLevel(),allow=YIELD/L,u=fieldUnit();
+ const s=cur,mode=$('umode').value,L=sfLevel(),allow=YIELDv()/L,u=fieldUnit();
  const [a,b]=autoRange(V);
  let txt=`${fieldName()}: ${(+a.toPrecision(4))} … ${(+b.toPrecision(4))} ${u} over ${V.length} surface nodes`;
  if(mode==='weak'&&cls){
@@ -576,6 +604,26 @@ function boltSummary(s){
         (lh?` · <b style="color:#ff7fdf">low-head 소두 ×${lh}</b>`:'')+
         ' <span class="hint">(* = mating tap outside this part set)</span>';
 }
+function partsPanel(){
+ const d=$('partsbox'); if(!d||d.style.display==='none')return;
+ const s=cur;
+ if(!s||!s.parts){d.innerHTML='<i>이 케이스에는 부품 분해 데이터가 없다 — '
+   +'tools/fea/pla_parts_viz.py 를 돌리면 생긴다.</i>';return;}
+ const allow=YIELDv()/sfLevel(), mat=$('umat').selectedOptions[0].text;
+ const rows=s.parts.slice().sort((a,b)=>b.p99-a.p99).map(p=>{
+   const sf=p.p99>0?allow/p.p99:Infinity, bad=sf<1;
+   return `<tr style="color:${bad?'#ff8c85':'#7CFC9A'}">`
+     +`<td>${p.name.replace('Volume','V')}</td><td>${p.label||''}</td>`
+     +`<td align=right>${p.vol_cm3.toFixed(1)}</td>`
+     +`<td align=right>${p.p99.toFixed(2)}</td>`
+     +`<td align=right><b>${isFinite(sf)?sf.toFixed(2):'—'}</b></td>`
+     +`<td align=right>${p.over_pla.toFixed(0)} %</td></tr>`;});
+ const nbad=s.parts.filter(p=>p.p99>0&&allow/p.p99<1).length;
+ d.innerHTML=`<b>부품별 판정 — ${mat}, SF ${sfLevel()} → 허용 ${allow.toFixed(2)} MPa</b><br>`
+  +`<span class="hint">${nbad} / ${s.parts.length} 부품이 미달 · p99 = 체적가중 (설계층)</span>`
+  +`<table class="pt"><tr><th>부품</th><th>위치</th><th>cm³</th><th>p99</th><th>SF</th>`
+  +`<th>표면 초과</th></tr>${rows.join('')}</table>`;
+}
 function info(){
  if(isMobile()&&!info._once){info._once=1;document.getElementById('leg').classList.add('hide');}
  const s=cur,e=s.envelope||{},m=s.magnitudes;
@@ -740,7 +788,10 @@ document.getElementById('bpost').addEventListener('click',e=>{
 $('ufield').addEventListener('change',()=>{
  $('urmin').value='';$('urmax').value='';
  $('bres').classList.add('on');paint();});
-for(const id of ['ucmap','ubands','usf'])$(id).addEventListener('change',paint);
+for(const id of ['ucmap','ubands','usf','umat'])$(id).addEventListener('change',()=>{paint();partsPanel();});
+$('utier').addEventListener('change',()=>{paint();partsPanel();});
+$('bparts').addEventListener('click',()=>{const d=$('partsbox');
+  d.style.display=(d.style.display==='none'||!d.style.display)?'block':'none';partsPanel();});
 for(const id of ['urmin','urmax'])$(id).addEventListener('change',paint);
 $('umode').addEventListener('change',()=>{
  if($('umode').value!=='all')$('bres').classList.add('on');
@@ -758,7 +809,7 @@ $('brallow').addEventListener('click',()=>{
  // scale the colours to the allowable, so anything saturated is a real problem
  const f=fieldName();
  if(f==='SF'){$('urmin').value=0;$('urmax').value=(sfLevel()*2);}
- else {$('urmin').value=0;$('urmax').value=(YIELD/sfLevel()).toFixed(0);}
+ else {$('urmin').value=0;$('urmax').value=(YIELDv()/sfLevel()).toFixed(3);}
  paint();});
 $('udef').addEventListener('input',()=>{
  $('udefv').textContent=$('udef').value;});
