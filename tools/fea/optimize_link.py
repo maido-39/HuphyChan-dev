@@ -268,6 +268,16 @@ def main():
             protected[k] = True
     pos = {e: k for k, e in enumerate(eids)}
     active = list(eids)
+    # the manufacturing model: 3-axis milling in up to six setups unless told otherwise
+    mach_axes = next((a.split('=')[1] for a in sys.argv if a.startswith('--axes=')), 'xyz')
+    tool_r = float(next((a.split('=')[1] for a in sys.argv if a.startswith('--tool-r=')), 3.0))
+    MACH = None
+    if '--no-machining' not in sys.argv:
+        from machinable import Machinability
+        MACH = Machinability(cen, vol, axes=mach_axes, tool_r=tool_r)
+        print(f'  machinability ON: {MACH.report(range(len(eids)))}', flush=True)
+    else:
+        print('  machinability OFF - result will not be millable', flush=True)
     V0 = vol.sum()
     print(f'{link}: {len(eids)} elements, {V0/1000:.1f} cm3, '
           f'{int(protected.sum())} protected, target SF>{target} on the '
@@ -324,6 +334,17 @@ def main():
                     break
                 cut.add(active[k])
                 acc += vol[pos[active[k]]]
+            # MACHINABILITY. These links are milled, so a cutter has to reach every gram
+            # from outside along a straight line with a finite radius. Without this the
+            # optimiser hollows the interior - a shape only a printer can make. Filtering
+            # here rather than in the ordering keeps the stress ranking intact and simply
+            # drops the picks a tool could not have taken at this stage of the cut.
+            if MACH is not None:
+                idx_act = [pos[e] for e in active]
+                idx_cut = [pos[e] for e in cut]
+                allowed = MACH.can_remove(idx_act, idx_cut)
+                cut = {e for e in cut if pos[e] in allowed}
+                acc = sum(vol[pos[e]] for e in cut)
             kept = [e for e in active if e not in cut]
             comp, ncomp = main_component(kept, elems, fix, load, ties)
             lost_vol = vol[[pos[e] for e in kept if e not in set(comp)]].sum()

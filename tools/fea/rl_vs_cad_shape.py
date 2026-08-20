@@ -173,13 +173,20 @@ def main():
            ('thigh', RLM['L_thigh_link'], 'HipYaw2Knee'),
            ('shin', RLM['L_shin_link'], 'Knee2Ankle'),
            ('foot', RLM['L_ankle_pitch_link'] + RLM['L_foot_link'], 'Ankle2Feet')]
-    # reading B - each motor booked to the body its CAD position sits on:
-    #   knee RS04 at z=-310 is the knee itself -> thigh, as the sim model has it
-    #   the two ankle RS03 at z=-500/-600 are on the shin span -> shin, as 2-RSU requires
+    # Reading B - the geometric split.  "Ankle2Feet" is not a link at all: its 31 solids run
+    # from a crank at z=-503.7, high on the shin, down to the sole at -839, and its four
+    # JMC-JS06 rod ends come in a shin pair (-523/-616) and a foot pair (-810).  It is the
+    # whole 2-RSU mechanism.  Splitting it by which body each solid is rigid with - and the
+    # two push rods 50/50, as a parallel linkage is conventionally lumped - puts
+    # FOOT_SHARE of its non-motor mass on the foot and the rest, plus both RS03, on the shin.
+    # ankle_group_split.py derives the share and checks it: the four plate solids it calls
+    # the foot sum to 262.07 cm3, which is the 262.0 cm3 the campaign actually solved as
+    # L1_ankle_foot, so the structural verdict and the geometric foot are one object.
+    FOOT_SHARE = (290.57 + 0.5 * 124.10) / 568.90
+    a2f_nonmotor = USER['Ankle2Feet'] - USER_MOTOR['Ankle2Feet']
     B = dict(USER)
-    B['HipYaw2Knee'] += USER_MOTOR['Knee2Ankle']
-    B['Knee2Ankle'] += USER_MOTOR['Ankle2Feet'] - USER_MOTOR['Knee2Ankle']
-    B['Ankle2Feet'] -= USER_MOTOR['Ankle2Feet']
+    B['Ankle2Feet'] = a2f_nonmotor * FOOT_SHARE
+    B['Knee2Ankle'] += a2f_nonmotor * (1 - FOOT_SHARE) + USER_MOTOR['Ankle2Feet']
     rows = [(nm, rl, USER[k], B[k]) for nm, rl, k in POS]
     print(f"\n== mass by position [kg]\n{'position':12s} {'RL':>7s} {'CAD-A':>7s} "
           f"{'%A':>8s} {'CAD-B':>7s} {'%B':>8s}")
@@ -256,12 +263,13 @@ def main():
     a.barh(y - 0.26, [r[1] for r in rows], 0.24, color=RL_C, label='RL sim')
     a.barh(y, [r[2] for r in rows], 0.24, color='#e8927c', label='CAD-A  table as written')
     a.barh(y + 0.26, [r[3] for r in rows], 0.24, color=CAD_C,
-           label='CAD-B  motors by CAD position')
+           label='CAD-B  split by body (geometric)')
     a.set_yticks(y)
     a.set_yticklabels([r[0] for r in rows], fontsize=8)
     a.invert_yaxis()
     a.set_xlabel('mass [kg]', fontsize=8)
-    a.set_title('same leg total (−0.2 %),\nvery different distribution', fontsize=9)
+    a.set_title('same leg total (−0.2 %): mass moved\nthigh → shin, the foot barely changed',
+                fontsize=9)
     a.legend(fontsize=6.8, loc='lower right')
     a.grid(alpha=0.3, axis='x')
 
