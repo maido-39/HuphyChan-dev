@@ -13,10 +13,14 @@ The split rule, stated rather than assumed:
   foot        anything rigidly attached to the foot plate, i.e. COM at or below the ankle
               axis (z = -800). The ankle cross that sits exactly on the axis goes to the
               foot, which is the conservative direction for a foot-mass claim.
-  shin        the cranks and their rod ends, which turn with the motors mounted on the shin
-  rods        the two 62.05 cm3 push rods connect the two, so their mass is split 50/50 -
-              standard practice for a parallel linkage and the reason this is reported as a
-              range rather than a number
+  shin        the clevis fork (the 62.05 cm3 pair at y=145 plus its 15.14 braces - it holds
+              the ankle pitch bearings and bolts to the shin) and the cranks with their
+              clamps, which ride the motor shafts
+  rods        the TRUE push rods are the 20.11 / 15.33 cm3 solids: each one's COM lands on
+              the midpoint of its JMC ball-joint pair to 0.5 mm, which is asserted below.
+              (An earlier pass mistook the fork pair for the rods - the ball-joint midpoint
+              test is what settles it.) Their mass is split 50/50, as a parallel linkage
+              conventionally is.
 
 The check that this is right: the FEA link L1_ankle_foot, which the whole structural
 campaign solved as "the foot", integrates to 262.0 cm3, and the four foot-plate solids sum
@@ -32,9 +36,11 @@ import numpy as np
 CAD = '/home/syaro/pyg_fea/steps'
 RHO = 2.70e-3            # kg/cm3, 6061
 ANKLE_Z = -800.0
-ROD_VOL = 62.05          # the two push rods, identified by volume and mirrored x
-MOTOR_KG = 0.932         # RS03 in the user's table
+MOTOR_KG = 0.88          # RS03 catalog (the table's 0.932 is a placeholder, docs/83 s1)
 FEA_FOOT_CM3 = 262.0     # what the campaign actually solved as L1_ankle_foot
+JMC = {'A': ([-83.7, 205.7, -523.2], [-86.2, 195.0, -810.0]),
+       'B': ([-163.7, 208.0, -616.0], [-161.2, 195.0, -810.0])}
+CRANK_Z = (-503.7, -602.5)   # the cranks sit on the motor shafts
 
 
 def main():
@@ -48,17 +54,28 @@ def main():
         # structure; the FEA never meshed them, so they are kept in their own bucket
         return 'JMC-JS06' in r['path'] or 'Flange' in r['path']
 
+    import numpy as np
+    rod_ids = set()
+    for up, dn in JMC.values():
+        mid = [(a + b) / 2 for a, b in zip(up, dn)]
+        cand = min((r for r in S if not is_joint_part(r)),
+                   key=lambda r: sum((a - b) ** 2 for a, b in zip(r['com'], mid)))
+        err = sum((a - b) ** 2 for a, b in zip(cand['com'], mid)) ** 0.5
+        assert err < 1.0, (
+            f'rod check: nearest solid COM is {err:.1f} mm off the ball-joint midpoint')
+        rod_ids.add(id(cand))
+
     foot, shin, rods, joints = [], [], [], []
     for r in S:
         z = r['com'][2]
         if is_joint_part(r):
             joints.append(r)
-        elif abs(r['vol'] - ROD_VOL) < 0.01 and -780 < z < -650:
+        elif id(r) in rod_ids:
             rods.append(r)
         elif z <= ANKLE_Z:
             foot.append(r)
         else:
-            shin.append(r)
+            shin.append(r)   # clevis fork + braces + cranks: all shin-fixed or motor-borne
     assert len(rods) == 2, f'expected 2 push rods, matched {len(rods)}'
     vf = sum(r['vol'] for r in foot)
     vs = sum(r['vol'] for r in shin)
@@ -79,7 +96,7 @@ def main():
     print(f'{"  - 캠페인 FEA 발(발판)":26s} {len(foot)-1:6d} {v_plate:8.2f} {v_plate * RHO:8.3f}')
     print(f'{"  - 발목 크로스(축상)":26s} {1:6d} {cross["vol"]:8.2f} {cross["vol"] * RHO:8.3f}')
     print(f'{"로드 2개 (50/50 분배)":26s} {len(rods):6d} {vr:8.2f} {vr * RHO:8.3f}')
-    print(f'{"정강이측 구조(크랭크·로드엔드)":26s} {len(shin):6d} {vs:8.2f} {vs * RHO:8.3f}')
+    print(f'{"정강이측(클레비스 포크+크랭크)":26s} {len(shin):6d} {vs:8.2f} {vs * RHO:8.3f}')
     print(f'{"JMC-JS06 볼조인트·플랜지 (발측)":26s} '
           f'{len([r for r in joints if r["com"][2] <= ANKLE_Z]):6d} {vj_foot:8.2f} '
           f'{vj_foot * RHO:8.3f}')
