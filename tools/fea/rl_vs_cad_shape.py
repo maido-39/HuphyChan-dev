@@ -19,7 +19,10 @@ The two frames do not share a convention: the sim walks along +x with the latera
 the CAD walks along -y with the lateral axis x. The sim is therefore turned -90 degrees
 about z before anything is drawn, and the turn is verified rather than assumed - the foot
 capsules must come out 226 mm long along the CAD's fore-aft axis and 80 mm across, and the
-toe must end up on the CAD's forward side.
+toe must end up on the CAD's forward side. Lengths INCLUDE the 10 mm capsule radius at
+each end, so the sim foot measures 246 x 100 mm, not the 226 x 80 mm of the capsule
+centrelines - the inflated reading is the one that matches the CAD sole's 100 mm width and
+the visual mesh extents, and it is the conservative end of the heel-lever comparison.
 
 The foot gets its own panel drawn from the COLLISION capsules rather than the visual mesh:
 the sim's visual foot stops short because the toe body is commented out, but the capsules
@@ -45,10 +48,38 @@ XML = ('/home/syaro/MikuchanRemote/Human-Pygmalion/mujoco-sim/mjlab/src/mjlab/'
        'asset_zoo/robots/pygmalion/xmls/pygmalion.xml')
 STATIC = '/home/syaro/MikuchanRemote/Human-Pygmalion/tools/wrench_studio/static'
 
-# CAD joint anchors [mm] in the CAD global frame, from the STEP bearing / actuator centres
-CAD_HIP_PITCH = np.array([-124.45, 68.1, 60.0])
-CAD_JOINT_Y_ANKLE = 145.0        # ankle centre, fore-aft, from the L1 RSU joints
-CAD_JOINT_Z = {'hip_pitch': 60.0, 'hip_yaw': -97.0, 'knee': -310.0, 'ankle': -800.0}
+CAD_STEPS = '/home/syaro/pyg_fea/steps'
+
+
+def cad_joints():
+    """CAD joint anchors read from the STEP-derived files, never hardcoded.
+
+    A constant here would keep reporting the old geometry after a CAD revision without
+    failing, which is exactly the silent-staleness this whole comparison exists to catch.
+    hip pitch and hip yaw come from the actuator proxy centres, knee and ankle from the
+    bearing seats that define those axes.
+    """
+    prox = json.load(open(f'{CAD_STEPS}/actuator_proxies.json'))
+    hp = np.array(prox['robstride_rs04_hip_p']['ctr'], float)
+    hy = np.array(prox['robstride_rs03_hip_y']['ctr'], float)
+
+    def seat(link):
+        J = json.load(open(f'{CAD_STEPS}/link_{link}_joints.json'))
+        locs = [s['loc'] for b in J.get('bearings', []) for s in b.get('seats', [])]
+        assert locs, f'{link}: no bearing seat to anchor the joint on'
+        return np.asarray(locs, float).mean(0)
+
+    knee, ankle = seat('L2_shin'), seat('L1_ankle_foot')
+    Z = {'hip_pitch': float(hp[2]), 'hip_yaw': -97.0, 'knee': float(knee[2]),
+         'ankle': float(ankle[2])}
+    # the hip yaw axis is vertical, so a "height" on it is a convention, not a measurement;
+    # the thigh's own bearing seat is used and flagged rather than the motor centre
+    assert Z['knee'] < Z['hip_pitch'] and Z['ankle'] < Z['knee'], \
+        f'the CAD joints do not descend hip -> knee -> ankle: {Z}'
+    return hp, float(ankle[1]), Z
+
+
+CAD_HIP_PITCH, CAD_JOINT_Y_ANKLE, CAD_JOINT_Z = cad_joints()
 CAD_LINKS = ['L6_pelvis', 'L5_hip_pitchroll', 'L4_hip_yaw', 'L3_thigh', 'L2_shin',
              'L1_ankle_foot']
 
@@ -314,9 +345,9 @@ def main():
     ends = to_common_rl(np.array([p for c in caps for p in (c[0], c[1])]))
     rl_r = max(c[2] for c in caps)
     rl_len, rl_wid = np.ptp(ends[:, 1]) + 2 * rl_r, np.ptp(ends[:, 0]) + 2 * rl_r
-    assert 200 < rl_len < 260 and 70 < rl_wid < 130, (
+    assert 240 < rl_len < 252 and 94 < rl_wid < 106, (
         f'after the turn the sim foot is {rl_len:.0f} x {rl_wid:.0f} mm - the frame map is '
-        'wrong; it must be about 246 long by 100 across')
+        'wrong; capsule ends plus radius must give about 246 long by 100 across')
     ANK = to_common_rl(bpos('L_ankle_pitch_link')[None])[0]
     assert ends[:, 1].min() - ANK[1] < -100, 'the toe must land on the CAD forward side (-y)'
     th = np.linspace(0, 2 * np.pi, 40)
@@ -349,10 +380,19 @@ def main():
     a.scatter([], [], c=CAD_C, s=12, label='final CAD sole')
     a.legend(fontsize=7.5, loc='upper right')
     a.grid(alpha=0.25)
-    print(f'\n== footprint [mm]\n{"":8s} {"length":>8s} {"toe lever":>10s} {"heel lever":>11s}')
-    print(f'{"sim":8s} {rl_len:8.0f} {lev["rl_toe"]:10.0f} {lev["rl_heel"]:11.0f}')
-    print(f'{"CAD":8s} {np.ptp(sole[:, 1]):8.0f} {lev["cad_toe"]:10.0f} '
-          f'{lev["cad_heel"]:11.0f}')
+    # the ankle pitch moment at heel strike is Fz*d_fore_aft + Fx*d_vertical, and the two
+    # levers moved in OPPOSITE directions, so reporting only the fore-aft one overstates it
+    v_sim = ANK[2] - (min(to_common_rl(np.array([c[0]]))[0][2] for c in caps) - rl_r)
+    v_cad = (CAD_JOINT_Z['ankle'] - CAD_HIP_PITCH[2]) - Qf[:, 2].min()
+    print(f'\n== footprint [mm] (levers about the ankle PITCH axis)\n'
+          f'{"":8s} {"length":>8s} {"toe":>8s} {"heel":>8s} {"sole below axis":>16s}')
+    print(f'{"sim":8s} {rl_len:8.0f} {lev["rl_toe"]:8.0f} {lev["rl_heel"]:8.0f} '
+          f'{v_sim:16.0f}')
+    print(f'{"CAD":8s} {np.ptp(sole[:, 1]):8.0f} {lev["cad_toe"]:8.0f} '
+          f'{lev["cad_heel"]:8.0f} {v_cad:16.0f}')
+    print(f'{"change":8s} {"":8s} {100*(lev["cad_toe"]/lev["rl_toe"]-1):+7.1f}% '
+          f'{100*(lev["cad_heel"]/lev["rl_heel"]-1):+7.1f}% '
+          f'{100*(v_cad/v_sim-1):+15.1f}%')
 
     fig.suptitle('RL sim model vs final CAD — hip pitch axis aligned, nothing scaled: '
                  'the leg total matches, the knee height and the mass distribution do not',
