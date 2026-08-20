@@ -40,8 +40,13 @@ BREAK = {
 # motor: (peak N.m, mass in the table, catalog mass, catalog source)
 MOTOR = {'RS04': (120.0, 1.558, 1.42, 'docs/33 · 84.5 N·m/kg'),
          'RS03': (60.0, 0.932, 0.88, 'docs/37·39·41'),
-         'RS02': (17.0, 1.432, None, 'docs/36 “소형”, 카탈로그 질량 미기록'),
+         'RS02': (17.0, 1.432, 0.405, 'docs/39 L29 · RS01/RS02 380-405 g'),
          'RS00': (14.0, 1.004, 0.31, 'docs/36·39')}
+# Fusion360 measurement (2026-08-20, docs/83 §1): every motor occurrence is a single
+# placeholder solid in generic Steel, bbox matching the catalog envelope - so the table's
+# motor masses are volume x wrong density, and the catalog values replace ALL of them,
+# not just the two that looked absurd.
+CORRECTED_FULL = 44.509
 COUNT = {'RS04': 4, 'RS03': 6, 'RS02': 2, 'RS00': 3}
 # which links are one-of-a-pair
 PER_SIDE = {'HipPitch2Roll', 'PipRoll2Yaw', 'HipYaw2Knee', 'Knee2Ankle', 'Ankle2Feet',
@@ -110,18 +115,20 @@ def main():
     ax[0].grid(alpha=0.3, axis='x')
 
     # (b) what the table covers vs a complete machine
-    ax[1].bar(['table\nas given', 'both sides\n(implied)', 'RL sim\nmodel'],
-              [tot, full, RL_TOTAL], color=['#e8927c', '#c0392b', '#3b82f6'], width=0.62)
-    ax[1].bar(['both sides\n(implied)'], [side + MIRRORED_MOTORS], bottom=[tot],
-              color='none', edgecolor='#111', lw=1.2, hatch='//', width=0.62)
-    for i, v in enumerate([tot, full, RL_TOTAL]):
+    ax[1].bar(['table\nas given', 'both sides\n(placeholder\nmotors)',
+               'both sides\n(catalog\nmotors)', 'RL sim\nmodel'],
+              [tot, full, CORRECTED_FULL, RL_TOTAL],
+              color=['#e8927c', '#e8927c', '#c0392b', '#3b82f6'], width=0.62)
+    ax[1].bar(['both sides\n(placeholder\nmotors)'], [side + MIRRORED_MOTORS],
+              bottom=[tot], color='none', edgecolor='#111', lw=1.2, hatch='//', width=0.62)
+    for i, v in enumerate([tot, full, CORRECTED_FULL, RL_TOTAL]):
         ax[1].annotate(f'{v:.2f}', (i, v + 0.7), ha='center', fontsize=9, weight='bold')
     ax[1].annotate(f'+{side + MIRRORED_MOTORS:.2f} kg\nmirrored limb', (1, tot / 2 + 8),
                    ha='center', fontsize=7.5)
     ax[1].set_ylabel('mass [kg]', fontsize=8.5)
     ax[1].set_ylim(0, 60)
-    ax[1].set_title('the table is one side\n'
-                    f'doubling lands {100 * (full - RL_TOTAL) / RL_TOTAL:+.1f} % from the sim model',
+    ax[1].set_title('one side; with catalog motors the robot is\n'
+                    f'{CORRECTED_FULL:.1f} kg, {100 * (CORRECTED_FULL - RL_TOTAL) / RL_TOTAL:+.1f} % vs the sim model',
                     fontsize=9.5)
     ax[1].grid(alpha=0.3, axis='y')
 
@@ -143,8 +150,8 @@ def main():
     ax[2].invert_yaxis()
     ax[2].set_xlim(0, 105)
     ax[2].set_xlabel('peak torque density [N·m/kg]', fontsize=8.5)
-    ax[2].set_title('RS00 and RS02 break the trend:\n'
-                    'a 14 N·m motor cannot outweigh a 60 N·m one', fontsize=9.5)
+    ax[2].set_title('placeholder solids x generic Steel:\n'
+                    'RS00/RS02 land 3.2-3.5x over, RS04/RS03 near-miss', fontsize=9.5)
     ax[2].legend(fontsize=7.5, loc='lower right')
     ax[2].grid(alpha=0.3, axis='x')
 
