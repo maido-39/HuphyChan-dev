@@ -155,8 +155,9 @@ def main():
     ax[2].legend(fontsize=7.5, loc='lower right')
     ax[2].grid(alpha=0.3, axis='x')
 
-    fig.suptitle('Final-design mass table — audit: the arithmetic closes, '
-                 'two motor masses and the side count do not', fontsize=11.5)
+    fig.suptitle('Final-design mass table — audit: the arithmetic closes; the side count '
+                 'and every placeholder motor mass do not (Fusion-measured, docs/83 §1)',
+                 fontsize=11.5)
     fig.tight_layout()
     fig.savefig(os.path.join(out, 'mass_table_review.png'), bbox_inches='tight')
     print(f"\n-> {os.path.join(out, 'mass_table_review.png')}")
