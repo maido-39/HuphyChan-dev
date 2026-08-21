@@ -62,7 +62,12 @@ SHORT = {'L1gf_foot_corner_fine': 'L1 foot', 'L2_shin': 'L2 shin', 'L3_thigh': '
 PLA_UTS_XY, PLA_INTERLAYER, SF_PLA, FAT = 51.0, 17.0, 1.5, 0.10
 A_STAT_XY, A_STAT_Z = PLA_UTS_XY / 2, PLA_INTERLAYER / SF_PLA           # 25.5 / 11.3
 A_FAT_XY, A_FAT_Z = PLA_UTS_XY * FAT / SF_PLA, PLA_INTERLAYER * FAT / SF_PLA  # 3.4 / 1.13
-SN_ENDUR_XY, SN_K, SN_N, CYC_PER_H = PLA_UTS_XY * FAT, 5.5, 2e6, 2.2e4
+SN_ENDUR_XY, SN_ENDUR_Z, SN_K, SN_N = PLA_UTS_XY * FAT, PLA_INTERLAYER * FAT, 5.5, 2e6
+# cycles per walking hour: the 2.2e4/h used earlier is the joint-velocity REVERSAL rate
+# (docs/64 s8i, a bearing-fretting figure). Load cycles on a leg part are one per stance:
+# measured on the T2 blocks, foot-contact onsets run at ~1.2 Hz per leg -> 4.3e3/h; a
+# pelvis part is loaded by both legs -> 8.6e3/h.
+CYC_PER_H_LEG, CYC_PER_H_PELVIS = 4.3e3, 8.6e3
 AL_ALLOW = 138.0
 MOTOR_CONTACT_MM, MOTOR_ZONE_MM = 1.5, 30.0
 # physical names inferred from each solid's position in the CAD (cm3 rounded to 0.1)
@@ -87,18 +92,32 @@ NAMES = {
 }
 
 
-def walk_mags(env, LW, tier):
-    """The walking magnitudes, component by component, never above the campaign's."""
+def walk_mags(env, LW, tier, grf_p99):
+    """The walking magnitudes, component by component, in the CAMPAIGN'S conventions.
+
+    Two conventions were missed in the first pass and caught by adversarial review:
+      * transverse moment: run_link_env.py sets Mt1 = Mt2 = |M_perp| x factor / sqrt(2), so
+        that the sign envelope's resultant equals the measured scalar. Putting the per-axis
+        maximum on both axes (first pass) overstated the hip/pelvis moments by 16-39 %.
+      * the foot: L1's campaign case is not a bracket wrench at all but the ground contact
+        patch - Fz = GRF P99 x factor with Fx = Fy = 0.3 Fz (friction fraction). Feeding it
+        the ankle_roll bracket wrench instead was a different physical quantity.
+    """
     T = LW[tier][env['joint']]
     cam = env['magnitudes']
     out = {}
+    foot = env['link'].startswith('L1')
     for c in env['comps']:
         if c in ('Fx', 'Fy', 'Fz'):
-            out[c] = round(T[c] * FACTOR, 1)
+            if foot:
+                fz = grf_p99 * FACTOR
+                out[c] = round(fz if c == 'Fz' else 0.3 * fz, 1)
+            else:
+                out[c] = round(T[c] * FACTOR, 1)
         elif c == 'Maxial':
             out[c] = round(min(T['tau'] * FACTOR, cam['Maxial']), 1)
         elif c in ('Mt1', 'Mt2'):
-            out[c] = round(min(max(T['Mt1'], T['Mt2']) * FACTOR, cam[c]), 1)
+            out[c] = round(min(T['Mt_norm'] * FACTOR / np.sqrt(2.0), cam[c]), 1)
         elif c == 'Gbody':
             out[c] = cam['Gbody']
         else:
@@ -134,10 +153,12 @@ def cyl_distance(P, p):
     return np.hypot(dr, da)
 
 
-def life_hours(sigma):
+def life_hours(sigma, pelvis=False, endurance=None):
+    """Basquin life [h]; in-plane endurance by default, interlayer on request."""
     if sigma <= 0:
         return float('inf')
-    return SN_N * (SN_ENDUR_XY / sigma) ** SN_K / CYC_PER_H
+    e = SN_ENDUR_XY if endurance is None else endurance
+    return SN_N * (e / sigma) ** SN_K / (CYC_PER_H_PELVIS if pelvis else CYC_PER_H_LEG)
 
 
 def band(sigma):
@@ -171,13 +192,14 @@ def finish(rows, tier, links_done):
     real = [r for r in rows if not r['sliver']]
     real.sort(key=lambda r: -r['p99_walk'])
     print(f"\n{'band':6s} {'therm':6s} {'link':10s} {'part':8s} {'name':26s} {'cm3':>6s} "
-          f"{'campaign':>9s} {'walk':>7s} {'ratio':>6s} {'life h':>8s} seat")
+          f"{'campaign':>9s} {'walk':>7s} {'ratio':>6s} {'life XY h':>9s} {'life Z h':>9s} seat")
     for r in real:
-        lh = f"{r['life_h']:8.1f}" if r['life_h'] < 1e5 else f"{'>1e5':>8s}"
+        lh = f"{r['life_h']:9.1f}" if r['life_h'] < 1e5 else f"{'>1e5':>9s}"
+        lz = f"{r.get('life_h_z', 0):9.3f}" if r.get('life_h_z', 0) < 1e5 else f"{'>1e5':>9s}"
         print(f"{r['band']:6s} {r['thermal']:6s} {r['short']:10s} {r['part']:8s} "
               f"{(r['cad_name'] or en(r['label']))[:26]:26s} {r['vol_cm3']:6.1f} "
               f"{r['p99_campaign']:9.1f} {r['p99_walk']:7.1f} "
-              f"{r['p99_walk']/max(r['p99_campaign'],1e-9):6.2f} {lh} {','.join(r['bearing_seat'][:1])}")
+              f"{r['p99_walk']/max(r['p99_campaign'],1e-9):6.2f} {lh} {lz} {','.join(r['bearing_seat'][:1])}")
     nb = {b: sum(1 for r in real if r['band'] == b) for b in ('RED', 'ORANGE', 'GREEN')}
     vb = {b: sum(r['vol_cm3'] for r in real if r['band'] == b) for b in nb}
     ns = sum(1 for r in rows if r['sliver'])
@@ -198,7 +220,7 @@ def finish(rows, tier, links_done):
               zorder=3, label='campaign design basis (tick)')
     for i, r in enumerate(big):
         if r['thermal'] == 'bolted':
-            a.annotate('motor-bolted', (r['p99_walk'] * 1.08, i), fontsize=6, va='center',
+            a.annotate('touches motor proxy', (r['p99_walk'] * 1.08, i), fontsize=6, va='center',
                        color='#7d3c98')
     for v, lab in ((A_FAT_Z, 'PLA fatigue Z 1.1'), (A_FAT_XY, 'PLA fatigue XY 3.4'),
                    (A_STAT_Z, 'PLA static Z 11.3'), (A_STAT_XY, 'PLA static XY 25.5'),
@@ -234,7 +256,7 @@ def finish(rows, tier, links_done):
     b.invert_yaxis()
     b.set_xscale('log')
     b.set_xlabel('worst part p99 [MPa]')
-    b.set_title('Per link: the worst part barely moves\n(vertical load is 88–93 % of full-box)',
+    b.set_title('Per link: every component drops 0.6–0.8× vs the campaign\nbasis, so the worst part lands at 0.6–0.8× too',
                 fontsize=9.5)
     b.legend(fontsize=7.5)
     b.grid(alpha=0.3, axis='x')
@@ -273,7 +295,7 @@ def main():
     for link in links:
         env = json.load(open(f'{W}/{link}/envelope_P99.json'))
         comps = env['comps']
-        mw = walk_mags(env, LW, tier)
+        mw = walk_mags(env, LW, tier, LW[tier]['GRF_z']['P99'])
         print(f'\n== {link}  joint {env["joint"]}', flush=True)
         print('   campaign', env['magnitudes'])
         print('   walking ', mw, flush=True)
@@ -333,7 +355,8 @@ def main():
                 p99_walk=round(float(p99w), 2), peak_walk=round(float(sw.max()), 1),
                 motor_mm=round(dm[near], 1), motor=near.replace('robstride_', ''),
                 bearing_seat=seat_hit[:2],
-                life_h=round(life_hours(p99w), 1),
+                life_h=round(life_hours(p99w, link.startswith('L6')), 1),
+                life_h_z=round(life_hours(p99w, link.startswith('L6'), SN_ENDUR_Z), 2),
                 sf_al_walk=round(AL_ALLOW / max(p99w, 1e-9), 2)))
         links_done.append(link)
         print(f'   {len(sets)} parts, {link_tot/1000:.1f} cm3; link field p99 '
@@ -344,7 +367,7 @@ def main():
     out = dict(tier=tier, factor=FACTOR,
                bands=dict(RED=f'> {A_STAT_Z:.1f} MPa', ORANGE=f'{A_FAT_XY:.1f}..{A_STAT_Z:.1f} MPa',
                           GREEN=f'<= {A_FAT_XY:.1f} MPa',
-                          thermal='bolted = touches a motor proxy (<=1.5 mm), zone = within 30 mm'),
+                          thermal='bolted = overlaps the catalog-envelope motor proxy (<=1.5 mm) - a proximity test, not a bolt-pad test; zone = within 30 mm'),
                rows=rows)
     finish(rows, tier, links_done)
     json.dump(out, open(f'{W}/walk_triage_{tier}.json', 'w'), indent=1, ensure_ascii=False)

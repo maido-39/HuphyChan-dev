@@ -44,7 +44,7 @@ UTS_XY, UTS_Z = 51.0, 17.0
 TAU_PLA = 0.577 * UTS_Z              # shear, interlayer-limited: 9.8 MPa
 TAU_PLA_XY = 0.577 * UTS_XY          # 29.4 MPa if the layer is never in the shear plane
 FAT_XY = 0.10 * UTS_XY               # 5.1 MPa endurance at 2e6 (before SF)
-SF_FAT, K_SN, N_SN, CYC_H = 1.5, 5.5, 2e6, 2.2e4
+SF_FAT, K_SN, N_SN, CYC_H = 1.5, 5.5, 2e6, 4.3e3   # cycles per walking hour = stance onsets per leg, measured 1.16-1.19 Hz on the T2 blocks (the earlier 2.2e4 was a joint-velocity reversal rate)
 # measured on the walking subset (this session; see docs/86 for the commands)
 WALK = dict(
     rod=dict(A=dict(comp_p99=204, comp_peak=292, ten_p99=539, ten_peak=800),
