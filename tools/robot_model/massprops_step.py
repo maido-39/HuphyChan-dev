@@ -16,14 +16,21 @@ Sources (all under ~/pyg_fea/steps, produced by tools/fea/xcaf_links.py from the
 Rigid bodies (L leg, CAD frame, mm). The 2-RSU ankle is SERIAL here - pitch then roll -
 as the goal requires: the two RS03, the cranks and the clevis fork ride the shin, the push
 rods are split half to the shin and half to the foot, the ankle cross goes to the foot.
-  pelvis          CenterParts + Waist_Yaw RS04 + Hip_R(pitch) RS04 stator
+  pelvis          CenterParts + Waist_Yaw RS04 + BOTH hip-pitch RS04 stators (the right one
+                  mirrored from the left) + the 40 cm3 CRBS808 outer housing from the
+                  HipPitch2Roll group (it bolts 10xM4 into the hip-pitch stator)
   hip_pitch_link  HipPitch2Roll + Hip_P(roll) RS04
   hip_roll_link   PipRoll2Yaw + Hip_Y RS03
-  thigh           HipYaw2Knee
-  shin            Knee2Ankle + Knee RS04 + Ankle RS03 x2 + fork + cranks + rods/2
+  thigh           HipYaw2Knee + Knee RS04 (its stator is clamped between the thigh clevis
+                  plates by 2 x 10xM4 PCD106; the shin hangs on its 6xM5 output flange)
+                  minus the 70 cm3 hip-yaw ring (bolted 8xM4 into the hip-yaw RS03 stator,
+                  holds the 6814 outer seat -> it turns with hip_roll_link)
+  shin            Knee2Ankle + Ankle RS03 x2 + fork + cranks + rods/2
   ankle_pitch_link  the universal-joint cross (the real intermediate body)
   foot            sole plates + rods/2 (+ the 6900 cross bearings)
-Bearings are split half/half between the two bodies they join.
+Bearings are split half/half between the two bodies they join, chosen by the distance of
+the bearing centre to each joint AXIS (hip pitch and hip roll share a point, so a point
+test could never pick the roll pair - the first review caught exactly that).
 
 Checks: every OCC volume must match the JSON inventory (0.5 %); every tensor must be
 positive definite and satisfy the triangle inequality; the sum of body masses must equal
@@ -56,12 +63,20 @@ BODY_OF_GROUP = {'L6_pelvis': 'pelvis', 'L5_hip_pitchroll': 'hip_pitch_link',
                  'L4_hip_yaw': 'hip_roll_link', 'L3_thigh': 'thigh', 'L2_shin': 'shin'}
 MOTOR_BODY = {'robstride_rs04_hip_r_1_': 'pelvis', 'robstride_rs04_hip_r': 'pelvis',
               'robstride_rs04_hip_p': 'hip_pitch_link', 'robstride_rs03_hip_y': 'hip_roll_link',
-              'robstride_rs04_knee_p': 'shin', 'robstride_rs03_ankle_a': 'shin',
+              'robstride_rs04_knee_p': 'thigh', 'robstride_rs03_ankle_a': 'shin',
               'robstride_rs03_ankle_b': 'shin'}
 # joint points, for bearing assignment and for the output
-JOINT_PT = {'hip_pitch': [-124.45, 70.0, 60.0], 'hip_roll': [-124.45, 70.0, 60.0],
-            'hip_yaw': [-124.19, 70.0, -97.0], 'knee': [-97.45, 115.0, -310.0],
+JOINT_PT = {'hip_pitch': [-123.7, 70.0, 60.0], 'hip_roll': [-123.7, 70.0, 60.0],
+            'hip_yaw': [-123.7, 70.0, -97.0], 'knee': [-123.7, 115.0, -310.0],
             'ankle': [-123.7, 145.0, ANKLE_Z]}
+JOINT_AXIS = {'hip_pitch': [1, 0, 0], 'hip_roll': [0, 1, 0], 'hip_yaw': [0, 0, 1],
+              'knee': [1, 0, 0], 'ankle': [1, 0, 0]}
+
+
+def dist_to_axis(p, j):
+    d = np.asarray(p, float) - np.asarray(JOINT_PT[j], float)
+    u = np.asarray(JOINT_AXIS[j], float)
+    return float(np.linalg.norm(d - np.dot(d, u) * u))
 BEARING_PAIR = {'hip_yaw': ('hip_roll_link', 'thigh'), 'knee': ('thigh', 'shin'),
                 'ankle': ('shin', 'foot'), 'hip_pitch': ('pelvis', 'hip_pitch_link'),
                 'hip_roll': ('hip_pitch_link', 'hip_roll_link')}
@@ -135,7 +150,12 @@ def main():
         for k, s in enumerate(read_solids(f'{STEPS}/link_{grp}.step')):
             m, com, I, vol = props(s, RHO_AL)
             vol_check[grp] = vol_check.get(grp, 0.0) + vol
-            add(body, f'{grp}#{k}', m, com, I, 'struct', 'occ')
+            b = body
+            if grp == 'L3_thigh' and 65e3 < vol < 75e3 and np.linalg.norm(com - [-123.7, 70.0, -100.2]) < 3:
+                b = 'hip_roll_link'           # hip-yaw ring: bolted to the RS03 stator, 6814 outer seat
+            if grp == 'L5_hip_pitchroll' and 35e3 < vol < 45e3 and np.linalg.norm(com - [-56.3, 72.7, 79.8]) < 3:
+                b = 'pelvis'                  # CRBS808 outer housing on the hip-pitch stator
+            add(b, f'{grp}#{k}', m, com, I, 'struct', 'occ')
     # ---- the ankle group: split by rigid body ----
     for k, s in enumerate(read_solids(f'{STEPS}/link_L1_ankle_foot.step')):
         m, com, I, vol = props(s, RHO_AL)
@@ -167,14 +187,18 @@ def main():
             continue
         m = r['vol'] * 1000 * RHO_STEEL
         com = np.array(r['com'], float)
-        if r['link'] in BODY_OF_GROUP:
+        if kind == 'bearing':
+            # every bearing, grouped or loose: half to each body it joins, by nearest joint AXIS
+            j = min(JOINT_AXIS, key=lambda q: dist_to_axis(com, q))
+            for b in BEARING_PAIR[j]:
+                add(b, r['path'][-40:] + ' /2', m / 2, com, np.zeros((3, 3)), kind, 'inv')
+        elif r['link'] in BODY_OF_GROUP:
             add(BODY_OF_GROUP[r['link']], r['path'][-40:], m, com, np.zeros((3, 3)), kind, 'inv')
         elif r['link'] == 'L1_ankle_foot':
             add('foot' if com[2] <= ANKLE_Z + 0.5 else 'shin', r['path'][-40:], m, com,
                 np.zeros((3, 3)), kind, 'inv')
         else:
-            # loose bearings: half to each body they join, by nearest joint point
-            j = min(JOINT_PT, key=lambda q: np.linalg.norm(com - np.array(JOINT_PT[q])))
+            j = min(JOINT_AXIS, key=lambda q: dist_to_axis(com, q))
             for b in BEARING_PAIR[j]:
                 add(b, r['path'][-40:] + ' /2', m / 2, com, np.zeros((3, 3)), kind, 'inv')
 
@@ -187,6 +211,11 @@ def main():
         m0, com, I0, vol = props(sols[0], 1.0)
         rho = MOTOR_KG[fam] / vol
         add(body, key, MOTOR_KG[fam], com, I0 * rho, 'motor', 'occ+catalogue')
+        if key == 'robstride_rs04_hip_r':
+            # the pelvis carries BOTH hip-pitch stators; the STEP only has the left one
+            Mx = np.diag([-1.0, 1.0, 1.0])
+            add(body, key + ' (R mirror)', MOTOR_KG[fam], Mx @ com, Mx @ (I0 * rho) @ Mx,
+                'motor', 'mirror')
         ax = cyl_axis(sols[0])
         motors[key] = dict(family=fam, com=[float(v) for v in com],
                            axis=[float(v) for v in ax[1]] if ax else None,

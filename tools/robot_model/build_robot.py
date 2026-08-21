@@ -53,15 +53,21 @@ JOINT = {   # child body -> (joint name suffix, axis in sim frame, range rad, in
     'hip_pitch_link': ('hip_pitch', (0, 1, 0), (-2.18166, 0.523599)),
     'hip_roll_link': ('hip_roll', (1, 0, 0), (-0.785398, 0.436332)),
     'thigh': ('hip_yaw', (0, 0, -1), (-0.872665, 0.872665)),
-    'shin': ('knee', (0, -1, 0), (-2.44346, 0.0)),
-    'ankle_pitch_link': ('ankle_pitch', (0, -1, 0), (-0.872665, 0.698132)),
+    # knee: the shin knee plates meet the thigh clevis plates at about -120 deg (mesh
+    # interference check, red team 2026-08-20) - the old -140 is not reachable on this CAD
+    'shin': ('knee', (0, -1, 0), (-2.094395, 0.0)),
+    # ankle pitch: the DESIGN cap is -50/+30 (docs/71 s8g, docs/76 s12), not the old +40
+    'ankle_pitch_link': ('ankle_pitch', (0, -1, 0), (-0.872665, 0.523599)),
     'foot': ('ankle_roll', (-1, 0, 0), (-0.349066, 0.349066)),
 }
 EFFORT = {'hip_pitch': 120, 'hip_roll': 120, 'hip_yaw': 60, 'knee': 120,
           'ankle_pitch': 90, 'ankle_roll': 50}
-# upper-body placeholder (docs/82 catalogue-corrected table: Torso+Neck+2 arms, no battery)
-UPPER_MASS = 15.335
-UPPER_COM_SIM = np.array([-0.092, 0.0, 0.366])          # old base_link COM, hip-level origin
+# upper-body placeholder (docs/82 catalogue-corrected table: Torso+Neck+2 arms + the
+# WaistYaw2Pitch link 0.775, no battery). COM = the old base_link COM re-expressed at the
+# HIP: the old base origin sat at hip + (+0.104, 0, -0.059), so x = -0.092 + 0.104 = +0.012
+# (the first pass forgot the x part and put the lump 104 mm too far aft).
+UPPER_MASS = 15.335 + 0.775
+UPPER_COM_SIM = np.array([0.012, 0.0, 0.366])
 UPPER_DIAG = np.array([1.62441, 1.27435, 0.55027]) * (UPPER_MASS / 28.0892)
 # sole from the CAD: plate bottom 43 mm under the ankle axis, 180 ahead / 80 behind, 100 wide
 SOLE_Z, SOLE_X = -0.043, (-0.080, 0.180)
@@ -77,7 +83,7 @@ MOTOR_BODY = {'robstride_rs04_hip_r_1_': 'pelvis', 'robstride_rs04_hip_r': 'pelv
               'robstride_rs03_ankle_b': 'shin'}
 
 
-def motor_geoms(mp, body, side):
+def motor_geoms(mp, body, side, collision=False):
     """MJCF cylinder visuals for the actuators riding on `body`, in its link frame.
 
     The placeholders are not meshed (gmsh takes minutes on their fine features); the
@@ -97,9 +103,14 @@ def motor_geoms(mp, body, side):
         r = mo['r'] / 1000.0
         h = prox[key]['len'] / 2000.0
         # cylinder along `ax`: express as zaxis
-        out.append(f'<geom name="{side}_{key[10:]}_motor" type="cylinder" size="{r:.4f} {h:.4f}" '
-                   f'pos="{c[0]:.5f} {c[1]:.5f} {c[2]:.5f}" zaxis="{ax[0]:.4f} {ax[1]:.4f} {ax[2]:.4f}" '
-                   f'class="visual" material="black"/>')
+        if collision:
+            out.append(f'<geom name="{side}_{key[10:]}_motor_collision" type="cylinder" size="{r:.4f} {h:.4f}" '
+                       f'pos="{c[0]:.5f} {c[1]:.5f} {c[2]:.5f}" zaxis="{ax[0]:.4f} {ax[1]:.4f} {ax[2]:.4f}" '
+                       f'class="collision"/>')
+        else:
+            out.append(f'<geom name="{side}_{key[10:]}_motor" type="cylinder" size="{r:.4f} {h:.4f}" '
+                       f'pos="{c[0]:.5f} {c[1]:.5f} {c[2]:.5f}" zaxis="{ax[0]:.4f} {ax[1]:.4f} {ax[2]:.4f}" '
+                       f'class="visual" material="black"/>')
     return out
 
 
@@ -171,37 +182,47 @@ def main():
           <geom type="capsule" size="0.01"/>
         </default>
       </default>
+      <default class="hull">
+        <geom group="4" type="mesh" density="0" material="hull" contype="0" conaffinity="0"/>
+      </default>
       <site group="5" rgba="1 0 0 1"/>
     </default>
   </default>
   <asset>
     <material name="silver" rgba="0.7 0.7 0.7 1"/>
+    <material name="hull" rgba="0.2 0.4 0.9 0.25"/>
     <material name="black" rgba="0.2 0.2 0.2 1"/>
     <material name="red" rgba="1.0 0.0 0.0 1.0"/>
 ''')
-    X.append('    <mesh name="pelvis" file="pelvis.stl"/>\n')
+    X.append('    <mesh name="pelvis" file="pelvis.stl"/>\n    <mesh name="pelvis_hull" file="pelvis_hull.stl"/>\n')
     for s in 'LR':
         for b in CHAIN:
             if b == 'ankle_pitch_link':
                 continue
             f = f'{"R_" if s == "R" else ""}{b}.stl'
             X.append(f'    <mesh name="{s}_{b}" file="{f}"/>\n')
+            X.append(f'    <mesh name="{s}_{b}_hull" file="{f.replace(".stl", "_hull.stl")}"/>\n')
     X.append('  </asset>\n  <worldbody>\n    <body name="base_link" childclass="pygmalion">\n      <freejoint name="root"/>\n')
     X.append(f'      <inertial pos="{c_b[0]:.6g} {c_b[1]:.6g} {c_b[2]:.6g}" mass="{m_b:.5g}" fullinertia="{fullinertia(I_b)}"/>\n')
-    X.append('      <geom mesh="pelvis" class="visual"/>\n')
+    X.append('      <geom mesh="pelvis" class="visual"/>\n      <geom name="pelvis_hull" mesh="pelvis_hull" class="hull"/>\n')
     for g in motor_geoms(mp, 'pelvis', 'L'):
         X.append('      ' + g + '\n')
     for g in motor_geoms(mp, 'pelvis', 'R'):
         if 'hip_r_1_' not in g:          # the waist motor sits on the centreline: once only
             X.append('      ' + g + '\n')
-    X.append('      <geom name="base_torso_collision" class="collision" type="capsule" fromto="-0.09 0 0.10  -0.09 0 0.56" size="0.11"/>\n')
-    X.append('      <geom name="base_head_collision" class="collision" type="sphere" pos="-0.09 0 0.77" size="0.09"/>\n')
-    X.append('      <site name="imu_in_base" size="0.03" pos="-0.09 0 0.28"/>\n')
+
+    # old model geometry re-expressed at the hip-level base origin (+0.104 x, -0.059 z)
+    X.append('      <geom name="base_torso_collision" class="collision" type="capsule" fromto="0.004 0 0.061  0.004 0 0.521" size="0.11"/>\n')
+    X.append('      <geom name="base_head_collision" class="collision" type="sphere" pos="0.004 0 0.731" size="0.09"/>\n')
+    X.append('      <geom name="base_pelvis_collision" class="collision" type="box" pos="0 0 0.008" size="0.069 0.045 0.075"/>\n')
+    X.append('      <site name="imu_in_base" size="0.03" pos="0.004 0 0.241"/>\n')
     for s in 'LR':
         sign = -1.0 if s == 'L' else 1.0
         depth = 3
         for b in CHAIN:
             jn, ax, rg = JOINT[b]
+            if s == 'R' and jn in ('hip_roll', 'ankle_roll'):
+                ax = tuple(-v for v in ax)          # +q = adduction / inversion on BOTH legs
             o = off[b].copy()
             if b == 'hip_pitch_link':
                 o[1] = sign * abs(o[1])
@@ -212,12 +233,19 @@ def main():
             X.append(f'{ind}  <joint name="{s}_{jn}_joint" pos="0 0 0" axis="{ax[0]} {ax[1]} {ax[2]}" range="{rg[0]} {rg[1]}"/>\n')
             if b != 'ankle_pitch_link':
                 X.append(f'{ind}  <geom mesh="{s}_{b}" class="visual"/>\n')
+                X.append(f'{ind}  <geom name="{s}_{BNAME[b]}_hull" mesh="{s}_{b}_hull" class="hull"/>\n')
             for g in motor_geoms(mp, b, s):
                 X.append(f'{ind}  ' + g + '\n')
+            if b == 'hip_pitch_link':
+                X.append(f'{ind}  <geom name="{s}_hip_pitch_collision" class="collision" type="sphere" pos="0.0 {0.012*sign:.3f} 0.0" size="0.068"/>\n')
+            if b == 'hip_roll_link':
+                X.append(f'{ind}  <geom name="{s}_hip_roll_collision" class="collision" type="capsule" fromto="0 0 0.03  0 0 -0.085" size="0.05"/>\n')
             if b == 'thigh':
-                X.append(f'{ind}  <geom name="{s}_thigh_collision" class="collision" type="capsule" fromto="0 0 -0.03  -0.045 0 -0.34" size="0.062"/>\n')
+                X.append(f'{ind}  <geom name="{s}_thigh_collision" class="collision" type="capsule" fromto="-0.005 0 -0.13  -0.045 0 -0.37" size="0.058"/>\n')
             if b == 'shin':
-                X.append(f'{ind}  <geom name="{s}_shin_collision" class="collision" type="capsule" fromto="0 0 -0.03  -0.03 0 -0.40" size="0.05"/>\n')
+                X.append(f'{ind}  <geom name="{s}_shin_collision" class="collision" type="capsule" fromto="0 0 0.0  -0.03 0 -0.44" size="0.05"/>\n')
+                # the two RS03 on the back of the shin (CAD z -500/-600 -> -0.19/-0.29 below the knee)
+                X.append(f'{ind}  <geom name="{s}_shin_motors_collision" class="collision" type="capsule" fromto="-0.03 0 -0.16  -0.03 0 -0.32" size="0.055"/>\n')
             if b == 'foot':
                 X.append(f'{ind}  <site name="{"left" if s == "L" else "right"}_foot" pos="0.05 0 {SOLE_Z:.3f}" size="0.01"/>\n')
                 for i, y in enumerate((-0.04, -0.02, 0.0, 0.02, 0.04), start=2):
@@ -234,6 +262,11 @@ def main():
         pairs = ['base_link'] + [f'{s}_{BNAME[b]}' for b in CHAIN]
         for a, b in zip(pairs[:-1], pairs[1:]):
             X.append(f'    <exclude body1="{a}" body2="{b}"/>\n')
+        # the hip is a nested cluster: pelvis, hip_pitch_link and hip_roll_link interpenetrate by
+        # construction (motor housings inside each other's envelopes), so the 2-apart pairs in
+        # that cluster are excluded too; leg-vs-leg and torso-vs-thigh stay live
+        X.append(f'    <exclude body1="base_link" body2="{s}_hip_roll_link"/>\n')
+        X.append(f'    <exclude body1="{s}_hip_pitch_link" body2="{s}_thigh_link"/>\n')
     X.append('''  </contact>
   <sensor>
     <gyro name="imu_ang_vel" site="imu_in_base"/>
@@ -270,6 +303,8 @@ def main():
         parent = 'base_link'
         for b in CHAIN:
             jn, ax, rg = JOINT[b]
+            if s == 'R' and jn in ('hip_roll', 'ankle_roll'):
+                ax = tuple(-v for v in ax)
             o = off[b].copy()
             if b == 'hip_pitch_link':
                 o[1] = sign * abs(o[1])

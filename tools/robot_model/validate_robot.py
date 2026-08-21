@@ -129,6 +129,37 @@ def main():
     print('\n== joint sweeps (L leg, all others at 0): self-collision between non-adjacent bodies')
     frames = []
     sweep_rep = {}
+    # L/R sign conventions must be the OLD model's: for +dq on each joint, the sign pattern of
+    # the right foot's displacement relative to the left (mirrored y) is compared joint by
+    # joint with pygmalion.xml - the old model mirrors the two roll joints but not the yaw
+    def lr_pattern(model):
+        dd = mujoco.MjData(model)
+        out = {}
+        for j in JOINTS:
+            disp = {}
+            for sd in 'LR':
+                mujoco.mj_resetData(model, dd)
+                dd.qpos[:] = 0
+                dd.qpos[2] = 1.0
+                dd.qpos[3] = 1.0
+                mujoco.mj_forward(model, dd)
+                fb = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, f'{sd}_foot_link')
+                f0 = dd.xpos[fb].copy()
+                jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f'{sd}_{j}_joint')
+                dd.qpos[model.jnt_qposadr[jid]] = 0.3
+                mujoco.mj_forward(model, dd)
+                disp[sd] = dd.xpos[fb] - f0
+            # the convention is whether +dq moves the two feet as mirror images (lateral
+            # components opposite) or in the same lateral direction; x/z asymmetries are
+            # geometry (the old foot sits off its yaw axis, v2's does not), not convention
+            yl, yr = disp['L'][1], disp['R'][1]
+            out[j] = ('mirror' if yl * yr < 0 else 'same') if min(abs(yl), abs(yr)) > 1e-3 else 'n/a'
+        return out
+    old = mujoco.MjModel.from_xml_path(os.path.join(os.path.dirname(xml), 'pygmalion.xml'))
+    pat_old, pat_new = lr_pattern(old), lr_pattern(m)
+    for j in JOINTS:
+        assert pat_old[j] == pat_new[j], f'{j}: L/R convention differs from pygmalion.xml (old {pat_old[j]}, v2 {pat_new[j]})'
+    print(f'  L/R sign conventions match pygmalion.xml for all 6 joints: {pat_new}')
     for j in JOINTS:
         jid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, f'L_{j}_joint')
         lo, hi = m.jnt_range[jid]
