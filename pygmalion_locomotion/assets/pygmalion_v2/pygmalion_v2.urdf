@@ -2,9 +2,9 @@
 <robot name="pygmalion_v2">
   <link name="base_link">
     <inertial>
-      <origin xyz="0.00892958 -0.000429749 0.281074" rpy="0 0 0"/>
-      <mass value="21.592"/>
-      <inertia ixx="1.40911" ixy="-7.4555e-05" ixz="-0.0164878" iyy="1.21013" iyz="-0.0025522" izz="0.329744"/>
+      <origin xyz="0.00884615 1.80456e-05 0.278967" rpy="0 0 0"/>
+      <mass value="21.763"/>
+      <inertia ixx="1.42204" ixy="2.8873e-05" ixz="-0.0169774" iyy="1.22273" iyz="4.42639e-05" izz="0.330514"/>
     </inertial>
     <visual>
       <geometry><mesh filename="meshes/pelvis.stl"/></geometry>
@@ -54,9 +54,9 @@
   </link>
   <link name="L_shin_link">
     <inertial>
-      <origin xyz="-0.0273423 -0.000265126 -0.227915" rpy="0 0 0"/>
-      <mass value="3.3628"/>
-      <inertia ixx="0.0429728" ixy="3.96597e-05" ixz="-0.00323758" iyy="0.0441539" iyz="-5.81368e-06" izz="0.00476379"/>
+      <origin xyz="-0.0273338 -0.000265913 -0.227137" rpy="0 0 0"/>
+      <mass value="3.3529"/>
+      <inertia ixx="0.0422865" ixy="3.96521e-05" ixz="-0.00323012" iyy="0.0434644" iyz="-6.50761e-06" izz="0.00476042"/>
     </inertial>
     <visual>
       <geometry><mesh filename="meshes/shin.stl"/></geometry>
@@ -67,16 +67,16 @@
   </link>
   <link name="L_ankle_pitch_link">
     <inertial>
-      <origin xyz="-1.42109e-15 9.25695e-14 9.3678e-14" rpy="0 0 0"/>
-      <mass value="0.066987"/>
-      <inertia ixx="1.31094e-05" ixy="6.4373e-19" ixz="1.28746e-18" iyy="7.08093e-06" iyz="2.57492e-18" izz="1.2847e-05"/>
+      <origin xyz="-2.28287e-05 2.87098e-05 -1.9553e-05" rpy="0 0 0"/>
+      <mass value="0.086895"/>
+      <inertia ixx="1.83618e-05" ixy="-5.69515e-11" ixz="1.54521e-08" iyy="1.04473e-05" iyz="-1.94328e-08" izz="2.13095e-05"/>
     </inertial>
   </link>
   <link name="L_foot_link">
     <inertial>
-      <origin xyz="0.0245214 0.000321455 -0.0242027" rpy="0 0 0"/>
-      <mass value="0.78529"/>
-      <inertia ixx="0.0020039" ixy="1.91399e-05" ixz="0.000790218" iyy="0.00557935" iyz="-7.79345e-05" izz="0.00478413"/>
+      <origin xyz="0.0248362 0.000322365 -0.0245123" rpy="0 0 0"/>
+      <mass value="0.77534"/>
+      <inertia ixx="0.00199287" ixy="1.91575e-05" ixz="0.000784256" iyy="0.00556734" iyz="-7.79321e-05" izz="0.00477289"/>
     </inertial>
     <visual>
       <geometry><mesh filename="meshes/foot.stl"/></geometry>
@@ -126,9 +126,9 @@
   </link>
   <link name="R_shin_link">
     <inertial>
-      <origin xyz="-0.0273423 0.000265126 -0.227915" rpy="0 0 0"/>
-      <mass value="3.3628"/>
-      <inertia ixx="0.0429728" ixy="-3.96597e-05" ixz="-0.00323758" iyy="0.0441539" iyz="5.81368e-06" izz="0.00476379"/>
+      <origin xyz="-0.0273338 0.000265913 -0.227137" rpy="0 0 0"/>
+      <mass value="3.3529"/>
+      <inertia ixx="0.0422865" ixy="-3.96521e-05" ixz="-0.00323012" iyy="0.0434644" iyz="6.50761e-06" izz="0.00476042"/>
     </inertial>
     <visual>
       <geometry><mesh filename="meshes/R_shin.stl"/></geometry>
@@ -139,16 +139,16 @@
   </link>
   <link name="R_ankle_pitch_link">
     <inertial>
-      <origin xyz="-1.42109e-15 -9.25695e-14 9.3678e-14" rpy="0 0 0"/>
-      <mass value="0.066987"/>
-      <inertia ixx="1.31094e-05" ixy="-6.4373e-19" ixz="1.28746e-18" iyy="7.08093e-06" iyz="-2.57492e-18" izz="1.2847e-05"/>
+      <origin xyz="-2.28287e-05 -2.87098e-05 -1.9553e-05" rpy="0 0 0"/>
+      <mass value="0.086895"/>
+      <inertia ixx="1.83618e-05" ixy="5.69515e-11" ixz="1.54521e-08" iyy="1.04473e-05" iyz="1.94328e-08" izz="2.13095e-05"/>
     </inertial>
   </link>
   <link name="R_foot_link">
     <inertial>
-      <origin xyz="0.0245214 -0.000321455 -0.0242027" rpy="0 0 0"/>
-      <mass value="0.78529"/>
-      <inertia ixx="0.0020039" ixy="-1.91399e-05" ixz="0.000790218" iyy="0.00557935" iyz="7.79345e-05" izz="0.00478413"/>
+      <origin xyz="0.0248362 -0.000322365 -0.0245123" rpy="0 0 0"/>
+      <mass value="0.77534"/>
+      <inertia ixx="0.00199287" ixy="-1.91575e-05" ixz="0.000784256" iyy="0.00556734" iyz="7.79321e-05" izz="0.00477289"/>
     </inertial>
     <visual>
       <geometry><mesh filename="meshes/R_foot.stl"/></geometry>

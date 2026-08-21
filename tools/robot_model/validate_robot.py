@@ -133,10 +133,18 @@ def main():
     # the right foot's displacement relative to the left (mirrored y) is compared joint by
     # joint with pygmalion.xml - the old model mirrors the two roll joints but not the yaw
     def lr_pattern(model):
+        """Per joint: sign products (L x R) of the FOOT BODY ROTATION VECTOR for +dq.
+
+        A rotation fingerprint is independent of where the foot sits relative to the axis
+        (the old model's feet are laterally offset and its roll axis is canted, so any
+        point-displacement test confuses geometry with convention). Mirrored joints
+        (+q = adduction on both legs) give -1 on the lateral-plane components, same-axis
+        joints give +1; a single flipped axis on one side flips the product.
+        """
         dd = mujoco.MjData(model)
         out = {}
         for j in JOINTS:
-            disp = {}
+            rv = {}
             for sd in 'LR':
                 mujoco.mj_resetData(model, dd)
                 dd.qpos[:] = 0
@@ -144,28 +152,39 @@ def main():
                 dd.qpos[3] = 1.0
                 mujoco.mj_forward(model, dd)
                 fb = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, f'{sd}_foot_link')
-                f0 = dd.xpos[fb].copy()
+                q0 = dd.xquat[fb].copy()
                 jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f'{sd}_{j}_joint')
                 dd.qpos[model.jnt_qposadr[jid]] = 0.3
                 mujoco.mj_forward(model, dd)
-                disp[sd] = dd.xpos[fb] - f0
-            # the convention is whether +dq moves the two feet as mirror images (lateral
-            # components opposite) or in the same lateral direction; x/z asymmetries are
-            # geometry (the old foot sits off its yaw axis, v2's does not), not convention
-            yl, yr = disp['L'][1], disp['R'][1]
-            out[j] = ('mirror' if yl * yr < 0 else 'same') if min(abs(yl), abs(yr)) > 1e-3 else 'n/a'
+                q1 = dd.xquat[fb].copy()
+                qn = np.zeros(4)
+                mujoco.mju_negQuat(qn, q0)
+                dq = np.zeros(4)
+                mujoco.mju_mulQuat(dq, q1, qn)          # rotation from pose 0 to pose 1, world
+                v = np.zeros(3)
+                mujoco.mju_quat2Vel(v, dq, 1.0)
+                rv[sd] = v
+            out[j] = tuple(int(np.sign(a * b)) if min(abs(a), abs(b)) > 1e-3 else 0
+                           for a, b in zip(rv['L'], rv['R']))
         return out
     old = mujoco.MjModel.from_xml_path(os.path.join(os.path.dirname(xml), 'pygmalion.xml'))
     pat_old, pat_new = lr_pattern(old), lr_pattern(m)
     for j in JOINTS:
-        assert pat_old[j] == pat_new[j], f'{j}: L/R convention differs from pygmalion.xml (old {pat_old[j]}, v2 {pat_new[j]})'
-    print(f'  L/R sign conventions match pygmalion.xml for all 6 joints: {pat_new}')
+        # a component that is zero in one model is geometry (e.g. the old canted roll axis
+        # moves the site in x, the pure CAD axis does not); the convention lives in the
+        # components both models exercise, and every joint must exercise at least one
+        both = [(a, b) for a, b in zip(pat_old[j], pat_new[j]) if a != 0 and b != 0]
+        assert both, f'{j}: no common fingerprint component'
+        assert all(a == b for a, b in both), \
+            f'{j}: L/R convention differs from pygmalion.xml (old {pat_old[j]}, v2 {pat_new[j]})'
+        assert pat_new[j][1] == pat_old[j][1] or 0 in (pat_new[j][1], pat_old[j][1]), j
+    print(f'  L/R sign conventions match pygmalion.xml for all 6 joints (foot rotation fingerprints x,y,z): {pat_new}')
     for j in JOINTS:
         jid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, f'L_{j}_joint')
         lo, hi = m.jnt_range[jid]
         qa = m.jnt_qposadr[jid]
         hits, reach = [], []
-        for k, q in enumerate(np.linspace(lo, hi, 13)):
+        for k, q in enumerate(np.linspace(lo, hi, 61)):
             mujoco.mj_resetData(m, d)
             set_free_base(d, 1.0)
             d.qpos[qa] = q
@@ -179,16 +198,17 @@ def main():
                     continue
                 hits.append((round(float(np.degrees(q)), 1), n1, n2, round(float(d.contact[c].dist), 4)))
             reach.append(d.xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, 'L_foot_link')].copy())
-            if k in (0, 6, 12):
+            if k in (0, 30, 60):
                 frames.append((j, np.degrees(q), d.qpos.copy()))
         reach = np.array(reach)
         sweep_rep[j] = dict(range_deg=[float(np.degrees(lo)), float(np.degrees(hi))],
                             self_contacts=hits[:6], n_contacts=len(hits),
                             foot_x=[float(reach[:, 0].min()), float(reach[:, 0].max())],
                             foot_z=[float(reach[:, 2].min()), float(reach[:, 2].max())])
+        onset = min((h[0] for h in hits), key=abs) if hits else None
         print(f"  {j:12s} [{np.degrees(lo):6.1f},{np.degrees(hi):6.1f}] deg  foot x {reach[:,0].min():+.3f}..{reach[:,0].max():+.3f}"
-              f"  z {reach[:,2].min():.3f}..{reach[:,2].max():.3f}  self-contacts {len(hits)}"
-              + (f'  e.g. {hits[0]}' if hits else ''))
+              f"  z {reach[:,2].min():.3f}..{reach[:,2].max():.3f}  self-contact samples {len(hits)}"
+              + (f'  first at {onset} deg: {hits[0][1]}-{hits[0][2]}' if hits else ''))
     rep['sweeps'] = sweep_rep
 
     # ---- 4. inertia read back from the simulator ----
@@ -196,6 +216,16 @@ def main():
     mujoco.mj_resetData(m, d)
     set_free_base(d, 1.0)
     mujoco.mj_forward(m, d)
+    # point-mass reference from the mass-property file: sum m d^2 about the axis
+    def pm(axis_pt, bodies_):
+        tot = 0.0
+        for b in bodies_:
+            for p in mp['bodies'][b]['parts']:
+                c = np.array(p['com']) - np.array(axis_pt)
+                tot += p['mass'] * (c[1] ** 2 + c[2] ** 2) * 1e-6
+        return tot
+    ref = {'hip_pitch': pm([-123.7, 70.0, 60.0], ['hip_pitch_link', 'hip_roll_link', 'thigh', 'shin', 'ankle_pitch_link', 'foot']),
+           'knee': pm([-123.7, 115.0, -310.0], ['shin', 'ankle_pitch_link', 'foot'])}
     # M[dof,dof] via M @ e_dof - works on every MuJoCo version regardless of how qM is stored
     for j in ('hip_pitch', 'knee'):
         jid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, f'L_{j}_joint')
@@ -204,7 +234,7 @@ def main():
         e[dof] = 1.0
         res = np.zeros(m.nv)
         mujoco.mj_mulM(m, d, res, e)
-        print(f'  L_{j}: M[dof,dof] = {res[dof]:.4f} kg m2  (STEP point-mass estimate: hip 2.21 / knee 0.44 incl. ankle motors on the shin)')
+        print(f'  L_{j}: M[dof,dof] = {res[dof]:.4f} kg m2  (point-mass estimate from the part list {ref[j]:.4f}; the difference is the parts\' own tensors)')
         rep[f'I_{j}_axis'] = float(res[dof])
 
     # ---- 5. figure: zero pose two views + sweep contact sheet ----

@@ -38,9 +38,6 @@ ORIGIN = {'pelvis': np.array([0.0, 70.0, 60.0]), 'hip_pitch_link': HIP, 'hip_rol
 R_SIM = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])   # cad -> sim
 GROUP_BODY = {'L6_pelvis': 'pelvis', 'L5_hip_pitchroll': 'hip_pitch_link',
               'L4_hip_yaw': 'hip_roll_link', 'L3_thigh': 'thigh', 'L2_shin': 'shin'}
-MOTOR_BODY = {'rs04_hip_r_1_': 'pelvis', 'rs04_hip_r': 'pelvis', 'rs04_hip_p': 'hip_pitch_link',
-              'rs03_hip_y': 'hip_roll_link', 'rs04_knee_p': 'shin', 'rs03_ankle_a': 'shin',
-              'rs03_ankle_b': 'shin'}
 JMC = {'A': ([-83.7, 205.7, -523.2], [-86.2, 195.0, -810.0]),
        'B': ([-163.7, 208.0, -616.0], [-161.2, 195.0, -810.0])}
 
@@ -106,6 +103,12 @@ def main():
                 b = 'hip_roll_link'
             if grp == 'L5_hip_pitchroll' and 35 < vol < 45 and np.linalg.norm(com - [-56.3, 72.7, 79.8]) < 3:
                 b = 'pelvis'
+                # the pelvis STEP is left-sided: the right housing is the x-mirror
+                mm = m.copy()
+                mm.vertices[:, 0] *= -1
+                mm.faces = mm.faces[:, [0, 2, 1]]
+                bodies['pelvis']['visual'].append(mm)
+                bodies['pelvis']['hull'].append(mm)
             bodies[b]['visual'].append(m)
             bodies[b]['hull'].append(m)
         log.append(f'{grp} -> {body}')

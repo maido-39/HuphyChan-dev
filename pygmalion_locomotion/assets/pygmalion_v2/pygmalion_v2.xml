@@ -48,7 +48,7 @@
   <worldbody>
     <body name="base_link" childclass="pygmalion">
       <freejoint name="root"/>
-      <inertial pos="0.00892958 -0.000429749 0.281074" mass="21.592" fullinertia="1.40911 1.21013 0.329744 -7.4555e-05 -0.0164878 -0.0025522"/>
+      <inertial pos="0.00884615 1.80456e-05 0.278967" mass="21.763" fullinertia="1.42204 1.22273 0.330514 2.8873e-05 -0.0169774 4.42639e-05"/>
       <geom mesh="pelvis" class="visual"/>
       <geom name="pelvis_hull" mesh="pelvis_hull" class="hull"/>
       <geom name="L_rs04_hip_r_1__motor" type="cylinder" size="0.0600 0.0279" pos="0.00053 0.00058 0.09393" zaxis="0.0000 0.0000 -1.0000" class="visual" material="black"/>
@@ -77,22 +77,22 @@
             <joint name="L_hip_yaw_joint" pos="0 0 0" axis="0 0 -1" range="-0.872665 0.872665"/>
             <geom mesh="L_thigh" class="visual"/>
             <geom name="L_thigh_link_hull" mesh="L_thigh_hull" class="hull"/>
+            <geom name="L_rs04_knee_p_motor" type="cylinder" size="0.0600 0.0279" pos="-0.04495 -0.00318 -0.36922" zaxis="0.0000 1.0000 0.0000" class="visual" material="black"/>
             <geom name="L_thigh_collision" class="collision" type="capsule" fromto="-0.005 0 -0.13  -0.045 0 -0.37" size="0.058"/>
             <body name="L_shin_link" pos="-0.045 0 -0.37">
-              <inertial pos="-0.0273423 -0.000265126 -0.227915" mass="3.3628" fullinertia="0.0429728 0.0441539 0.00476379 3.96597e-05 -0.00323758 -5.81368e-06"/>
+              <inertial pos="-0.0273338 -0.000265913 -0.227137" mass="3.3529" fullinertia="0.0422865 0.0434644 0.00476042 3.96521e-05 -0.00323012 -6.50761e-06"/>
               <joint name="L_knee_joint" pos="0 0 0" axis="0 -1 0" range="-2.094395 0.0"/>
               <geom mesh="L_shin" class="visual"/>
               <geom name="L_shin_link_hull" mesh="L_shin_hull" class="hull"/>
-              <geom name="L_rs04_knee_p_motor" type="cylinder" size="0.0600 0.0279" pos="0.00005 -0.00318 0.00078" zaxis="0.0000 1.0000 0.0000" class="visual" material="black"/>
               <geom name="L_rs03_ankle_a_motor" type="cylinder" size="0.0446 0.0283" pos="-0.03006 0.00172 -0.29003" zaxis="0.0000 -1.0000 -0.0000" class="visual" material="black"/>
               <geom name="L_rs03_ankle_b_motor" type="cylinder" size="0.0446 0.0283" pos="-0.02994 -0.00172 -0.19003" zaxis="0.0000 1.0000 0.0000" class="visual" material="black"/>
               <geom name="L_shin_collision" class="collision" type="capsule" fromto="0 0 0.0  -0.03 0 -0.44" size="0.05"/>
               <geom name="L_shin_motors_collision" class="collision" type="capsule" fromto="-0.03 0 -0.16  -0.03 0 -0.32" size="0.055"/>
               <body name="L_ankle_pitch_link" pos="-0.03 0 -0.49">
-                <inertial pos="-1.42109e-15 9.25695e-14 9.3678e-14" mass="0.066987" fullinertia="1.31094e-05 7.08093e-06 1.2847e-05 6.4373e-19 1.28746e-18 2.57492e-18"/>
+                <inertial pos="-2.28287e-05 2.87098e-05 -1.9553e-05" mass="0.086895" fullinertia="1.83618e-05 1.04473e-05 2.13095e-05 -5.69515e-11 1.54521e-08 -1.94328e-08"/>
                 <joint name="L_ankle_pitch_joint" pos="0 0 0" axis="0 -1 0" range="-0.872665 0.523599"/>
                 <body name="L_foot_link" pos="0 0 0">
-                  <inertial pos="0.0245214 0.000321455 -0.0242027" mass="0.78529" fullinertia="0.0020039 0.00557935 0.00478413 1.91399e-05 0.000790218 -7.79345e-05"/>
+                  <inertial pos="0.0248362 0.000322365 -0.0245123" mass="0.77534" fullinertia="0.00199287 0.00556734 0.00477289 1.91575e-05 0.000784256 -7.79321e-05"/>
                   <joint name="L_ankle_roll_joint" pos="0 0 0" axis="-1 0 0" range="-0.349066 0.349066"/>
                   <geom mesh="L_foot" class="visual"/>
                   <geom name="L_foot_link_hull" mesh="L_foot_hull" class="hull"/>
@@ -127,22 +127,22 @@
             <joint name="R_hip_yaw_joint" pos="0 0 0" axis="0 0 -1" range="-0.872665 0.872665"/>
             <geom mesh="R_thigh" class="visual"/>
             <geom name="R_thigh_link_hull" mesh="R_thigh_hull" class="hull"/>
+            <geom name="R_rs04_knee_p_motor" type="cylinder" size="0.0600 0.0279" pos="-0.04495 0.00318 -0.36922" zaxis="0.0000 -1.0000 0.0000" class="visual" material="black"/>
             <geom name="R_thigh_collision" class="collision" type="capsule" fromto="-0.005 0 -0.13  -0.045 0 -0.37" size="0.058"/>
             <body name="R_shin_link" pos="-0.045 0 -0.37">
-              <inertial pos="-0.0273423 0.000265126 -0.227915" mass="3.3628" fullinertia="0.0429728 0.0441539 0.00476379 -3.96597e-05 -0.00323758 5.81368e-06"/>
+              <inertial pos="-0.0273338 0.000265913 -0.227137" mass="3.3529" fullinertia="0.0422865 0.0434644 0.00476042 -3.96521e-05 -0.00323012 6.50761e-06"/>
               <joint name="R_knee_joint" pos="0 0 0" axis="0 -1 0" range="-2.094395 0.0"/>
               <geom mesh="R_shin" class="visual"/>
               <geom name="R_shin_link_hull" mesh="R_shin_hull" class="hull"/>
-              <geom name="R_rs04_knee_p_motor" type="cylinder" size="0.0600 0.0279" pos="0.00005 0.00318 0.00078" zaxis="0.0000 -1.0000 0.0000" class="visual" material="black"/>
               <geom name="R_rs03_ankle_a_motor" type="cylinder" size="0.0446 0.0283" pos="-0.03006 -0.00172 -0.29003" zaxis="0.0000 1.0000 -0.0000" class="visual" material="black"/>
               <geom name="R_rs03_ankle_b_motor" type="cylinder" size="0.0446 0.0283" pos="-0.02994 0.00172 -0.19003" zaxis="0.0000 -1.0000 0.0000" class="visual" material="black"/>
               <geom name="R_shin_collision" class="collision" type="capsule" fromto="0 0 0.0  -0.03 0 -0.44" size="0.05"/>
               <geom name="R_shin_motors_collision" class="collision" type="capsule" fromto="-0.03 0 -0.16  -0.03 0 -0.32" size="0.055"/>
               <body name="R_ankle_pitch_link" pos="-0.03 0 -0.49">
-                <inertial pos="-1.42109e-15 -9.25695e-14 9.3678e-14" mass="0.066987" fullinertia="1.31094e-05 7.08093e-06 1.2847e-05 -6.4373e-19 1.28746e-18 -2.57492e-18"/>
+                <inertial pos="-2.28287e-05 -2.87098e-05 -1.9553e-05" mass="0.086895" fullinertia="1.83618e-05 1.04473e-05 2.13095e-05 5.69515e-11 1.54521e-08 1.94328e-08"/>
                 <joint name="R_ankle_pitch_joint" pos="0 0 0" axis="0 -1 0" range="-0.872665 0.523599"/>
                 <body name="R_foot_link" pos="0 0 0">
-                  <inertial pos="0.0245214 -0.000321455 -0.0242027" mass="0.78529" fullinertia="0.0020039 0.00557935 0.00478413 -1.91399e-05 0.000790218 7.79345e-05"/>
+                  <inertial pos="0.0248362 -0.000322365 -0.0245123" mass="0.77534" fullinertia="0.00199287 0.00556734 0.00477289 -1.91575e-05 0.000784256 7.79321e-05"/>
                   <joint name="R_ankle_roll_joint" pos="0 0 0" axis="1 0 0" range="-0.349066 0.349066"/>
                   <geom mesh="R_foot" class="visual"/>
                   <geom name="R_foot_link_hull" mesh="R_foot_hull" class="hull"/>

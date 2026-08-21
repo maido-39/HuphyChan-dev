@@ -68,9 +68,9 @@ MOTOR_BODY = {'robstride_rs04_hip_r_1_': 'pelvis', 'robstride_rs04_hip_r': 'pelv
 # joint points, for bearing assignment and for the output
 JOINT_PT = {'hip_pitch': [-123.7, 70.0, 60.0], 'hip_roll': [-123.7, 70.0, 60.0],
             'hip_yaw': [-123.7, 70.0, -97.0], 'knee': [-123.7, 115.0, -310.0],
-            'ankle': [-123.7, 145.0, ANKLE_Z]}
+            'ankle': [-123.7, 145.0, ANKLE_Z], 'ankle_roll': [-123.7, 145.0, ANKLE_Z]}
 JOINT_AXIS = {'hip_pitch': [1, 0, 0], 'hip_roll': [0, 1, 0], 'hip_yaw': [0, 0, 1],
-              'knee': [1, 0, 0], 'ankle': [1, 0, 0]}
+              'knee': [1, 0, 0], 'ankle': [1, 0, 0], 'ankle_roll': [0, 1, 0]}
 
 
 def dist_to_axis(p, j):
@@ -78,7 +78,9 @@ def dist_to_axis(p, j):
     u = np.asarray(JOINT_AXIS[j], float)
     return float(np.linalg.norm(d - np.dot(d, u) * u))
 BEARING_PAIR = {'hip_yaw': ('hip_roll_link', 'thigh'), 'knee': ('thigh', 'shin'),
-                'ankle': ('shin', 'foot'), 'hip_pitch': ('pelvis', 'hip_pitch_link'),
+                'ankle': ('shin', 'ankle_pitch_link'),          # 6900 on the pitch trunnions
+                'ankle_roll': ('ankle_pitch_link', 'foot'),     # 6900 on the roll pillows
+                'hip_pitch': ('pelvis', 'hip_pitch_link'),
                 'hip_roll': ('hip_pitch_link', 'hip_roll_link')}
 JMC = {'A': ([-83.7, 205.7, -523.2], [-86.2, 195.0, -810.0]),
        'B': ([-163.7, 208.0, -616.0], [-161.2, 195.0, -810.0])}
@@ -139,10 +141,10 @@ def main():
     bodies = {b: dict(parts=[]) for b in ('pelvis', 'hip_pitch_link', 'hip_roll_link',
                                          'thigh', 'shin', 'ankle_pitch_link', 'foot')}
 
-    def add(body, name, m, com, I_com, kind, src):
+    def add(body, name, m, com, I_com, kind, src, origin=''):
         bodies[body]['parts'].append(dict(name=name, mass=float(m), com=[float(v) for v in com],
                                           I_com=[[float(v) for v in r] for r in I_com],
-                                          kind=kind, src=src))
+                                          kind=kind, src=src, origin=origin))
 
     # ---- structural solids, exact, from the per-link STEPs ----
     vol_check = {}
@@ -155,7 +157,7 @@ def main():
                 b = 'hip_roll_link'           # hip-yaw ring: bolted to the RS03 stator, 6814 outer seat
             if grp == 'L5_hip_pitchroll' and 35e3 < vol < 45e3 and np.linalg.norm(com - [-56.3, 72.7, 79.8]) < 3:
                 b = 'pelvis'                  # CRBS808 outer housing on the hip-pitch stator
-            add(b, f'{grp}#{k}', m, com, I, 'struct', 'occ')
+            add(b, f'{grp}#{k}', m, com, I, 'struct', 'occ', origin=grp)
     # ---- the ankle group: split by rigid body ----
     for k, s in enumerate(read_solids(f'{STEPS}/link_L1_ankle_foot.step')):
         m, com, I, vol = props(s, RHO_AL)
@@ -191,7 +193,8 @@ def main():
             # every bearing, grouped or loose: half to each body it joins, by nearest joint AXIS
             j = min(JOINT_AXIS, key=lambda q: dist_to_axis(com, q))
             for b in BEARING_PAIR[j]:
-                add(b, r['path'][-40:] + ' /2', m / 2, com, np.zeros((3, 3)), kind, 'inv')
+                add(b, r['path'][-40:] + ' /2', m / 2, com, np.zeros((3, 3)), kind, 'inv',
+                    origin=r['link'])
         elif r['link'] in BODY_OF_GROUP:
             add(BODY_OF_GROUP[r['link']], r['path'][-40:], m, com, np.zeros((3, 3)), kind, 'inv')
         elif r['link'] == 'L1_ankle_foot':
@@ -222,6 +225,14 @@ def main():
                            axis_point=[float(v) for v in ax[2]] if ax else None,
                            r=float(ax[3]) if ax else None)
 
+    # ---- the pelvis is left-sided in the STEP: mirror every pelvis part that came from a
+    #      leg-side group (L5 housing, the CRBS808 pelvis half) - the left hip-pitch stator is
+    #      already mirrored above ----
+    Mx = np.diag([-1.0, 1.0, 1.0])
+    for pp in list(bodies['pelvis']['parts']):
+        if pp['origin'] in ('L5_hip_pitchroll', 'unassigned_crbs808auuu'):
+            add('pelvis', pp['name'] + ' (R mirror)', pp['mass'], Mx @ np.array(pp['com']),
+                Mx @ np.array(pp['I_com']) @ Mx, pp['kind'], 'mirror', origin=pp['origin'])
     # ---- aggregate per body ----
     out = dict(frame='CAD global, mm, kg, kg*mm^2; L leg', joints=JOINT_PT, motors=motors,
                bodies={})

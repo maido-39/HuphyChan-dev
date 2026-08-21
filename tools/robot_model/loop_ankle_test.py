@@ -16,6 +16,9 @@ the cranks driven, the serial joints become passive and follow the linkage. The 
   2. with the base welded, torque on crank A must move ankle pitch and the rods must stay
      at their lengths - the loop transmits
 
+Known double count: the v2 shin/foot already carry the crank and rod masses (0.33 kg), so this
+feasibility file has them twice - to be removed from the serial bodies when v2.1 is integrated.
+
 Usage: loop_ankle_test.py   (mjlab .venv python). Writes xmls/pygmalion_v21_loop.xml.
 """
 import numpy as np
@@ -45,7 +48,8 @@ def main():
     for tag in 'AB':
         # crank: hinge about the motor axis (x in CAD -> y in sim) at the motor axis point
         c = shin.add_body(name=f'L_crank_{tag}', pos=sim(MOTOR[tag], SHIN), mass=CRANK_KG,
-                          ipos=[0, 0, 0], fullinertia=[4e-5, 4e-5, 4e-5, 0, 0, 0])
+                          ipos=[0, 0, 0], fullinertia=[4e-5, 4e-5, 4e-5, 0, 0, 0],
+                          explicitinertial=True)   # without this MjSpec derives mass from the geoms
         c.add_joint(name=f'L_crank_{tag}_joint', type=mujoco.mjtJoint.mjJNT_HINGE, axis=[0, 1, 0],
                     damping=0.2, armature=0.005)
         pin_rel = sim(PIN[tag], MOTOR[tag])
@@ -55,7 +59,8 @@ def main():
         vec = sim(BALL[tag], PIN[tag])
         L = np.linalg.norm(vec)
         r = c.add_body(name=f'L_rod_{tag}', pos=pin_rel, mass=ROD_KG[tag], ipos=vec / 2,
-                       fullinertia=[ROD_KG[tag] * L * L / 12] * 2 + [1e-6, 0, 0, 0])
+                       fullinertia=[ROD_KG[tag] * L * L / 12] * 2 + [1e-6, 0, 0, 0],
+                       explicitinertial=True)
         r.add_joint(name=f'L_rod_{tag}_ball', type=mujoco.mjtJoint.mjJNT_BALL, damping=0.02, armature=0.0005)
         r.add_geom(type=mujoco.mjtGeom.mjGEOM_CAPSULE, fromto=[0, 0, 0, *vec], size=[0.005, 0, 0],
                    contype=0, conaffinity=0, rgba=[0.2, 0.6, 0.9, 1], group=2)
