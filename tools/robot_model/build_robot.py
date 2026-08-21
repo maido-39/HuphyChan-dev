@@ -79,8 +79,8 @@ def to_sim_vec(v):
 
 MOTOR_BODY = {'robstride_rs04_hip_r_1_': 'pelvis', 'robstride_rs04_hip_r': 'pelvis',
               'robstride_rs04_hip_p': 'hip_pitch_link', 'robstride_rs03_hip_y': 'hip_roll_link',
-              'robstride_rs04_knee_p': 'shin', 'robstride_rs03_ankle_a': 'shin',
-              'robstride_rs03_ankle_b': 'shin'}
+              'robstride_rs04_knee_p': 'thigh', 'robstride_rs03_ankle_a': 'shin',
+              'robstride_rs03_ankle_b': 'shin'}     # knee stator rides the thigh (red team)
 
 
 def motor_geoms(mp, body, side, collision=False):

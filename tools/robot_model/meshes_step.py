@@ -99,8 +99,15 @@ def main():
     log = []
     for grp, body in GROUP_BODY.items():
         for m, com in solid_meshes(f'{STEPS}/link_{grp}.step', size):
-            bodies[body]['visual'].append(m)
-            bodies[body]['hull'].append(m)
+            b = body
+            vol = abs(m.volume) / 1000.0 if m.is_watertight else 0.0
+            # same re-bookings as massprops_step.py (bolt patterns, red team 2026-08-20)
+            if grp == 'L3_thigh' and 65 < vol < 75 and np.linalg.norm(com - [-123.7, 70.0, -100.2]) < 3:
+                b = 'hip_roll_link'
+            if grp == 'L5_hip_pitchroll' and 35 < vol < 45 and np.linalg.norm(com - [-56.3, 72.7, 79.8]) < 3:
+                b = 'pelvis'
+            bodies[b]['visual'].append(m)
+            bodies[b]['hull'].append(m)
         log.append(f'{grp} -> {body}')
         print(log[-1], flush=True)
     for m, com in solid_meshes(f'{STEPS}/link_L1_ankle_foot.step', size):
