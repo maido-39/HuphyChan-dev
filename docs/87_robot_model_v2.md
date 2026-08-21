@@ -139,12 +139,32 @@ XML 미재생성(무릎 모터 시각 원통) 재빌드 · "내번"→외번 · 
 반대 다리 외전 시 24°에서 대퇴 캡슐–골반 박스 접촉) · 태스크 `thermal_effort` 정격 · URDF velocity 20 rad/s 출처
 (RS04 무부하 19.9) · 8개 링 나사/10개 하우징 나사는 링크 규칙상 옛 바디에 잔류(34 g).
 
+## §8 RL 준비 상태 — 구 정책 제로샷 (CPU, 학습 없이)
+
+GPU가 내려가 있어 학습은 못 하지만, **학습 파이프라인과 같은 경로**(`measure_loads.py`, 체크포인트 →
+정책 추론 → mjlab 환경 → MuJoCo Warp)로 구 flat 앵커 정책(gen21p2, 구 모델로 학습)을 v2에 그대로 돌렸다
+(`analysis/zeroshot_v2.py`, 3명령 × 15 s).
+
+![zeroshot](img/robot_v2_zeroshot_sheet.png)
+
+| 명령 vx | base z min/mean | 달성 vx | 낙상 | knee |τ| P99 | GRF_z P99 |
+|---|---|---|---|---|---|
+| 0.0 (정지) | 0.880 / 0.907 | +0.01 | 0 | 84.6 N·m | 420 N |
+| 0.5 | 0.697 / 0.879 | **+0.23** | 0 | **120 (포화)** | 956 N (1.9 BW) |
+| 1.0 | 0.696 / 0.873 | −0.03 | 0 | **120 (포화)** | 925 N |
+
+**45 s 동안 넘어지지 않고 서 있고**, 0.5 m/s 명령엔 절반 속도로 걷지만 1.0에선 제자리 — 질량 분포·무릎 높이·
+정강이 길이가 바뀐 로봇에서 구 정책은 무릎 토크를 포화시키며 버틴다. 즉 **파이프라인은 v2에서 끝까지 동작**하고,
+재학습이 필요하다는 것(예상대로)과 그 출발점(직립 유지)이 확인됐다. 영상: `docs/img/robot_v2_zeroshot_walk1.mp4`.
+
 ## §6 환경 제약 (이 호스트)
 
-- **GPU 드라이버 미로드**(`nvidia-smi` 통신 실패, `/dev/nvidia*` 없음) → RL 학습 불가. CPU로 mjlab
-  태스크 환경 스모크(2 env, 100 step)만 수행. 학습은 드라이버 복구 후 `scripts/run_training.sh`.
+- **GPU 드라이버 미로드**(`nvidia-smi` 통신 실패, `/dev/nvidia*` 없음). DKMS 모듈 570.195.03은 현 커널
+  6.8.0-136용으로 **빌드돼 있고 로드만 안 된 상태**(`modinfo nvidia` 정상) — `sudo modprobe nvidia`
+  (또는 재부팅)로 복구 가능하나 sudo 비밀번호가 필요해 사용자 몫. 학습은 복구 후 `scripts/run_training.sh`.
 - **Fusion MCP(27182)**: 이 리눅스 호스트·LAN에 리스너 없음 — Windows PC의 `ssh -L`은 그쪽 로컬용.
-  이 호스트에서 쓰려면 PC에서 `ssh -R 27182:127.0.0.1:27182 syaro@192.168.20.177` 역터널.
+  PC(192.168.20.172 추정)는 SSH 22번도 닫혀 있어 여기서 정방향 터널도 불가. PC에서
+  `ssh -R 27182:127.0.0.1:27182 syaro@192.168.20.177` 역터널이 유일한 경로.
   클라이언트는 준비됨(`tools/fusion/mcp_client.py list`).
 
 관련: [[81_rl_model_vs_cad_mass]] · [[82_final_design_mass_review]] · [[83_fusion360_measurement_spec]]
