@@ -87,10 +87,15 @@ DESIGN_CAP = {
     # would really have followed it, so its range comes from the mechanism studies
     'ankle_pitch': (-50.0, 30.0),      # docs/71 s8g, docs/76 s12
     'ankle_roll': (-20.0, 20.0),       # JS6 clevis swing cone, docs/74 (PYG_ANKLE_ROLL15 -> 15)
-    # geometry allows more than the design wants, each for a stated reason
-    'hip_roll': (-45.0, 25.0),         # abduction held at the design 45; adduction 25 is the
-                                       # gen21 verdict (2026-07-13) and sits 2 deg inside the
-                                       # measured +27 hard stop
+    # Geometry allows more than the design wants. Set by the user 2026-08-23; each sits
+    # inside the measured stop, which the assert below enforces.
+    'hip_pitch': (-120.0, 25.0),       # extension 25 (metal at +26)
+    'hip_roll': (-85.0, 25.0),         # abduction 85 (metal at -86); the inherited -45 had
+                                       # no basis at all - it was the old MJCF's number, kept
+                                       # by mistake after a sweep that stopped searching at
+                                       # -70 and so never found the stop. Adduction 25 is the
+                                       # gen21 verdict (2026-07-13)
+    'hip_yaw': (-45.0, 45.0),          # metal at -48 / +52
     'knee': (-120.0, 0.0),             # no hyperextension (the sweep finds metal only at +2)
     'waist_yaw': (-60.0, 60.0),        # cable routing; the geometry is clear past +-120
     'shoulder_pitch': (-180.0, 60.0),  # nothing collides anywhere in +-200/90 - the arm is a
@@ -117,39 +122,40 @@ def to_sim_vec(v):
     return R @ np.asarray(v, float)
 
 
-MOTOR_BODY = {'robstride_rs04_hip_r_1_': 'pelvis', 'robstride_rs04_hip_r': 'pelvis',
-              'robstride_rs04_hip_p': 'hip_pitch_link', 'robstride_rs03_hip_y': 'hip_roll_link',
-              'robstride_rs04_knee_p': 'thigh', 'robstride_rs03_ankle_a': 'shin',
-              'robstride_rs03_ankle_b': 'shin'}     # knee stator rides the thigh (red team)
+MOTOR_PROXIES = '/home/syaro/pyg_fea/fusion/motor_proxies_fusion.json'
+CENTRELINE_MM = 5.0        # |x_cad| under this = on the centreline, drawn once, not mirrored
 
 
 def motor_geoms(mp, body, side, collision=False):
     """MJCF cylinder visuals for the actuators riding on `body`, in its link frame.
 
-    The placeholders are not meshed (gmsh takes minutes on their fine features); the
-    measured axis, radius and length reproduce their envelope exactly.
+    Placement comes from the LIVE Fusion document (motor_proxies_fusion.py), not from the
+    STEP export: the two agree within 4 mm everywhere except the hip-pitch RS04, which moved
+    75 mm between revisions, and the STEP has no upper body at all.
+
+    The placeholders are not meshed - gmsh takes minutes on their fine features - and the
+    measured centre, axis, radius and length reproduce their envelope exactly.
     """
     out = []
-    for key, b in MOTOR_BODY.items():
-        if b != body or key not in mp.get('motors', {}):
+    for key, mo in mp.get('motors', {}).items():
+        if mo['link'] != body:
             continue
-        mo = mp['motors'][key]
-        c = to_sim_vec((np.array(mo['com']) - ORIGIN_CAD[body]) / 1000.0)
+        centre = np.array(mo['com'], float)
+        if abs(centre[0]) < CENTRELINE_MM and side == 'R':
+            continue                       # centreline actuator: drawn once, on the L pass
+        c = to_sim_vec((centre - ORIGIN_CAD[body]) / 1000.0)
         ax = to_sim_vec(mo['axis'])
         if side == 'R':
             c = c * np.array([1, -1, 1])
             ax = ax * np.array([1, -1, 1])
         r = mo['r'] / 1000.0
-        h = mo.get('len', 56.0) / 2000.0
-        # cylinder along `ax`: express as zaxis
-        if collision:
-            out.append(f'<geom name="{side}_{key[10:]}_motor_collision" type="cylinder" size="{r:.4f} {h:.4f}" '
-                       f'pos="{c[0]:.5f} {c[1]:.5f} {c[2]:.5f}" zaxis="{ax[0]:.4f} {ax[1]:.4f} {ax[2]:.4f}" '
-                       f'class="collision"/>')
-        else:
-            out.append(f'<geom name="{side}_{key[10:]}_motor" type="cylinder" size="{r:.4f} {h:.4f}" '
-                       f'pos="{c[0]:.5f} {c[1]:.5f} {c[2]:.5f}" zaxis="{ax[0]:.4f} {ax[1]:.4f} {ax[2]:.4f}" '
-                       f'class="visual" material="black"/>')
+        h = mo['len'] / 2000.0
+        nm = mo['joint'] if abs(centre[0]) < CENTRELINE_MM else f'{side}_{mo["joint"]}'
+        cls, suffix = ('collision', '_motor_collision') if collision else ('visual', '_motor')
+        mat = '' if collision else ' material="black"'
+        out.append(f'<geom name="{nm}{suffix}" type="cylinder" size="{r:.4f} {h:.4f}" '
+                   f'pos="{c[0]:.5f} {c[1]:.5f} {c[2]:.5f}" '
+                   f'zaxis="{ax[0]:.4f} {ax[1]:.4f} {ax[2]:.4f}" class="{cls}"{mat}/>')
     return out
 
 
@@ -218,12 +224,10 @@ def main():
         rom_log.append((jn, lo_d, hi_d, src,
                         rom.get(jn, {}).get('blocker_lo'), rom.get(jn, {}).get('blocker_hi')))
 
-    if 'motors' not in mp:
-        # the Fusion aggregation carries rigid bodies only; the actuator cylinders (axis,
-        # radius, length) were measured once off the STEP and are geometry, not mass
-        step = '/home/syaro/pyg_fea/steps/robot_massprops_step.json'
-        if os.path.exists(step):
-            mp['motors'] = json.load(open(step)).get('motors', {})
+    # actuator cylinders are geometry, not mass, and come from the live Fusion document
+    assert os.path.exists(MOTOR_PROXIES), (
+        f'{MOTOR_PROXIES} missing - run tools/robot_model/motor_proxies_fusion.py')
+    mp['motors'] = json.load(open(MOTOR_PROXIES))
     os.makedirs(OUT_URDF, exist_ok=True)
 
     # ---- joint offsets (sim, m) and the leg-length anchor ----
@@ -320,8 +324,7 @@ def main():
     for g in motor_geoms(mp, 'pelvis', 'L'):
         X.append('      ' + g + '\n')
     for g in motor_geoms(mp, 'pelvis', 'R'):
-        if 'hip_r_1_' not in g:          # the waist motor sits on the centreline: once only
-            X.append('      ' + g + '\n')
+        X.append('      ' + g + '\n')
 
     if not articulated:
         # old model geometry re-expressed at the hip-level base origin (+0.104 x, -0.059 z)
@@ -390,6 +393,9 @@ def main():
         X.append('        <geom name="torso_hull" mesh="torso_hull" class="hull"/>\n')
         for s_ in 'LR':
             X.append(f'        <geom mesh="{s_}_torso_shpitch" class="visual" material="black"/>\n')
+        for s_ in 'LR':
+            for g in motor_geoms(mp, 'torso', s_):
+                X.append('        ' + g + '\n')
         lo, hi = mesh_bounds('torso')
         X.append('        ' + box_geom('torso_collision', lo, hi) + '\n')
         for s_ in 'LR':
@@ -409,6 +415,8 @@ def main():
                 X.append(f'{ind}  <joint name="{s_}_{jn}_joint" pos="0 0 0" axis="{ax[0]} {ax[1]} {ax[2]}" range="{rg[0]} {rg[1]}"/>\n')
                 X.append(f'{ind}  <geom mesh="{s_}_{b}" class="visual"/>\n')
                 X.append(f'{ind}  <geom name="{s_}_{BNAME[b]}_hull" mesh="{s_}_{b}_hull" class="hull"/>\n')
+                for g in motor_geoms(mp, b, s_):
+                    X.append(f'{ind}  ' + g + '\n')
                 lo, hi = mesh_bounds(('R_' if s_ == 'R' else '') + b)
                 # a box, not a capsule: a capsule sized to the widest section (the shoulder
                 # end) is 44 mm fat all the way down and would sit permanently inside the hip

@@ -70,21 +70,21 @@
       <site name="imu_in_base" size="0.03" pos="0.004 0 0.241"/>
       <body name="L_hip_pitch_link" pos="0 -0.1237 0">
         <inertial pos="0.000855967 0.0124212 0.00133312" mass="2.1738" fullinertia="0.00551161 0.00351194 0.00413077 3.68377e-05 4.96564e-06 -9.93989e-05"/>
-        <joint name="L_hip_pitch_joint" pos="0 0 0" axis="0 1 0" range="-2.0943951023931953 0.4537856055185257"/>
+        <joint name="L_hip_pitch_joint" pos="0 0 0" axis="0 1 0" range="-2.0943951023931953 0.4363323129985824"/>
         <geom mesh="L_hip_pitch_link" class="visual"/>
         <geom name="L_hip_pitch_link_hull" mesh="L_hip_pitch_link_hull" class="hull"/>
         <geom name="L_hip_roll_motor" type="cylinder" size="0.0600 0.0278" pos="0.00317 0.00061 0.00049" zaxis="-1.0000 0.0000 0.0000" class="visual" material="black"/>
         <geom name="L_hip_pitch_collision" class="collision" type="sphere" pos="0.0 -0.012 0.0" size="0.068"/>
         <body name="L_hip_roll_link" pos="0 0 0">
           <inertial pos="0.00131994 -0.00243218 -0.104881" mass="1.6181" fullinertia="0.0055353 0.00574331 0.00249478 -4.9279e-06 -0.000218639 0.000136744"/>
-          <joint name="L_hip_roll_joint" pos="0 0 0" axis="1 0 0" range="-0.7853981633974483 0.4363323129985824"/>
+          <joint name="L_hip_roll_joint" pos="0 0 0" axis="1 0 0" range="-1.4835298641951802 0.4363323129985824"/>
           <geom mesh="L_hip_roll_link" class="visual"/>
           <geom name="L_hip_roll_link_hull" mesh="L_hip_roll_link_hull" class="hull"/>
           <geom name="L_hip_yaw_motor" type="cylinder" size="0.0495 0.0283" pos="0.00006 0.00003 -0.13303" zaxis="0.0000 0.0000 1.0000" class="visual" material="black"/>
           <geom name="L_hip_roll_collision" class="collision" type="capsule" fromto="0 0 0.03  0 0 -0.085" size="0.05"/>
           <body name="L_thigh_link" pos="0 0 0">
             <inertial pos="-0.0284174 -0.000721632 -0.307125" mass="2.9294" fullinertia="0.0241122 0.0273241 0.00624474 -2.35227e-05 -0.00471023 -0.000128926"/>
-            <joint name="L_hip_yaw_joint" pos="0 0 0" axis="0 0 -1" range="-0.8203047484373349 0.8901179185171081"/>
+            <joint name="L_hip_yaw_joint" pos="0 0 0" axis="0 0 -1" range="-0.7853981633974483 0.7853981633974483"/>
             <geom mesh="L_thigh" class="visual"/>
             <geom name="L_thigh_link_hull" mesh="L_thigh_hull" class="hull"/>
             <geom name="L_knee_motor" type="cylinder" size="0.0600 0.0278" pos="-0.04495 -0.00318 -0.36922" zaxis="0.0000 1.0000 0.0000" class="visual" material="black"/>
@@ -120,21 +120,21 @@
       </body>
       <body name="R_hip_pitch_link" pos="0 0.1237 0">
         <inertial pos="0.000855967 -0.0124212 0.00133312" mass="2.1738" fullinertia="0.00551161 0.00351194 0.00413077 -3.68377e-05 4.96564e-06 9.93989e-05"/>
-        <joint name="R_hip_pitch_joint" pos="0 0 0" axis="0 1 0" range="-2.0943951023931953 0.4537856055185257"/>
+        <joint name="R_hip_pitch_joint" pos="0 0 0" axis="0 1 0" range="-2.0943951023931953 0.4363323129985824"/>
         <geom mesh="R_hip_pitch_link" class="visual"/>
         <geom name="R_hip_pitch_link_hull" mesh="R_hip_pitch_link_hull" class="hull"/>
         <geom name="R_hip_roll_motor" type="cylinder" size="0.0600 0.0278" pos="0.00317 -0.00061 0.00049" zaxis="-1.0000 -0.0000 0.0000" class="visual" material="black"/>
         <geom name="R_hip_pitch_collision" class="collision" type="sphere" pos="0.0 0.012 0.0" size="0.068"/>
         <body name="R_hip_roll_link" pos="0 0 0">
           <inertial pos="0.00131994 0.00243218 -0.104881" mass="1.6181" fullinertia="0.0055353 0.00574331 0.00249478 4.9279e-06 -0.000218639 -0.000136744"/>
-          <joint name="R_hip_roll_joint" pos="0 0 0" axis="-1 0 0" range="-0.7853981633974483 0.4363323129985824"/>
+          <joint name="R_hip_roll_joint" pos="0 0 0" axis="-1 0 0" range="-1.4835298641951802 0.4363323129985824"/>
           <geom mesh="R_hip_roll_link" class="visual"/>
           <geom name="R_hip_roll_link_hull" mesh="R_hip_roll_link_hull" class="hull"/>
           <geom name="R_hip_yaw_motor" type="cylinder" size="0.0495 0.0283" pos="0.00006 -0.00003 -0.13303" zaxis="0.0000 -0.0000 1.0000" class="visual" material="black"/>
           <geom name="R_hip_roll_collision" class="collision" type="capsule" fromto="0 0 0.03  0 0 -0.085" size="0.05"/>
           <body name="R_thigh_link" pos="0 0 0">
             <inertial pos="-0.0284174 0.000721632 -0.307125" mass="2.9294" fullinertia="0.0241122 0.0273241 0.00624474 2.35227e-05 -0.00471023 0.000128926"/>
-            <joint name="R_hip_yaw_joint" pos="0 0 0" axis="0 0 -1" range="-0.8203047484373349 0.8901179185171081"/>
+            <joint name="R_hip_yaw_joint" pos="0 0 0" axis="0 0 -1" range="-0.7853981633974483 0.7853981633974483"/>
             <geom mesh="R_thigh" class="visual"/>
             <geom name="R_thigh_link_hull" mesh="R_thigh_hull" class="hull"/>
             <geom name="R_knee_motor" type="cylinder" size="0.0600 0.0278" pos="-0.04495 0.00318 -0.36922" zaxis="0.0000 -1.0000 0.0000" class="visual" material="black"/>

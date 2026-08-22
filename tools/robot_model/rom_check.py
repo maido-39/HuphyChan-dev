@@ -33,7 +33,7 @@ JOINTS = ['hip_pitch', 'hip_roll', 'hip_yaw', 'knee', 'ankle_pitch', 'ankle_roll
           'waist_yaw', 'shoulder_pitch', 'shoulder_roll']
 CENTRE = {'waist_yaw'}                 # on the centreline: no L_/R_ prefix
 # how far to look, per joint (deg) - wider than any plausible design range
-SPAN = {'hip_pitch': (-150, 60), 'hip_roll': (-70, 60), 'hip_yaw': (-90, 90),
+SPAN = {'hip_pitch': (-150, 60), 'hip_roll': (-120, 60), 'hip_yaw': (-90, 90),
         'knee': (-160, 20), 'ankle_pitch': (-80, 60), 'ankle_roll': (-45, 45),
         'waist_yaw': (-120, 120), 'shoulder_pitch': (-200, 90), 'shoulder_roll': (-120, 60)}
 BODIES = ['base_link', 'torso_link'] + [f'{s}_{b}' for s in 'LR' for b in
@@ -257,7 +257,12 @@ def main():
         print(f'{j:15s} [{lo:5.0f},{hi:5.0f}]  [{free[0]:7.1f},{free[1]:7.1f}]   '
               + ('   '.join(bl) or 'nothing in the searched span')
               + ('   | ' + cx if cx else '') + note)
-    json.dump(res, open('/home/syaro/pyg_fea/fusion/rom_measured.json', 'w'), indent=1)
+    # MERGE, never overwrite: re-measuring one joint used to wipe the other eight out of
+    # the file, and build_robot.py then silently fell back to inherited ranges for them.
+    out = '/home/syaro/pyg_fea/fusion/rom_measured.json'
+    prev = json.load(open(out)) if os.path.exists(out) else {}
+    prev.update(res)
+    json.dump(prev, open(out, 'w'), indent=1)
     print('\n-> /home/syaro/pyg_fea/fusion/rom_measured.json')
 
 
