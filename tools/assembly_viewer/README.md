@@ -53,5 +53,12 @@ After either, re-run:
     mujoco-sim/mjlab/.venv/bin/python3 tools/fusion/dump_fasteners.py
     mujoco-sim/mjlab/.venv/bin/python3 tools/assembly_viewer/build_data.py
 
+**Mesh resolution is asserted, not hoped for.** Ten of the eighteen link meshes once loaded
+because the body-to-STL mapping stripped `_link` before looking for the file, so
+`hip_pitch_link.stl`, `hip_roll_link.stl` and `shoulder_pitch_link.stl` were never found and
+the entire hip cluster was silently absent. `build_data.py` now tries explicit candidates and
+raises on any body that resolves to nothing unless it is on the `NO_MESH` list (only the
+ankle universal-joint cross, which genuinely has no mesh).
+
 `preview.py` renders the same data as a static figure (docs/img/assembly_fasteners.png) for
 checking the positions without a browser.

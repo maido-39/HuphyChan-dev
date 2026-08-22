@@ -40,11 +40,14 @@ XML = f'{REPO}/mujoco-sim/mjlab/src/mjlab/asset_zoo/robots/pygmalion/xmls/pygmal
 PELVIS = np.array([0.0, 70.0, 60.0])                        # CAD mm, the base link origin
 R = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 KEY = ('Screw', 'Bolt', 'Nut', 'Washer', 'Pin')
-# rigid body -> the mesh drawn for it and the side it belongs to
-BODY_MESH = {'pelvis': 'pelvis', 'hip_pitch_link': 'hip_pitch_link',
-             'hip_roll_link': 'hip_roll_link', 'thigh': 'thigh', 'shin': 'shin',
-             'foot': 'foot', 'torso': 'torso', 'shoulder_pitch_link': 'shoulder_pitch_link',
-             'arm': 'arm'}
+# body stem -> mesh stem, only where the two genuinely differ
+BODY_ALIAS = {'base_link': 'pelvis', 'thigh_link': 'thigh', 'shin_link': 'shin',
+              'foot_link': 'foot', 'torso_link': 'torso', 'arm_link': 'arm'}
+# meshes that ride a body without being named after it: the CAD has ONE shoulder-pitch
+# motor, drawn on the torso for both arms
+EXTRA_MESH = {'torso_link': ('torso_shpitch', 'R_torso_shpitch')}
+# bodies that are deliberately not meshed - the ankle universal-joint cross
+NO_MESH = {'ankle_pitch_link'}
 
 
 def to_sim(cad_mm):
@@ -112,15 +115,28 @@ def main():
     d.qpos[3] = 1.0
     mujoco.mj_forward(m, d)
     links = []
+    missing = []
     for bid in range(1, m.nbody):
         bn = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, bid)
-        base = bn.replace('_link', '').replace('L_', '').replace('R_', '')
-        key = {'base': 'pelvis', 'thigh': 'thigh', 'shin': 'shin', 'foot': 'foot',
-               'torso': 'torso', 'arm': 'arm'}.get(base, base)
-        stl = ('R_' if bn.startswith('R_') else '') + key + '.stl'
-        if not os.path.exists(f'{MESHDIR}/{stl}'):
+        stem = bn[2:] if bn[:2] in ('L_', 'R_') else bn
+        pre = 'R_' if bn.startswith('R_') else ''
+        # Try the body name as-is first. Stripping "_link" before looking would miss
+        # hip_pitch_link.stl and shoulder_pitch_link.stl, which is exactly how the whole hip
+        # cluster went missing from the viewer once - so the candidates are explicit and an
+        # unmatched body is an ERROR, never a silent skip.
+        cands = [stem, stem.replace('_link', ''), BODY_ALIAS.get(stem, '')]
+        found = next((c for c in cands if c and
+                      os.path.exists(f'{MESHDIR}/{pre}{c}.stl')), None)
+        if found is None:
+            if stem not in NO_MESH:
+                missing.append(bn)
             continue
-        links.append(dict(body=bn, stl=stl, pos=[round(float(v), 5) for v in d.xpos[bid]]))
+        extra = [e for e in EXTRA_MESH.get(stem, ())
+                 if os.path.exists(f'{MESHDIR}/{e}.stl')]
+        for f in [pre + found + '.stl'] + [e + '.stl' for e in extra]:
+            links.append(dict(body=bn, stl=f,
+                              pos=[round(float(v), 5) for v in d.xpos[bid]]))
+    assert not missing, f'these bodies have no mesh and are not on the NO_MESH list: {missing}'
 
     os.makedirs(f'{OUT}/meshes', exist_ok=True)
     for l in links:

@@ -1,7 +1,10 @@
 """Static preview of the assembly viewer's data - a sanity check that does not need a browser.
 
-Draws the robot's collision hulls behind every fastener the viewer will show, coloured by
-designation, so the screw positions can be checked against the geometry at a glance.
+It draws THE VIEWER'S OWN mesh list, loaded from `tools/assembly_viewer/meshes` at the exact
+positions `screws.json` gives, rather than re-deriving the geometry from the MJCF. That
+distinction matters: the viewer once silently dropped the whole hip cluster because its
+body-name-to-STL mapping missed `hip_pitch_link.stl`, and a preview drawn from the MJCF would
+have looked perfectly fine.
 
 Usage: preview.py   (mjlab .venv python; writes docs/img/assembly_fasteners.png)
 """
@@ -12,24 +15,38 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt          # noqa: E402
 import numpy as np                       # noqa: E402
-import mujoco                            # noqa: E402
+import trimesh                           # noqa: E402
+from matplotlib.collections import PolyCollection   # noqa: E402
 
 REPO = '/home/syaro/MikuchanRemote/Human-Pygmalion'
-sys.path.insert(0, f'{REPO}/tools/robot_model')
-from validate_robot import draw          # noqa: E402
-
 DATA = f'{REPO}/tools/assembly_viewer/screws.json'
-XML = f'{REPO}/mujoco-sim/mjlab/src/mjlab/asset_zoo/robots/pygmalion/xmls/pygmalion_v2.xml'
+MESHES = f'{REPO}/tools/assembly_viewer/meshes'
 OUT = f'{REPO}/docs/img/assembly_fasteners.png'
+
+
+def draw_links(ax, links, ix, iy, depth_axis):
+    """Project exactly the STLs the viewer loads, in the order it places them."""
+    polys, cols, dep = [], [], []
+    for i, l in enumerate(links):
+        me = trimesh.load(f'{MESHES}/{l["stl"]}', process=False)
+        V = np.asarray(me.vertices) + np.array(l['pos'])
+        F = np.asarray(me.faces)
+        n = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+        n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)
+        lam = np.clip(0.4 + 0.6 * np.abs(n @ np.array([0.4, -0.7, 0.6])), 0, 1)
+        base = np.array([0.62, 0.66, 0.72])   # one neutral grey so the coloured screws read
+        polys.append(V[F][:, :, [ix, iy]])
+        cols.append(np.clip(base * lam[:, None], 0, 1))
+        dep.append(V[F][:, :, depth_axis].mean(1))
+    P, C, D = np.vstack(polys), np.vstack(cols), np.concatenate(dep)
+    o = np.argsort(D)
+    ax.add_collection(PolyCollection(P[o], facecolors=C[o], edgecolors='none',
+                                     alpha=0.45, rasterized=True))
+    ax.set_aspect('equal')
 
 
 def main():
     d = json.load(open(DATA))
-    m = mujoco.MjModel.from_xml_path(XML)
-    dd = mujoco.MjData(m)
-    dd.qpos[:] = 0
-    dd.qpos[3] = 1.0
-    mujoco.mj_forward(m, dd)
 
     kinds = {}
     for s in d['screws']:
@@ -40,8 +57,8 @@ def main():
 
     fig, ax = plt.subplots(1, 2, figsize=(11.5, 7.0))
     for a, view in zip(ax, ('side', 'front')):
-        draw(a, m, dd, view, group=4)
         ix, iy = (0, 2) if view == 'side' else (1, 2)
+        draw_links(a, d['links'], ix, iy, 1 if view == 'side' else 0)
         for k in order:
             P = np.array([s['pos'] for s in kinds[k]])
             M_ = P[:, [ix, iy]]
@@ -59,8 +76,9 @@ def main():
                 mir = np.array([[-p[1], p[2]] for p in P])
                 a.scatter(mir[:, 0], mir[:, 1], s=16, color=col[k], alpha=0.35,
                           edgecolors='none', zorder=4)
-        a.set_title(f'{view} — {len(d["screws"])} fasteners in the CAD'
+        a.set_title(f'{view} — {len(d["screws"])} fasteners, {len(d["links"])} link meshes'
                     + ('  (faint = mirrored side)' if view == 'front' else ''), fontsize=10)
+        a.autoscale_view()
     ax[0].legend(fontsize=7, loc='upper left', bbox_to_anchor=(1.02, 1.0),
                  frameon=False, ncol=1)
     fig.suptitle('Assembly viewer data: every fastener, coloured by designation '

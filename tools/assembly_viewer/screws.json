@@ -7655,6 +7655,24 @@
    ]
   },
   {
+   "body": "L_hip_pitch_link",
+   "stl": "hip_pitch_link.stl",
+   "pos": [
+    0.0,
+    -0.1237,
+    0.0
+   ]
+  },
+  {
+   "body": "L_hip_roll_link",
+   "stl": "hip_roll_link.stl",
+   "pos": [
+    0.0,
+    -0.1237,
+    0.0
+   ]
+  },
+  {
    "body": "L_thigh_link",
    "stl": "thigh.stl",
    "pos": [
@@ -7679,6 +7697,24 @@
     -0.075,
     -0.1237,
     -0.86
+   ]
+  },
+  {
+   "body": "R_hip_pitch_link",
+   "stl": "R_hip_pitch_link.stl",
+   "pos": [
+    0.0,
+    0.1237,
+    0.0
+   ]
+  },
+  {
+   "body": "R_hip_roll_link",
+   "stl": "R_hip_roll_link.stl",
+   "pos": [
+    0.0,
+    0.1237,
+    0.0
    ]
   },
   {
@@ -7718,11 +7754,47 @@
    ]
   },
   {
+   "body": "torso_link",
+   "stl": "torso_shpitch.stl",
+   "pos": [
+    0.0,
+    0.0,
+    0.1175
+   ]
+  },
+  {
+   "body": "torso_link",
+   "stl": "R_torso_shpitch.stl",
+   "pos": [
+    0.0,
+    0.0,
+    0.1175
+   ]
+  },
+  {
+   "body": "L_shoulder_pitch_link",
+   "stl": "shoulder_pitch_link.stl",
+   "pos": [
+    -0.015,
+    -0.2,
+    0.48
+   ]
+  },
+  {
    "body": "L_arm_link",
    "stl": "arm.stl",
    "pos": [
     -0.015,
     -0.2,
+    0.48
+   ]
+  },
+  {
+   "body": "R_shoulder_pitch_link",
+   "stl": "R_shoulder_pitch_link.stl",
+   "pos": [
+    -0.015,
+    0.2,
     0.48
    ]
   },
