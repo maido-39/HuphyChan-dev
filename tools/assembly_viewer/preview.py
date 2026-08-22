@@ -41,11 +41,20 @@ def main():
     fig, ax = plt.subplots(1, 2, figsize=(11.5, 7.0))
     for a, view in zip(ax, ('side', 'front')):
         draw(a, m, dd, view, group=4)
+        ix, iy = (0, 2) if view == 'side' else (1, 2)
         for k in order:
             P = np.array([s['pos'] for s in kinds[k]])
-            M_ = np.array([[p[0], p[2]] if view == 'side' else [p[1], p[2]] for p in P])
+            M_ = P[:, [ix, iy]]
             a.scatter(M_[:, 0], M_[:, 1], s=16, color=col[k], edgecolors='k',
                       linewidths=0.25, zorder=5, label=k if view == 'side' else None)
+            # a tick down the screw axis, scaled to the real length, so the direction the
+            # bolt goes in is visible and not just where it sits
+            A = np.array([s['axis'] for s in kinds[k]])
+            L = np.array([float(s['size'].split('x')[1]) if 'x' in s['size'] else 10.0
+                          for s in kinds[k]]) / 1000.0
+            a.quiver(M_[:, 0], M_[:, 1], A[:, ix] * L, A[:, iy] * L, color=col[k],
+                     angles='xy', scale_units='xy', scale=1, width=0.0035,
+                     headwidth=3.5, headlength=4, zorder=6)
             if view == 'front':          # the CAD has one side; the viewer mirrors it
                 mir = np.array([[-p[1], p[2]] for p in P])
                 a.scatter(mir[:, 0], mir[:, 1], s=16, color=col[k], alpha=0.35,

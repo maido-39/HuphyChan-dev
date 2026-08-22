@@ -15,10 +15,19 @@ mirror and can be switched off.
 **Orientation.** `build_data.py` draws real oriented screw bodies when
 `~/pyg_fea/fusion/fasteners.json` exists (written by `tools/fusion/dump_fasteners.py`, which
 reads each occurrence's transform so the local z is the screw axis). Without it the markers
-are spheres and the sidebar says so. As of 2026-08-22 that file is empty because Fusion's
-script host is wedged - `fusion_mcp_read` still answers, but every `fusion_mcp_execute`
-script dies in a `__getattr__` stack overflow before the submitted code runs, including a
-bare `def run(_c): raise ValueError("X")`. Restart the Fusion MCP add-in, then:
+are spheres and the sidebar says so. All 283 are oriented as of 2026-08-22: 187 go in
+laterally, 60 fore-aft, 36 vertically, and every one is axis-aligned.
+
+Two failure modes cost time and are worth recognising:
+- **script host wedged.** `fusion_mcp_read` keeps answering while every `fusion_mcp_execute`
+  dies in a `__getattr__` stack overflow *before the submitted code runs* - a bare
+  `def run(_c): raise ValueError("X")` never raises. Restart the Fusion MCP add-in.
+- **tunnel dead.** The local forward still listens, so the port looks open; the give-away is
+  `RemoteDisconnected` and then a timeout. Check the process, not the port:
+  `ps -eo pid,etime,cmd | grep "ssh .*27182"`. Restart with
+  `ssh -N -L 27182:127.0.0.1:27182 syaro@192.168.20.161` from this host.
+
+After either, re-run:
 
     mujoco-sim/mjlab/.venv/bin/python3 tools/fusion/dump_fasteners.py
     mujoco-sim/mjlab/.venv/bin/python3 tools/assembly_viewer/build_data.py
