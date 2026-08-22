@@ -81,17 +81,27 @@ def main():
         e['mass_g'] += rec['m'] * 1000.0
 
     out = []
+    out = []
     for i, e in enumerate(screws):
-        p = to_sim(e['pos'])
-        ax = None
+        ax, seat = None, None
         if e['occ'] in axes:
-            a = np.array(axes[e['occ']]['axis'], float)
-            ax = list(R @ a)
+            f = axes[e['occ']]
+            ax = [round(float(v), 4) for v in R @ np.array(f['axis'], float)]
+            # The Fusion fastener components put their ORIGIN on the BEARING FACE - measured,
+            # not assumed: the origin sits along +axis from the bounding-box centre by
+            # exactly (length/2 - head height) for every size in the assembly (M4x12 +4.0 of
+            # 16.0, M4x20 +7.4 of 22.8, M3x60 +28.5 of 63.0, 283/283 positive). So the head
+            # always grows along +axis, the shank along -axis, and the origin is the point an
+            # assembler cares about: where the head lands.
+            seat = np.array(f['pos'], float)
+        anchor = seat if seat is not None else np.array(e['pos'], float)
+        p = to_sim(anchor)
         out.append(dict(id=i, name=e['name'], size=e['size'], head=e['head'], std=e['std'],
                         grade=e['grade'], body=e['body'], mass_g=round(e['mass_g'], 2),
-                        cad_mm=[round(v, 1) for v in e['pos']],
+                        anchor=('bearing face' if seat is not None else 'centre of mass'),
+                        cad_mm=[round(float(v), 1) for v in anchor],
                         pos=[round(float(v), 5) for v in p],
-                        axis=None if ax is None else [round(float(v), 4) for v in ax],
+                        axis=ax,
                         side='C' if abs(p[1]) < 0.02 else 'L'))
 
     # link meshes, placed by the simulator at the zero pose
