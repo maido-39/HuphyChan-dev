@@ -1,0 +1,136 @@
+"""Data for the assembly viewer: every fastener, what it is called, and where it goes.
+
+Two sources, and the second is optional so the viewer works even while Fusion is busy:
+  * `bodies.json` (tools/fusion/dump_bodies.py) always has each fastener's centre of mass
+    and its Fusion component name, and the name carries the standard designation -
+    "Hexagon Socket Countersunk Head Screw ISO 10642 - M4 x 16 Steel 8.8 Plain v1".
+  * `fasteners.json` (tools/fusion/dump_fasteners.py) adds the occurrence TRANSFORM, so the
+    viewer can draw a screw pointing the way it actually goes in rather than a bare marker.
+    Fusion rejects scripts while a command dialog is open, so this file may not exist yet;
+    the viewer degrades to spheres and says so.
+
+Everything is emitted in the SIMULATOR frame (x forward, y left, z up, metres) at the zero
+pose, where every link frame coincides with its CAD placement, so the fasteners and the link
+meshes line up with one shared transform: sim = (cad_mm - pelvis_origin) turned +90 deg
+about z, in metres.
+
+The CAD models one leg and one arm; the other side is emitted as a flagged mirror.
+
+Usage: build_data.py   (mjlab .venv python)
+"""
+import json
+import os
+import re
+import shutil
+import sys
+
+import numpy as np
+
+REPO = '/home/syaro/MikuchanRemote/Human-Pygmalion'
+sys.path.insert(0, f'{REPO}/tools/robot_model')
+sys.path.insert(0, f'{REPO}/tools/fusion')
+from massprops_fusion import classify                       # noqa: E402
+from dump_fasteners import designation                      # noqa: E402
+
+BODIES = '/home/syaro/pyg_fea/fusion/bodies.json'
+FAST = '/home/syaro/pyg_fea/fusion/fasteners.json'
+OUT = f'{REPO}/tools/assembly_viewer'
+MESHDIR = f'{REPO}/pygmalion_locomotion/assets/pygmalion_v2/meshes'
+XML = f'{REPO}/mujoco-sim/mjlab/src/mjlab/asset_zoo/robots/pygmalion/xmls/pygmalion_v2.xml'
+PELVIS = np.array([0.0, 70.0, 60.0])                        # CAD mm, the base link origin
+R = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+KEY = ('Screw', 'Bolt', 'Nut', 'Washer', 'Pin')
+# rigid body -> the mesh drawn for it and the side it belongs to
+BODY_MESH = {'pelvis': 'pelvis', 'hip_pitch_link': 'hip_pitch_link',
+             'hip_roll_link': 'hip_roll_link', 'thigh': 'thigh', 'shin': 'shin',
+             'foot': 'foot', 'torso': 'torso', 'shoulder_pitch_link': 'shoulder_pitch_link',
+             'arm': 'arm'}
+
+
+def to_sim(cad_mm):
+    return R @ (np.asarray(cad_mm, float) - PELVIS) / 1000.0
+
+
+def main():
+    B = json.load(open(BODIES))
+    axes = {}
+    if os.path.exists(FAST):
+        for f in json.load(open(FAST)):
+            axes[f['path']] = f
+    screws, seen = [], {}
+    for path, rec in B.items():
+        if not rec['live']:
+            continue
+        occ = path.split('::')[0]
+        seg = next((s for s in occ.split('/') if any(k in s for k in KEY)), None)
+        if seg is None:
+            continue
+        e = seen.get(occ)
+        if e is None:
+            d = designation(seg)
+            body = classify(path) or '?'
+            e = dict(occ=occ, name=re.sub(r':\d+$', '', seg), body=body, mass_g=0.0,
+                     pos=[0.0, 0.0, 0.0], m_sum=0.0, **d)
+            seen[occ] = e
+            screws.append(e)
+        # mass-weighted centre over the occurrence's bodies
+        c = np.array(rec['c'], float) * 10.0                 # cm -> mm, CAD
+        e['pos'] = list(np.array(e['pos']) * e['m_sum'] + c * rec['m'])
+        e['m_sum'] += rec['m']
+        e['pos'] = list(np.array(e['pos']) / max(e['m_sum'], 1e-12))
+        e['mass_g'] += rec['m'] * 1000.0
+
+    out = []
+    for i, e in enumerate(screws):
+        p = to_sim(e['pos'])
+        ax = None
+        if e['occ'] in axes:
+            a = np.array(axes[e['occ']]['axis'], float)
+            ax = list(R @ a)
+        out.append(dict(id=i, name=e['name'], size=e['size'], head=e['head'], std=e['std'],
+                        grade=e['grade'], body=e['body'], mass_g=round(e['mass_g'], 2),
+                        cad_mm=[round(v, 1) for v in e['pos']],
+                        pos=[round(float(v), 5) for v in p],
+                        axis=None if ax is None else [round(float(v), 4) for v in ax],
+                        side='C' if abs(p[1]) < 0.02 else 'L'))
+
+    # link meshes, placed by the simulator at the zero pose
+    import mujoco
+    m = mujoco.MjModel.from_xml_path(XML)
+    d = mujoco.MjData(m)
+    d.qpos[:] = 0
+    d.qpos[3] = 1.0
+    mujoco.mj_forward(m, d)
+    links = []
+    for bid in range(1, m.nbody):
+        bn = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, bid)
+        base = bn.replace('_link', '').replace('L_', '').replace('R_', '')
+        key = {'base': 'pelvis', 'thigh': 'thigh', 'shin': 'shin', 'foot': 'foot',
+               'torso': 'torso', 'arm': 'arm'}.get(base, base)
+        stl = ('R_' if bn.startswith('R_') else '') + key + '.stl'
+        if not os.path.exists(f'{MESHDIR}/{stl}'):
+            continue
+        links.append(dict(body=bn, stl=stl, pos=[round(float(v), 5) for v in d.xpos[bid]]))
+
+    os.makedirs(f'{OUT}/meshes', exist_ok=True)
+    for l in links:
+        shutil.copy(f'{MESHDIR}/{l["stl"]}', f'{OUT}/meshes/{l["stl"]}')
+    for f in ('three.min.js', 'OrbitControls.js', 'STLLoader.js'):
+        os.makedirs(f'{OUT}/vendor', exist_ok=True)
+        shutil.copy(f'{REPO}/tools/wrench_studio/static/vendor/{f}', f'{OUT}/vendor/{f}')
+
+    data = dict(oriented=bool(axes), n=len(out), screws=out, links=links,
+                note=('screw axes from the Fusion occurrence transforms' if axes else
+                      'no orientation yet - Fusion was busy; markers are spheres'))
+    json.dump(data, open(f'{OUT}/screws.json', 'w'), indent=1)
+    import collections
+    c = collections.Counter(f"{s['size']} {s['head']}" for s in out)
+    print(f'{len(out)} fasteners, {len(c)} kinds, oriented={bool(axes)}')
+    for k, v in c.most_common():
+        print(f'  {v:4d}  {k}')
+    print(f'{len(links)} link meshes copied')
+    print(f'-> {OUT}/screws.json')
+
+
+if __name__ == '__main__':
+    main()
