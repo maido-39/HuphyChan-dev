@@ -15,19 +15,26 @@ URL = os.environ.get('FUSION_MCP', 'http://127.0.0.1:27182/mcp')
 _session = {'id': None, 'n': 0}
 
 
-def _post(payload):
+def _post(payload, notify=False):
+    """One JSON-RPC call. `notify` sends a notification (no id) - the spec requires the
+    initialized notification to carry NO id, and this server rejects the session until it
+    arrives, so getting that distinction right is what completes the handshake."""
     _session['n'] += 1
-    payload = dict(payload, jsonrpc='2.0', id=_session['n'])
+    payload = dict(payload, jsonrpc='2.0')
+    if not notify:
+        payload['id'] = _session['n']
     hdr = {'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream'}
     if _session['id']:
         hdr['Mcp-Session-Id'] = _session['id']
     req = urllib.request.Request(URL, data=json.dumps(payload).encode(), headers=hdr)
-    with urllib.request.urlopen(req, timeout=120) as r:
-        sid = r.headers.get('Mcp-Session-Id')
+    with urllib.request.urlopen(req, timeout=180) as r:
+        sid = r.headers.get('Mcp-Session-Id') or r.headers.get('mcp-session-id')
         if sid:
             _session['id'] = sid
         body = r.read().decode()
         ctype = r.headers.get('Content-Type', '')
+    if notify:
+        return {}
     if 'text/event-stream' in ctype:
         # take the last JSON data line of the SSE stream
         msgs = [ln[5:].strip() for ln in body.splitlines() if ln.startswith('data:')]
@@ -42,10 +49,7 @@ def connect():
     res = _post({'method': 'initialize', 'params': {
         'protocolVersion': '2025-03-26', 'capabilities': {},
         'clientInfo': {'name': 'pygmalion-fusion-client', 'version': '0.1'}}})
-    try:
-        _post({'method': 'notifications/initialized', 'params': {}})
-    except Exception:
-        pass
+    _post({'method': 'notifications/initialized', 'params': {}}, notify=True)
     return res
 
 

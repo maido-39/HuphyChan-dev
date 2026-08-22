@@ -25,7 +25,7 @@ import viser
 
 REPO = '/home/syaro/MikuchanRemote/Human-Pygmalion'
 XML = f'{REPO}/mujoco-sim/mjlab/src/mjlab/asset_zoo/robots/pygmalion/xmls/pygmalion_v2.xml'
-MP = '/home/syaro/pyg_fea/steps/robot_massprops_step.json'
+MP = '/home/syaro/pyg_fea/fusion/robot_massprops_fusion.json'
 STAND_Z = 0.903
 JOINTS = [f'{s}_{j}_joint' for s in 'LR'
           for j in ('hip_pitch', 'hip_roll', 'hip_yaw', 'knee', 'ankle_pitch', 'ankle_roll')]
@@ -156,7 +156,7 @@ def main():
             key = dd.value.replace('L_', '').replace('R_', '').replace('thigh_link', 'thigh').replace('shin_link', 'shin').replace('foot_link', 'foot')
             if key in mp['bodies']:
                 cad = mp['bodies'][key]
-                txt += (f'\nCAD(STEP): mass {cad["mass"]:.3f} kg · {cad["n_parts"]} parts · '
+                txt += (f'\nCAD(Fusion): mass {cad["mass"]:.3f} kg · {cad.get("n", cad.get("n_parts", 0))} bodies · '
                         f'principal [{cad["principal"][0]:.0f}, {cad["principal"][1]:.0f}, {cad["principal"][2]:.0f}] kg mm²')
             info.content = txt
         dd.on_update(show)

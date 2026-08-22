@@ -87,13 +87,16 @@ def main():
     xml = next((a.split('=')[1] for a in sys.argv if a.startswith('--xml=')), XML)
     m = mujoco.MjModel.from_xml_path(xml)
     d = mujoco.MjData(m)
-    mp = json.load(open('/home/syaro/pyg_fea/steps/robot_massprops_step.json'))
+    mpf = next((a.split('=')[1] for a in sys.argv if a.startswith('--massprops=')),
+               '/home/syaro/pyg_fea/fusion/robot_massprops_fusion.json')
+    mp = json.load(open(mpf))
+    print(f'mass properties: {mpf}')
     rep = {}
 
     # ---- 1. mass ----
     print('== mass')
     tot = float(m.body_subtreemass[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, 'base_link')])
-    print(f'  total {tot:.3f} kg  (docs/82 catalogue-corrected 44.51 incl. arms; upper lump placeholder)')
+    print(f'  total {tot:.3f} kg')
     BN = {'thigh': 'thigh_link', 'shin': 'shin_link', 'foot': 'foot_link'}
     for b in ('hip_pitch_link', 'hip_roll_link', 'thigh', 'shin', 'foot'):
         bi = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, f'L_{BN.get(b, b)}')
@@ -218,9 +221,13 @@ def main():
     mujoco.mj_forward(m, d)
     # point-mass reference from the mass-property file: sum m d^2 about the axis
     def pm(axis_pt, bodies_):
+        """Point-mass estimate about a lateral axis; falls back to body COMs when the
+        file has no per-part list (the Fusion export aggregates in Fusion)."""
         tot = 0.0
         for b in bodies_:
-            for p in mp['bodies'][b]['parts']:
+            d = mp['bodies'][b]
+            items = d.get('parts') or [dict(mass=d['mass'], com=d['com'])]
+            for p in items:
                 c = np.array(p['com']) - np.array(axis_pt)
                 tot += p['mass'] * (c[1] ** 2 + c[2] ** 2) * 1e-6
         return tot

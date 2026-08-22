@@ -62,10 +62,11 @@ JOINT = {   # child body -> (joint name suffix, axis in sim frame, range rad, in
 }
 EFFORT = {'hip_pitch': 120, 'hip_roll': 120, 'hip_yaw': 60, 'knee': 120,
           'ankle_pitch': 90, 'ankle_roll': 50}
-# upper-body placeholder (docs/82 catalogue-corrected table: Torso+Neck+2 arms + the
-# WaistYaw2Pitch link 0.775, no battery). COM = the old base_link COM re-expressed at the
-# HIP: the old base origin sat at hip + (+0.104, 0, -0.059), so x = -0.092 + 0.104 = +0.012
-# (the first pass forgot the x part and put the lump 104 mm too far aft).
+# Upper body. When the mass-property file carries an `upper` block (the Fusion export does -
+# the current CAD is "wUpper" and models Torso, Neck and the arm), it is used verbatim,
+# mirrored to two arms. Otherwise the old placeholder lump is used: the docs/82
+# catalogue-corrected table (Torso+Neck+2 arms + WaistYaw2Pitch 0.775, no battery), with the
+# old base_link COM re-expressed at the HIP (old base origin = hip + (+0.104, 0, -0.059)).
 UPPER_MASS = 15.335 + 0.775
 UPPER_COM_SIM = np.array([0.012, 0.0, 0.366])
 UPPER_DIAG = np.array([1.62441, 1.27435, 0.55027]) * (UPPER_MASS / 28.0892)
@@ -89,7 +90,6 @@ def motor_geoms(mp, body, side, collision=False):
     The placeholders are not meshed (gmsh takes minutes on their fine features); the
     measured axis, radius and length reproduce their envelope exactly.
     """
-    prox = json.load(open('/home/syaro/pyg_fea/steps/actuator_proxies.json'))
     out = []
     for key, b in MOTOR_BODY.items():
         if b != body:
@@ -101,7 +101,7 @@ def motor_geoms(mp, body, side, collision=False):
             c = c * np.array([1, -1, 1])
             ax = ax * np.array([1, -1, 1])
         r = mo['r'] / 1000.0
-        h = prox[key]['len'] / 2000.0
+        h = mo.get('len', 56.0) / 2000.0
         # cylinder along `ax`: express as zaxis
         if collision:
             out.append(f'<geom name="{side}_{key[10:]}_motor_collision" type="cylinder" size="{r:.4f} {h:.4f}" '
@@ -151,19 +151,27 @@ def main():
     leg = (ORIGIN_CAD['hip_pitch_link'] - ORIGIN_CAD['foot'])[2]
     assert abs(leg - 860.0) < 0.1, f'hip-to-ankle {leg} mm, CAD says 860'
 
-    # ---- base_link: pelvis (exact) + upper-body lump (placeholder) ----
+    # ---- base_link: pelvis (exact) + upper body ----
     m_p, c_p, I_p = body_inertial('pelvis', mp)
-    m_b = m_p + UPPER_MASS
-    c_b = (m_p * c_p + UPPER_MASS * UPPER_COM_SIM) / m_b
+    if 'upper' in mp:                       # measured upper body (Fusion)
+        u = mp['upper']
+        m_u = u['mass']
+        c_u = to_sim_vec((np.array(u['com']) - ORIGIN_CAD['pelvis']) / 1000.0)
+        I_u = R @ np.array(u['I_com']) @ R.T * 1e-6
+    else:                                   # placeholder lump
+        m_u, c_u, I_u = UPPER_MASS, UPPER_COM_SIM, np.diag(UPPER_DIAG)
+    m_b = m_p + m_u
+    c_b = (m_p * c_p + m_u * c_u) / m_b
     def shift(I, m, c, about):
         d = c - about
         return I + m * (np.dot(d, d) * np.eye(3) - np.outer(d, d))
-    I_b = shift(I_p, m_p, c_p, c_b) + shift(np.diag(UPPER_DIAG), UPPER_MASS, UPPER_COM_SIM, c_b)
+    I_b = shift(I_p, m_p, c_p, c_b) + shift(I_u, m_u, c_u, c_b)
     legs = {}
     for b in CHAIN:
         m, c, I = body_inertial(b, mp)
         legs[b] = dict(L=(m, c, I), R=(m,) + mirror(c, I))
     total = m_b + 2 * sum(legs[b]['L'][0] for b in CHAIN)
+    UPPER_MASS_USED = m_u
     for b in CHAIN:
         w = np.linalg.eigvalsh(legs[b]['L'][2])
         assert w.min() > 0, f'{b}: non-physical inertia'
@@ -320,11 +328,12 @@ def main():
     model = mujoco.MjModel.from_xml_path(f'{OUT_MJCF}/pygmalion_v2.xml')
     print(f'MJCF compiled: {model.nbody} bodies, {model.njnt} joints, {model.ngeom} geoms, '
           f'{model.nmesh} meshes; total mass {model.body_subtreemass[1]:.3f} kg')
-    print(f'  base_link (pelvis {m_p:.3f} + upper lump {UPPER_MASS}) = {m_b:.3f} kg')
+    print(f'  base_link (pelvis {m_p:.3f} + upper {m_u:.3f}'
+          f'{" MEASURED" if "upper" in mp else " placeholder"}) = {m_b:.3f} kg')
     for b in CHAIN:
         m, c, I = legs[b]['L']
         print(f'  {b:16s} {m:6.3f} kg  com {np.round(c, 4)}  I diag {np.round(np.diag(I), 5)}')
-    print(f'  python total {total:.3f} kg  (docs/82 catalogue-corrected full robot 44.51, no battery)')
+    print(f'  python total {total:.3f} kg')
     print(f'-> {OUT_MJCF}/pygmalion_v2.xml · {OUT_URDF}/pygmalion_v2.urdf')
 
 
