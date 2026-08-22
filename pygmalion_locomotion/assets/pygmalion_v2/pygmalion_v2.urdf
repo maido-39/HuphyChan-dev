@@ -2,9 +2,9 @@
 <robot name="pygmalion_v2">
   <link name="base_link">
     <inertial>
-      <origin xyz="-0.0288271 -0.00120728 0.00110105" rpy="0 0 0"/>
-      <mass value="5.1659"/>
-      <inertia ixx="0.0315512" ixy="0.000207877" ixz="-0.00831301" iyy="0.0363113" iyz="-7.10993e-05" izz="0.0154534"/>
+      <origin xyz="-0.0277433 -0.00121931 0.00266945" rpy="0 0 0"/>
+      <mass value="5.3668"/>
+      <inertia ixx="0.0324176" ixy="0.000209331" ixz="-0.0085446" iyy="0.0377931" iyz="-8.55037e-05" izz="0.0165288"/>
     </inertial>
     <visual>
       <geometry><mesh filename="meshes/pelvis.stl"/></geometry>

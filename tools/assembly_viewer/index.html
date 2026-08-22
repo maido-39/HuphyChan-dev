@@ -115,6 +115,8 @@ code{background:#0d1014;padding:1px 5px;border-radius:4px;font-size:12px}
   <label class="row"><input type="checkbox" id="cbMirror" checked> mirrored side</label>
   <label class="row"><input type="checkbox" id="cbLabels"> label every kind</label>
   <label class="row"><input type="checkbox" id="cbHideOthers"> hide instead of dim</label>
+  <label class="row"><input type="checkbox" id="cbCadHidden" checked>
+    <span>fasteners switched off in the CAD <span class="cnt" id="nHidden"></span></span></label>
   <div id="warn"></div>
 </div>
 
@@ -126,6 +128,8 @@ code{background:#0d1014;padding:1px 5px;border-radius:4px;font-size:12px}
     <div><span class="k">standard</span><span id="iStd"></span></div>
     <div><span class="k">grade</span><span id="iGrade"></span></div>
     <div><span class="k">link</span><span id="iBody"></span></div>
+    <div id="iHiddenRow" style="display:none;color:#ffb4a2">
+      switched off in the CAD view — still real hardware</div>
     <div><span class="k">mass</span><span id="iMass"></span></div>
     <div><span class="k">goes in</span><span id="iAxis"></span></div>
     <div><span class="k">seat CAD</span><code id="iCad"></code></div>
@@ -292,6 +296,8 @@ function build(){
   };
   DATA.screws.forEach(s=>{add(s,false); if(s.side!=='C') add(s,true);});
 
+  const nh=DATA.screws.filter(x=>x.hidden).length;
+  document.getElementById('nHidden').textContent=nh;
   document.getElementById('count').textContent=
     ` — ${DATA.screws.length} in the CAD, ${Object.keys(byKind).length} kinds`;
 
@@ -317,6 +323,7 @@ function build(){
 
 /* ---------- filtering --------------------------------------------------- */
 function matches(s){
+  if(s.hidden && !document.getElementById('cbCadHidden').checked) return false;
   if(kindFilter && s.size+' '+s.head!==kindFilter) return false;
   if(linkFilter && s.body!==linkFilter) return false;
   if(query){
@@ -350,7 +357,7 @@ function sync(refit){
   refreshLabels();
   if(refit) frame(visibleBox(),null);
 }
-['cbMirror','cbHideOthers'].forEach(id=>
+['cbMirror','cbHideOthers','cbCadHidden'].forEach(id=>
   document.getElementById(id).onchange=()=>sync(false));
 document.getElementById('cbMesh').onchange=e=>meshGroup.visible=e.target.checked;
 document.getElementById('cbLabels').onchange=refreshLabels;
@@ -455,7 +462,9 @@ function select(g){
   document.getElementById('iHead').textContent=s.head+(g.userData.mir?'  · mirrored side':'');
   document.getElementById('iStd').textContent=s.std||'—';
   document.getElementById('iGrade').textContent=s.grade||'—';
-  document.getElementById('iBody').textContent=s.body;
+  document.getElementById('iBody').textContent=
+    s.body+(s.body_from?'  ('+s.body_from+')':'');
+  document.getElementById('iHiddenRow').style.display=s.hidden?'block':'none';
   document.getElementById('iMass').textContent=s.mass_g.toFixed(2)+' g';
   document.getElementById('iAxis').textContent=dirTxt;
   document.getElementById('iCad').textContent=s.cad_mm.join(', ');

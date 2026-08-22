@@ -1,5 +1,5 @@
 {
- "mass_total": 42.098074,
+ "mass_total": 42.298974,
  "hip_to_sole": 0.903,
  "standing_base_z": 0.903,
  "sweeps": {
@@ -222,6 +222,6 @@
    ]
   }
  },
- "I_hip_pitch_axis": 2.572275667393768,
- "I_knee_axis": 0.5352654500670692
+ "I_hip_pitch_axis": 2.5722756673937672,
+ "I_knee_axis": 0.5352654500670688
 }

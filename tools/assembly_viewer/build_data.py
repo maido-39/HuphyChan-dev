@@ -40,6 +40,17 @@ XML = f'{REPO}/mujoco-sim/mjlab/src/mjlab/asset_zoo/robots/pygmalion/xmls/pygmal
 PELVIS = np.array([0.0, 70.0, 60.0])                        # CAD mm, the base link origin
 R = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 KEY = ('Screw', 'Bolt', 'Nut', 'Washer', 'Pin')
+# A light bulb that is off does not mean the part is not in the robot. Every fastener inside
+# CenterParts is switched off so the parts underneath can be seen - 69 of them, 201 g, and
+# the pelvis had no screws at all until this was separated out. What genuinely is NOT in the
+# robot is marked by branch name: the alternative arm, the not-used actuators, the human
+# reference solid. Verified against the dump: the test matches 25 hidden bodies (671.0 kg) and
+# ZERO live ones, and every hidden body it does not match is a fastener.
+ALT_BRANCH = ('NotUse', 'fullDoF', 'REF')
+
+
+def is_alternative(path):
+    return any(t in path for t in ALT_BRANCH)
 # body stem -> mesh stem, only where the two genuinely differ
 BODY_ALIAS = {'base_link': 'pelvis', 'thigh_link': 'thigh', 'shin_link': 'shin',
               'foot_link': 'foot', 'torso_link': 'torso', 'arm_link': 'arm'}
@@ -62,7 +73,7 @@ def main():
             axes[f['path']] = f
     screws, seen = [], {}
     for path, rec in B.items():
-        if not rec['live']:
+        if is_alternative(path):
             continue
         occ = path.split('::')[0]
         seg = next((s for s in occ.split('/') if any(k in s for k in KEY)), None)
@@ -73,7 +84,7 @@ def main():
             d = designation(seg)
             body = classify(path) or '?'
             e = dict(occ=occ, name=re.sub(r':\d+$', '', seg), body=body, mass_g=0.0,
-                     pos=[0.0, 0.0, 0.0], m_sum=0.0, **d)
+                     pos=[0.0, 0.0, 0.0], m_sum=0.0, hidden=not rec['live'], **d)
             seen[occ] = e
             screws.append(e)
         # mass-weighted centre over the occurrence's bodies
@@ -102,6 +113,7 @@ def main():
         out.append(dict(id=i, name=e['name'], size=e['size'], head=e['head'], std=e['std'],
                         grade=e['grade'], body=e['body'], mass_g=round(e['mass_g'], 2),
                         anchor=('bearing face' if seat is not None else 'centre of mass'),
+                        hidden=bool(e['hidden']),
                         cad_mm=[round(float(v), 1) for v in anchor],
                         pos=[round(float(v), 5) for v in p],
                         axis=ax,
@@ -148,6 +160,32 @@ def main():
     data = dict(oriented=bool(axes), n=len(out), screws=out, links=links,
                 note=('screw axes from the Fusion occurrence transforms' if axes else
                       'no orientation yet - Fusion was busy; markers are spheres'))
+    # ---- link assignment for the fasteners the path cannot name -----------------
+    # 21 fasteners sit as loose root-level occurrences, so classify() has no group to read
+    # and returns nothing. Geometry answers it: assign each to the link whose own mesh it is
+    # closest to. Done after the link list is built so the same meshes the viewer draws are
+    # the ones consulted.
+    from scipy.spatial import cKDTree
+    import trimesh as _tm
+    unknown = [o for o in out if o['body'] in (None, '?', 'ANKLE_SPLIT')]
+    if unknown:
+        pts, owner = [], []
+        for l in links:
+            if l['stl'].startswith('R_'):
+                continue                      # the CAD is one-sided; match against that side
+            me = _tm.load(f'{MESHDIR}/{l["stl"]}', process=False)
+            v = np.asarray(me.vertices)[::7] + np.array(l['pos'])
+            pts.append(v)
+            owner += [l['body']] * len(v)
+        tree = cKDTree(np.vstack(pts))
+        for o in unknown:
+            d_, i_ = tree.query(np.array(o['pos']))
+            nm = owner[i_]
+            o['body'] = (nm[2:] if nm[:2] in ('L_', 'R_') else nm).replace('_link', '')
+            o['body'] = {'base': 'pelvis', 'torso': 'torso'}.get(o['body'], o['body'])
+            o['body_from'] = f'nearest mesh ({d_ * 1000:.0f} mm)'
+        print(f'{len(unknown)} fasteners had no group in their path -> assigned by geometry')
+
     json.dump(data, open(f'{OUT}/screws.json', 'w'), indent=1)
     import collections
     c = collections.Counter(f"{s['size']} {s['head']}" for s in out)

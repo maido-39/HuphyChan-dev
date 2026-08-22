@@ -30,9 +30,13 @@ shoulder roll (y through x-200,z540), which intersect at the shoulder point (-20
   torso              Torso group (frame + PSU + Waist2Torso) + Neck + both shoulder-pitch RS03
   shoulder_pitch_link  Shoulder-Pitch2Roll + the shoulder-roll RS03
   arm                ArmR_Dummy
-`ArmR_fullDoF` (6.497 kg) is the SUPPRESSED alternative - its light bulb is off - and every
-body carries a `live` flag so hidden geometry (that arm plus 50 hidden screws, 6.697 kg in
-all) never reaches the model.
+What is NOT in the robot is decided by BRANCH NAME, not by the light bulb. `ArmR_fullDoF`,
+`Actuators-NotUse` and the `Human_Solid ... (REF)` bodies are alternatives and are excluded.
+A light bulb that is merely off is not evidence of anything: all 69 fasteners inside
+`CenterParts` are switched off so the parts underneath can be seen, and treating that as
+suppression cost the pelvis 201 g of real screws. The split was verified against the dump -
+the branch test matches 25 hidden bodies (671.0 kg) and ZERO live ones, and every hidden body
+it does not match is a fastener on a fully visible sub-assembly.
 
 Usage: massprops_fusion.py   (needs bodies.json from the MCP dump)
 """
@@ -58,6 +62,14 @@ MOTOR_BODY = {'Waist_Yaw': 'pelvis', 'Hip_R': 'pelvis', 'Hip_P': 'hip_pitch_link
               'Ankle_A:3': 'shin', 'Ankle_A (1)': 'shin'}
 # pelvis-side parts that the one-sided CAD has only on the left
 MIRROR_TO_PELVIS = ('Hip_R', 'Hip_P')
+
+
+ALT_BRANCH = ('NotUse', 'fullDoF', 'REF')
+
+
+def is_alternative(path):
+    """True for geometry that is an ALTERNATIVE design, not part of this robot."""
+    return any(t in path for t in ALT_BRANCH)
 
 
 def family(name):
@@ -131,10 +143,13 @@ def main():
                               'ankle_pitch_link', 'foot') + UPPER_BODIES}
     rods = []
     skipped = 0.0
+    hidden_real = 0.0
     for path, rec in B.items():
-        if not rec.get('live', True):                         # light bulb off in Fusion
+        if is_alternative(path):                              # alternative design branch
             skipped += rec['m']
             continue
+        if not rec.get('live', True):
+            hidden_real += rec['m']                           # switched off, still hardware
         who = classify(path)
         if who is None:
             continue
@@ -191,7 +206,11 @@ def main():
     arms = sum(out['bodies'][b]['mass'] for b in ('shoulder_pitch_link', 'arm'))
     whole = out['bodies']['pelvis']['mass'] + out['bodies']['torso']['mass'] + 2 * leg + 2 * arms
     out['whole_robot_kg'] = float(whole)
-    print(f"\nhidden (light bulb off) skipped: {skipped:.3f} kg")
+    print(f"\nalternative branches excluded: {skipped:.3f} kg "
+          f"(ArmR_fullDoF / Actuators-NotUse / Human_Solid REF)")
+    print(f"switched off in the CAD view but counted: {hidden_real * 1000:.1f} g "
+          f"({sum(1 for p, r in B.items() if not r.get('live', True) and not is_alternative(p))} "
+          f"fasteners, all inside CenterParts)")
     print(f"one leg {leg:.3f} · one arm side {arms:.3f} · pelvis {out['bodies']['pelvis']['mass']:.3f}"
           f" · torso {out['bodies']['torso']['mass']:.3f}")
     print(f"WHOLE ROBOT {whole:.3f} kg  (pelvis + torso once, legs x2, arms x2)")

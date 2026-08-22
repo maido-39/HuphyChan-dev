@@ -1,5 +1,10 @@
 """Every fastener in the Fusion assembly: designation, where it sits, which way it points.
 
+Hidden fasteners are INCLUDED and flagged `visible: false`. A light bulb that is off does not
+mean the screw is not in the robot - all 69 fasteners inside `CenterParts` are switched off so
+the parts underneath can be seen, and skipping them left the pelvis with no screws at all.
+Genuine alternatives are excluded by branch name instead (see build_data.py / massprops).
+
 The assembly viewer needs more than a position - to be useful for actually building the
 robot it has to show which way a screw goes in, so this pulls each fastener occurrence's
 full 3D transform (its local z is the screw axis) along with the bounding box that tells
@@ -40,12 +45,10 @@ def run(_context: str):
         stats[0] += 1
         if any(k in o.name for k in KEY):
             stats[1] += 1
-            if live:
+            if True:                        # hidden fasteners are still hardware - see below
                 bb = None
                 for i in range(o.bRepBodies.count):
                     b = o.bRepBodies.item(i)
-                    if not b.isLightBulbOn:
-                        continue
                     box = b.boundingBox
                     v = [box.minPoint.x, box.minPoint.y, box.minPoint.z,
                          box.maxPoint.x, box.maxPoint.y, box.maxPoint.z]
@@ -57,7 +60,7 @@ def run(_context: str):
                 if bb is not None:
                     m = o.transform2.asArray()
                     out.append([p, o.name, [round(x, 5) for x in m],
-                                [round(x, 4) for x in bb]])
+                                [round(x, 4) for x in bb], bool(live)])
                     stats[2] += 1
             continue                        # a screw has no children worth walking
         for i in range(o.childOccurrences.count):
@@ -100,12 +103,12 @@ def main():
     print(f"walked {res['stats'][0]} occurrences, "
           f"{res['stats'][1]} fastener-named, {res['stats'][2]} with geometry")
     out = []
-    for path, name, mat, bb in rows:
+    for path, name, mat, bb, vis in rows:
         d = designation(name)
         # column-major-free: Fusion's asArray is row major 4x4; the axis is the third column
         axis = [mat[2], mat[6], mat[10]]
         pos = [mat[3] * 10.0, mat[7] * 10.0, mat[11] * 10.0]        # cm -> mm, CAD frame
-        out.append(dict(path=path, name=name, pos=pos, axis=axis,
+        out.append(dict(path=path, name=name, pos=pos, axis=axis, visible=vis,
                         bbox_mm=[v * 10.0 for v in bb], **d))
     json.dump(out, open(dest, 'w'), indent=1)
     import collections
