@@ -23,6 +23,9 @@
 | `~/pyg_fea/steps/robot_massprops_step.json` | 강체별 질량·COM·관성텐서(CAD 전역 mm) + 모터 축 |
 | `pygmalion_locomotion/assets/pygmalion_v2/validation.json` | 검증 수치(직립 높이 등) — mjlab 키프레임이 이 파일을 읽음 |
 
+**웹 뷰어**: `tools/robot_model/web_viewer.py --port=8890` (viser) → `http://192.168.20.177:8890` —
+관절 슬라이더(실제 ROM)·HOME/BENT 프리셋·L/R 링크·시각/충돌/껍질/모터 토글·바디별 질량·COM·관성(모델 vs CAD).
+
 사용: `PYG_V2=1` 로 mjlab 전 태스크가 v2 모델을 쓴다(`pygmalion_constants.py` 토글, 기존 cant/rolloff
 토글과 같은 패턴). 액추에이터·관절명·발 사이트·충돌 geom 이름(`L_foot2..6_collision`)은 기존과 동일해
 task 설정을 손대지 않는다.
