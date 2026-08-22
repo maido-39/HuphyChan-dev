@@ -36,3 +36,8 @@ screenshot.png
 **/.obsidian/workspace*.json
 docs/assets/*.mp4
 docs/assets/*official*.png
+
+# 153 MB - over GitHub's 100 MB hard limit, so it can never be pushed. Kept on disk and
+# backed up at ~/pyg_fea/big_media_backup/; removed from history 2026-08-22 to unblock the
+# push. If it needs to live on GitHub, move the demo videos to Git LFS instead.
+docs/mujoco/assets/p2r_v2_fc_demo_loadviz.mp4
