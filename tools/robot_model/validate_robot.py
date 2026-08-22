@@ -31,6 +31,10 @@ REPO = '/home/syaro/MikuchanRemote/Human-Pygmalion'
 XML = f'{REPO}/mujoco-sim/mjlab/src/mjlab/asset_zoo/robots/pygmalion/xmls/pygmalion_v2.xml'
 IMG = f'{REPO}/docs/img'
 JOINTS = ['hip_pitch', 'hip_roll', 'hip_yaw', 'knee', 'ankle_pitch', 'ankle_roll']
+# the upper body has no counterpart in pygmalion.xml, so it is swept and drawn but left out
+# of the L/R convention comparison; waist yaw is a centreline joint with no side prefix
+UPPER_JOINTS = ['waist_yaw', 'shoulder_pitch', 'shoulder_roll']
+CENTRE_JOINTS = {'waist_yaw'}
 
 
 def mesh_world(m, d, g):
@@ -43,11 +47,17 @@ def mesh_world(m, d, g):
     return v @ Rm.T + d.geom_xpos[g], f
 
 
-def draw(ax, m, d, view='side', color_by_body=True):
+def draw(ax, m, d, view='side', color_by_body=True, group=2):
+    """Project the mesh geoms of one visual group.
+
+    `group` picks which meshes: 2 is the full visual set (~600k triangles) and 4 the convex
+    hulls. The 27-panel contact sheet has to use the hulls - holding 27 collections of the
+    full set at once was enough to get the process killed.
+    """
     polys, cols, depth = [], [], []
     cm = plt.get_cmap('tab20')
     for g in range(m.ngeom):
-        if m.geom_type[g] != mujoco.mjtGeom.mjGEOM_MESH:
+        if m.geom_type[g] != mujoco.mjtGeom.mjGEOM_MESH or m.geom_group[g] != group:
             continue
         V, F = mesh_world(m, d, g)
         if view == 'side':
@@ -72,8 +82,14 @@ def draw(ax, m, d, view='side', color_by_body=True):
     o = np.argsort(D)
     ax.add_collection(PolyCollection(P[o], facecolors=C[o], edgecolors='none', rasterized=True))
     ax.set_aspect('equal')
-    ax.set_xlim(-0.45, 0.45)
-    ax.set_ylim(-0.05, 1.15)
+    # limits follow what was actually drawn - the fixed 1.15 m ceiling cut the head and the
+    # arms off as soon as the upper body stopped being a lump
+    lo, hi = P.reshape(-1, 2).min(0), P.reshape(-1, 2).max(0)
+    pad = 0.04
+    cx = (lo[0] + hi[0]) / 2
+    half = max(hi[0] - lo[0], 0.5) / 2 + pad
+    ax.set_xlim(cx - half, cx + half)
+    ax.set_ylim(min(lo[1], 0.0) - pad, hi[1] + pad)
     ax.axhline(0, color='k', lw=0.8)
 
 
@@ -97,8 +113,10 @@ def main():
     print('== mass')
     tot = float(m.body_subtreemass[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, 'base_link')])
     print(f'  total {tot:.3f} kg')
-    BN = {'thigh': 'thigh_link', 'shin': 'shin_link', 'foot': 'foot_link'}
-    for b in ('hip_pitch_link', 'hip_roll_link', 'thigh', 'shin', 'foot'):
+    BN = {'thigh': 'thigh_link', 'shin': 'shin_link', 'foot': 'foot_link',
+          'arm': 'arm_link'}
+    for b in ('hip_pitch_link', 'hip_roll_link', 'thigh', 'shin', 'foot',
+              'shoulder_pitch_link', 'arm'):
         bi = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, f'L_{BN.get(b, b)}')
         print(f"  L_{b:16s} {m.body_mass[bi]:6.3f} kg  (massprops {mp['bodies'][b]['mass']:.3f})")
         assert abs(m.body_mass[bi] - mp['bodies'][b]['mass']) < 1e-3
@@ -129,6 +147,15 @@ def main():
                  f'{s}_ankle_pitch_link', f'{s}_foot_link']
         for a, b in zip(chain[:-1], chain[1:]):
             adj.add(frozenset((a, b)))
+        arm = ['torso_link', f'{s}_shoulder_pitch_link', f'{s}_arm_link']
+        for a, b in zip(arm[:-1], arm[1:]):
+            adj.add(frozenset((a, b)))
+        adj.add(frozenset(('torso_link', f'{s}_arm_link')))
+        # the dummy arm interferes with the hip in the CAD's own zero pose (docs/88 s3c);
+        # the MJCF excludes those pairs, so they are not self-collisions to report either
+        for h in ('hip_pitch_link', 'hip_roll_link'):
+            adj.add(frozenset((f'{s}_arm_link', f'{s}_{h}')))
+    adj.add(frozenset(('base_link', 'torso_link')))
     print('\n== joint sweeps (L leg, all others at 0): self-collision between non-adjacent bodies')
     frames = []
     sweep_rep = {}
@@ -182,8 +209,13 @@ def main():
             f'{j}: L/R convention differs from pygmalion.xml (old {pat_old[j]}, v2 {pat_new[j]})'
         assert pat_new[j][1] == pat_old[j][1] or 0 in (pat_new[j][1], pat_old[j][1]), j
     print(f'  L/R sign conventions match pygmalion.xml for all 6 joints (foot rotation fingerprints x,y,z): {pat_new}')
-    for j in JOINTS:
-        jid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, f'L_{j}_joint')
+    all_joints = JOINTS + [j for j in UPPER_JOINTS
+                           if mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT,
+                                                (f'{j}_joint' if j in CENTRE_JOINTS
+                                                 else f'L_{j}_joint')) >= 0]
+    for j in all_joints:
+        jname = f'{j}_joint' if j in CENTRE_JOINTS else f'L_{j}_joint'
+        jid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, jname)
         lo, hi = m.jnt_range[jid]
         qa = m.jnt_qposadr[jid]
         hits, reach = [], []
@@ -256,18 +288,22 @@ def main():
     ax[1].set_title('front (y-z)')
     fig.tight_layout()
     fig.savefig(f'{IMG}/robot_v2_zero_pose.png')
-    n = len(frames)
-    fig, axes = plt.subplots(6, 3, figsize=(9, 17))
+    rows = (len(frames) + 2) // 3
+    fig, axes = plt.subplots(rows, 3, figsize=(9, 2.9 * rows), squeeze=False)
     for i, (j, qd, qpos) in enumerate(frames):
         d.qpos[:] = qpos
         mujoco.mj_forward(m, d)
         a = axes[i // 3, i % 3]
-        draw(a, m, d, 'front' if j in ('hip_roll', 'ankle_roll', 'hip_yaw') else 'side')
+        draw(a, m, d, 'front' if j in ('hip_roll', 'ankle_roll', 'hip_yaw', 'shoulder_roll',
+                                       'waist_yaw') else 'side', group=4)
         a.set_title(f'{j} {qd:+.0f}°', fontsize=8)
         a.set_xticks([])
         a.set_yticks([])
-    fig.suptitle('Joint sweeps (L leg): min / mid / max of each range, drawn from the MJCF meshes', fontsize=9)
-    fig.tight_layout()
+    for k in range(len(frames), rows * 3):
+        axes[k // 3, k % 3].axis('off')
+    fig.suptitle('Joint sweeps (left side): min / mid / max of each range, '
+                 'drawn from the MJCF collision hulls', fontsize=9, y=0.998)
+    fig.tight_layout(rect=(0, 0, 1, 0.985))
     fig.savefig(f'{IMG}/robot_v2_joint_sweeps.png')
     json.dump(rep, open(f'{REPO}/pygmalion_locomotion/assets/pygmalion_v2/validation.json', 'w'), indent=1)
     print(f'\n-> {IMG}/robot_v2_zero_pose.png · {IMG}/robot_v2_joint_sweeps.png')

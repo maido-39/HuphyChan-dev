@@ -1,0 +1,336 @@
+{
+  "summary": "Find authoritative masses for the RobStride motors and every bearing in the Pygmalion CAD",
+  "agentCount": 6,
+  "logs": [
+    "collected 27 part masses"
+  ],
+  "result": {
+    "findings": [
+      {
+        "part": "RobStride RS04 QDD actuator (hip pitch / hip roll / knee)",
+        "mass_g": 1420,
+        "confidence": "high",
+        "source": "MANUFACTURER CATALOGUE (primary): official RobStride GitHub Product_Information, 'RS04User Manual260428.pdf' §1.3 mechanical characteristics — '1420g±20g'. Mirror of the same manual text at https://wiki.aifitlab.com/robstride-docs/robstride-04-instruction-manual (confirms 1420g±20g, 120 N·m peak, 40 N·m rated w/ 345x345 mm heat sink, 9:1). RESELLER cross-checks (agree): https://openelab.io/blogs/learn/complete-guide-to-robstride-qdd-motors-model-comparison-and-selection (1420 g, 120x120x56 mm, 120/40 N·m, 9:1); https://www.roboticscenter.ai/store/product/robstride-04 (1420 g device mass, '1.5 kg' net/shipping mass). Official RobStride X post https://x.com/RobStride_com/status/1802891697912737824 gives a rounded 'Weight: 1.4 kg'.",
+        "note": "CONFIRMS the project note's 1.42 kg exactly. Tolerance ±20 g (1400-1440 g); use 1420 g. Sanity check: peak 120 N·m, rated 40 N·m, 9:1, 700 W, 48 V, 42 poles, Kt 2.1 N·m/Arms — all cross-verified by >=4 independent sources with no dissent. Outer envelope 120x120x56 mm (driver plate ~Phi84); the official X post's '110*50 mm' is a rounded/pre-release figure and is the only outlier. DENSITY OVERRIDE for the 198.5 cm3 Fusion placeholder: 1420 g / 198.5 cm3 = 7.153 g/cm3. WARNING on the placeholder geometry: a true Phi120x56 cylinder is ~633 cm3, so the RS04 placeholder solid is only ~31% of the real motor envelope. The density override will give the correct MASS but the placeholder's inertia tensor and its collision/interference envelope will both be wrong (too compact, too small). Consider re-sizing the placeholder to the real 120x120x56 envelope before overriding, otherwise flag RS04 inertia as unreliable."
+      },
+      {
+        "part": "RobStride RS03 QDD actuator (hip yaw / ankle pitch)",
+        "mass_g": 880,
+        "confidence": "high",
+        "source": "MANUFACTURER CATALOGUE (primary): official RobStride GitHub Product_Information, 'RS03User Manual260428.pdf' §1.3 — '880g±20g', 106x106x56 mm. Manual text mirror: https://wiki.aifitlab.com/robstride-docs/robstride-03-instruction-manual (880g±20g, 60 N·m peak, 20 N·m rated, 9:1). RESELLER cross-checks (all agree): https://openelab.io/products/robstride03-qdd-60n-m-integrated-joint-motor-module (880g±20g, 106x106x56 mm, 60/20 N·m, 9:1); https://aifitlab.com/products/robstride-03-motor; https://rcdrone.top/products/robstride-03-qdd-60n-m-integrated-actuator-module-48v-dual-encoders-planetary-reducer-ip52-9-1-ratio; https://www.roboticscenter.ai/store/product/robstride-03.",
+        "note": "CONFIRMS the project note's 880 g exactly. Tolerance ±20 g (860-900 g). Sanity check: peak 60 N·m, rated 20 N·m, no-load 200 rpm (official; resellers say 195), 9:1, Kt 2.36 N·m/Arms, 42 poles, back-EMF 17 Vrms/krpm, 106x106x56 mm (driver Phi70) — 6 independent sources, no dissent on any headline value. DENSITY OVERRIDE for the 118.7 cm3 placeholder: 880 g / 118.7 cm3 = 7.414 g/cm3. Same geometry warning as RS04: a Phi106x56 cylinder is ~494 cm3, so the placeholder is only ~24% of the real envelope — mass will be right, inertia and interference envelope will not."
+      },
+      {
+        "part": "RobStride RS02 QDD actuator",
+        "mass_g": 405,
+        "confidence": "high",
+        "source": "MANUFACTURER mechanical-data table as reproduced by multiple resellers: https://openelab.io/blogs/learn/complete-guide-to-robstride-qdd-motors-model-comparison-and-selection (RS02 405 g, 78.5x78.5x45.5 mm, 17/6 N·m, 7.75:1) and https://rcdrone.top/products/robstride-02-qdd-17n-m-integrated-actuator-module-7-75-1-ratio-dual-14-bit-magnetic-encoders-48v-405g-foc-drive-for-robotics ('405g ± 5g'). Also https://www.seeedstudio.com/Robostride-02-Actuator-p-6665.html (RESELLER).",
+        "note": "CORRECTION to the project note. The claimed '380-405 g' is not a tolerance range on one part — it conflates two different models: RS01 = 380 g and RS02 = 405 g, which share the identical 78.5x78.5x45.5 mm housing and 17/6 N·m rating. For RS02 use 405 g ± 5 g, NOT the 392.5 g midpoint. DENSITY OVERRIDE for the 182.5 cm3 placeholder: 405 g / 182.5 cm3 = 2.219 g/cm3. Here the placeholder is realistic: a Phi78.5x45.5 cylinder is ~220 cm3, so 182.5 cm3 is ~83% of envelope — inertia after override will be roughly credible."
+      },
+      {
+        "part": "RobStride RS00 QDD actuator (ankle roll)",
+        "mass_g": 310,
+        "confidence": "high",
+        "source": "MANUFACTURER CATALOGUE (primary): official RobStride GitHub Product_Information, 'RobStride Product Specification Document 20250626.pdf' p.2 — '310g ±3g', 57x57x51 mm. RESELLER cross-checks: https://openelab.io/blogs/learn/complete-guide-to-robstride-qdd-motors-model-comparison-and-selection (310 g, 57x57x51 mm, 14/5 N·m, 10:1); https://wiki.aifitlab.com/robstride-docs/robstride-00-instruction-manual; https://www.seeedstudio.com/Robostride-00-Actuator-p-6664.html.",
+        "note": "CONFIRMS the project note's 310 g. Tight tolerance ±3 g. Sanity: peak 14 N·m, rated 5 N·m, no-load 315 rpm, 10:1, Kt 1.48, 28 poles. DENSITY OVERRIDE for the 127.9 cm3 placeholder: 310 g / 127.9 cm3 = 2.424 g/cm3. Placeholder geometry is sound here — a Phi57x51 cylinder is ~130 cm3, so the placeholder IS the full envelope and post-override inertia will be trustworthy."
+      },
+      {
+        "part": "RobStride RS00 (ankle roll / ankle x4 sets)",
+        "mass_g": 310,
+        "confidence": "high",
+        "source": "Manufacturer primary: RobStride official GitHub repo RobStride/Product_Information — 'Product Literature/RS00/RS00User Manual260713.pdf' §1.4 Mechanical characteristic ('Weight: 310g ± 3g'), cross-confirmed by the same repo's RS-series catalogue '灵足时代RS系列产品规格介绍(260713).pdf' RS00 page (重量 Weight 310g ±3g). NOT a reseller figure.",
+        "note": "CONFIRMS the project note (310 g). Tolerance ±3 g. Envelope from the manual's §1.1 outline drawing: Ø57 mm x 51±1 mm (output boss Ø35, mounting PCDs Ø50/Ø38/Ø27, 6-M3). Peak torque 14 N·m; rated 5 N·m @100 rpm (manual: 90x85 mm heatsink; catalogue: 150x150 mm Al plate); reduction 10:1; no-load 315 rpm ±10%; 48 V (24-60 V); Kt 1.48 N·m/Arms; back-EMF 9.5 Vrms/krpm; line R 1.5 Ω; L 750 µH; 28 poles; low-speed-side inertia 0.001 kg·m²; dual 14-bit magnetic encoders. GEOMETRY CROSS-CHECK: a solid Ø57x51 cylinder is 130.1 cm³ vs the 127.9 cm³ Fusion placeholder (98%) — the placeholder really is the RS00 envelope, so the density override is sound. DENSITY OVERRIDE = 310 g / 127.9 cm³ = 2.4238 g/cm³."
+      },
+      {
+        "part": "RobStride RS02 (test-rig hip RPY + knee; Fusion 'RS02' placeholder)",
+        "mass_g": 380,
+        "confidence": "high",
+        "source": "Manufacturer primary: RobStride/Product_Information 'Product Literature/RS02/RS02User Manual260713.pdf' §1.4 ('Weight: 380g±3g'), cross-confirmed by the official RS-series catalogue PDF RS02 page (重量 Weight 380g ±3g). The 405 g in the project note traces only to resellers (seeedstudio.com/Robostride-02-Actuator-p-6665.html 'weighs only 405g', echoed by rcdrone.top) — reseller figure, not in any RobStride document.",
+        "note": "CORRECTS the project note's '380-405 g' range: use 380 g ±3 g. Do NOT take the midpoint of 380-405 — the two ends are not a manufacturer tolerance band, 380±3 is the catalogue value and 405 is an unsourced reseller number (likely includes cable/connector or packed weight). Envelope from manual §1.1: Ø78.5 mm flange, Ø65 mm body, Ø43 rear, overall length 41.5 mm (28 mm body + 3.5 + 0.5 steps), 9xM3 depth 8 + 6xM4 depth 7, output PCD Ø24±0.2 / Ø73±0.2. Peak torque 17 N·m; rated 7 N·m @100 rpm per catalogue (manual text says 6 N·m with a 260x280 heatsink — catalogue 7 N·m matches our own Motor_Spec/RS02_TN_curve_48V.csv rated 7); reduction 7.75:1; no-load 410 rpm ±10%; 48 V (24-60 V); Kt 1.22 N·m/Arms; line R 0.55 Ω; L 486 µH; 28 poles; inertia 4.2e-3 kg·m²; dual 14-bit encoders. GEOMETRY CROSS-CHECK: solid Ø78.5x41.5 cylinder = 200.9 cm³ vs 182.5 cm³ placeholder (91%) — consistent with the stepped Ø78.5-flange/Ø65-body form. DENSITY OVERRIDE = 380 g / 182.5 cm³ = 2.0822 g/cm³ (vs the 7.85 placeholder = 3.77x too heavy, i.e. the placeholder currently adds ~1.05 kg of phantom mass per RS02)."
+      },
+      {
+        "part": "RobStride RS01 (same envelope as RS02, 36 V variant — disambiguation check)",
+        "mass_g": 380,
+        "confidence": "high",
+        "source": "Manufacturer primary: RobStride/Product_Information 'Product Literature/RS01/RS01User Manual260713.pdf' §1.4 ('Weight: 380g±3g') and the RS-series catalogue PDF RS01 page (380g ±3g).",
+        "note": "Included because RS01 and RS02 share the identical Ø78.5 x ~41.5 mm package and the identical 380 g ±3 g mass — so the CAD density override is the same number whichever of the two the model actually carries. They differ electrically only: RS01 = 36 V rated (24-50 V), no-load 315 rpm, SINGLE magnetic encoder; RS02 = 48 V rated (24-60 V), no-load 410 rpm, DUAL encoders. Both 17 N·m peak, 7 N·m rated, 7.75:1, Kt 1.22, 28 poles, inertia 4.2e-3 kg·m². If the build uses a 48 V bus (it does), the part is RS02."
+      },
+      {
+        "part": "RobStride RS02-IP67 (sealed variant — only if this variant is used)",
+        "mass_g": 490,
+        "confidence": "medium",
+        "source": "Manufacturer primary: RS-series catalogue PDF, RS02-IP67 page (重量 Weight 490g, 防水等级 IP67). Corroborated independently by OpenELAB's RS02 IP67 listing ('490g ± 5g') — reseller, agreeing with the catalogue.",
+        "note": "WATCH OUT: the RS02-IP67 USER MANUAL's §1.4 still prints 'Weight: 380g±3g' — a copy-paste from the standard RS02 manual. The catalogue's 490 g is the correct IP67 figure (+110 g of sealing/housing) and is the one two independent sources agree on. Confidence medium only because the two RobStride documents contradict each other. Same 17 N·m peak / 7 N·m rated / 7.75:1 / 48 V / 410 rpm. Use 380 g unless the BOM explicitly specifies the IP67 SKU."
+      },
+      {
+        "part": "RobStride RS03 (hip yaw / ankle pitch) — cross-check of the project's 880 g claim",
+        "mass_g": 890,
+        "confidence": "medium",
+        "source": "Two conflicting MANUFACTURER sources: 'Product Literature/RS03/RS03User Manual260713.pdf' §1.4 says 'Weight: 880g±20g'; the official RS-series catalogue PDF RS03 page says '900g±20g'. Both are RobStride primary documents (same 260713 revision date).",
+        "note": "The project note's 880 g is the MANUAL value and is defensible, but it is not the only official number — the catalogue says 900 g. The two tolerance bands overlap on 880-900 g, so 890 g is the honest midpoint (range 880-900, worst case 860-920). Impact on the density override is small: 880 g/118.7 cm³ = 7.4136 g/cm³ vs 900 g → 7.5821 g/cm³ (2.3% apart). Recommend 890 g / 7.498 g/cm³ unless you weigh a real unit. Other RS03 specs (both docs agree): peak 60 N·m, rated 20-21 N·m @100 rpm, 9:1, no-load 195-200 rpm ±10%, 48 V (15-60 V), Kt 2.36 N·m/Arms, R 0.39 Ω, 42 poles, inertia 0.02 kg·m²."
+      },
+      {
+        "part": "RobStride RS04 (hip pitch/roll, knee) — cross-check of the project's 1.42 kg claim",
+        "mass_g": 1420,
+        "confidence": "high",
+        "source": "Manufacturer primary: 'Product Literature/RS04/RS04User Manual260713.pdf' §1.4 ('Weight: 1420g±20g'), cross-confirmed by the official RS-series catalogue PDF RS04 page (1420g ±20g). Both agree exactly.",
+        "note": "CONFIRMS the project note (1.42 kg). Unlike RS03, the manual and catalogue agree here, so confidence is high. Peak 120 N·m, rated 40 N·m @100 rpm, 9:1, no-load 200 rpm ±10%, Kt 2.1 N·m/Arms, inertia 0.04 kg·m². DENSITY OVERRIDE = 1420 g / 198.5 cm³ = 7.1537 g/cm³ — note this is close to the 7.85 steel placeholder, which is exactly why RS04's placeholder mass looked plausible (+9.7%) and hid the fact that it was a placeholder; the coincidence does not validate it."
+      },
+      {
+        "part": "6810ZZ deep groove ball bearing (50 x 65 x 7 mm) — hip roll and knee, 2 units",
+        "mass_g": 50,
+        "confidence": "high",
+        "source": "MANUFACTURER (NSK official product/engineering page, www.nsk.com/engineering/6810zz-dgbb-sr.html): 6810ZZ mass approx. 0.05 kg, d50/D65/B7, Cr 7050 N, C0r 6200 N, 23 balls of 3.969 mm, pressed steel cage, shields both sides. CROSS-CHECK (catalogue mirrors of SKF data, i.e. reseller-level): SKF 61810-2Z 0.052 kg (abf.store listing of SKF data) and SKF 61810-2RZ 0.052 kg (bearingsize.info SKF catalogue mirror, C 6.8 kN / C0 6.8 kN).",
+        "note": "ZZ (NSK/NTN) = 2Z (SKF) = two pressed-steel non-contact shields; this IS the shielded mass, shields are thin stampings so open vs ZZ differs by only a few percent and 2RS1 rubber-sealed is within the same rounding. Range across sources 50-52 g, midpoint 51 g; use 50 g (NSK, exact ZZ designation). Placeholder volume 6.12 cm3 -> override density = 50/6.12 = 8.17 g/cm3 (placeholder at 7.85 gives 48.0 g, only -2.0 g error, so this one was nearly right). NOTE a repo discrepancy: docs/82_final_design_mass_review.md line 161 cites CAD link_L2_shin_joints.json as '6810ZZ x2 = 0.075 kg' (37.5 g each), which is 25% below catalogue; the correct pair mass is 0.100 kg."
+      },
+      {
+        "part": "6814ZZ deep groove ball bearing (70 x 90 x 10 mm) — hip yaw",
+        "mass_g": 134,
+        "confidence": "high",
+        "source": "MANUFACTURER (NSK official product/engineering page, www.nsk.com/engineering/6814zz-dgbb-sr.html): 6814ZZ mass approx. 0.134 kg, d70/D90/B10, Cr 13300 N, C0r 12700 N, pressed steel cage, shields both sides. CROSS-CHECK (reseller listing of SKF data): SKF 61814-2RZ 0.14 kg (abf.store).",
+        "note": "Range 134-140 g across NSK vs SKF-derived listings, midpoint 137 g; adopt 134 g (NSK, exact ZZ designation, manufacturer source). Placeholder volume 15.9 cm3 -> override density = 134/15.9 = 8.43 g/cm3. Placeholder at 7.85 gives 124.8 g, so the current model under-reports this bearing by 9.2 g. Repo docs/64 uses C0 11.4 kN for 6814 in the s0 checks; NSK's own figure is 12.7 kN static / 13.3 kN dynamic, i.e. the existing bearing-capacity margins are slightly conservative, not optimistic."
+      },
+      {
+        "part": "6900ZZ deep groove ball bearing (10 x 22 x 6 mm) — ankle, x4 sets",
+        "mass_g": 9,
+        "confidence": "high",
+        "source": "MANUFACTURER (NSK official product/engineering page, www.nsk.com/engineering/6900zz-dgbb-sr.html): 6900ZZ mass 0.009 kg, d10/D22/B6, Cr 2970 N, C0r 1270 N, 9 balls of 3.175 mm, pressed steel cage, shields both sides. CROSS-CHECK: bearingsize.info NSK catalogue mirror gives 0.009 kg / C 2.7 kN / C0 1.27 kN; SKF 61900-2Z listed at 0.010 kg (reseller/catalogue-mirror listings of SKF data).",
+        "note": "Range 9-10 g (NSK 9, SKF 10), midpoint 9.5 g; adopt 9 g per NSK, the exact ZZ designation. Per bearing. If the ankle uses 4 sets of 2 bearings (8 pieces) that is 72 g total; 4 pieces = 36 g. Placeholder volume ~1.3 cm3 -> override density = 9/1.3 = 6.92 g/cm3 (placeholder at 7.85 gives 10.2 g, over-reporting by 1.2 g each). Because the placeholder volume is given as approximate (~1.3), prefer entering the density that reproduces 9 g against whatever exact volume Fusion reports."
+      },
+      {
+        "part": "CRBS808AUUU (hip pitch crossed-roller bearing) — correct designation IKO CRBS 808 A UU",
+        "mass_g": 122,
+        "confidence": "high",
+        "source": "MANUFACTURER CATALOGUE (primary). IKO / Nippon Thompson, 'Crossed Roller Bearings' catalogue CAT-5508/3E, PDF at https://www.ikont.com/catalogs/needle-roller-bearing-series/5508_3_E_CRB.pdf — CRBS slim-type dimension table, shaft-dia 80 row: 'CRBS 808 | CRBS 808 A UU | CRBS 808 V | CRBS 808 V UU — Mass 122 g, d 80, D 96, B 8, r 0.4, da 84, Da 91, Cr 6130 N, C0r 9590 N'. Text extracted from the catalogue PDF with pdftotext, so this is the vendor's own table, not a reseller restatement. Independently corroborated by distributor Nodes Bearing (https://www.nodeshk.com/iko/crb/crbs/crbs808.html, 'reference weight 122 g') and by Motion Industries' listing of CRBS808AUUT1 at 0.27 lb = 122 g (https://www.motion.com/products/sku/04427966).",
+        "note": "MASS: 122 g exactly as catalogued; single mass figure covers all four roller-guide variants of size 808 (cage / A separator / V full-complement), so no range. Density override for the placeholder: 122 g / 16.10 cm3 = 7.578 g/cm3 (vs 7.85 assumed) — the placeholder was only ~4% heavy at 126 g, so this bearing is the least-wrong of the placeholders. Sanity check: a solid steel annulus 96/80 x 8 mm would be 17.7 cm3 / 139 g, so 122 g is physically consistent with a raceway-relieved ring.\n\nTWO CORRECTIONS TO THE PROJECT NOTES:\n(1) MANUFACTURER IS IKO (Nippon Thompson), NOT THK. THK has no CRBS series — THK crossed-roller rings are RA/RB/RE/RU/RD. CRBS is IKO's 'Slim Type Crossed Roller Bearing'. Searching a THK catalogue for this part will find nothing.\n(2) THE DESIGNATION 'CRBS808AUUU' HAS ONE U TOO MANY. The catalogue code is CRBS 808 A UU. Decoded per catalogue section 'Examples of identification number' (Example 4 is literally 'CRBS 150 8 A UU C1'): CRBS = slim-type crossed roller bearing; 80 = bore diameter mm; 8 = bearing width mm; A = roller guide 'with separator' (no letter = with cage, V = full complement); UU = sealed both sides (U = one side only, no symbol = open). Optional trailing codes: T1/C1/C2 = radial clearance class (no symbol = normal), then P6/P5/P4/P2 = accuracy class (no symbol = class 0). So the Motion.com part CRBS808AUUT1 is the same bearing with T1 clearance, and its mass is identical. Recommend renaming the CAD component to 'CRBS 808 A UU' to keep it orderable.\n\nUSAGE FIT: Cr 6.13 kN dynamic / C0r 9.59 kN static, and the type is rated for combined radial + axial + overturning moment, which is why it suits the hip pitch joint; recommended housing shoulder diameters are da 84 / Da 91 mm."
+      },
+      {
+        "part": "JMC JS6 / JS06 rod end (M6, 15.8 mm ball) - as specified in the Fusion model",
+        "mass_g": 35,
+        "confidence": "low",
+        "source": "NO manufacturer or reseller catalogue found for a 'JS6'/'JS06' rod end under the JMC (JMC/Jalman) brand or any other; JMC's indexable range uses POS/PHS/SI/SA/JM/JF codes only. Value is an engineering estimate bracketed by the three major catalogues for the SAME ball size (see other rows).",
+        "note": "Key identification: 15.8 mm ball = 15.875 mm = 5/8 in, which is the STANDARD spherical-ball size for the size-8 (8 mm bore) rod end across THK, IKO and NMB - not for a size-6. So the JS06 is an M6-threaded body carrying a size-8 class ball. Bracket: 5/8-in-ball rod ends weigh 32 g (male, IKO POS8) to 43 g (female, IKO PHS8 / THK d=8). An M6 shank instead of M8 removes a little material, so 35 g is the midpoint estimate; usable range 30-43 g. Sanity check: the 15.875 mm chrome-steel ball alone is 16.4 g solid, 13.8 g with a 6 mm bore, so a 35 g total means a ~21 g housing - consistent with IKO/THK size-8 bodies. IF instead the 15.8 mm figure was measured as the head OD (not the ball) and the ball is really 12.7 mm, then use 19 g (male) / 25 g (female) instead. RECOMMEND confirming which by measuring the placeholder's head OD in Fusion: a real 5/8-ball rod end head OD is 22 mm (THK PB8) vs 18 mm for a 1/2-ball size-6."
+      },
+      {
+        "part": "THK Rod End, bore d=6, M6, ball 12.7 mm (1/2 in) - non-lubricated type",
+        "mass_g": 25,
+        "confidence": "high",
+        "source": "MANUFACTURER catalogue: THK Rod End General Catalog A23-1 (PDF), mass column of the size table",
+        "note": "Same 25 g listed for the grease-nipple variant. Static radial load 5000 N (non-lube) / 6860 N (grease type). This is the reference mass for a genuine M6 steel rod end with the standard size-6 ball."
+      },
+      {
+        "part": "THK Rod End, bore d=8, M8, ball 15.875 mm (5/8 in)",
+        "mass_g": 43,
+        "confidence": "high",
+        "source": "MANUFACTURER catalogue: THK Rod End General Catalog A23-1 (PDF)",
+        "note": "The nearest catalogue part to the JS06's 15.8 mm ball. Upper bound for the JS06 estimate."
+      },
+      {
+        "part": "THK PB6 spherical bearing insert (ball 12.7 mm, no housing)",
+        "mass_g": 13,
+        "confidence": "high",
+        "source": "MANUFACTURER catalogue: THK Rod End General Catalog A23-1, Link/PB model table",
+        "note": "PB8 (ball 15.875 mm) is 24 g. Useful if the CAD placeholder is only the ball element, not the whole rod end."
+      },
+      {
+        "part": "IKO PHS6 rod end, female M6x1, ball 12.7 mm",
+        "mass_g": 25,
+        "confidence": "high",
+        "source": "IKO (Nippon Thompson) catalogue data as reproduced in distributor spec tables (Nodes bearing); a second reseller (BearingsRUs) lists 0.06 lb = 27 g",
+        "note": "Head OD d2 = 18 mm, overall height 39 mm, C dyn 4.2 kN. The 25 g figure matches THK's identical-geometry part exactly, which cross-validates it."
+      },
+      {
+        "part": "IKO POS6 rod end, male M6x1, ball 12.7 mm",
+        "mass_g": 19,
+        "confidence": "high",
+        "source": "IKO catalogue data via distributor spec table (Nodes bearing)",
+        "note": "Male (external-thread) versions run ~25 percent lighter than the female version of the same size."
+      },
+      {
+        "part": "IKO PHS8 rod end, female M8x1.25, ball 15.875 mm",
+        "mass_g": 43,
+        "confidence": "high",
+        "source": "IKO catalogue data via distributor spec table (Nodes bearing)",
+        "note": "Independently equals THK's 43 g for the same geometry - the strongest anchor for the JS06's 15.8 mm ball class."
+      },
+      {
+        "part": "IKO POS8 rod end, male M8x1.25, ball 15.875 mm",
+        "mass_g": 32,
+        "confidence": "high",
+        "source": "IKO catalogue data via distributor spec table (Nodes bearing)",
+        "note": "Lower bound of the 5/8-in-ball bracket used for the JS06 estimate."
+      },
+      {
+        "part": "NMB / Minebea RBT6E rod end, male M6x1.0, ball 14.29 mm",
+        "mass_g": 19,
+        "confidence": "high",
+        "source": "MANUFACTURER catalogue: NMB (Minebea) Spherical, Rod End and Sleeve Bearings, metric series catalogue PDF, 'Approx. Weight g' column",
+        "note": "Female counterpart RBT6 = 25 g. NMB is the only one of the three that uses a 14.29 mm (9/16 in) ball on a 6 mm bore, i.e. an oversized ball on a small thread - the same design idea the JS06 appears to use, and it still only weighs 19/25 g."
+      },
+      {
+        "part": "NMB / Minebea PR6E / PR6 rod ends, M6x1.0, ball 12.70 mm",
+        "mass_g": 22,
+        "confidence": "high",
+        "source": "MANUFACTURER catalogue: NMB metric series catalogue PDF",
+        "note": "Midpoint of the range 19 g (PR6E, male) to 25 g (PR6, female). Sister series RBM6E 20 g / RBM6 25 g and PBR6EFN 19 g / PBR6FN 24 g are within the same band - so ANY plain steel M6 rod end with a 1/2-in ball is 19-25 g."
+      },
+      {
+        "part": "NMB / Minebea HRT6E heavy-duty rod end, male M6x1.0, ball 13.49 mm",
+        "mass_g": 35,
+        "confidence": "medium",
+        "source": "MANUFACTURER catalogue: NMB metric series catalogue PDF (weight cell is merged across the HRT5E/HRT6E rows, so 35 g is shared between the two sizes)",
+        "note": "Heavy-duty PTFE-lined stainless series - shows that a HIGH-STRENGTH M6 rod end reaches 35 g, which independently supports 35 g as the JS06 estimate. Bracketed by HRT5E 35 g and HRT8E 40 g."
+      },
+      {
+        "part": "SKF SAKB 6 F rod end, male M6, maintenance-free",
+        "mass_g": 21,
+        "confidence": "high",
+        "source": "SKF catalogue data as listed in distributor product table (Nodes bearing) - SKF's own product page did not render its data table to the fetcher",
+        "note": "Female counterpart SIKB 6 F is the same size class (bore 6, head OD 20, width 9) and should be ~25 g; its mass was not retrievable, so do not quote it as catalogue data."
+      },
+      {
+        "part": "igus igubal KBRM-06 rod end, female M6, polymer (igumid G housing + iglide L280 ball)",
+        "mass_g": 4.7,
+        "confidence": "high",
+        "source": "MANUFACTURER catalogue: igus igubal Rod Ends catalogue PDF (igus.com/us/pdf/igubal_rod_end.pdf), 'Weight (g)' column",
+        "note": "Same-size variants: KBRM-06 CL 4.5 g, EBRM-06 4.0 g, EBRM-06 HT 5.0 g; KBRM-08 8.6 g. NOTE: an igus web product page quotes 5.2 g for KBRM-06 - the catalogue PDF value 4.7 g is the one to use. Polymer rod ends are 5-6x lighter than steel; if the ankle rod ends were ever switched to igubal the mass drops from ~35 g to ~5 g each, which is a real design lever given x8 units in a 2-RSU ankle pair."
+      }
+    ],
+    "check": "## Adversarial verification — Pygmalion CAD placeholder mass/density overrides\n\n### 1. What I independently re-sourced (not the input's sources)\n\nThe input leaned on the RobStride GitHub `260713` manuals plus resellers. I pulled the **same manuals from a different host and a different revision** (`files.seeedstudio.com/products/RobStride/Product Literature/<model>/<model>User Manual251112.pdf`), extracted the text myself with `pdftotext`, and read §\"Mechanical characteristic\" directly:\n\n| Model | Manual rev 251112, §Mechanical characteristic, line 1 |\n|---|---|\n| RS00 | `Weight: 310g±3g` — poles 28, ratio 10:1 |\n| RS02 | `Weight: 380g±3g` — poles 28, ratio 7.75:1, peak 17 N·m, Kt 1.22 |\n| RS03 | `Weight: 880g±20g` — poles 42, ratio 9:1 |\n| RS04 | `Weight: 1420g±20g` — poles 42, ratio 9:1 |\n\nBearings re-sourced from a **second manufacturer** (Koyo/JTEKT) against the input's NSK figures, and the crossed roller from a distributor with matching load ratings:\n\n| Bearing | NSK | Koyo/JTEKT | Adopt |\n|---|---|---|---|\n| 6810ZZ | 0.050 kg, Cr 7050 N, C0r 6200 N | **0.052 kg**, Cr 8.20 kN, C0r 6.10 kN | 51 g (50–52) |\n| 6814ZZ | 0.134 kg, Cr 13300 N, C0r 12700 N | **0.134 kg**, Cr 15.1 kN, C0r 11.9 kN | 134 g (exact agreement) |\n| 6900ZZ | 0.009 kg, Cr 2970 N, C0r 1270 N | **0.010 kg**, Cr 3.35 kN, C0r 1.25 kN | 9.5 g (9–10) |\n| CRBS 808 A UU | IKO cat. 122 g | Nodes distributor: **122 g, d80/D96/B8, C 6.13 kN, C0 9.59 kN, \"IKO\"** | 122 g |\n\n---\n\n### 2. THE HEADLINE FINDING — two placeholder *volumes* are wrong, not two masses\n\nCompute the mean density each placeholder demands, and compare it against the same number computed over the **real catalogue envelope**:\n\n| Motor | Real envelope | Envelope vol | Mass/envelope | Placeholder vol | **Mass/placeholder** | Placeholder as % of envelope |\n|---|---|---|---|---|---|---|\n| RS04 | Ø120 × 56 | 633 cm³ | 2.24 g/cm³ ✅ | 198.5 cm³ | **7.15 g/cm³ ❌** | **31 %** |\n| RS03 | Ø106 × 56 | 494 cm³ | 1.78 g/cm³ ✅ | 118.7 cm³ | **7.41 g/cm³ ❌** | **24 %** |\n| RS02 | Ø78.5 × 41.5 | 201 cm³ | 1.89 g/cm³ ✅ | 182.5 cm³ | 2.08 g/cm³ ✅ | 91 % |\n| RS00 | Ø57 × 51 | 130 cm³ | 2.38 g/cm³ ✅ | 127.9 cm³ | 2.42 g/cm³ ✅ | 98 % |\n\n**A QDD actuator cannot have a 7.2–7.4 g/cm³ mean density.** RS02 and RS00 land at 1.9–2.4, exactly the expected aluminium-housing + copper + steel-rotor value, and their placeholders are 91 %/98 % of the true envelope. RS03 and RS04 demand 3–4× the density of their own product family. The masses (1420 / 880 g) are triple-confirmed; therefore **the 198.5 cm³ and 118.7 cm³ measurements are the broken numbers.**\n\nTwo independent corroborations that this is a CAD defect, not a measurement quirk:\n\n- **Volume ordering is scrambled.** Placeholders rank RS04 198.5 > RS02 182.5 > RS00 127.9 > RS03 118.7. Real envelopes rank RS04 633 > RS03 494 > RS02 201 > RS00 130. **The RS00 (smallest motor, 310 g) has a larger placeholder solid than the RS03 (880 g).** RS04's placeholder is only 9 % bigger than RS02's, though the real parts differ 3.2×.\n- **Consequence, if the placeholder is a solid of catalogue height:** equivalent placeholder Ø for RS03 = √(4·118.7/(π·5.6)) ≈ **52 mm vs the real 106 mm** — the body is short by 27 mm of radius all round. The 2-RSU ankle-raise study (commit `998b36b`) that concluded the raised ankle motors land \"10 mm from both the thigh envelope and the knee motor\" was measured against these bodies; against a real Ø106 RS03 that is a **~17 mm interference**, not a 10 mm clearance. The −12.8 % knee-swing / −6.8 % hip-swing inertia deltas are likewise computed on bodies with the wrong radius of gyration.\n\n**Required action before overriding RS03/RS04:** measure the placeholder **bounding box**, not its volume, in Fusion.\n- If bbox ≈ 106×106×56 / 120×120×56 → the solids are shelled/detailed imports, volume shortfall is internal, and the density override is fine for mass and acceptable for inertia (biased slightly outward).\n- If bbox is small (likely, given RS02/RS00 are modelled as near-solid envelopes) → **rescale the bodies first**, then override density. Do not ship inertia or clearance results from the current RS03/RS04 bodies.\n\n---\n\n### 3. Errors found in the input list\n\n**(a) RS02 = 380 g, not 405 g. The input contradicts itself and one row has a provenance error.**\nThe first RS02 row labels its source `MANUFACTURER mechanical-data table` but the URL is an **OpenELAB blog post** — a reseller. I fetched that page: it lists `RS01 380 g / RS02 405 g`, both at 78.5×78.5×45.5 mm. But **both** RobStride manuals print `380g±3g`, and 405 g appears in **no** RobStride document. Use **380 g ±3 g**. Never the 392.5 g midpoint — 380 and 405 are two different sources, not a tolerance band.\n\n**(b) RS03: the 880 vs 900 conflict is real and confirmed.** The manual (both revisions, `251112` and `260713`) says `880g±20g`; RobStride's own product-description text says \"overall weight of 900g\". Note 880 + 20 = 900, so the manual's upper tolerance touches the catalogue figure. Both are vendor-published. Density impact is 2.3 %, immaterial next to the 3–4× volume defect above — but tag it *unresolved*, and if you want one number use 890 g.\n\n**(c) The JS6 is not a rod end — the entire rod-end bracket in the input is the wrong product class.** `JS` is the series code of **JMC / 잘만정공 (Jalman Precision, Korea)** for a **grease-lubricated spherical plain bearing (GE-type insert)**, sold via MISUMI Korea and Korean bearing shops; `JET` is the same maker's maintenance-free version (which is exactly why your own `docs/64` writes \"무급유(JET) 사유 … JS8(급유)로\"). Distributor listings give the series OD progression: JS05 → 16, JS08 → 22, JS14 → 34, JS20 → 46, JS25 → 56 mm, i.e. **D = 2d + 6**, so **JS6 = bore 6 / OD 18 mm**. A 15.8 mm inner sphere inside an 18 mm outer ring (1.1 mm wall) is exactly the \"15.8 mm ball\" in your brief — the identification is self-consistent.\nMass: **no JS-series mass is published anywhere I could reach.** The best anchor is JMC's *own* GE table (navimro): GE-10 (d10 / D19 / B6(9)) = **12 g**, GE-12 (d12 / D22) = 17 g. A d6 / D18 JS insert therefore sits around **12–20 g, central ~15 g** — the input's **35 g is ~2.3× too heavy** because it was derived from IKO/THK/NMB *rod ends* (threaded body + ball), a part JS6 is not. Over 8 units that is ~160 g of phantom mass. **This number is UNVERIFIED.** The part costs ₩6,130 — weigh one.\nAlso: **no placeholder volume was supplied for the JS6**, so no density override can be computed for it at all.\n\n**(d) Two repo numbers are internally inconsistent with the placeholder volumes you gave.**\n`docs/82_final_design_mass_review.md` line ~161 cites CAD `link_L2_shin_joints.json` as `6810ZZ ×2 ≈ 0.075 kg` → 37.5 g each. That is 27 % below catalogue (51 g), **and** it is not reproducible from the placeholder either: 6.12 cm³ × 7.85 = 48.0 g each, i.e. 0.096 kg for the pair. Something other than the 6.12 cm³ / 7.85 g/cm³ combination produced that JSON value — reconcile before trusting either.\n\n**(e) Designation fixes carried forward (both correct in the input, both worth acting on):** the crossed roller is **IKO, not THK**, and the orderable code is **CRBS 808 A UU** — `CRBS808AUUU` has one U too many. Rename the CAD component.\n\n---\n\n### 4. Physical-plausibility screen on every override\n\n| Part | Override ρ | Sanity reference | Verdict |\n|---|---|---|---|\n| RS04 | 7.15 | family norm 1.8–2.4 | ❌ **implausible — placeholder volume wrong** |\n| RS03 | 7.41 | family norm 1.8–2.4 | ❌ **implausible — placeholder volume wrong** |\n| RS02 | 2.08 | envelope 1.89 | ✅ |\n| RS00 | 2.42 | envelope 2.38 | ✅ |\n| CRBS808 | 7.58 | real steel vol 15.5 cm³ vs 16.1 placeholder (104 %) | ✅ |\n| 6810ZZ | 8.33 | real steel vol 6.50 cm³ vs 6.12 (94 %) | ✅ (6 % over steel = placeholder slightly small) |\n| 6814ZZ | 8.43 | real steel vol 17.1 cm³ vs 15.9 (93 %) | ✅ (7 % over steel) |\n| 6900ZZ | 7.31 | real steel vol 1.21 cm³ vs 1.3 (107 %) | ✅ |\n\nAll four bearing placeholders sit within ±7 % of the actual steel volume of the real bearing (solid ring minus raceway/cavity), so their override densities land within ±8 % of 7.85 — exactly as they should. The bearings are modelled correctly; the two large motors are not.\n\n---\n\n### 5. FINAL TABLE\n\n| Part | mass_g | Placeholder vol (cm³) | **Implied ρ (g/cm³)** | Confidence | Source |\n|---|---|---|---|---|---|\n| RobStride RS04 (hip pitch/roll, knee) | **1420** ±20 | 198.5 ⚠ | **7.154 ⚠ implausible** | mass **high**; volume **rejected** | RS04 manual §Mech. char. rev 251112 (Seeed mirror, self-extracted) + rev 260713 (RobStride GitHub) + OpenELAB |\n| RobStride RS03 (hip yaw / ankle pitch) | **880** ±20 *(vendor also publishes 900)* | 118.7 ⚠ | **7.414 ⚠ implausible** | mass **medium** (880 vs 900 unresolved); volume **rejected** | RS03 manual rev 251112 + 260713 = 880±20; RobStride product text = 900 |\n| RobStride RS02 | **380** ±3 | 182.5 | **2.082** ✅ | **high** | RS02 manual rev 251112 (self-extracted) + rev 260713. **405 g is reseller-only — rejected** |\n| RobStride RS00 (ankle roll) | **310** ±3 | 127.9 | **2.424** ✅ | **high** | RS00 manual rev 251112 (self-extracted) + rev 260713 + OpenELAB |\n| CRBS 808 A UU (hip pitch, IKO) | **122** | 16.10 | **7.578** ✅ | **high** | IKO CAT-5508/3E dimension table + Nodes distributor (122 g, C 6.13 / C0 9.59 kN) + Motion 0.27 lb |\n| 6810ZZ (hip roll, knee) | **51** (50–52) | 6.12 | **8.333** ✅ | **high** | NSK 0.050 kg + **Koyo/JTEKT 0.052 kg** (2 makers) |\n| 6814ZZ (hip yaw) | **134** | 15.9 | **8.428** ✅ | **high** | NSK 0.134 kg + **Koyo/JTEKT 0.134 kg** (exact agreement) |\n| 6900ZZ (ankle, ×4 sets) | **9.5** (9–10) | ~1.3 ⚠ approx | **7.31** ✅ | **high** on mass; volume approximate | NSK 0.009 kg + **Koyo/JTEKT 0.010 kg** |\n| JMC **JS6 spherical plain bearing** (d6 / D18, 15.8 mm sphere) — *not a rod end* | **~15 (12–20)** | **not supplied** | **cannot compute** | **LOW — UNVERIFIED** | No published mass exists. Bracketed from JMC's own GE table (GE-10 d10/D19 = 12 g, GE-12 = 17 g) + JS OD series JS05 16 / JS08 22 / JS14 34 (⇒ JS6 D = 18). **Input's 35 g came from rod-end catalogues and is the wrong part class.** |\n\n**Plainly unverified:** only the **JS6**. Everything else is confirmed by at least two independent sources, and the only surviving genuine ambiguity is RS03 880 vs 900 g.\n\n### 6. Per-unit mass delta when you apply the overrides\n\n| Part | Placeholder @7.85 | Real | Δ per unit |\n|---|---|---|---|\n| RS02 | 1432.6 g | 380 g | **−1052.6 g** |\n| RS00 | 1004.0 g | 310 g | **−694.0 g** |\n| RS04 | 1558.2 g | 1420 g | −138.2 g |\n| RS03 | 931.8 g | 880 g | −51.8 g |\n| 6814ZZ | 124.8 g | 134 g | +9.2 g |\n| 6810ZZ | 48.0 g | 51 g | +3.0 g |\n| CRBS808 | 126.4 g | 122 g | −4.4 g |\n| 6900ZZ | 10.2 g | 9.5 g | −0.7 g |\n\nThe uncorrected model gives every motor a mass of roughly 0.9–1.6 kg: **an RS02 placeholder (1433 g) currently weighs more than a real RS04 (1420 g), and an RS00 placeholder (1004 g) more than a real RS03 (880 g).** The motor mass ordering in the present CAD is not merely wrong in magnitude, it is inverted — which is why the small-motor placeholders, not the big ones, dominate the phantom mass.\n\n**Sources:** [RS02 manual rev 251112 (Seeed mirror)](https://files.seeedstudio.com/products/RobStride/Product%20Literature/RS02/RS02User%20Manual251112.pdf) · [RobStride/Product_Information](https://github.com/RobStride/Product_Information) · [OpenELAB RobStride comparison](https://openelab.io/blogs/learn/complete-guide-to-robstride-qdd-motors-model-comparison-and-selection) · [NSK 6810ZZ](https://www.nsk.com/engineering/6810zz-dgbb-sr.html) · [NSK 6814ZZ](https://www.nsk.com/engineering/6814zz-dgbb-sr.html) · [NSK 6900ZZ](https://www.nsk.com/engineering/6900zz-dgbb-sr.html) · [Koyo 6810 ZZ](https://koyo.jtekt.co.jp/en/products/detail/?pno=6810+ZZ) · [Koyo 6814 ZZ](https://koyo.jtekt.co.jp/en/products/detail/?pno=6814+ZZ) · [Koyo 6900 ZZ](https://koyo.jtekt.co.jp/en/products/detail/?pno=6900+ZZ) · [Nodes IKO CRBS808](https://www.nodeshk.com/iko/crb/crbs/crbs808.html) · [MISUMI Korea JMC 로드엔드](https://kr.misumi-ec.com/vona2/maker/jmc/) · [종로몰 JMC JS series](https://www.ichongro.shop/goods/goods_list.php?cateCd=034005) · [베어링웍스 JS08 (외경 22)](https://bearingworks.co.kr/1020669219/?idx=1631) · [나비엠알오 JMC GE mass table](https://www.navimro.com/g/41429/)"
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Search"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "spec:rs04",
+      "phaseIndex": 1,
+      "phaseTitle": "Search",
+      "agentId": "af956cc99d7333776",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1787371920158,
+      "queuedAt": 1787371905563,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Pygmalion biped CAD. Every motor and bearing in the Fusion model is a placeholder solid at generic\nsteel density (7.85 g/cm3), so their masses are wrong. We will correct each one by overriding the\nplaceholder's DENSITY so that density x (the placeholder's measured volume) = the real catalogue mass.\nMeasured placeholder volumes from Fusion (cm3):\n  RobStride RS04 198.5 | RS03 118.7 | RS02 182.5 | R…",
+      "lastProgressAt": 1787372071261,
+      "tokens": 59579,
+      "toolCalls": 16,
+      "durationMs": 151102,
+      "resultPreview": "{\"findings\":[{\"part\":\"RobStride RS04 QDD actuator (hip pitch / hip roll / knee)\",\"mass_g\":1420,\"confidence\":\"high\",\"source\":\"MANUFACTURER CATALOGUE (primary): official RobStride GitHub Product_Information, 'RS04User Manual260428.pdf' §1.3 mechanical characteristics — '1420g±20g'. Mirror of the same manual text at https://wiki.aifitlab.com/robstride-docs/robstride-04-instruction-manual (confirms 14…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "spec:rs02rs00",
+      "phaseIndex": 1,
+      "phaseTitle": "Search",
+      "agentId": "a31afcf93b3fe1a8b",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1787371923496,
+      "queuedAt": 1787371905563,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Pygmalion biped CAD. Every motor and bearing in the Fusion model is a placeholder solid at generic\nsteel density (7.85 g/cm3), so their masses are wrong. We will correct each one by overriding the\nplaceholder's DENSITY so that density x (the placeholder's measured volume) = the real catalogue mass.\nMeasured placeholder volumes from Fusion (cm3):\n  RobStride RS04 198.5 | RS03 118.7 | RS02 182.5 | R…",
+      "lastProgressAt": 1787372251971,
+      "tokens": 104396,
+      "toolCalls": 30,
+      "durationMs": 328474,
+      "resultPreview": "{\"findings\":[{\"part\":\"RobStride RS00 (ankle roll / ankle x4 sets)\",\"mass_g\":310,\"confidence\":\"high\",\"source\":\"Manufacturer primary: RobStride official GitHub repo RobStride/Product_Information — 'Product Literature/RS00/RS00User Manual260713.pdf' §1.4 Mechanical characteristic ('Weight: 310g ± 3g'), cross-confirmed by the same repo's RS-series catalogue '灵足时代RS系列产品规格介绍(260713).pdf' RS00 page (重量 W…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "spec:bearings-deep",
+      "phaseIndex": 1,
+      "phaseTitle": "Search",
+      "agentId": "ae8ae0109322d6e73",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1787371914046,
+      "queuedAt": 1787371905563,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Pygmalion biped CAD. Every motor and bearing in the Fusion model is a placeholder solid at generic\nsteel density (7.85 g/cm3), so their masses are wrong. We will correct each one by overriding the\nplaceholder's DENSITY so that density x (the placeholder's measured volume) = the real catalogue mass.\nMeasured placeholder volumes from Fusion (cm3):\n  RobStride RS04 198.5 | RS03 118.7 | RS02 182.5 | R…",
+      "lastProgressAt": 1787372214860,
+      "tokens": 69803,
+      "toolCalls": 35,
+      "durationMs": 300814,
+      "resultPreview": "{\"findings\":[{\"part\":\"6810ZZ deep groove ball bearing (50 x 65 x 7 mm) — hip roll and knee, 2 units\",\"mass_g\":50,\"confidence\":\"high\",\"source\":\"MANUFACTURER (NSK official product/engineering page, www.nsk.com/engineering/6810zz-dgbb-sr.html): 6810ZZ mass approx. 0.05 kg, d50/D65/B7, Cr 7050 N, C0r 6200 N, 23 balls of 3.969 mm, pressed steel cage, shields both sides. CROSS-CHECK (catalogue mirrors o…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "spec:crossed-roller",
+      "phaseIndex": 1,
+      "phaseTitle": "Search",
+      "agentId": "ae0e6cc8058ef2776",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1787371916966,
+      "queuedAt": 1787371905563,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Pygmalion biped CAD. Every motor and bearing in the Fusion model is a placeholder solid at generic\nsteel density (7.85 g/cm3), so their masses are wrong. We will correct each one by overriding the\nplaceholder's DENSITY so that density x (the placeholder's measured volume) = the real catalogue mass.\nMeasured placeholder volumes from Fusion (cm3):\n  RobStride RS04 198.5 | RS03 118.7 | RS02 182.5 | R…",
+      "lastProgressAt": 1787372151162,
+      "tokens": 45625,
+      "toolCalls": 11,
+      "durationMs": 234195,
+      "resultPreview": "{\"findings\":[{\"part\":\"CRBS808AUUU (hip pitch crossed-roller bearing) — correct designation IKO CRBS 808 A UU\",\"mass_g\":122,\"confidence\":\"high\",\"source\":\"MANUFACTURER CATALOGUE (primary). IKO / Nippon Thompson, 'Crossed Roller Bearings' catalogue CAT-5508/3E, PDF at https://www.ikont.com/catalogs/needle-roller-bearing-series/5508_3_E_CRB.pdf — CRBS slim-type dimension table, shaft-dia 80 row: 'CRBS…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "spec:rodend",
+      "phaseIndex": 1,
+      "phaseTitle": "Search",
+      "agentId": "aa9e0aec6c0fcd5cd",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1787371911036,
+      "queuedAt": 1787371905563,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Pygmalion biped CAD. Every motor and bearing in the Fusion model is a placeholder solid at generic\nsteel density (7.85 g/cm3), so their masses are wrong. We will correct each one by overriding the\nplaceholder's DENSITY so that density x (the placeholder's measured volume) = the real catalogue mass.\nMeasured placeholder volumes from Fusion (cm3):\n  RobStride RS04 198.5 | RS03 118.7 | RS02 182.5 | R…",
+      "lastProgressAt": 1787372684294,
+      "tokens": 87881,
+      "toolCalls": 43,
+      "durationMs": 773257,
+      "resultPreview": "{\"findings\":[{\"part\":\"JMC JS6 / JS06 rod end (M6, 15.8 mm ball) - as specified in the Fusion model\",\"mass_g\":35,\"confidence\":\"low\",\"source\":\"NO manufacturer or reseller catalogue found for a 'JS6'/'JS06' rod end under the JMC (JMC/Jalman) brand or any other; JMC's indexable range uses POS/PHS/SI/SA/JM/JF codes only. Value is an engineering estimate bracketed by the three major catalogues for the S…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "verify",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "ac32820588b21dfa2",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1787372687832,
+      "queuedAt": 1787372685906,
+      "attempt": 1,
+      "lastToolName": "WebFetch",
+      "lastToolSummary": "Give mass (kg), d/D/B, Cr and C0r for 6900ZZ.",
+      "promptPreview": "Pygmalion biped CAD. Every motor and bearing in the Fusion model is a placeholder solid at generic\nsteel density (7.85 g/cm3), so their masses are wrong. We will correct each one by overriding the\nplaceholder's DENSITY so that density x (the placeholder's measured volume) = the real catalogue mass.\nMeasured placeholder volumes from Fusion (cm3):\n  RobStride RS04 198.5 | RS03 118.7 | RS02 182.5 | R…",
+      "lastProgressAt": 1787373205257,
+      "tokens": 97740,
+      "toolCalls": 38,
+      "durationMs": 517424,
+      "resultPreview": "## Adversarial verification — Pygmalion CAD placeholder mass/density overrides\n\n### 1. What I independently re-sourced (not the input's sources)\n\nThe input leaned on the RobStride GitHub `260713` manuals plus resellers. I pulled the **same manuals from a different host and a different revision** (`files.seeedstudio.com/products/RobStride/Product Literature/<model>/<model>User Manual251112.pdf`), e…"
+    }
+  ],
+  "totalTokens": 465024,
+  "totalToolCalls": 173
+}

@@ -79,3 +79,44 @@ if __name__ == '__main__':
     elif cmd == 'call':
         print(json.dumps(call(sys.argv[2], json.loads(sys.argv[3]) if len(sys.argv) > 3 else {}),
                          ensure_ascii=False, indent=1)[:6000])
+
+
+def script(src, tries=4):
+    """Run a Fusion script and get its payload back.
+
+    The connector's stdout capture returns an empty message (Fusion build here), but the
+    ERROR path hands back the whole traceback - so a script signals its result by raising
+    with the JSON as the exception text. `src` must define `emit(obj)`-free code that ends
+    in `raise Payload(json.dumps(...))`; the helper below wraps that for you.
+    """
+    import time
+    wrapper = ('import json\nclass _P(Exception):\n    pass\n'
+               'def emit(o):\n    raise _P("JSONSTART" + json.dumps(o))\n' + src)
+    last = ''
+    for k in range(tries):
+        r = call('fusion_mcp_execute', {'featureType': 'script', 'object': {'script': wrapper}})
+        txt = r.get('error', '') if isinstance(r, dict) else str(r)
+        last = txt
+        if 'JSONSTART' in txt:
+            body = txt.split('JSONSTART', 1)[1]
+            # the traceback ends the exception text at the final newline
+            body = body.rsplit('\n', 1)[0] if body.endswith('\n') else body
+            try:
+                return json.loads(body)
+            except json.JSONDecodeError:
+                pass
+        time.sleep(0.5 + k)
+    raise RuntimeError(f'no payload after {tries} tries:\n{last}')
+
+
+def run_script(src):
+    """Run a Fusion script for its SIDE EFFECT and let it end normally.
+
+    `script()` gets its payload back by raising, and Fusion rolls the document edit back
+    when the script ends in an exception - so anything that CHANGES the design has to
+    return quietly and be verified by a separate read.
+    """
+    r = call('fusion_mcp_execute', {'featureType': 'script', 'object': {'script': src}})
+    if isinstance(r, dict) and not r.get('success', False):
+        raise RuntimeError(r.get('error', r))
+    return r

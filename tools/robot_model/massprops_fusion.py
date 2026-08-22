@@ -24,7 +24,15 @@ Rigid-body split (same physics as massprops_step.py, now on the current CAD):
   ankle_pitch_link  the universal-joint cross + the 6900 pitch bearings
   foot            the Ankle2Feet parts below the ankle axis + the 6900 roll bearings
   rods            the two push rods, split half shin / half foot
-Upper body is no longer a placeholder: Torso + Neck + Arm_R (x2) + shoulder actuators.
+Upper body is no longer a placeholder OR a lump - it is articulated, on the three joints the
+CAD actually has: waist yaw (z through x0,y70), shoulder pitch (x through y85,z540) and
+shoulder roll (y through x-200,z540), which intersect at the shoulder point (-200,85,540):
+  torso              Torso group (frame + PSU + Waist2Torso) + Neck + both shoulder-pitch RS03
+  shoulder_pitch_link  Shoulder-Pitch2Roll + the shoulder-roll RS03
+  arm                ArmR_Dummy
+`ArmR_fullDoF` (6.497 kg) is the SUPPRESSED alternative - its light bulb is off - and every
+body carries a `live` flag so hidden geometry (that arm plus 50 hidden screws, 6.697 kg in
+all) never reaches the model.
 
 Usage: massprops_fusion.py   (needs bodies.json from the MCP dump)
 """
@@ -35,10 +43,16 @@ import numpy as np
 FUS = '/home/syaro/pyg_fea/fusion/bodies.json'
 OUT = '/home/syaro/pyg_fea/fusion/robot_massprops_fusion.json'
 ANKLE_Z = -800.0                      # mm, CAD frame
-MOTOR_CAT = {'RS04': 1.42, 'RS03': 0.88, 'RS02': 0.405, 'RS00': 0.310}
+# Catalogue masses (RobStride user manuals 260713, "Mechanical characteristic"). The CAD
+# placeholders now carry these masses directly - tools/fusion/set_placeholder_density.py
+# rescaled their density - so this table is a cross-check rather than a correction, and it
+# asserts against the document. RS02 is 380 g in the manual; the 405 g that circulates is a
+# reseller figure.
+MOTOR_CAT = {'RS04': 1.42, 'RS03': 0.88, 'RS02': 0.380, 'RS00': 0.310}
 GROUP_BODY = {'CenterParts:1': 'pelvis', 'HipPitch2Roll:1': 'hip_pitch_link',
               'HipRoll2Yaw:1': 'hip_roll_link', 'HipYaw2Knee:1': 'thigh',
-              'Knee2Ankle:1': 'shin'}
+              'Knee2Ankle:1': 'shin', 'Torso:1': 'torso', 'Neck:1': 'torso'}
+UPPER_BODIES = ('torso', 'shoulder_pitch_link', 'arm')
 MOTOR_BODY = {'Waist_Yaw': 'pelvis', 'Hip_R': 'pelvis', 'Hip_P': 'hip_pitch_link',
               'Hip_Y': 'hip_roll_link', 'Knee_P': 'thigh',
               'Ankle_A:3': 'shin', 'Ankle_A (1)': 'shin'}
@@ -99,17 +113,28 @@ def classify(path):
     if grp == 'Ankle2Feet:1':
         return 'ANKLE_SPLIT'
     if parts[1] == 'Joints_UpperBody:1':
-        return 'UPPER'
+        if 'ArmR_fullDoF' in path:
+            return None                                       # suppressed alternative arm
+        if 'ArmR_Dummy' in path:
+            return 'arm'
+        if 'Shoulder-Pitch2Roll' in path or 'Shoulder_Roll' in path:
+            return 'shoulder_pitch_link'
+        if 'Shoulder_Pitch' in path:
+            return 'torso'                                    # its stator rides the torso
+        return None
     return None
 
 
 def main():
     B = json.load(open(FUS))
     bodies = {b: [] for b in ('pelvis', 'hip_pitch_link', 'hip_roll_link', 'thigh', 'shin',
-                              'ankle_pitch_link', 'foot')}
-    upper = []
+                              'ankle_pitch_link', 'foot') + UPPER_BODIES}
     rods = []
+    skipped = 0.0
     for path, rec in B.items():
+        if not rec.get('live', True):                         # light bulb off in Fusion
+            skipped += rec['m']
+            continue
         who = classify(path)
         if who is None:
             continue
@@ -117,11 +142,11 @@ def main():
         fam = family(path)
         if fam:                                               # placeholder -> catalogue mass
             k = MOTOR_CAT[fam] / m
+            assert abs(k - 1.0) < 0.02, (
+                f'{path}: CAD says {m * 1000:.1f} g, catalogue {MOTOR_CAT[fam] * 1000:.0f} g - '
+                'run tools/fusion/set_placeholder_density.py --apply')
             m, I_o = MOTOR_CAT[fam], I_o * k
         item = dict(path=path, m=m, com=com, I_o=I_o)
-        if who == 'UPPER':
-            upper.append(item)
-            continue
         if who == 'ANKLE_SPLIT':
             # the two push rods: identified by volume (their COM sits between the ball joints)
             if 15.0 < rec['v'] < 21.0 and -780 < com[2] < -650:
@@ -134,10 +159,13 @@ def main():
                 bodies['shin'].append(item)
             continue
         bodies[who].append(item)
+        Mx = np.diag([-1.0, 1.0, 1.0])
         if fam and any(k in path for k in MIRROR_TO_PELVIS) and who == 'pelvis':
-            Mx = np.diag([-1.0, 1.0, 1.0])
             bodies['pelvis'].append(dict(path=path + ' (R mirror)', m=m, com=Mx @ com,
                                          I_o=Mx @ I_o @ Mx))
+        if who == 'torso' and 'Shoulder_Pitch' in path:
+            bodies['torso'].append(dict(path=path + ' (mirror)', m=m, com=Mx @ com,
+                                        I_o=Mx @ I_o @ Mx))
     for r in rods:                                            # half to each end
         for b in ('shin', 'foot'):
             bodies[b].append(dict(path=r['path'] + ' /2', m=r['m'] / 2, com=r['com'],
@@ -159,24 +187,14 @@ def main():
                                 principal=[float(v) for v in w], n=len(items))
         tot += M
         print(f'{b:18s} {M:8.3f}  [{C[0]:8.1f}{C[1]:7.1f}{C[2]:8.1f}]  {w.round(0)}  ({len(items)} bodies)')
-    # upper body: one lump, both arms (the CAD carries the right arm only)
-    Mu = sum(i['m'] for i in upper)
-    Cu = sum(i['m'] * i['com'] for i in upper) / Mu
-    Iu = sum(i['I_o'] for i in upper)
-    arm = [i for i in upper if '/Arm_R:1/' in i['path'] or '/Actuator:1/' in i['path']]
-    Ma = sum(i['m'] for i in arm)
-    Mx = np.diag([-1.0, 1.0, 1.0])
-    Mu2 = Mu + Ma
-    Cu2 = (Mu * Cu + sum(i['m'] * (Mx @ i['com']) for i in arm)) / Mu2
-    Iu2 = Iu + sum(Mx @ i['I_o'] @ Mx for i in arm)
-    Icu = to_com(Iu2, Mu2, Cu2)
-    out['upper'] = dict(mass=float(Mu2), com=[float(v) for v in Cu2],
-                        I_com=[[float(v) for v in r] for r in Icu],
-                        note='right arm mirrored to give both arms')
-    print(f"\n{'upper (both arms)':18s} {Mu2:8.3f}  [{Cu2[0]:8.1f}{Cu2[1]:7.1f}{Cu2[2]:8.1f}]"
-          f"   (CAD one arm {Mu:.3f}, arm {Ma:.3f})")
-    print(f"\nleg+pelvis {tot:.3f} kg · whole robot {tot + Mu2 + (tot - out['bodies']['pelvis']['mass']):.3f} kg"
-          f"  (pelvis once, legs x2, upper with both arms)")
+    leg = tot - sum(out['bodies'][b]['mass'] for b in ('pelvis',) + UPPER_BODIES)
+    arms = sum(out['bodies'][b]['mass'] for b in ('shoulder_pitch_link', 'arm'))
+    whole = out['bodies']['pelvis']['mass'] + out['bodies']['torso']['mass'] + 2 * leg + 2 * arms
+    out['whole_robot_kg'] = float(whole)
+    print(f"\nhidden (light bulb off) skipped: {skipped:.3f} kg")
+    print(f"one leg {leg:.3f} · one arm side {arms:.3f} · pelvis {out['bodies']['pelvis']['mass']:.3f}"
+          f" · torso {out['bodies']['torso']['mass']:.3f}")
+    print(f"WHOLE ROBOT {whole:.3f} kg  (pelvis + torso once, legs x2, arms x2)")
     json.dump(out, open(OUT, 'w'), indent=1)
     print(f'-> {OUT}')
 

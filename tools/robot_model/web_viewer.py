@@ -27,8 +27,11 @@ REPO = '/home/syaro/MikuchanRemote/Human-Pygmalion'
 XML = f'{REPO}/mujoco-sim/mjlab/src/mjlab/asset_zoo/robots/pygmalion/xmls/pygmalion_v2.xml'
 MP = '/home/syaro/pyg_fea/fusion/robot_massprops_fusion.json'
 STAND_Z = 0.903
-JOINTS = [f'{s}_{j}_joint' for s in 'LR'
-          for j in ('hip_pitch', 'hip_roll', 'hip_yaw', 'knee', 'ankle_pitch', 'ankle_roll')]
+JOINTS = ([f'{s}_{j}_joint' for s in 'LR'
+           for j in ('hip_pitch', 'hip_roll', 'hip_yaw', 'knee', 'ankle_pitch', 'ankle_roll')]
+          # upper body: waist yaw is on the centreline, the shoulders are sided
+          + ['waist_yaw_joint']
+          + [f'{s}_{j}_joint' for s in 'LR' for j in ('shoulder_pitch', 'shoulder_roll')])
 BENT = {'hip_pitch': -0.32, 'knee': -0.67, 'ankle_pitch': 0.36}
 
 
@@ -109,7 +112,8 @@ def main():
     sliders = {}
     with server.gui.add_folder('Joints (deg)'):
         mirror = server.gui.add_checkbox('L/R link', initial_value=False)
-        for jn in JOINTS:
+        for jn in [j for j in JOINTS
+                   if mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, j) >= 0]:
             jid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, jn)
             lo, hi = np.degrees(m.jnt_range[jid])
             s = server.gui.add_slider(jn.replace('_joint', ''), min=round(lo, 1),
@@ -117,7 +121,7 @@ def main():
             sliders[jn] = s
 
             def cb(_, jn=jn, s=s):
-                if mirror.value:
+                if mirror.value and jn[:2] in ('L_', 'R_'):
                     other = ('R' + jn[1:]) if jn.startswith('L') else ('L' + jn[1:])
                     if other in sliders and abs(sliders[other].value - s.value) > 1e-9:
                         sliders[other].value = s.value
@@ -126,7 +130,8 @@ def main():
         with server.gui.add_folder('Presets'):
             def preset(vals):
                 for jn, s in sliders.items():
-                    base = jn.rsplit('_joint', 1)[0][2:]
+                    base = jn.rsplit('_joint', 1)[0]
+                    base = base[2:] if base[:2] in ('L_', 'R_') else base
                     s.value = float(np.degrees(vals.get(base, 0.0)))
                 set_pose({k: np.radians(v.value) for k, v in sliders.items()})
             b0 = server.gui.add_button('HOME (all zero)')
@@ -154,6 +159,7 @@ def main():
                    f'- COM (link frame) [{m.body_ipos[b][0]:+.4f}, {m.body_ipos[b][1]:+.4f}, {m.body_ipos[b][2]:+.4f}] m\n'
                    f'- principal inertia [{m.body_inertia[b][0]:.4g}, {m.body_inertia[b][1]:.4g}, {m.body_inertia[b][2]:.4g}] kg m²\n')
             key = dd.value.replace('L_', '').replace('R_', '').replace('thigh_link', 'thigh').replace('shin_link', 'shin').replace('foot_link', 'foot')
+            key = key.replace('torso_link', 'torso').replace('arm_link', 'arm')
             if key in mp['bodies']:
                 cad = mp['bodies'][key]
                 txt += (f'\nCAD(Fusion): mass {cad["mass"]:.3f} kg · {cad.get("n", cad.get("n_parts", 0))} bodies · '

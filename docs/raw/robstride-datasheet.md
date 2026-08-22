@@ -235,3 +235,25 @@
 - Seeed wiki: https://wiki.seeedstudio.com/robstride_control/
 - roboticscenter: https://www.roboticscenter.ai/store/product/robstride-03
 - verified **yes** (공식 매뉴얼 T-N·과부하·스톨 곡선 직접 렌더·판독 + 5 독립 리셀러/wiki 교차).
+
+## RS02 질량 정정 — 380 g (매뉴얼) vs 405 g (리셀러) — 검증 (wblvv7972, 2026-08-22)
+> 대립 출처 2건을 각각 1차까지 추적한 결과.
+- **채택 380 g ± 3 g**: 공식 RobStride GitHub `Product Literature/RS02/RS02User Manual260713.pdf`
+  §1.4 "Mechanical characteristic — Weight: 380g±3g", 그리고 RS 시리즈 카탈로그
+  `灵足시대RS系列产品规格介绍(260713).pdf` RS02 페이지 (重量 380g ±3g). 검증 에이전트가 다른 호스트의
+  다른 리비전(`...251112.pdf`)을 `pdftotext`로 직접 추출해 동일 문구 재확인.
+- 405 g은 **리셀러 전용**(seeedstudio.com "weighs only 405g", rcdrone.top "405g ± 5g") — RobStride
+  문서 어디에도 없음. 케이블/포장 포함 추정.
+- ⚠ 380–405를 "허용오차 범위"로 읽고 중점 392.5를 쓰면 안 된다. 380±3이 카탈로그값이다.
+- 외형 §1.1: 플랜지 Φ78.5 · 본체 Φ65 · 후단 Φ43 · 전장 41.5 mm. 정격 7 N·m(카탈로그, 우리
+  `Motor_Spec/RS02_TN_curve_48V.csv`의 rated 7과 일치; 매뉴얼 본문의 6 N·m는 방열판 조건 명시본).
+- 적용: Fusion 자리표시자 밀도 7850 → **2083 kg/m³** (182.455 cm³ → 380 g). [[88_cad_placeholder_mass_rom]]
+
+## 자리표시자 외피 실측 (Fusion bbox, 2026-08-22)
+| 모델 | Fusion 자리표시자 bbox | 카탈로그 외형 | 판정 |
+|---|---|---|---|
+| RS04 | 120.0 × 120.0 × 55.7 | 120 × 120 × 56 | 일치 (속 빈 셸) |
+| RS03 | 99.5 × 98.5 × 56.6 | 106 × 106 × 56 | 코너 플랜지 생략, 두께 일치 |
+| RS02 | 83.5 × 83.5 × 45.4 | 78.5 × 78.5 × 41.5 | 약간 큼 |
+| RS00 | 57.0 × 57.0 × 51.4 | 57 × 57 × 51 | 일치 |
+→ 체적이 카탈로그 원기둥의 24–31 %인 것은 **형상 축소가 아니라 중공**이다. 밀도 보정이 타당하다.

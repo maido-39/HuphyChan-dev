@@ -243,3 +243,8 @@ STEP이 그룹별로 최대 24 % 가벼웠던 것은 빠진 나사 141개 때문
   클라이언트는 준비됨(`tools/fusion/mcp_client.py list`).
 
 관련: [[81_rl_model_vs_cad_mass]] · [[82_final_design_mass_review]] · [[83_fusion360_measurement_spec]]
+
+---
+
+> **후속 (2026-08-22)**: [[88_cad_placeholder_mass_rom]] — CAD 자리표시자 밀도 보정(모터·베어링 −2.49 kg),
+> 관절 가동범위 CAD 실측 적용, 상체 3 DoF 관절화(waist yaw + 어깨 pitch/roll ×2, `PYG_UPPER_DOF`).
