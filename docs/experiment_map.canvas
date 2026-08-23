@@ -373,7 +373,7 @@
   {
    "id": "n_era10",
    "type": "text",
-   "text": "Era-10 모델 교체 (2026-08-23)\\n프린트 하체 35.35 kg (docs/89) · 실측 모터 J/b/tc + T-N 곡선 · HW 관절/토크 한계\\n발목 AB(폐루프, 크랭크 액션) vs RP(직렬 + 자세별 선형화 토크 클램프)\\n상체 weld + 팔 15° 외전 고정 · 보상 gen21 그대로 · DR/vx/push 단일런 커리큘럼\\n→ docs/92, docs/91\n첫 리뷰 iter 610 (08-23 21:55): 두 arm 모두 CONTINUE",
+   "text": "Era-10 모델 교체 (2026-08-23)\\n프린트 하체 35.35 kg (docs/89) · 실측 모터 J/b/tc + T-N 곡선 · HW 관절/토크 한계\\n발목 AB(폐루프, 크랭크 액션) vs RP(직렬 + 자세별 선형화 토크 클램프)\\n상체 weld + 팔 15° 외전 고정 · 보상 gen21 그대로 · DR/vx/push 단일런 커리큘럼\\n→ docs/92, docs/91\n첫 리뷰 iter 610 (08-23 21:55): 두 arm 모두 CONTINUE\niter 1200 분석(93 §5b): AB 정지 잔떨림/스웨이 · RP bang-bang 발목 목표",
    "x": 10340,
    "y": -300,
    "width": 460,
