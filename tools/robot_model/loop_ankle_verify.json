@@ -1495,11 +1495,11 @@
  },
  "ground": {
   "contacts_min": 0,
-  "contacts_max": 2,
+  "contacts_max": 3,
   "fz_range": [
    0.0,
-   98.1164994854478
+   127.82588129269124
   ],
-  "closure_worst_mm": 0.0029139132914536197
+  "closure_worst_mm": 0.0022323019197034344
  }
 }

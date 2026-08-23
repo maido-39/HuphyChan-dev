@@ -53,7 +53,7 @@
     <mesh name="L_crank_B" file="crank_B.stl"/>
     <mesh name="L_rod_A" file="rod_A.stl"/>
     <mesh name="L_rod_B" file="rod_B.stl"/>
-    <mesh name="L_shin_noloop" content_type="model/stl" file="shin_noloop.stl"/>
+    <mesh name="L_shin_noloop" file="shin_noloop.stl"/>
     <mesh name="L_foot_noloop" file="foot_noloop.stl"/>
     <mesh name="R_crank_A" file="R_crank_A.stl"/>
     <mesh name="R_crank_B" file="R_crank_B.stl"/>
@@ -71,7 +71,7 @@
     <mesh name="R_torso_shpitch" file="R_torso_shpitch.stl"/>
     <mesh name="R_shoulder_pitch_link" file="R_shoulder_pitch_link.stl"/>
     <mesh name="R_shoulder_pitch_link_hull" file="R_shoulder_pitch_link_hull.stl"/>
-    <mesh name="R_arm" file="R_arm.stl"/>
+    <mesh name="R_arm" content_type="model/stl" file="R_arm.stl"/>
     <mesh name="R_arm_hull" file="R_arm_hull.stl"/>
   </asset>
 

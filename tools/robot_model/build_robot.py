@@ -286,6 +286,51 @@ def loop_xml(s, ind, mp, sign):
     return out
 
 
+def loop_urdf(s, mp, sign):
+    """The same mechanism for the URDF - as a TREE. URDF has no loop closure and no universal
+    joint, so: crank (revolute) -> rod_u (1 g dummy link) -> rod (revolute x2 = the universal
+    joint); the rod's far end is left open and the closure is stated in a comment. Link masses
+    and inertias equal the MJCF's (the dummy links add 2 x 1 g per leg, URDF-only bodies)."""
+    pts = json.load(open(LOOP_PTS))
+    links, joints = [], []
+    for tag in 'AB':
+        P = pts[tag]
+        motor, pin, ball = (np.array(P[k]) for k in ('motor', 'pin', 'ball'))
+        o_c = to_sim_vec((motor - ORIGIN_CAD['shin']) / 1000.0)
+        pin_rel = to_sim_vec((pin - motor) / 1000.0)
+        vec = to_sim_vec((ball - pin) / 1000.0)
+        if sign > 0:
+            o_c, pin_rel, vec = (v * np.array([1, -1, 1]) for v in (o_c, pin_rel, vec))
+        axis1 = np.array([0.0, 1.0, 0.0])
+        axis2 = np.cross(axis1, vec / np.linalg.norm(vec)); axis2 /= np.linalg.norm(axis2)
+        mc, cc, Ic = body_inertial(f'crank_{tag}', mp)
+        mr, cr, Ir = body_inertial(f'rod_{tag}', mp)
+        if sign > 0:
+            cc, Ic = mirror(cc, Ic)
+            cr, Ir = mirror(cr, Ir)
+        pre = 'R_' if sign > 0 else ''
+        def link(name, m, c, I, mesh=None):
+            t = (f'  <link name="{name}">\n    <inertial>\n      <origin xyz="{c[0]:.6g} {c[1]:.6g} {c[2]:.6g}" rpy="0 0 0"/>\n'
+                 f'      <mass value="{m:.5g}"/>\n      {urdf_inertia(I)}\n    </inertial>\n')
+            if mesh:
+                t += f'    <visual>\n      <geometry><mesh filename="meshes/{mesh}"/></geometry>\n    </visual>\n'
+            return t + '  </link>\n'
+        def joint(name, parent, child, o, ax, rg=None, effort=0.0):
+            lim = (f'    <limit lower="{rg[0]}" upper="{rg[1]}" effort="{effort}" velocity="20"/>\n' if rg
+                   else f'    <limit lower="-3.1416" upper="3.1416" effort="0" velocity="50"/>\n')
+            return (f'  <joint name="{name}" type="revolute">\n    <origin xyz="{o[0]:.6g} {o[1]:.6g} {o[2]:.6g}" rpy="0 0 0"/>\n'
+                    f'    <parent link="{parent}"/>\n    <child link="{child}"/>\n    <axis xyz="{ax[0]:.4f} {ax[1]:.4f} {ax[2]:.4f}"/>\n{lim}  </joint>\n')
+        links.append(link(f'{s}_crank_{tag}', mc, cc, Ic, f'{pre}crank_{tag}.stl'))
+        links.append(link(f'{s}_rod_{tag}_u', 1e-3, np.zeros(3), np.eye(3) * 1e-7))
+        links.append(link(f'{s}_rod_{tag}', mr, cr, Ir, f'{pre}rod_{tag}.stl'))
+        joints.append(joint(f'{s}_crank_{tag}_joint', f'{s}_shin_link', f'{s}_crank_{tag}', o_c, (0, 1, 0), CRANK_RANGE, 60.0))
+        joints.append(joint(f'{s}_rod_{tag}_u1', f'{s}_crank_{tag}', f'{s}_rod_{tag}_u', pin_rel, axis1))
+        joints.append(joint(f'{s}_rod_{tag}_u2', f'{s}_rod_{tag}_u', f'{s}_rod_{tag}', np.zeros(3), axis2))
+        joints.append(f'  <!-- loop closure, not expressible in URDF: the far end of {s}_rod_{tag} at xyz="{vec[0]:.6g} {vec[1]:.6g} {vec[2]:.6g}" '
+                      f'(rod frame) is a ball joint on {s}_foot_link - see the <equality><connect> in {s and ""}the MJCF -->\n')
+    return links, joints
+
+
 def foot_ball_sites(s, sign):
     pts = json.load(open(LOOP_PTS))
     out = []
@@ -657,6 +702,10 @@ def main():
                      f'    <parent link="{parent}"/>\n    <child link="{s}_{BNAME[b]}"/>\n    <axis xyz="{ax[0]} {ax[1]} {ax[2]}"/>\n'
                      f'    <limit lower="{rg[0]}" upper="{rg[1]}" effort="{EFFORT[jn]}" velocity="20"/>\n  </joint>\n')
             parent = f'{s}_{BNAME[b]}'
+    if loop:
+        for s in 'LR':
+            links_, joints_ = loop_urdf(s, mp, -1.0 if s == 'L' else 1.0)
+            U.extend(links_); U.extend(joints_)
     if articulated:
         m, c, I = upper['torso']['L']
         U.append(link_xml('torso_link', m, c, I, 'torso.stl'))

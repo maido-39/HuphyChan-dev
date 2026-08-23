@@ -1,0 +1,528 @@
+{
+ "tag": "pygmalion_v3_printed_loop",
+ "joints": {
+  "L_hip_pitch_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 5e-06,
+   "range": [
+    -2.0944,
+    0.4363
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "L_hip_roll_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -1.4835,
+    0.4363
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "L_hip_yaw_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -0.7854,
+    0.7854
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "L_knee_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 5e-06,
+   "range": [
+    -2.0944,
+    0.0
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "L_crank_A_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -1.2,
+    1.2
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "L_rod_A_u1": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    0.0,
+    0.0
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "L_rod_A_u2": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    0.0,
+    0.0
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "L_crank_B_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -1.2,
+    1.2
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "L_rod_B_u1": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    0.0,
+    0.0
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "L_rod_B_u2": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    0.0,
+    0.0
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "L_ankle_pitch_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -0.8727,
+    0.5236
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "L_ankle_roll_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -0.3491,
+    0.3491
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_hip_pitch_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 5e-06,
+   "range": [
+    -2.0944,
+    0.4363
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_hip_roll_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -1.4835,
+    0.4363
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_hip_yaw_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -0.7854,
+    0.7854
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_knee_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 5e-06,
+   "range": [
+    -2.0944,
+    0.0
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_crank_A_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -1.2,
+    1.2
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_rod_A_u1": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    0.0,
+    0.0
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_rod_A_u2": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    0.0,
+    0.0
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_crank_B_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -1.2,
+    1.2
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_rod_B_u1": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    0.0,
+    0.0
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_rod_B_u2": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    0.0,
+    0.0
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_ankle_pitch_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -0.8727,
+    0.5236
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_ankle_roll_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -0.3491,
+    0.3491
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "waist_yaw_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 2e-06,
+   "range": [
+    -1.0472,
+    1.0472
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "L_shoulder_pitch_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 3e-06,
+   "range": [
+    -3.1416,
+    1.0472
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "L_shoulder_roll_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -0.5585,
+    0.5236
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_shoulder_pitch_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 3e-06,
+   "range": [
+    -3.1416,
+    1.0472
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  },
+  "R_shoulder_roll_joint": {
+   "axis_deg": 0.0,
+   "same_sign": true,
+   "anchor_mm": 0.0,
+   "range_diff_rad": 0.0,
+   "range": [
+    -0.5585,
+    0.5236
+   ],
+   "sweep_pos_mm": 0.0,
+   "sweep_ang_deg": 0.0
+  }
+ },
+ "bodies": {
+  "base_link": {
+   "note": "URDF root merged into world by the loader",
+   "mass": 4.8405
+  },
+  "L_hip_pitch_link": {
+   "mass": 1.7829,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 4.113734141091702e-09
+  },
+  "L_hip_roll_link": {
+   "mass": 1.2868,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 2.9053392057616645e-09
+  },
+  "L_thigh_link": {
+   "mass": 2.0704,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 3.5143002022341996e-08
+  },
+  "L_shin_link": {
+   "mass": 2.4854,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 4.87027007403662e-08
+  },
+  "L_crank_A": {
+   "mass": 0.0347,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 3.299481555216286e-11
+  },
+  "L_rod_A": {
+   "mass": 0.0806,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 3.1557889457016486e-09
+  },
+  "L_crank_B": {
+   "mass": 0.0339,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 4.924792782848059e-11
+  },
+  "L_rod_B": {
+   "mass": 0.0646,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 4.6551689705711524e-10
+  },
+  "L_ankle_pitch_link": {
+   "mass": 0.04,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 3.260850321181027e-11
+  },
+  "L_foot_link": {
+   "mass": 0.3707,
+   "mass_diff": 0.0,
+   "com_diff_mm": 1.42109e-14,
+   "inertia_diff": 1.0329826891867372e-09
+  },
+  "R_hip_pitch_link": {
+   "mass": 1.7829,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 4.113734141091702e-09
+  },
+  "R_hip_roll_link": {
+   "mass": 1.2868,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 2.9053392057616645e-09
+  },
+  "R_thigh_link": {
+   "mass": 2.0704,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 3.5143002022341996e-08
+  },
+  "R_shin_link": {
+   "mass": 2.4854,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 4.87027007403662e-08
+  },
+  "R_crank_A": {
+   "mass": 0.0347,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 3.299481555216286e-11
+  },
+  "R_rod_A": {
+   "mass": 0.0806,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 3.1557889457016486e-09
+  },
+  "R_crank_B": {
+   "mass": 0.0339,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 4.924792782848059e-11
+  },
+  "R_rod_B": {
+   "mass": 0.0646,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 4.6551689705711524e-10
+  },
+  "R_ankle_pitch_link": {
+   "mass": 0.04,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 3.260850321181027e-11
+  },
+  "R_foot_link": {
+   "mass": 0.3707,
+   "mass_diff": 0.0,
+   "com_diff_mm": 1.42109e-14,
+   "inertia_diff": 1.0329826891867372e-09
+  },
+  "torso_link": {
+   "mass": 5.9658,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 4.980421099698429e-07
+  },
+  "L_shoulder_pitch_link": {
+   "mass": 1.1776,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 4.683955099000006e-09
+  },
+  "L_arm_link": {
+   "mass": 2.843,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 3.60726975512371e-07
+  },
+  "R_shoulder_pitch_link": {
+   "mass": 1.1776,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 4.683955099000006e-09
+  },
+  "R_arm_link": {
+   "mass": 2.843,
+   "mass_diff": 0.0,
+   "com_diff_mm": 0.0,
+   "inertia_diff": 3.60726975512371e-07
+  }
+ },
+ "urdf_only_bodies": [
+  "L_rod_A_u",
+  "L_rod_B_u",
+  "R_rod_A_u",
+  "R_rod_B_u"
+ ],
+ "random_poses": {
+  "n": 200,
+  "pos_mm": 0.0,
+  "ang_deg": 0.0
+ },
+ "worst": {
+  "axis_deg": 2.561320938754782e-06,
+  "anchor_mm": 0.0,
+  "range_rad": 4.897606804554755e-06,
+  "sweep_pos_mm": 0.0,
+  "sweep_ang_deg": 2.4148365394514667e-06
+ },
+ "verdict": "MATCH"
+}

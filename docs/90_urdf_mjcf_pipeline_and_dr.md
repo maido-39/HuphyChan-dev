@@ -217,6 +217,8 @@ URDF가 맞는지는 우리 emitter가 아니라 **독립 파서**로 읽어 확
 
 *그림 — 관절별 스윕에서의 최대 링크 위치차(mm). 빨간 점선 = 0.05 mm 기준.*
 
-영상 [urdf_crosscheck_pygmalion_v3_printed.mp4](video/urdf_crosscheck_pygmalion_v3_printed.mp4): MJCF 메시(채움) 위에 URDF 메시(빨간 와이어)를 겹쳐 관절 하나씩 범위를 스윕 — 두 모델이 한 로봇으로 보이면 일치. 루프 모델(`_loop`, URDF는 트리)은 같은 스크립트로 `--tag=pygmalion_v3_printed_loop`.
+영상 [urdf_crosscheck_pygmalion_v3_printed.mp4](video/urdf_crosscheck_pygmalion_v3_printed.mp4): MJCF 메시(채움) 위에 URDF 메시(빨간 와이어)를 겹쳐 관절 하나씩 범위를 스윕 — 두 모델이 한 로봇으로 보이면 일치.
+
+루프 모델 `pygmalion_v3_printed_loop`: URDF는 크랭크·로드를 **트리**로 싣는다(crank revolute → `*_rod_*_u` 1 g 더미 링크 → 로드; revolute 2개 = 유니버설, URDF엔 유니버설도 루프 닫힘도 없음 — 닫힘은 주석). 같은 스크립트 `--tag=pygmalion_v3_printed_loop`: 29/29 관절, 링크 위치차 0.0000 mm, URDF 전용 바디 4개(더미)만 보고. 무제한 MJCF 힌지(로드)는 URDF가 ±π를 써야 하므로 범위 비교에서 제외. 영상 [urdf_crosscheck_pygmalion_v3_printed_loop.mp4](video/urdf_crosscheck_pygmalion_v3_printed_loop.mp4).
 
 주의: URDF 로더는 `<visual>`을 기본 폐기하므로(`discardvisual`) 스크립트가 `<mujoco><compiler discardvisual="false"/></mujoco>` 확장을 주입해 읽는다. 캡슐 컬리전은 URDF에 없어서(URDF는 box/cylinder/sphere/mesh) URDF 쪽 컬리전은 hull 메시다 — 컬리전 형상은 MJCF만 권위가 있다.

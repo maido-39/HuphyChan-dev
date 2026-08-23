@@ -228,7 +228,7 @@ def main():
     # put the sole ~1 mm above the floor: the shin is welded where it is at home, so raise
     # the whole robot so the foot box bottom sits at z = +0.001 (box bottom = ankle - 0.043)
     fid = mujoco.mj_name2id(mg, mujoco.mjtObj.mjOBJ_BODY, 'L_foot_link')
-    dg.qpos[2] += 0.001 + 0.043 - dg.xpos[fid][2]
+    dg.qpos[2] += 0.002 + 0.043 - dg.xpos[fid][2]        # sole 2 mm above the floor at rest: a crank tilt brings the toe or heel edge down onto it
     mujoco.mj_forward(mg, dg)
     # re-weld at this pose: the weld equality stored the pose at compile time, so rebuild
     mg = load(tag, weld_shin=False, floor=True)
@@ -241,8 +241,17 @@ def main():
     mocap = None
     # hold base_link by pinning the free joint with a strong PD each step
     qb = dg2.qpos[:7].copy()
+    # hold every non-mechanism joint at zero with a PD (the hips/knees are unactuated here;
+    # without this the leg hangs off the pinned base at whatever angle contact props it)
+    hold = [j for j in range(mg.njnt) if mg.jnt_type[j] == mujoco.mjtJoint.mjJNT_HINGE
+            and not any(k_ in (mujoco.mj_id2name(mg, mujoco.mjtObj.mjOBJ_JOINT, j) or '') for k_ in ('crank', 'rod', 'ankle'))]
+    def hold_joints():
+        for j in hold:
+            qa, va = mg.jnt_qposadr[j], mg.jnt_dofadr[j]
+            dg2.qfrc_applied[va] = -300 * dg2.qpos[qa] - 6 * dg2.qvel[va]
     ground_log = []
     for k in range(3000):
+        hold_joints()
         cA = np.radians(12 * np.sin(2 * np.pi * k / 1500)) if k > 800 else 0.0
         cB = np.radians(12 * np.sin(2 * np.pi * k / 1500)) if k > 800 else 0.0
         if 2200 < k:
@@ -316,8 +325,9 @@ def main():
             for a_ in axes:
                 a_.set_xlim(-0.35, 0.35); a_.set_ylim(0.45, 1.25)
         video(name, fr, NF)
-    sweep_video('loop_ankle_pitch', 'pitch')
-    sweep_video('loop_ankle_roll', 'roll')
+    if '--ground-only' not in sys.argv:
+        sweep_video('loop_ankle_pitch', 'pitch')
+        sweep_video('loop_ankle_roll', 'roll')
 
     def ground_video(name):
         m = load(tag, weld_shin=False, floor=True)
@@ -327,12 +337,16 @@ def main():
         mujoco.mj_forward(m, d)
         aA = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, 'L_crank_A_servo')
         aB = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, 'L_crank_B_servo')
+        holdv = [j for j in range(m.njnt) if m.jnt_type[j] == mujoco.mjtJoint.mjJNT_HINGE
+                 and not any(k_ in (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j) or '') for k_ in ('crank', 'rod', 'ankle'))]
         def fr(k, axes):
             for s_ in range(25):
                 kk = k * 25 + s_
                 cA = np.radians(12 * np.sin(2 * np.pi * kk / 1500)) if kk > 800 else 0.0
                 cB = (-cA if kk > 2200 else cA)
                 d.ctrl[aA], d.ctrl[aB] = cA, cB
+                for j in holdv:
+                    d.qfrc_applied[m.jnt_dofadr[j]] = -300 * d.qpos[m.jnt_qposadr[j]] - 6 * d.qvel[m.jnt_dofadr[j]]
                 d.qpos[:7] = qb
                 d.qvel[:6] = 0
                 mujoco.mj_step(m, d)

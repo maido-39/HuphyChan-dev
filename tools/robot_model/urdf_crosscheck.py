@@ -87,6 +87,10 @@ def main():
     print(f'{tag}: URDF {mu.nbody} bodies / {mu.njnt} joints  MJCF {mx.nbody} bodies / {len(jx)} joints (+free)')
     missing = sorted(set(jx) - set(ju)) + sorted(set(ju) - set(jx))
     assert not missing, f'joint sets differ: {missing}'
+    extra = sorted(set(bu) - set(bx))
+    if extra:
+        print('URDF-only bodies (expected: the 1 g universal-joint dummies of the loop rods):', extra)
+        rep['urdf_only_bodies'] = extra
     # 1. joints at the zero pose
     set_pose(mu, du, {}, ju); set_pose(mx, dx, {}, jx)
     print('\njoints (zero pose): axis angle / anchor / range')
@@ -96,7 +100,9 @@ def main():
         ang = np.degrees(np.arccos(np.clip(abs(float(np.dot(a1, a2))), -1, 1)))
         same_sign = float(np.dot(a1, a2)) > 0
         anc = np.linalg.norm(du.xanchor[ju[n]] - dx.xanchor[jx[n]]) * 1000
-        rng = np.abs(mu.jnt_range[ju[n]] - mx.jnt_range[jx[n]]).max()
+        # an unlimited MJCF hinge (the rod universal joints) has jnt_range 0 0; the URDF
+        # writes +-pi there because URDF revolute joints must carry a limit - not a difference
+        rng = np.abs(mu.jnt_range[ju[n]] - mx.jnt_range[jx[n]]).max() if mx.jnt_limited[jx[n]] else 0.0
         worst_axis, worst_anchor, worst_range = max(worst_axis, ang), max(worst_anchor, anc), max(worst_range, rng)
         rep['joints'][n] = dict(axis_deg=round(float(ang), 4), same_sign=bool(same_sign), anchor_mm=round(float(anc), 4),
                                 range_diff_rad=round(float(rng), 6), range=[round(float(x), 4) for x in mx.jnt_range[jx[n]]])

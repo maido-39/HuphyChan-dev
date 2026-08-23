@@ -241,6 +241,202 @@
     <axis xyz="1 0 0"/>
     <limit lower="-0.3490658503988659" upper="0.3490658503988659" effort="50" velocity="20"/>
   </joint>
+  <link name="L_crank_A">
+    <inertial>
+      <origin xyz="-0.0198018 0.0360067 -0.00621469" rpy="0 0 0"/>
+      <mass value="0.034678"/>
+      <inertia ixx="7.75262e-06" ixy="1.98668e-06" ixz="-3.69056e-06" iyy="1.9968e-05" iyz="6.27366e-07" izz="1.66361e-05"/>
+    </inertial>
+    <visual>
+      <geometry><mesh filename="meshes/crank_A.stl"/></geometry>
+    </visual>
+  </link>
+  <link name="L_rod_A_u">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-07" ixy="0" ixz="0" iyy="1e-07" iyz="0" izz="1e-07"/>
+    </inertial>
+  </link>
+  <link name="L_rod_A">
+    <inertial>
+      <origin xyz="0.0054836 0.00130335 -0.144763" rpy="0 0 0"/>
+      <mass value="0.080611"/>
+      <inertia ixx="0.0010012" ixy="-3.22157e-07" ixz="3.80218e-05" iyy="0.00100408" iyz="9.07639e-06" izz="3.71478e-06"/>
+    </inertial>
+    <visual>
+      <geometry><mesh filename="meshes/rod_A.stl"/></geometry>
+    </visual>
+  </link>
+  <link name="L_crank_B">
+    <inertial>
+      <origin xyz="-0.0191694 -0.0360216 -0.00484965" rpy="0 0 0"/>
+      <mass value="0.033884"/>
+      <inertia ixx="6.83072e-06" ixy="-1.92677e-06" ixz="-2.42352e-06" iyy="1.81543e-05" iyz="-4.53131e-07" izz="1.57308e-05"/>
+    </inertial>
+    <visual>
+      <geometry><mesh filename="meshes/crank_B.stl"/></geometry>
+    </visual>
+  </link>
+  <link name="L_rod_B_u">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-07" ixy="0" ixz="0" iyy="1e-07" iyz="0" izz="1e-07"/>
+    </inertial>
+  </link>
+  <link name="L_rod_B">
+    <inertial>
+      <origin xyz="0.00482582 -0.00130784 -0.0979612" rpy="0 0 0"/>
+      <mass value="0.064627"/>
+      <inertia ixx="0.000406114" ixy="3.11989e-07" ixz="2.01611e-05" iyy="0.000408351" iyz="-5.24426e-06" izz="2.86674e-06"/>
+    </inertial>
+    <visual>
+      <geometry><mesh filename="meshes/rod_B.stl"/></geometry>
+    </visual>
+  </link>
+  <joint name="L_crank_A_joint" type="revolute">
+    <origin xyz="-0.029945 -0.001718 -0.190034" rpy="0 0 0"/>
+    <parent link="L_shin_link"/>
+    <child link="L_crank_A"/>
+    <axis xyz="0.0000 1.0000 0.0000"/>
+    <limit lower="-1.2" upper="1.2" effort="60.0" velocity="20"/>
+  </joint>
+  <joint name="L_rod_A_u1" type="revolute">
+    <origin xyz="-0.061494 0.042718 -0.021185" rpy="0 0 0"/>
+    <parent link="L_crank_A"/>
+    <child link="L_rod_A_u"/>
+    <axis xyz="0.0000 1.0000 0.0000"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0" velocity="50"/>
+  </joint>
+  <joint name="L_rod_A_u2" type="revolute">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="L_rod_A_u"/>
+    <child link="L_rod_A"/>
+    <axis xyz="-0.9993 0.0000 -0.0379"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0" velocity="50"/>
+  </joint>
+  <!-- loop closure, not expressible in URDF: the far end of L_rod_A at xyz="0.010939 0.0026 -0.288781" (rod frame) is a ball joint on L_foot_link - see the <equality><connect> in the MJCF -->
+  <joint name="L_crank_B_joint" type="revolute">
+    <origin xyz="-0.030055 0.001717 -0.290034" rpy="0 0 0"/>
+    <parent link="L_shin_link"/>
+    <child link="L_crank_B"/>
+    <axis xyz="0.0000 1.0000 0.0000"/>
+    <limit lower="-1.2" upper="1.2" effort="60.0" velocity="20"/>
+  </joint>
+  <joint name="L_rod_B_u1" type="revolute">
+    <origin xyz="-0.060039 -0.042717 -0.01522" rpy="0 0 0"/>
+    <parent link="L_crank_B"/>
+    <child link="L_rod_B_u"/>
+    <axis xyz="0.0000 1.0000 0.0000"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0" velocity="50"/>
+  </joint>
+  <joint name="L_rod_B_u2" type="revolute">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="L_rod_B_u"/>
+    <child link="L_rod_B"/>
+    <axis xyz="-0.9988 0.0000 -0.0492"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0" velocity="50"/>
+  </joint>
+  <!-- loop closure, not expressible in URDF: the far end of L_rod_B at xyz="0.009594 -0.0026 -0.194746" (rod frame) is a ball joint on L_foot_link - see the <equality><connect> in the MJCF -->
+  <link name="R_crank_A">
+    <inertial>
+      <origin xyz="-0.0198018 -0.0360067 -0.00621469" rpy="0 0 0"/>
+      <mass value="0.034678"/>
+      <inertia ixx="7.75262e-06" ixy="-1.98668e-06" ixz="-3.69056e-06" iyy="1.9968e-05" iyz="-6.27366e-07" izz="1.66361e-05"/>
+    </inertial>
+    <visual>
+      <geometry><mesh filename="meshes/R_crank_A.stl"/></geometry>
+    </visual>
+  </link>
+  <link name="R_rod_A_u">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-07" ixy="0" ixz="0" iyy="1e-07" iyz="0" izz="1e-07"/>
+    </inertial>
+  </link>
+  <link name="R_rod_A">
+    <inertial>
+      <origin xyz="0.0054836 -0.00130335 -0.144763" rpy="0 0 0"/>
+      <mass value="0.080611"/>
+      <inertia ixx="0.0010012" ixy="3.22157e-07" ixz="3.80218e-05" iyy="0.00100408" iyz="-9.07639e-06" izz="3.71478e-06"/>
+    </inertial>
+    <visual>
+      <geometry><mesh filename="meshes/R_rod_A.stl"/></geometry>
+    </visual>
+  </link>
+  <link name="R_crank_B">
+    <inertial>
+      <origin xyz="-0.0191694 0.0360216 -0.00484965" rpy="0 0 0"/>
+      <mass value="0.033884"/>
+      <inertia ixx="6.83072e-06" ixy="1.92677e-06" ixz="-2.42352e-06" iyy="1.81543e-05" iyz="4.53131e-07" izz="1.57308e-05"/>
+    </inertial>
+    <visual>
+      <geometry><mesh filename="meshes/R_crank_B.stl"/></geometry>
+    </visual>
+  </link>
+  <link name="R_rod_B_u">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-07" ixy="0" ixz="0" iyy="1e-07" iyz="0" izz="1e-07"/>
+    </inertial>
+  </link>
+  <link name="R_rod_B">
+    <inertial>
+      <origin xyz="0.00482582 0.00130784 -0.0979612" rpy="0 0 0"/>
+      <mass value="0.064627"/>
+      <inertia ixx="0.000406114" ixy="-3.11989e-07" ixz="2.01611e-05" iyy="0.000408351" iyz="5.24426e-06" izz="2.86674e-06"/>
+    </inertial>
+    <visual>
+      <geometry><mesh filename="meshes/R_rod_B.stl"/></geometry>
+    </visual>
+  </link>
+  <joint name="R_crank_A_joint" type="revolute">
+    <origin xyz="-0.029945 0.001718 -0.190034" rpy="0 0 0"/>
+    <parent link="R_shin_link"/>
+    <child link="R_crank_A"/>
+    <axis xyz="0.0000 1.0000 0.0000"/>
+    <limit lower="-1.2" upper="1.2" effort="60.0" velocity="20"/>
+  </joint>
+  <joint name="R_rod_A_u1" type="revolute">
+    <origin xyz="-0.061494 -0.042718 -0.021185" rpy="0 0 0"/>
+    <parent link="R_crank_A"/>
+    <child link="R_rod_A_u"/>
+    <axis xyz="0.0000 1.0000 0.0000"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0" velocity="50"/>
+  </joint>
+  <joint name="R_rod_A_u2" type="revolute">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="R_rod_A_u"/>
+    <child link="R_rod_A"/>
+    <axis xyz="-0.9993 0.0000 -0.0379"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0" velocity="50"/>
+  </joint>
+  <!-- loop closure, not expressible in URDF: the far end of R_rod_A at xyz="0.010939 -0.0026 -0.288781" (rod frame) is a ball joint on R_foot_link - see the <equality><connect> in the MJCF -->
+  <joint name="R_crank_B_joint" type="revolute">
+    <origin xyz="-0.030055 -0.001717 -0.290034" rpy="0 0 0"/>
+    <parent link="R_shin_link"/>
+    <child link="R_crank_B"/>
+    <axis xyz="0.0000 1.0000 0.0000"/>
+    <limit lower="-1.2" upper="1.2" effort="60.0" velocity="20"/>
+  </joint>
+  <joint name="R_rod_B_u1" type="revolute">
+    <origin xyz="-0.060039 0.042717 -0.01522" rpy="0 0 0"/>
+    <parent link="R_crank_B"/>
+    <child link="R_rod_B_u"/>
+    <axis xyz="0.0000 1.0000 0.0000"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0" velocity="50"/>
+  </joint>
+  <joint name="R_rod_B_u2" type="revolute">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="R_rod_B_u"/>
+    <child link="R_rod_B"/>
+    <axis xyz="-0.9988 0.0000 -0.0492"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0" velocity="50"/>
+  </joint>
+  <!-- loop closure, not expressible in URDF: the far end of R_rod_B at xyz="0.009594 0.0026 -0.194746" (rod frame) is a ball joint on R_foot_link - see the <equality><connect> in the MJCF -->
   <link name="torso_link">
     <inertial>
       <origin xyz="-0.0151972 -4.8463e-05 0.279032" rpy="0 0 0"/>
