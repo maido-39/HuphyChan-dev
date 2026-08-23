@@ -114,6 +114,7 @@
 |---|---|---|---|
 | ~~ankleAB_c1 / ankleRP_c1~~ (`20-45-09/27`, ✗ iter 172 중단) | 팔이 영점(매달림)으로 weld → hip_roll 링크와 14 mm 관통 | — | ✗ 상체 팔 15° 외전 고정 후 c2로 재시작 |
 | **ankleAB_c2 → c2r** "flat-2.5max gen21-bundle curriculum-dr+push ankle-AB-loop (2026-08-23)" (`21-02-10` → OOM iter1252 → `23-17-35_ankleAB_c2r` resume model_1200, 🔄학습중 총 32k) [[2026-08-23_ankleAB_c2]] | vs gen21_bent_p2: 프린트 질량·실측 모터(RS04 J .0163/b .0095/tc .269, RS03 .0153/.0223/.285)·T-N 곡선·**폐루프 발목(크랭크 RS03 ×2, Kp 22.3/Kd 1.41/60 N·m)**·단일 런 커리큘럼(DR 10k→20k, vx 단계 2.5@16k)·16384 env·상체 weld+팔 15° 외전 고정·hip_yaw ±45° | iter 610: reward 109·fell 0; iter 1200 분석(93 §5b): 보행 발목 17° 사용·토크 12.8 N·m·GRFc 1.39 BW, **정지 잔떨림+0.4 Hz 스웨이**; 최신 스냅샷 iter 1950: reward 114.2·fell 0.000 | 🔄 CONTINUE (4k 게이트서 정지 떨림 재확인) |
+| (분석) 폐루프 구속 강성 solimp 전례·변인통제 [[94_loop_constraint_stiffness]] (2026-08-24) | 같은 AB 정책, 구속만 0.9→0.9999 5단계 | 튐 |Δτ| p99: 기본 18.0 / 0.99–0.9999 11–12 N·m, 폐루프 오차 8.4→0.08 mm | 0.999 유지; 학습 A/B(0.95/0.99·solref 5 ms, BRUCE 데드밴드)는 본런 후 |
 | **ankleRP_c2** "flat-2.5max gen21-bundle curriculum-dr+push ankle-RP-serial (2026-08-23)" (`2026-08-23_21-02-18`, 🔄학습중 32k) [[2026-08-23_ankleRP_c2]] | ankleAB_c2와 **단일변인 = 발목 기구**: 직렬 pitch/roll(Kp 28.5/Kd 1.81) + 루프 자코비안 크랭크공간 클램프(±60, T-N) + 반영 관성/마찰. env.yaml diff = 발목 항목만(launch 직후 확인) | iter 610: reward 113·fell 0; iter 1200 분석: 발목 10° 사용·**bang-bang 목표(−40↔+35°) PD 포화 토크 스파이크**·GRFc 1.51 BW; 최신 스냅샷 iter 2162: reward 113.6·fell 0.000 | 🔄 CONTINUE |
 
 ## 9. 측정 캠페인 (2026-07-11, fc/fcp 표준) — 데이터 대응표

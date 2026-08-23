@@ -379,6 +379,16 @@
    "width": 460,
    "height": 200,
    "color": "6"
+  },
+  {
+   "id": "n_solimp",
+   "type": "file",
+   "file": "94_loop_constraint_stiffness.md",
+   "x": 10340,
+   "y": -560,
+   "width": 460,
+   "height": 200,
+   "color": "3"
   }
  ],
  "edges": [
@@ -669,6 +679,14 @@
    "toNode": "n_ankAB",
    "toSide": "top",
    "label": "변인 정의"
+  },
+  {
+   "id": "e_solimp",
+   "fromNode": "n_solimp",
+   "fromSide": "bottom",
+   "toNode": "n_ankAB",
+   "toSide": "top",
+   "label": "구속 강성 조사·변인통제 (solimp 0.999 유지, A/B 본런 후)"
   }
  ]
 }
