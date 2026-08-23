@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pygmalion collision viewer</title>
+<style>
+:root{--bg:#15171b;--panel:#1f2228;--fg:#e6e6e6;--mut:#9aa0a6;--acc:#4fc3f7;--w:340px}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,sans-serif;overflow:hidden}
+#view{position:absolute;inset:0 0 0 var(--w)}canvas{display:block}
+#side{position:absolute;left:0;top:0;bottom:0;width:var(--w);background:var(--panel);overflow-y:auto;padding:10px 12px;border-right:1px solid #333}
+h1{font-size:15px;margin:2px 0 8px}h2{font-size:12px;color:var(--mut);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+label.row{display:flex;align-items:center;gap:6px;margin:2px 0}label.row input[type=range]{flex:1}
+.j{display:grid;grid-template-columns:118px 1fr 46px;gap:6px;align-items:center;margin:1px 0;font-size:12px}.j span.n{color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.j span.v{text-align:right;font-variant-numeric:tabular-nums}
+button{background:#2b3038;color:var(--fg);border:1px solid #444;border-radius:6px;padding:5px 9px;margin:2px 2px 2px 0;cursor:pointer}button.on{background:#24506a;border-color:var(--acc)}
+select{background:#2b3038;color:var(--fg);border:1px solid #444;border-radius:6px;padding:4px;width:100%}
+#info{position:absolute;right:10px;top:10px;max-width:360px;background:rgba(20,22,26,.92);border:1px solid #444;border-radius:8px;padding:8px 10px;font-size:12px;display:none}
+#info b{color:var(--acc)}#hint{position:absolute;left:calc(var(--w) + 10px);bottom:8px;color:var(--mut);font-size:11px}
+#burger{display:none;position:absolute;left:8px;top:8px;z-index:5}
+.chip{display:inline-block;background:#2b3038;border:1px solid #444;border-radius:10px;padding:1px 7px;margin:1px;font-size:11px}
+@media (max-width:860px){:root{--w:0px}#side{width:300px;transform:translateX(-100%);transition:transform .2s;z-index:4}#side.open{transform:none}#burger{display:block}#hint{display:none}}
+</style></head><body>
+<button id="burger">☰</button>
+<div id="side">
+ <h1>Pygmalion — collision geometry viewer</h1>
+ <div style="color:var(--mut);font-size:11px">Drag = rotate · right-drag / 2 fingers = pan · wheel = zoom · click a geom = info · keys 1/2/3 iso/front/side, F = fit</div>
+ <h2>Model</h2><select id="model"></select>
+ <div id="stats" style="color:var(--mut);font-size:11px;margin-top:4px"></div>
+ <h2>Layers</h2>
+ <label class="row"><input type="checkbox" id="lv" checked> visual meshes <input type="range" id="ov" min="0" max="1" step="0.05" value="0.35" title="opacity"></label>
+ <label class="row"><input type="checkbox" id="lc" checked> collision primitives (capsules / box sole)</label>
+ <label class="row"><input type="checkbox" id="lh"> convex hulls (URDF collision)</label>
+ <label class="row"><input type="checkbox" id="ls" checked> loop sites (rod ends / foot balls)</label>
+ <label class="row"><input type="checkbox" id="lf" checked> floor grid at the sole</label>
+ <h2>Pose</h2>
+ <div><button id="bzero">zero</button><button id="bbent">bent init</button><button id="bfit">fit view</button></div>
+ <div id="abctl" style="display:none;margin-top:4px"><button id="bplay">▶ play AB mechanism (cranks servoed, loop closed)</button> <span id="ablab" class="chip"></span>
+ <label class="row">speed <input type="range" id="spd" min="0.25" max="2" step="0.25" value="1"><span id="spdv">1×</span></label></div>
+ <div id="joints"></div>
+ <h2>Contact excludes (adjacent pairs)</h2><div id="exc" style="font-size:11px;color:var(--mut)"></div>
+</div>
+<div id="view"></div>
+<div id="info"></div>
+<div id="hint">green = collision capsule/box (what the physics touches) · orange = convex hull · red dots = loop closure sites</div>
+<script src="vendor/three.min.js"></script><script src="vendor/OrbitControls.js"></script><script src="vendor/STLLoader.js"></script>
+<script>
+let DATA,M,root,bodies=[],geomMeshes=[],jointState={},floor,anim=null,abIdx=0,lastT=0;
+const view=document.getElementById('view');
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));view.appendChild(renderer.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x15171b);
+const camera=new THREE.PerspectiveCamera(40,1,0.01,50);camera.up.set(0,0,1);
+const controls=new THREE.OrbitControls(camera,renderer.domElement);controls.enableDamping=true;
+scene.add(new THREE.HemisphereLight(0xffffff,0x334455,0.9));const dl=new THREE.DirectionalLight(0xffffff,0.8);dl.position.set(2,-2,3);scene.add(dl);
+const dl2=new THREE.DirectionalLight(0xffffff,0.4);dl2.position.set(-2,2,1);scene.add(dl2);
+const MAT={visual:new THREE.MeshStandardMaterial({color:0xc8ccd2,metalness:0.2,roughness:0.6,transparent:true,opacity:0.35}),
+ collision:new THREE.MeshStandardMaterial({color:0x3fbf5a,transparent:true,opacity:0.42,depthWrite:false,side:THREE.DoubleSide}),
+ collision_off:new THREE.MeshStandardMaterial({color:0x3fbf5a,transparent:true,opacity:0.12,depthWrite:false}),
+ hull:new THREE.MeshStandardMaterial({color:0xffa040,transparent:true,opacity:0.28,depthWrite:false,wireframe:false}),
+ site:new THREE.MeshBasicMaterial({color:0xff3030}),sel:new THREE.MeshStandardMaterial({color:0x4fc3f7,transparent:true,opacity:0.6})};
+const loader=new THREE.STLLoader();const meshCache={};
+function q(a){return new THREE.Quaternion(a[1],a[2],a[3],a[0]);}
+function resize(){const w=view.clientWidth,h=view.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
+addEventListener('resize',resize);
+function loadMesh(fn,cb){if(meshCache[fn]){cb(meshCache[fn]);return;}loader.load('meshes/'+fn,g=>{g.computeVertexNormals();meshCache[fn]=g;cb(g);});}
+function geomObject(g){
+ let mesh;
+ if(g.type==='capsule'){const mat=MAT[g.kind]||MAT.collision,r=g.size[0],h=g.size[1];mesh=new THREE.Group();const cyl=new THREE.Mesh(new THREE.CylinderGeometry(r,r,2*h,20,1,true),mat);cyl.rotation.x=Math.PI/2;mesh.add(cyl);
+  [h,-h].forEach((z,i)=>{const sp=new THREE.Mesh(new THREE.SphereGeometry(r,20,12,0,Math.PI*2,0,Math.PI/2),mat);sp.position.z=z;sp.rotation.x=i?Math.PI/2:-Math.PI/2;mesh.add(sp);});}
+ else if(g.type==='box'){mesh=new THREE.Mesh(new THREE.BoxGeometry(2*g.size[0],2*g.size[1],2*g.size[2]),MAT[g.kind]||MAT.collision);}
+ else if(g.type==='sphere'){mesh=new THREE.Mesh(new THREE.SphereGeometry(g.size[0],16,12),MAT[g.kind]||MAT.collision);}
+ else if(g.type==='cylinder'){const m=new THREE.Mesh(new THREE.CylinderGeometry(g.size[0],g.size[0],2*g.size[1],24),MAT[g.kind]||MAT.collision);m.rotation.x=Math.PI/2;mesh=new THREE.Group();mesh.add(m);}
+ else if(g.type==='mesh'){mesh=new THREE.Group();const mat=g.kind==='hull'?MAT.hull:MAT.visual;loadMesh(g.mesh,geo=>{const m=new THREE.Mesh(geo,mat);m.userData.geom=g;mesh.add(m);});}
+ else return null;
+ mesh.position.set(...g.pos);mesh.quaternion.copy(q(g.quat));mesh.userData.geom=g;mesh.traverse(o=>{o.userData.geom=g;});
+ return mesh;
+}
+function build(){
+ if(root)scene.remove(root);root=new THREE.Group();bodies=[];geomMeshes=[];jointState={};
+ const B=M.bodies;const groups=B.map(()=>null);
+ B.forEach(b=>{const g=new THREE.Group();g.name=b.name;g.position.set(...b.pos);g.quaternion.copy(q(b.quat));
+  // joint pivots (hinges on this body, in order) between the body frame and its contents
+  let inner=g;const js=M.joints.filter(j=>j.body===b.id);
+  js.forEach(j=>{const piv=new THREE.Group();piv.position.set(...j.pos);const back=new THREE.Group();back.position.set(-j.pos[0],-j.pos[1],-j.pos[2]);piv.add(back);inner.add(piv);piv.userData.joint=j;inner=back;jointState[j.name]={val:0,pivot:piv,axis:new THREE.Vector3(...j.axis).normalize()};});
+  b.geoms.forEach(gd=>{const o=geomObject(gd);if(o){o.userData.kind=gd.kind;inner.add(o);geomMeshes.push(o);}});
+  M.sites.filter(s=>s.body===b.id).forEach(s=>{const m=new THREE.Mesh(new THREE.SphereGeometry(Math.max(s.size,0.006),10,8),MAT.site);m.position.set(...s.pos);m.userData.kind='site';inner.add(m);geomMeshes.push(m);});
+  groups[b.id]={g,inner};});
+ B.forEach(b=>{if(b.id===0)return;const p=groups[b.parent];(b.parent===0?root:p.inner).add(groups[b.id].g);});
+ bodies=groups;scene.add(root);
+ if(floor)scene.remove(floor);floor=new THREE.GridHelper(3,30,0x555555,0x333333);floor.rotation.x=Math.PI/2;floor.position.z=M.foot_z_at_origin;scene.add(floor);
+ buildJointUI();applyLayers();document.getElementById('stats').textContent=`${M.bodies.length-1} bodies · ${M.joints.length} hinges · ${M.total_mass} kg · excludes ${M.excludes.length} · connects ${M.connects.length}`;
+ document.getElementById('exc').innerHTML=M.excludes.map(e=>`<span class="chip">${e[0]} – ${e[1]}</span>`).join(' ');
+ document.getElementById('abctl').style.display=M.tag.includes('loop')?'block':'none';stopAB();
+}
+function setJoint(n,v){const s=jointState[n];if(!s)return;s.val=v;s.pivot.quaternion.setFromAxisAngle(s.axis,v);const el=document.getElementById('r_'+n);if(el){el.value=v;document.getElementById('v_'+n).textContent=(v*180/Math.PI).toFixed(1)+'°';}}
+function buildJointUI(){const c=document.getElementById('joints');c.innerHTML='';M.joints.forEach(j=>{const d=document.createElement('div');d.className='j';d.innerHTML=`<span class="n" title="${j.name}">${j.name.replace('_joint','')}</span><input type="range" id="r_${j.name}" min="${j.range[0]}" max="${j.range[1]}" step="0.005" value="0"><span class="v" id="v_${j.name}">0.0°</span>`;c.appendChild(d);d.querySelector('input').addEventListener('input',e=>{stopAB();setJoint(j.name,+e.target.value);});});}
+function applyLayers(){const lv=lv_.checked,lc=lc_.checked,lh=lh_.checked,ls=ls_.checked;MAT.visual.opacity=+ov_.value;
+ geomMeshes.forEach(o=>{const k=o.userData.kind;o.visible=k==='visual'?lv:k==='collision'?lc:k==='hull'?lh:k==='site'?ls:true;});floor.visible=lf_.checked;}
+const lv_=document.getElementById('lv'),lc_=document.getElementById('lc'),lh_=document.getElementById('lh'),ls_=document.getElementById('ls'),lf_=document.getElementById('lf'),ov_=document.getElementById('ov');
+[lv_,lc_,lh_,ls_,lf_,ov_].forEach(e=>e.addEventListener('input',applyLayers));
+const BENT={'.*_hip_pitch_joint':-0.32,'.*_knee_joint':-0.67};
+document.getElementById('bzero').onclick=()=>{stopAB();M.joints.forEach(j=>setJoint(j.name,0));};
+document.getElementById('bbent').onclick=()=>{stopAB();M.joints.forEach(j=>setJoint(j.name,0));M.joints.forEach(j=>{for(const k in BENT)if(new RegExp('^'+k+'$').test(j.name))setJoint(j.name,BENT[k]);if(!M.tag.includes('loop')&&/ankle_pitch/.test(j.name))setJoint(j.name,0.36);});
+ if(M.tag.includes('loop')&&DATA.bent)for(const k in DATA.bent)setJoint(k,DATA.bent[k]);};
+function fit(){const box=new THREE.Box3().setFromObject(root);const c=box.getCenter(new THREE.Vector3()),s=box.getSize(new THREE.Vector3()).length();controls.target.copy(c);camera.position.copy(c).add(new THREE.Vector3(s*0.9,-s*0.9,s*0.45));camera.near=s/200;camera.far=s*20;camera.updateProjectionMatrix();}
+document.getElementById('bfit').onclick=fit;
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;const c=controls.target,d=camera.position.distanceTo(c);if(e.key==='1')camera.position.copy(c).add(new THREE.Vector3(d*.6,-d*.6,d*.35));if(e.key==='2')camera.position.copy(c).add(new THREE.Vector3(d,0,0));if(e.key==='3')camera.position.copy(c).add(new THREE.Vector3(0,-d,0));if(e.key==='f'||e.key==='F')fit();});
+// AB playback
+const ab=()=>DATA.ab_trajectory;
+document.getElementById('bplay').onclick=()=>{if(anim){stopAB();return;}anim=true;document.getElementById('bplay').classList.add('on');lastT=performance.now();};
+function stopAB(){anim=null;document.getElementById('bplay').classList.remove('on');}
+document.getElementById('spd').oninput=e=>{document.getElementById('spdv').textContent=e.target.value+'×';};
+function tick(t){requestAnimationFrame(tick);controls.update();
+ if(anim&&M.tag.includes('loop')){const T=ab();const spd=+document.getElementById('spd').value;if(t-lastT>1000/(T.fps*spd)){lastT=t;abIdx=(abIdx+1)%T.frames.length;const f=T.frames[abIdx];T.joints.forEach((n,i)=>setJoint(n,f[i]));document.getElementById('ablab').textContent=T.labels[abIdx]+' '+(abIdx/T.fps).toFixed(1)+' s';}}
+ renderer.render(scene,camera);}
+// picking
+const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();let selected=null,selMat=null;
+renderer.domElement.addEventListener('pointerdown',e=>{e._x=e.clientX;e._y=e.clientY;});
+renderer.domElement.addEventListener('pointerup',e=>{if(Math.hypot(e.clientX-e._x,e.clientY-e._y)>4)return;const r=renderer.domElement.getBoundingClientRect();mouse.x=((e.clientX-r.left)/r.width)*2-1;mouse.y=-((e.clientY-r.top)/r.height)*2+1;ray.setFromCamera(mouse,camera);
+ const vis=[];root.traverse(o=>{if(o.isMesh&&o.visible&&o.userData.geom&&o.parent.visible)vis.push(o);});const hits=ray.intersectObjects(vis,false);
+ if(selected){selected.material=selMat;selected=null;}const info=document.getElementById('info');
+ if(!hits.length){info.style.display='none';return;}const o=hits[0].object,g=o.userData.geom;selected=o;selMat=o.material;o.material=MAT.sel;
+ const body=M.bodies.find(b=>b.geoms.includes(g));const sz=g.type==='capsule'?`r ${(g.size[0]*1000).toFixed(1)} mm, half-length ${(g.size[1]*1000).toFixed(1)} mm`:g.type==='box'?`half ${g.size.map(v=>(v*1000).toFixed(1)).join(' × ')} mm`:g.type==='sphere'?`r ${(g.size[0]*1000).toFixed(1)} mm`:'mesh';
+ info.innerHTML=`<b>${g.name}</b><br>${g.kind} · ${g.type} · ${sz}<br>body <b>${body?body.name:'?'}</b> (${body?body.mass:'?'} kg)${g.contype?'':'<br><span style="color:#9aa0a6">contype 0 — no contacts</span>'}`;info.style.display='block';});
+// model select
+fetch('robot.json').then(r=>r.json()).then(d=>{DATA=d;const sel=document.getElementById('model');Object.keys(d.models).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k;sel.appendChild(o);});sel.onchange=()=>{M=d.models[sel.value];build();fit();};
+ sel.value=Object.keys(d.models)[1]||Object.keys(d.models)[0];M=d.models[sel.value];resize();build();fit();requestAnimationFrame(tick);});
+document.getElementById('burger').onclick=()=>document.getElementById('side').classList.toggle('open');
+</script></body></html>

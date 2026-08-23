@@ -70,6 +70,12 @@
 
 영상: [loop_ankle_pitch.mp4](video/loop_ankle_pitch.mp4) (정강이 고정, 공동구동 ±30° → 발바닥 pitch −37.6/+31.5°), [loop_ankle_roll.mp4](video/loop_ankle_roll.mp4) (차동 → roll), [loop_ankle_ground.mp4](video/loop_ankle_ground.mp4) (베이스 고정·고관절/무릎 PD 유지, 발바닥을 바닥 2 mm 위에 두고 크랭크 구동 → 앞꿈치/뒤꿈치 모서리가 바닥에 닿음; 초록 삼각 = 접촉점, 크기 ∝ 법선력). 로드 = 분홍, 로드엔드 = 빨간 점.
 
+### 3b. 실제 렌더 영상과 컬리전 웹 뷰어 (2026-08-23 21:30)
+
+[loop_ankle_ab_render.mp4](video/loop_ankle_ab_render.mp4) — MuJoCo EGL 렌더(GPU 복구 후), 3패널: 전신(시각 메시) | 발목 클로즈업(시각) | 발목 클로즈업(**컬리전 형상**: 캡슐·박스 발바닥·루프 사이트). 매달림(중력 0, 베이스 고정): 공동구동 ±30° → pitch, 차동 ±14° → roll, 원운동 → 지면(베이스 고정·고관절 PD, 발바닥 2 mm 위): 크랭크가 발을 앞꿈치/뒤꿈치/측면 모서리로 기울여 접촉(접촉점·법선력 화살표). 실시간 25 fps, 하단에 크랭크/발목각·폐루프 오차 오버레이. 팔은 학습과 같은 15° 외전. `tools/robot_model/loop_ankle_render.py` (`MUJOCO_GL=egl MUJOCO_EGL_DEVICE_ID=0`; 드라이버 570에서 종료 시 컨텍스트 해제만 예외 → `os._exit`).
+
+**컬리전 웹 뷰어** `tools/collision_viewer/` (three.js, 휴대폰 대응): `python3 -m http.server 8892 --directory tools/collision_viewer` → http://192.168.20.177:8892. RP/AB 두 모델, 레이어(시각 메시 투명도·캡슐/박스·URDF 볼록껍질·루프 사이트·바닥 격자), 관절 슬라이더, bent 키프레임, **▶ AB 메커니즘 재생**(plain MuJoCo로 크랭크 서보 구동해 기록한 루프 정합 9 s 궤적), geom 클릭 → 이름·종류·치수·바디·질량·contype. 데이터는 `build_data.py`가 MJCF에서 뽑고 메시는 12k면으로 데시메이션(15 MB).
+
 ## 4. 검증
 
 ### 4.1 plain MuJoCo (`tools/robot_model/loop_ankle_verify.py`, dt 1 ms, fp64)
