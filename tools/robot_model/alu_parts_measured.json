@@ -100,12 +100,12 @@
   {
    "occ": "HipRoll2Yaw",
    "body": "HipRoll2Yaw_Mount",
-   "g": 67.3,
+   "g": 67.0,
    "conf": "med",
-   "photo": "3,4,8",
-   "read": "67 / 67.3",
+   "photo": "3,4",
+   "read": "67",
    "alt": "HipPitch2Roll_B (148 g, 비율 0.45 - 상한 직전)",
-   "note": "요 모터 둘레 칼라(사진8 '67.3')가 사진3의 '67'과 같은 부품 - 소수점 보정"
+   "note": "RS04가 들어앉은 X-래티스 블록. 사진8의 '6x.3'을 이 부품으로 봤던 것은 철회(그건 HipYaw2Knee 63.3)"
   },
   {
    "occ": "HipYaw2Knee",
@@ -175,21 +175,20 @@
   {
    "occ": "Ankle2Feet",
    "body": "KneeB2AnkleA",
-   "g": 36.9,
-   "conf": "low",
-   "photo": 7,
-   "read": "36.9 (56.9?)",
-   "note": "무릎→발목 긴 트러스판. 36.9면 비율 0.22로 다른 부품보다 낮음(충전율 차이 가능) - 56.9면 0.34. 3/5 판독 재확인",
-   "alt": "KneeB2AnkleB (172 g)"
+   "g": 56.9,
+   "conf": "high",
+   "photo": "user",
+   "read": "56.9 (사용자 확인)",
+   "note": "정강이 긴 트러스(motorb2ankle). 사진의 '36.9'는 3/5 오독 - 56.9 확정. A/B 짝 중 어느 쪽인지는 미확정"
   },
   {
    "occ": "Ankle2Feet",
    "body": "FEET",
-   "g": 119.0,
-   "conf": "low",
-   "photo": "6,7,10",
-   "read": "119 (114? 124?)",
-   "note": "발판. 세 사진 모두 11x로 읽히나 마지막 자리 불명. 비율 0.19 - 두꺼운 판이라 저충전 출력 가능성"
+   "g": 181.9,
+   "conf": "high",
+   "photo": "user",
+   "read": "181.9 (사용자 확인)",
+   "note": "발판. 사진 판독 119는 오독 - 사용자가 저울값 181.9로 확정. 비율 0.295"
   },
   {
    "occ": "HipPitch2Roll",
@@ -200,6 +199,16 @@
    "read": "53.0 (23.0?)",
    "note": "사진6 좌상단 힙 피치 D판. 비율 0.36",
    "alt": "HipPitch2Roll_A (128 g, 0.41)"
+  },
+  {
+   "occ": "HipYaw2Knee",
+   "body": "HipYaw2Knee_Rotor",
+   "g": 63.3,
+   "conf": "med",
+   "photo": "user,8",
+   "read": "63.3 (사용자: hipyaw2knee)",
+   "note": "요 로터에 붙는 두꺼운 원판(317 g). 사진8의 '6x.3'은 이 부품이었음. 비율 0.20 - 두꺼운 부품 저충전",
+   "alt": "HipYaw2Knee_outer (140 g)면 0.45로 상한 직전 - 사용자 명칭 hipyaw2knee가 어느 바디인지 확인"
   }
  ],
  "unplaced": [
