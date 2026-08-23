@@ -18,7 +18,7 @@ import os
 import numpy as np
 import trimesh
 
-SRC = '/home/syaro/pyg_fea/fusion/alu_parts'
+SRC = os.environ.get('ALU_PARTS_DIR', '/home/syaro/pyg_fea/fusion/alu_parts')
 OUT = f'{SRC}/all_meshes.npz'
 VOL_TOL, COM_TOL = 0.02, 3.0        # relative, mm
 

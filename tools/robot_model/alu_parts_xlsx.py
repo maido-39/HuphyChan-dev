@@ -23,7 +23,7 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-SRC = '/home/syaro/pyg_fea/fusion/alu_parts'
+SRC = os.environ.get('ALU_PARTS_DIR', '/home/syaro/pyg_fea/fusion/alu_parts')
 DEFAULT_OUT = ('/home/syaro/MikuchanRemote/Human-Pygmalion/docs/'
                'aluminium_parts_3dprint_masses.xlsx')
 IMG_W, IMG_H = 156, 117                      # px in the sheet
@@ -46,6 +46,19 @@ BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 STOCK = ('DR2020', 'DF2020')
 
 
+def find_part(meta, occ, body):
+    """The index row for a measured part: by body name when that is unique, else (occ, body).
+
+    Occurrence names drift between CAD revisions (HipRoll2Yaw is spelled PipRoll2Yaw in the
+    8/16 file) while body names do not, so the body name is the stable key.
+    """
+    hits = [r for r in meta if r['body'] == body]
+    if len(hits) == 1:
+        return hits[0]
+    hits = [r for r in hits if r['occ'].split(':')[0] == occ]
+    return hits[0] if len(hits) == 1 else None
+
+
 def note_for(r):
     if r['group'].startswith('NoSim'):
         return '설계 참조용 (NoSim) — 실물 아님'
@@ -60,15 +73,24 @@ def main():
     out = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_OUT
     meta = json.load(open(f'{SRC}/index.json'))
     meta.sort(key=lambda r: (r['link'], -r['mass_g']))
-    measured, alu = {}, {}
+    measured, alu, mj = {}, {}, {}
     mpath = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          'alu_parts_measured.json')
     if os.path.exists(mpath):
         mj = json.load(open(mpath))
+        absent = []
         for e in mj['entries']:
-            measured[(e['occ'], e['body'])] = e
+            row = find_part(meta, e['occ'], e['body'])
+            if row is None:
+                absent.append(e['body'])
+                continue
+            measured[row['path']] = e
         for e in mj.get('aluminium', []):
-            alu[(e['occ'], e['body'])] = e
+            row = find_part(meta, e['occ'], e['body'])
+            if row is not None:
+                alu[row['path']] = e
+        if absent:
+            print(f'measured parts with no row in this index (not in this CAD revision): {absent}')
 
     wb = Workbook()
     ws = wb.active
@@ -79,8 +101,13 @@ def main():
     ws['A2'] = ('노란 칸(E열)에만 입력하세요. 저울로 잰 값을 그램 숫자로 — 예: 78.4  ·  '
                 'D열은 CAD 형상에 알루미늄 6061(2.70 g/cm³)을 적용한 값입니다.')
     ws['A2'].font = Font(name=FONT, size=10, color='555F6D')
-    ws['A3'] = (f'출처: Fusion 360 문서 260819_HumanMesh_wUpper_OMAKASE v4, 살아있는(표시된) '
-                f'바디 {len(meta)}개 · 사진은 각 바디의 메시를 단독 렌더한 것')
+    ref = mj.get('reference', {}) if measured else {}
+    src_doc = (f"{ref['doc']} v{ref['version']} ({ref.get('saved', '')})" if ref
+               else '260819_HumanMesh_wUpper_OMAKASE v4')
+    n_hidden = sum(1 for r in meta if r.get('hidden'))
+    ws['A3'] = (f'출처: Fusion 360 문서 {src_doc}, 알루미늄 바디 {len(meta)}개'
+                + (f' (숨은 바디 {n_hidden}개 포함)' if n_hidden else '')
+                + ' · 사진은 각 바디의 메시를 단독 렌더한 것')
     ws['A3'].font = Font(name=FONT, size=9, italic=True, color='7A828C')
     if measured:
         ws['A4'] = ('E열 기입값은 출력물 사진의 손글씨를 읽어 CAD 부품에 대조한 것 — '
@@ -124,8 +151,8 @@ def main():
         f.number_format = '0.0%'
         f.alignment = Alignment(horizontal='right', vertical='center')
         note = note_for(r)
-        al = alu.get((r['occ'].split(':')[0], r['body']))
-        me = measured.get((r['occ'].split(':')[0], r['body']))
+        al = alu.get(r['path'])
+        me = measured.get(r['path'])
         if al:
             # machined in aluminium after all: the CAD mass IS the mass, ratio 1.0 by
             # definition, and the PLA ceiling does not apply

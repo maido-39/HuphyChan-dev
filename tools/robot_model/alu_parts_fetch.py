@@ -24,7 +24,7 @@ import numpy as np
 sys.path.insert(0, '/home/syaro/MikuchanRemote/Human-Pygmalion/tools/fusion')
 import mcp_client as M  # noqa: E402
 
-OUT = '/home/syaro/pyg_fea/fusion/alu_parts'
+OUT = os.environ.get('ALU_PARTS_DIR', '/home/syaro/pyg_fea/fusion/alu_parts')
 MESHES = f'{OUT}/meshes.npz'
 INDEX = f'{OUT}/index.json'
 
@@ -36,8 +36,6 @@ def walk(o, path, live, out):
     p = path + "/" + o.name
     for i in range(o.bRepBodies.count):
         b = o.bRepBodies.item(i)
-        if not (live and b.isLightBulbOn):
-            continue
         mat = b.material.name if b.material else "?"
         if "Alumin" not in mat:
             continue
@@ -45,6 +43,7 @@ def walk(o, path, live, out):
         bb = b.boundingBox
         out.append({
             "path": p, "idx": i, "body": b.name, "occ": o.name,
+            "hidden": not (live and b.isLightBulbOn),
             "comp": o.component.name if o.component else o.name,
             "mass_g": round(pr.mass * 1000.0, 3),
             "vol_cm3": round(pr.volume, 4),
@@ -123,11 +122,57 @@ def fetch_mesh(path, idx, chunk=40000):
     return v, f
 
 
+def link_of(f):
+    """Rigid body a Fusion aluminium body belongs to, by its group and name."""
+    g = f['occ'].split(':')[0]
+    n = f['body']
+    if g == 'CenterParts':
+        return 'base_link (골반)'
+    if g == 'HipPitch2Roll':
+        return 'hip_pitch_link'
+    if g in ('HipRoll2Yaw', 'PipRoll2Yaw'):
+        return 'hip_roll_link'
+    if g in ('HipYaw2Knee', 'CenterPin_RS03'):
+        return 'thigh_link (허벅지)'
+    if g == 'Knee2Ankle':
+        return 'shin_link (정강이)'
+    if g == 'Ankle2Feet':
+        if n.startswith('Arm_') or n.startswith('AnkleBrace'):
+            return 'shin/foot (푸시로드)'
+        if n == 'AnkleUniversalJointCore':
+            return 'ankle_pitch_link'
+        if n.startswith(('FEET', 'AnkleFeetPillow', 'Ankle_Stopper_Roll', 'Flange')):
+            return 'foot_link (발)'
+        return 'shin_link (정강이)'
+    if g.startswith(('Torso', 'Neck', 'Waist', 'DR2020', 'DF2020')):
+        return 'torso_link (몸통)'
+    if g.startswith('Shoulder'):
+        return 'shoulder_pitch_link'
+    if 'Arm' in g:
+        return 'arm_link (팔)'
+    return '(미배정)'
+
+
 def main():
     limit = int(next((a.split('=')[1] for a in sys.argv if a.startswith('--limit=')), 0))
     os.makedirs(OUT, exist_ok=True)
     ALL = f'{OUT}/all_meshes.npz'
-    meta = json.load(open(INDEX))
+    if os.path.exists(INDEX):
+        meta = json.load(open(INDEX))
+    else:
+        # no index yet for this data directory: build it from what Fusion reports now, so a
+        # NEW CAD revision is one `ALU_PARTS_DIR=... alu_parts_fetch.py` away
+        M.connect()
+        rows0 = M.script(LIST_SRC)
+        meta = []
+        for i, f in enumerate(rows0):
+            meta.append(dict(link=link_of(f), occ=f['occ'], body=f['body'], mass_g=f['mass_g'],
+                             vol=f['vol_cm3'], path=f'{f["path"]}::{f["body"]}', key=f'{i:03d}',
+                             group=f['occ'].split(':')[0], com_mm=f['com_mm'],
+                             bbox_mm=f['bbox_mm'], hidden=f['hidden'], mesh_src=None))
+        json.dump(meta, open(INDEX, 'w'), indent=1, ensure_ascii=False)
+        print(f'bootstrapped {INDEX} with {len(meta)} aluminium bodies '
+              f'({sum(1 for r in meta if r["hidden"])} hidden, kept and flagged)', flush=True)
     by_path = {r['path']: r for r in meta}
     cache = dict(np.load(ALL)) if os.path.exists(ALL) else {}
     have = {k.split('|')[0] for k in cache}

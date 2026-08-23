@@ -18,7 +18,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt                       # noqa: E402
 from matplotlib.collections import PolyCollection     # noqa: E402
 
-OUT = '/home/syaro/pyg_fea/fusion/alu_parts'
+OUT = os.environ.get('ALU_PARTS_DIR', '/home/syaro/pyg_fea/fusion/alu_parts')
 IMG = f'{OUT}/img'
 # candidate camera directions (azimuth deg, elevation deg)
 VIEWS = [(35, 22), (-35, 22), (125, 22), (35, -22), (0, 70), (90, 15)]

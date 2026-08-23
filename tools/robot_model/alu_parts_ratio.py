@@ -9,6 +9,7 @@ the CAD so the URDF comes out at the real mass.
 Usage: alu_parts_ratio.py   (mjlab .venv python; writes docs/img/alu_parts_density_ratio.png)
 """
 import json
+import os
 
 import matplotlib
 matplotlib.use('Agg')
@@ -16,22 +17,41 @@ import matplotlib.pyplot as plt          # noqa: E402
 import numpy as np                       # noqa: E402
 
 REPO = '/home/syaro/MikuchanRemote/Human-Pygmalion'
-IDX = '/home/syaro/pyg_fea/fusion/alu_parts/index.json'
+IDX = os.environ.get('ALU_PARTS_DIR', '/home/syaro/pyg_fea/fusion/alu_parts') + '/index.json'
 MEAS = f'{REPO}/tools/robot_model/alu_parts_measured.json'
 OUT = f'{REPO}/docs/img/alu_parts_density_ratio.png'
 CEIL = 1.24 / 2.70
 COL = {'high': '#3a9d5d', 'med': '#d9a400', 'low': '#e07b2a'}
 
 
+def find_part(meta, occ, body):
+    """The index row for a measured part: by body name when that is unique, else (occ, body).
+
+    Occurrence names drift between CAD revisions (HipRoll2Yaw is spelled PipRoll2Yaw in the
+    8/16 file) while body names do not, so the body name is the stable key.
+    """
+    hits = [r for r in meta if r['body'] == body]
+    if len(hits) == 1:
+        return hits[0]
+    hits = [r for r in hits if r['occ'].split(':')[0] == occ]
+    return hits[0] if len(hits) == 1 else None
+
+
 def main():
-    idx = {(r['occ'].split(':')[0], r['body']): r for r in json.load(open(IDX))}
-    rows = []
+    meta = json.load(open(IDX))
+    rows, absent = [], []
     for e in json.load(open(MEAS))['entries']:
         if e['g'] is None:
             continue
-        al = idx[(e['occ'], e['body'])]['mass_g']
+        row = find_part(meta, e['occ'], e['body'])
+        if row is None:
+            absent.append(e['body'])
+            continue
+        al = row['mass_g']
         rows.append(dict(part=e['body'], conf=e['conf'], al=al, g=e['g'], q=e['g'] / al))
     rows.sort(key=lambda r: r['q'])
+    if absent:
+        print(f'no denominator in this CAD revision, skipped: {absent}')
     q_all = np.array([r['q'] for r in rows])
     q_med = np.array([r['q'] for r in rows if r['conf'] in ('high', 'med')])
 

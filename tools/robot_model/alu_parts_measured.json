@@ -146,11 +146,11 @@
   {
    "occ": "HipYaw2Knee",
    "body": "HipYaw2Knee_outer",
-   "g": 44.9,
-   "conf": "med",
-   "photo": 10,
-   "read": "44.9",
-   "note": "요 모터 바로 아래 흰 링. 비율 0.32"
+   "g": 63.3,
+   "conf": "high",
+   "photo": "user,8",
+   "read": "63.3 (사용자 확정: HipYaw2Knee_outer)",
+   "note": "요 모터 아래 바깥 링. 비율 0.45 = PLA 100 % 충전 상한(0.459) 바로 아래 - 이 부품은 꽉 채워 뽑은 것"
   },
   {
    "occ": "Knee2Ankle",
@@ -199,16 +199,6 @@
    "read": "53.0 (23.0?)",
    "note": "사진6 좌상단 힙 피치 D판. 비율 0.36",
    "alt": "HipPitch2Roll_A (128 g, 0.41)"
-  },
-  {
-   "occ": "HipYaw2Knee",
-   "body": "HipYaw2Knee_Rotor",
-   "g": 63.3,
-   "conf": "med",
-   "photo": "user,8",
-   "read": "63.3 (사용자: hipyaw2knee)",
-   "note": "요 로터에 붙는 두꺼운 원판(317 g). 사진8의 '6x.3'은 이 부품이었음. 비율 0.20 - 두꺼운 부품 저충전",
-   "alt": "HipYaw2Knee_outer (140 g)면 0.45로 상한 직전 - 사용자 명칭 hipyaw2knee가 어느 바디인지 확인"
   }
  ],
  "unplaced": [
@@ -221,6 +211,11 @@
    "photo": 1,
    "read": "R-B 라벨 옆 숫자",
    "note": "판독 불가"
+  },
+  {
+   "photo": 10,
+   "read": "44.9",
+   "note": "요 모터 아래 링에 적힌 것으로 봤으나 그 링은 63.3(outer)으로 확정됨 - 44.9가 어느 부품인지 미확정"
   }
  ],
  "aluminium": [
@@ -234,5 +229,12 @@
    "body": "Arm_B",
    "note": "AB 푸시로드(긴 바) - 알루미늄 가공품, 출력 아님 (사용자 2026-08-23). CAD 질량 그대로"
   }
- ]
+ ],
+ "reference": {
+  "doc": "260814_HumanMesh_OMAKASE_RrecoverFromCrash",
+  "version": 5,
+  "saved": "2026-08-15 19:07 UTC (= 2026-08-16 04:07 KST)",
+  "why": "the CAD revision the printed parts were made from (user, 2026-08-23); the 0819 wUpper document changed several leg parts afterwards",
+  "data_dir": "/home/syaro/pyg_fea/fusion/alu_parts_v5"
+ }
 }
