@@ -3,7 +3,7 @@
 """
 import json, os, re, socket, subprocess, time, glob, shutil
 REPO = '/home/syaro/MikuchanRemote/Human-Pygmalion'; MJ = f'{REPO}/mujoco-sim/mjlab'
-RUNS = {'ankleAB_c2': dict(wandb='https://wandb.ai/dongyub39-snu/pygmalion/runs/e9syphbb', viser=8089),
+RUNS = {'ankleAB_c2r': dict(wandb='https://wandb.ai/dongyub39-snu/pygmalion/runs/ewuilz2q', viser=8089, note='resumed from ankleAB_c2 model_1200 after the 23:10 OOM kill'),
         'ankleRP_c2': dict(wandb='https://wandb.ai/dongyub39-snu/pygmalion/runs/a6y6vo4w', viser=8090)}
 PORTS = {'dashboard': 8890, 'viser_AB': 8089, 'viser_RP': 8090, 'tensorboard': 6006, 'assembly_viewer': 8891, 'collision_viewer': 8892}
 HELPERS = {'gate_watch': 'gate_watc[h].sh', 'review_loop': 'review_loo[p].sh', 'gpu_sampler': 'gpu_sample[r].sh', 'viser_live': 'viser_liv[e].py', 'train': 'train_wandb_vide[o].py'}
