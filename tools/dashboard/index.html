@@ -1,0 +1,51 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pygmalion dashboard</title>
+<style>
+:root{--bg:#15171b;--card:#1f2228;--fg:#e6e6e6;--mut:#9aa0a6;--ok:#3fbf5a;--bad:#e0493f;--warn:#f0b429;--acc:#4fc3f7}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,sans-serif;padding:16px}h1{font-size:20px;margin:0 0 4px}h2{font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}.card{background:var(--card);border:1px solid #333;border-radius:10px;padding:12px 14px}
+.card a.t{color:var(--acc);font-weight:600;text-decoration:none;font-size:15px}.card p{margin:4px 0;color:var(--mut);font-size:12px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}.ok{background:var(--ok)}.bad{background:var(--bad)}.warn{background:var(--warn)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12px;margin-top:6px}.kv b{color:var(--fg);font-weight:500}
+#top{display:flex;flex-wrap:wrap;gap:14px;align-items:center;color:var(--mut);font-size:12px}.bar{height:8px;background:#333;border-radius:4px;overflow:hidden;margin-top:4px}.bar i{display:block;height:100%;background:var(--acc)}
+</style></head><body>
+<h1>Pygmalion — 도구 사이트맵 · 헬스</h1>
+<div id="top">로딩…</div>
+<h2>학습 런 (live)</h2><div class="grid" id="runs"></div>
+<h2>뷰어 · 모니터</h2><div class="grid" id="svc"></div>
+<h2>문서 · 데이터 · 기타 도구</h2><div class="grid" id="docs"></div>
+<h2>백그라운드 헬퍼</h2><div class="grid" id="helpers"></div>
+<script>
+const H=location.hostname||'192.168.20.177';
+const SVC=[
+ {k:'viser_AB',name:'viser — AB 폐루프 (최신 .pt 자동 갱신, 토크 플롯)',url:`http://${H}:8089`,desc:'Torques 탭: 크랭크/무릎 토크 + 발목 환산 토크. Controls 탭: 명령 슬라이더·체크포인트 선택.'},
+ {k:'viser_RP',name:'viser — RP 직렬+포락',url:`http://${H}:8090`,desc:'동일 UI, RP 런 최신 체크포인트.'},
+ {k:'tensorboard',name:'TensorBoard (전 런)',url:`http://${H}:6006`,desc:'Train/mean_reward, Episode_Termination, Metrics/*, Curriculum/dr_levels, Perf/*'},
+ {k:'wandb',name:'Weights & Biases — project pygmalion',url:'https://wandb.ai/dongyub39-snu/pygmalion',desc:'런별 링크는 아래 런 카드에.'},
+ {k:'collision_viewer',name:'컬리전 웹 뷰어',url:`http://${H}:8892`,desc:'캡슐/박스/볼록껍질, 관절 슬라이더, AB 메커니즘 재생, geom 클릭 정보.'},
+ {k:'assembly_viewer',name:'조립 뷰어 (나사 호칭)',url:`http://${H}:8891`,desc:'283 체결부품, 클릭 → M4x16 등 호칭·규격·방향.'},
+];
+const DOCS=[
+ {name:'docs/93 AB vs RP 비교 계획',url:'/docs/93_ankle_ab_rp_comparison_plan.md'},{name:'docs/92 AB/RP 학습 세팅·모터·T-N·팔',url:'/docs/92_ankle_ab_rp_training_setup.md'},
+ {name:'docs/91 폐루프 발목 (선례·검증)',url:'/docs/91_closed_loop_ankle_rl.md'},{name:'docs/90 URDF/MJCF 파이프라인·DR',url:'/docs/90_urdf_mjcf_pipeline_and_dr.md'},
+ {name:'실험 레지스트리 docs/66',url:'/docs/66_experiment_registry.md'},{name:'런 노트 AB (§2c 리뷰표)',url:'/docs/experiments/2026-08-23_ankleAB_c2.md'},{name:'런 노트 RP',url:'/docs/experiments/2026-08-23_ankleRP_c2.md'},
+ {name:'비교 그래프 (stage 1)',url:'/docs/mujoco/assets/abrp_training_curves.png'},{name:'진행 그래프 AB / RP',url:'/docs/mujoco/assets/ankleAB_c2_progress.png'},
+ {name:'영상: AB 발목 실제 렌더',url:'/docs/video/loop_ankle_ab_render.mp4'},{name:'영상 폴더',url:'/docs/video/'},{name:'이미지 폴더',url:'/docs/img/'},
+ {name:'4절 링크 설계기 (HTML)',url:'/tools/fourbar_designer.html'},{name:'RSU 발목 설계기 (HTML)',url:'/tools/rsu_ankle_designer.html'},
+ {name:'동료 핸드오프 번들 README',url:'/tools/dashboard/handoff_README.md'},{name:'GPU 사용 로그 (csv)',url:'/mujoco-sim/mjlab/analysis/out/gpu_usage.csv'},{name:'리포지토리 루트 (파일 탐색)',url:'/'},
+];
+function dot(ok){return `<span class="dot ${ok?'ok':'bad'}"></span>`}
+function render(s){
+ const g=s.gpu||{};document.getElementById('top').innerHTML=`<span>갱신 ${s.time}</span><span>GPU ${g.util??'?'} % · ${g.mem_used??'?'}/${g.mem_total??'?'} MiB</span><span>load ${(s.load||0).toFixed(1)}</span><span>disk free ${s.disk_free_gb} GB</span>`;
+ document.getElementById('runs').innerHTML=Object.entries(s.runs).map(([k,r])=>{const m=r.metrics||{};const it=m.iter||{};const pct=it.max?100*it.i/it.max:0;const stale=(r.last_ckpt_age_s??1e9)>1200;
+  return `<div class="card">${dot(r.alive)}<a class="t" href="http://${H}:${r.viser_port}">${k}</a> <span style="color:var(--mut)">${r.alive?'training':'NOT RUNNING'}</span>
+  <div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div>
+  <div class="kv"><span>iter</span><b>${it.i??'?'} / ${it.max??'?'} (${pct.toFixed(1)} %)</b><span>reward</span><b>${m.reward??'?'}</b><span>fell_over</span><b>${m.fell??'?'}</b><span>s/iter</span><b>${m.it_time??'?'}</b><span>elapsed · ETA</span><b>${m.elapsed??'?'} · ${m.eta??'?'}</b>
+  <span>checkpoint</span><b>${r.last_ckpt??'-'} (${r.last_ckpt_age_s??'?'} s ago${stale?' ⚠ stale':''}, ${r.n_ckpt} saved)</b><span>롤아웃 클립</span><b>${r.clips}</b></div>
+  <p><a href="${r.wandb}" style="color:var(--acc)">wandb run</a> · <a href="http://${H}:${r.viser_port}" style="color:var(--acc)">viser live</a> · <a href="/docs/experiments/2026-08-23_${k}.md" style="color:var(--acc)">노트</a> · <a href="/mujoco-sim/mjlab/logs/${k}.log" style="color:var(--acc)">log</a></p></div>`}).join('');
+ document.getElementById('svc').innerHTML=SVC.map(x=>`<div class="card">${x.k==='wandb'?'<span class="dot ok"></span>':dot(s.services[x.k])}<a class="t" href="${x.url}" target="_blank">${x.name}</a><p>${x.desc}</p><p>${x.url}</p></div>`).join('');
+ document.getElementById('docs').innerHTML=DOCS.map(x=>`<div class="card"><a class="t" href="${x.url}">${x.name}</a><p>${x.url}</p></div>`).join('');
+ document.getElementById('helpers').innerHTML=Object.entries(s.helpers).map(([k,n])=>`<div class="card">${dot(n>0)}<b>${k}</b> <span style="color:var(--mut)">${n} proc</span></div>`).join('');
+}
+async function tick(){try{const r=await fetch('status.json?'+Date.now());render(await r.json());}catch(e){document.getElementById('top').textContent='status.json 읽기 실패: '+e;}}
+tick();setInterval(tick,15000);
+</script></body></html>
