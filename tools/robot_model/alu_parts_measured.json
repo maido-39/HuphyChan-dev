@@ -1,0 +1,40 @@
+{
+ "_about": "Handwritten masses (g) on the 3D-printed parts, read off five photos the user sent on 2026-08-23 and matched to CAD parts by shape + location + mass ratio. PLA at 100% infill is 1.24/2.70 = 0.46 of the aluminium CAD mass; anything above that is a misread or a misassignment. Confidence: high = shape and number unambiguous; med = shape fits, pair-mate (A/B) or side not provable from the photo; low = reading or shape uncertain - verify against the part in hand.",
+ "entries": [
+  {"occ": "HipYaw2Knee", "body": "Yaw2KneePlateA", "g": 98.1, "conf": "med", "photo": 1,
+   "read": "98.1", "note": "무릎 로터쪽 허벅지 트러스판. A/B 한 쌍 중 어느 쪽인지는 사진만으로 확정 불가 - 반대편 판에 적힌 값과 대조"},
+  {"occ": "Knee2Ankle", "body": "Knee2Ankle_RotorSide_1", "g": 61.2, "conf": "med", "photo": 1,
+   "read": "61.2", "note": "D형 판, 중앙 베어링 둘레 8볼트(로터 체결)"},
+  {"occ": "Knee2Ankle", "body": "Knee2Ankle_RotorSide_2", "g": 39.2, "conf": "med", "photo": 1,
+   "read": "39.2", "note": "61.2 판 아래 X-래티스 판"},
+  {"occ": "Knee2Ankle", "body": "Knee2Ankle_IdleSide_2", "g": 41.1, "conf": "low", "photo": 5,
+   "read": "41.1 (91.1?)", "alt": "91.1이면 Yaw2KneePlateB(297 g, 비율 0.31)",
+   "note": "반대편 X-래티스 판. 첫 글자가 4인지 9인지 불확실"},
+  {"occ": "Knee2Ankle", "body": "AnkleA2B_A_L", "g": 11.3, "conf": "low", "photo": 1,
+   "read": "11.3", "alt": "AnkleA2B_A_Support (1) (41 g)", "note": "RS03 아래 십자나사 2개 브래킷"},
+  {"occ": "Ankle2Feet", "body": "Ankle_Stopper_Pitch", "g": 6.0, "conf": "low", "photo": 1,
+   "read": "6.0", "note": "발목 우측 소형 부품. 비율 0.29"},
+  {"occ": "Knee2Ankle", "body": "AnkleA2B_A_Support", "g": 12.7, "conf": "med", "photo": 5,
+   "read": "12.7", "note": "십자나사 4개 사각판, 비율 0.31 정확히 일치"},
+  {"occ": "Knee2Ankle", "body": "AnkleA2B_A_R", "g": 12.0, "conf": "low", "photo": 5,
+   "read": "12.0", "alt": "Crank_A_Cover (32 g)", "note": "크랭크 옆 3볼트 브래킷"},
+  {"occ": "HipRoll2Yaw", "body": "HipRoll2YawA", "g": 57.2, "conf": "med", "photo": "2,4",
+   "read": "57.2 (두 사진 모두)", "alt": "HipRoll2YawB (136 g)", "note": "요 모터 바로 위 둥근 판, 상단 6볼트 로터 패턴. 사진 2와 4에서 같은 값 확인"},
+  {"occ": "HipPitch2Roll", "body": "HipPitchRotor", "g": 84.5, "conf": "low", "photo": 4,
+   "read": "84.5", "alt": "HipRoll2Yaw_Mount (165 g)",
+   "note": "세로로 선 판. 84.5 g를 PLA 상한 안에서 낼 수 있는 힙 부품은 CAD 199 g인 이 부품뿐(비율 0.42)"},
+  {"occ": "HipRoll2Yaw", "body": "HipRoll2Yaw_Mount", "g": 67.0, "conf": "med", "photo": "3,4",
+   "read": "67", "alt": "HipPitch2Roll_B (148 g, 비율 0.45 - 상한 직전)",
+   "note": "RS04가 들어앉은 X-래티스 블록, 대형 베어링 위"},
+  {"occ": "HipYaw2Knee", "body": "SupportA", "g": 40.0, "conf": "low", "photo": 2,
+   "read": "'4.0'", "note": "허벅지 육각 래티스 스트립. 4.0 g는 물리적으로 불가 - 40으로 해석. 확인 필요"},
+  {"occ": "HipYaw2Knee", "body": "SupportB", "g": 40.5, "conf": "low", "photo": 2,
+   "read": "'ㅣ0.5' (10.5? 40.5?)", "note": "반대편 스트립. 40.5면 비율 0.47로 PLA 상한 초과 → 판독 또는 배정 재확인"},
+  {"occ": "Ankle2Feet", "body": "Crank_A_Cover", "g": null, "conf": "none", "photo": 5,
+   "read": "R-A 라벨 아래 글자 판독 불가", "note": "둥근 3볼트 덮개판. 질량 미기입"}
+ ],
+ "unplaced": [
+  {"photo": 3, "read": "'ㅣㅣ' 또는 '77' (좌측 모서리, 세로)", "note": "어느 부품인지 특정 못함"},
+  {"photo": 1, "read": "R-B 라벨 옆 숫자", "note": "판독 불가"}
+ ]
+}
