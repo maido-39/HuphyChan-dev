@@ -122,7 +122,7 @@ def to_sim_vec(v):
     return R @ np.asarray(v, float)
 
 
-MOTOR_PROXIES = '/home/syaro/pyg_fea/fusion/motor_proxies_fusion.json'
+MOTOR_PROXIES = os.environ.get('PYG_MOTOR_PROXIES', '/home/syaro/pyg_fea/fusion/motor_proxies_fusion.json')
 CENTRELINE_MM = 5.0        # |x_cad| under this = on the centreline, drawn once, not mirrored
 
 
@@ -204,7 +204,10 @@ def main():
     tag = next((a.split('=')[1] for a in sys.argv if a.startswith('--tag=')), 'pygmalion_v2')
     mp = json.load(open(mpf))
     # ---- resolve joint ranges from the CAD sweep ----
-    rom = json.load(open(ROM_FILE)) if os.path.exists(ROM_FILE) else {}
+    # measured ranges are not optional: without the sweep file the old MJCF ranges would come
+    # back silently, and the ankle design caps with them (red team 2026-08-23)
+    assert os.path.exists(ROM_FILE), f'{ROM_FILE} missing - run tools/robot_model/rom_check.py'
+    rom = json.load(open(ROM_FILE))
     rom_log = []
     for b, (jn, ax, rg) in list(JOINT.items()):
         lo_d, hi_d = np.degrees(rg)
@@ -532,7 +535,7 @@ def main():
     print(f'MJCF compiled: {model.nbody} bodies, {model.njnt} joints, {model.ngeom} geoms, '
           f'{model.nmesh} meshes; total mass {model.body_subtreemass[1]:.3f} kg')
     print(f'  base_link (pelvis) = {m_b:.3f} kg · upper body {m_u:.3f} kg '
-          f'{"ARTICULATED (3 joints)" if articulated else "placeholder lump on the pelvis"}')
+          f'{"ARTICULATED (5 joints: waist yaw + shoulder pitch/roll x2)" if articulated else "placeholder lump on the pelvis"}')
     for b in CHAIN:
         m, c, I = legs[b]['L']
         print(f'  {b:16s} {m:6.3f} kg  com {np.round(c, 4)}  I diag {np.round(np.diag(I), 5)}')

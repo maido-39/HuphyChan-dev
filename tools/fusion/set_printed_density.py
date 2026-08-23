@@ -88,7 +88,7 @@ def run(_c: str):
                 if mat is None:
                     mat = des.materials.addByCopy(b.material, name)
                     existing[name] = mat
-                b.material = mat
+                b.material = mat                # PLA -> PLA with a new density is a new copy
                 for pid in ("structural_Density", "thermal_Density"):
                     pr = mat.materialProperties.itemById(pid)
                     if pr is not None:
@@ -122,12 +122,17 @@ def main():
         f"active document is {L['doc']!r}, not the URDF-export copy - refusing"
     plan, rows = {}, []
     for path, occ, body, mat, m_g, vol, live in L['bodies']:
-        if not path.startswith('/Joints_UnderBody') or 'Alumin' not in mat:
+        # aluminium bodies get converted; bodies already on a PLA material are RE-planned, so a
+        # changed measurement moves them (a new 'PLA <body> <density>' material is made when
+        # the value changed, the existing one reused when not) - the first version skipped
+        # them and was a no-op on any copy that had been converted once
+        if not path.startswith('/Joints_UnderBody') or not ('Alumin' in mat or mat.startswith('PLA ')):
             continue
         if any(t in path for t in ALT_BRANCH):
             continue
         if body in KEEP_AL or any(s in occ for s in SKIP_OCC):
             continue
+        al_g = vol * AL if mat.startswith('PLA ') else m_g     # what it weighs at aluminium
         r = ratio_by_body.get(body)
         # a part's own ratio is used only when its reading AND its match are confident;
         # an orange (low) reading such as SupportB's 0.465 would put a density above PLA
@@ -138,8 +143,11 @@ def main():
         dens = ratio * AL
         name = f'PLA {body} {dens:.3f}'
         plan[path] = [round(dens, 4), name]
-        rows.append(dict(path=path, body=body, vol=vol, al_g=m_g, ratio=round(ratio, 4),
-                         dens=round(dens, 4), new_g=round(vol * dens, 2),
+        cur = m_g / vol
+        if abs(cur - dens) < 0.01 * dens:
+            continue                                             # already at this density
+        rows.append(dict(path=path, body=body, vol=vol, al_g=al_g, ratio=round(ratio, 4),
+                         dens=round(dens, 4), new_g=round(vol * dens, 2), was_g=round(m_g, 2),
                          src=('measured ' + r['conf']) if r else 'mean'))
     json.dump(dict(doc=L['doc'], mean_ratio=mean_ratio, rows=rows), open(PLAN_OUT, 'w'),
               indent=1, ensure_ascii=False)
@@ -150,11 +158,15 @@ def main():
               f"{r['new_g']:7.1f}  {r['src']}")
     tot_al = sum(r['al_g'] for r in rows)
     tot_new = sum(r['new_g'] for r in rows)
-    print(f"\n{len(rows)} bodies (ONE side of the leg + pelvis as modelled): "
+    print(f"\n{len(rows)} bodies to change (ONE side of the leg + pelvis as modelled): "
           f"{tot_al / 1000:.3f} kg at aluminium -> {tot_new / 1000:.3f} kg printed  "
-          f"({len([r for r in rows if r['src'] != 'mean'])} with their own measured ratio)")
+          f"({len([r for r in rows if r['src'] != 'mean'])} with their own measured ratio); "
+          f"bodies already at their planned density are not listed")
     if not apply:
         print('DRY RUN - pass --apply')
+        return
+    if not plan:
+        print('nothing to apply - every body is already at its planned density')
         return
     # the connector silently skips scripts above 4 KiB, so the plan goes over in batches
     items = list(plan.items())

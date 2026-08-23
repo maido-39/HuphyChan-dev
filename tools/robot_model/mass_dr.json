@@ -22,9 +22,9 @@
    "mass_kg": 4.840512000000003,
    "n_bodies": 130,
    "classes": {
-    "fastener": 69,
-    "bearing": 53,
     "motor": 3,
+    "bearing": 53,
+    "fastener": 69,
     "printed_mean": 5
    },
    "mass_scale": {
@@ -121,6 +121,21 @@
      0.95,
      1.15
     ],
+    "com_effective_m": {
+     "x": [
+      -0.02,
+      0.02
+     ],
+     "y": [
+      -0.02,
+      0.02
+     ],
+     "z": [
+      -0.0201,
+      0.0201
+     ],
+     "note": "t plus the COM excursion d causes about the body origin"
+    },
     "note": "alpha: mass & inertia x e^(2a); t: COM shift [m] in the body frame; d is the residual inertia shape factor and ALSO stretches the COM about the body origin, so it is capped small"
    }
   },
@@ -128,9 +143,9 @@
    "mass_kg": 1.782904,
    "n_bodies": 54,
    "classes": {
-    "fastener": 48,
-    "bearing": 1,
     "motor": 1,
+    "bearing": 1,
+    "fastener": 48,
     "printed_mean": 4
    },
    "mass_scale": {
@@ -227,6 +242,21 @@
      0.95,
      1.05
     ],
+    "com_effective_m": {
+     "x": [
+      -0.005,
+      0.005
+     ],
+     "y": [
+      -0.0051,
+      0.0051
+     ],
+     "z": [
+      -0.005,
+      0.005
+     ],
+     "note": "t plus the COM excursion d causes about the body origin"
+    },
     "note": "alpha: mass & inertia x e^(2a); t: COM shift [m] in the body frame; d is the residual inertia shape factor and ALSO stretches the COM about the body origin, so it is capped small"
    }
   },
@@ -234,11 +264,11 @@
    "mass_kg": 1.286795,
    "n_bodies": 36,
    "classes": {
+    "motor": 1,
     "fastener": 30,
     "printed_mean": 1,
-    "motor": 1,
-    "printed_measured": 3,
-    "bearing": 1
+    "bearing": 1,
+    "printed_measured": 3
    },
    "mass_scale": {
     "p2_5": 0.9703446849664201,
@@ -334,6 +364,21 @@
      0.95,
      1.05
     ],
+    "com_effective_m": {
+     "x": [
+      -0.005,
+      0.005
+     ],
+     "y": [
+      -0.005,
+      0.005
+     ],
+     "z": [
+      -0.007,
+      0.007
+     ],
+     "note": "t plus the COM excursion d causes about the body origin"
+    },
     "note": "alpha: mass & inertia x e^(2a); t: COM shift [m] in the body frame; d is the residual inertia shape factor and ALSO stretches the COM about the body origin, so it is capped small"
    }
   },
@@ -341,12 +386,12 @@
    "mass_kg": 2.0703639999999996,
    "n_bodies": 83,
    "classes": {
+    "motor": 1,
     "fastener": 72,
     "printed_mean": 4,
-    "aluminium": 3,
-    "motor": 1,
+    "bearing": 1,
     "printed_measured": 2,
-    "bearing": 1
+    "aluminium": 3
    },
    "mass_scale": {
     "p2_5": 0.9643487794524007,
@@ -435,13 +480,28 @@
      0.005
     ],
     "d_range": [
-     -0.02,
-     0.02
+     -0.0149,
+     0.0149
     ],
     "mass_scale": [
      0.95,
      1.05
     ],
+    "com_effective_m": {
+     "x": [
+      -0.0055,
+      0.0055
+     ],
+     "y": [
+      -0.005,
+      0.005
+     ],
+     "z": [
+      -0.01,
+      0.01
+     ],
+     "note": "t plus the COM excursion d causes about the body origin"
+    },
     "note": "alpha: mass & inertia x e^(2a); t: COM shift [m] in the body frame; d is the residual inertia shape factor and ALSO stretches the COM about the body origin, so it is capped small"
    }
   },
@@ -449,12 +509,12 @@
    "mass_kg": 2.6458045000000014,
    "n_bodies": 134,
    "classes": {
+    "motor": 2,
     "fastener": 103,
     "printed_mean": 16,
-    "aluminium": 2,
-    "motor": 2,
+    "bearing": 6,
     "printed_measured": 5,
-    "bearing": 6
+    "aluminium": 2
    },
    "mass_scale": {
     "p2_5": 0.9776534939426205,
@@ -550,6 +610,21 @@
      0.95,
      1.05
     ],
+    "com_effective_m": {
+     "x": [
+      -0.0054,
+      0.0054
+     ],
+     "y": [
+      -0.005,
+      0.005
+     ],
+     "z": [
+      -0.0083,
+      0.0083
+     ],
+     "note": "t plus the COM excursion d causes about the body origin"
+    },
     "note": "alpha: mass & inertia x e^(2a); t: COM shift [m] in the body frame; d is the residual inertia shape factor and ALSO stretches the COM about the body origin, so it is capped small"
    }
   },
@@ -654,6 +729,21 @@
      0.894,
      1.119
     ],
+    "com_effective_m": {
+     "x": [
+      -0.005,
+      0.005
+     ],
+     "y": [
+      -0.005,
+      0.005
+     ],
+     "z": [
+      -0.005,
+      0.005
+     ],
+     "note": "t plus the COM excursion d causes about the body origin"
+    },
     "note": "alpha: mass & inertia x e^(2a); t: COM shift [m] in the body frame; d is the residual inertia shape factor and ALSO stretches the COM about the body origin, so it is capped small"
    }
   },
@@ -663,9 +753,9 @@
    "classes": {
     "fastener": 6,
     "printed_mean": 10,
-    "aluminium": 1,
+    "bearing": 10,
     "printed_measured": 1,
-    "bearing": 10
+    "aluminium": 1
    },
    "mass_scale": {
     "p2_5": 0.9518649382242439,
@@ -761,6 +851,21 @@
      0.95,
      1.05
     ],
+    "com_effective_m": {
+     "x": [
+      -0.0051,
+      0.0051
+     ],
+     "y": [
+      -0.005,
+      0.005
+     ],
+     "z": [
+      -0.0051,
+      0.0051
+     ],
+     "note": "t plus the COM excursion d causes about the body origin"
+    },
     "note": "alpha: mass & inertia x e^(2a); t: COM shift [m] in the body frame; d is the residual inertia shape factor and ALSO stretches the COM about the body origin, so it is capped small"
    }
   },
@@ -768,9 +873,9 @@
    "mass_kg": 5.965762000000002,
    "n_bodies": 25,
    "classes": {
-    "aluminium": 20,
     "motor": 4,
-    "fastener": 1
+    "fastener": 1,
+    "aluminium": 20
    },
    "mass_scale": {
     "p2_5": 0.9846865198835975,
@@ -866,6 +971,21 @@
      0.95,
      1.15
     ],
+    "com_effective_m": {
+     "x": [
+      -0.0201,
+      0.0201
+     ],
+     "y": [
+      -0.02,
+      0.02
+     ],
+     "z": [
+      -0.0218,
+      0.0218
+     ],
+     "note": "t plus the COM excursion d causes about the body origin"
+    },
     "note": "alpha: mass & inertia x e^(2a); t: COM shift [m] in the body frame; d is the residual inertia shape factor and ALSO stretches the COM about the body origin, so it is capped small"
    }
   },
@@ -873,8 +993,8 @@
    "mass_kg": 1.177606,
    "n_bodies": 4,
    "classes": {
-    "aluminium": 3,
-    "motor": 1
+    "motor": 1,
+    "aluminium": 3
    },
    "mass_scale": {
     "p2_5": 0.9709331257272665,
@@ -970,6 +1090,21 @@
      0.95,
      1.05
     ],
+    "com_effective_m": {
+     "x": [
+      -0.005,
+      0.005
+     ],
+     "y": [
+      -0.005,
+      0.005
+     ],
+     "z": [
+      -0.005,
+      0.005
+     ],
+     "note": "t plus the COM excursion d causes about the body origin"
+    },
     "note": "alpha: mass & inertia x e^(2a); t: COM shift [m] in the body frame; d is the residual inertia shape factor and ALSO stretches the COM about the body origin, so it is capped small"
    }
   },
@@ -977,9 +1112,9 @@
    "mass_kg": 2.8429819999999997,
    "n_bodies": 5,
    "classes": {
-    "aluminium": 1,
+    "fastener": 3,
     "bearing": 1,
-    "fastener": 3
+    "aluminium": 1
    },
    "mass_scale": {
     "p2_5": 0.9789087122724621,
@@ -1075,6 +1210,21 @@
      0.95,
      1.05
     ],
+    "com_effective_m": {
+     "x": [
+      -0.0051,
+      0.0051
+     ],
+     "y": [
+      -0.005,
+      0.005
+     ],
+     "z": [
+      -0.0072,
+      0.0074
+     ],
+     "note": "t plus the COM excursion d causes about the body origin"
+    },
     "note": "alpha: mass & inertia x e^(2a); t: COM shift [m] in the body frame; d is the residual inertia shape factor and ALSO stretches the COM about the body origin, so it is capped small"
    }
   }

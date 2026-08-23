@@ -134,12 +134,23 @@ def main():
         hi_m = max(mq[2], 1.0 + STRUCT['mass_floor'] + (STRUCT['trunk_mass_extra'] if trunk else 0.0))
         cf = STRUCT['trunk_com_floor_m'] if trunk else STRUCT['com_floor_m']
         tr = [[round(min(cq[0][i], -cf), 4), round(max(cq[2][i], cf), 4)] for i in range(3)]
-        dd = min(max(abs(d_lo), abs(d_hi)), STRUCT['d_cap'])
+        # d stretches the mass distribution about the BODY ORIGIN, so it moves the COM by
+        # |c_i| (e^d - 1) on each axis - on the thigh (COM 0.33 m below the joint) a d of 0.02
+        # is 6.7 mm, more than the whole COM floor. Cap d per link so that excursion stays
+        # within the floor, and report the resulting effective COM envelope honestly.
+        c_body = (R @ (c0 - np.array(ORIGIN_CAD[link]))) / 1000.0      # nominal COM, body frame
+        big = np.abs(c_body) > 1e-3
+        d_by_com = float(np.log(1.0 + cf / np.abs(c_body[big])).min()) if big.any() else STRUCT['d_cap']
+        dd = min(max(abs(d_lo), abs(d_hi)), STRUCT['d_cap'], d_by_com)
+        eff = [[round(float(tr[i][0] - abs(c_body[i]) * (np.exp(dd) - 1)), 4),
+                round(float(tr[i][1] + abs(c_body[i]) * (np.exp(dd) - 1)), 4)] for i in range(3)]
         report[link]['mjlab_pseudo_inertia_recommended'] = dict(
             alpha_range=[round(float(np.log(lo_m) / 2), 4), round(float(np.log(hi_m) / 2), 4)],
             t1_range=tr[0], t2_range=tr[1], t3_range=tr[2],
             d_range=[round(-dd, 4), round(dd, 4)],
             mass_scale=[round(float(lo_m), 3), round(float(hi_m), 3)],
+            com_effective_m=dict(x=eff[0], y=eff[1], z=eff[2],
+                                 note='t plus the COM excursion d causes about the body origin'),
             note='alpha: mass & inertia x e^(2a); t: COM shift [m] in the body frame; d is '
                  'the residual inertia shape factor and ALSO stretches the COM about the '
                  'body origin, so it is capped small')
@@ -187,11 +198,13 @@ def main():
                  f'({n} samples) - the ranges domain randomization has to cover', fontsize=10.5)
     fig.tight_layout()
     fig.savefig(OUT_PNG, dpi=130)
-    print(f"\n{'link':18s} {'RECOMMENDED mass scale':>24s} {'COM +- [mm] x/y/z':>24s} {'alpha':>16s}")
+    print(f"\n{'link':18s} {'RECOMMENDED mass':>18s} {'t +- [mm] x/y/z':>17s} {'d':>7s} {'effective COM +- [mm]':>22s} {'alpha':>16s}")
     for l, r in report.items():
         rc = r['mjlab_pseudo_inertia_recommended']
         com = '/'.join(f"{max(abs(rc[k][0]), abs(rc[k][1]))*1000:.0f}" for k in ('t1_range', 't2_range', 't3_range'))
-        print(f"{l:18s} {rc['mass_scale'][0]:10.3f}..{rc['mass_scale'][1]:5.3f} {com:>24s} {rc['alpha_range'][0]:8.4f}..{rc['alpha_range'][1]:7.4f}")
+        ce = rc['com_effective_m']
+        eff = '/'.join(f"{max(abs(ce[k][0]), abs(ce[k][1]))*1000:.1f}" for k in ('x', 'y', 'z'))
+        print(f"{l:18s} {rc['mass_scale'][0]:8.3f}..{rc['mass_scale'][1]:5.3f} {com:>17s} {rc['d_range'][1]:7.4f} {eff:>22s} {rc['alpha_range'][0]:8.4f}..{rc['alpha_range'][1]:7.4f}")
     print(f'-> {OUT_JSON}\n-> {OUT_PNG}')
 
 

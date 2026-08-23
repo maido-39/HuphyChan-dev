@@ -63,9 +63,9 @@
       <inertial pos="0.000579519 -0.00134141 0.0307872" mass="4.8405" fullinertia="0.0182081 0.0183896 0.0112987 2.29828e-05 -6.62215e-05 -0.000271916"/>
       <geom mesh="pelvis" class="visual"/>
       <geom name="pelvis_hull" mesh="pelvis_hull" class="hull"/>
-      <geom name="L_hip_pitch_motor" type="cylinder" size="0.0600 0.0278" pos="-0.05288 -0.02732 -0.05380" zaxis="0.0000 1.0000 0.0000" class="visual" material="black"/>
+      <geom name="L_hip_pitch_motor" type="cylinder" size="0.0600 0.0278" pos="0.00065 -0.02962 -0.00044" zaxis="0.0000 1.0000 0.0000" class="visual" material="black"/>
       <geom name="waist_yaw_motor" type="cylinder" size="0.0600 0.0278" pos="0.00053 0.00058 0.09393" zaxis="0.0000 0.0000 1.0000" class="visual" material="black"/>
-      <geom name="R_hip_pitch_motor" type="cylinder" size="0.0600 0.0278" pos="-0.05288 0.02732 -0.05380" zaxis="0.0000 -1.0000 0.0000" class="visual" material="black"/>
+      <geom name="R_hip_pitch_motor" type="cylinder" size="0.0600 0.0278" pos="0.00065 0.02962 -0.00044" zaxis="0.0000 -1.0000 0.0000" class="visual" material="black"/>
       <geom name="base_pelvis_collision" class="collision" type="box" pos="0 0 0.008" size="0.069 0.045 0.075"/>
       <site name="imu_in_base" size="0.03" pos="0.004 0 0.241"/>
       <body name="L_hip_pitch_link" pos="0 -0.1237 0">

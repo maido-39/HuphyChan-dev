@@ -9,7 +9,9 @@ The connector's stdout capture returns nothing on this Fusion build, so the payl
 back through the exception channel (mcp_client.script). It carries the whole document in
 one call.
 
-Usage: dump_bodies.py [out.json]     (default /home/syaro/pyg_fea/fusion/bodies.json)
+Usage: dump_bodies.py [out.json] [--expect=<document name prefix>]
+       (default /home/syaro/pyg_fea/fusion/bodies.json; with --expect the dump is refused,
+        and nothing written, unless the ACTIVE document's name starts with the prefix)
 """
 import json
 import sys
@@ -27,7 +29,10 @@ def walk(o, path, live, out):
         b = o.bRepBodies.item(i)
         pr = b.physicalProperties
         xx, yy, zz, xy, yz, xz = pr.getXYZMomentsOfInertia()[1:]
+        bb = b.boundingBox
         out[p + "::" + b.name] = {
+            "bb": [round(bb.minPoint.x*10,1), round(bb.minPoint.y*10,1), round(bb.minPoint.z*10,1),
+                   round(bb.maxPoint.x*10,1), round(bb.maxPoint.y*10,1), round(bb.maxPoint.z*10,1)],
             "m": round(pr.mass, 6), "v": round(pr.volume, 4),
             "c": [round(pr.centerOfMass.x, 5), round(pr.centerOfMass.y, 5),
                   round(pr.centerOfMass.z, 5)],
@@ -49,9 +54,14 @@ def run(_context: str):
 
 
 def main():
-    dest = sys.argv[1] if len(sys.argv) > 1 else '/home/syaro/pyg_fea/fusion/bodies.json'
+    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    dest = args[0] if args else '/home/syaro/pyg_fea/fusion/bodies.json'
+    expect = next((a.split('=', 1)[1] for a in sys.argv if a.startswith('--expect=')), None)
     M.connect()
     r = M.script(SRC)
+    if expect and not r['doc'].startswith(expect):
+        # refuse BEFORE writing: a wrong active document must not overwrite the tagged dump
+        sys.exit(f"!! active document is {r['doc']!r}, expected {expect}* - nothing written")
     B = r['bodies']
     json.dump(B, open(dest, 'w'), indent=0)
     live = {k: v for k, v in B.items() if v['live']}
