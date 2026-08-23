@@ -60,6 +60,7 @@ Suggested playlists: **Huphy 1.0 - sim model & RL** (2026-08-23 clips), **Huphy 
 - Pattern search over crank / rod / anchor geometry with HARD constraints (Deb rules): ROM reach, torque, torque-speed, swing angle
 - Soft composite scores were rejected after they picked constraint-violating designs as “best”
 - Slowed 4×, not real-time
+- ⚠ **Superseded design stage** (docs/71 §7e, 2026-08-04; rendered 08-11). Geometry shown — A_r 70 · B_r 62.9 · RP_h 20, P99 margin 16.3 % — is **not** the final design. Invalidated afterwards by the ball-joint ±13→±20 redesign (§8), the pitch-sign bug (§9) and the swing_foot arcsin→arccos bug (§10c); the pattern-search **method itself** was dropped in §8e after it was shown to land in 16 distinct local minima. Design of record = **v9h2** (docs/76 §1) → see clip 17
 
 ## 9. `20260812 201533 Huphy 1.0 - 2-RSU ankle replaying a learned gait, crank torques`  (20 s)
 
@@ -167,3 +168,11 @@ Suggested playlists: **Huphy 1.0 - sim model & RL** (2026-08-23 clips), **Huphy 
 - Joint sliders, bent-init pose, and a loop-consistent crank trajectory recorded from MuJoCo so the passive foot moves correctly
 - Click a geom for name / size / body / mass / contype
 - Screen capture under software WebGL — slower than live
+
+## 17. `20260824 012359 Huphy 1.0 - 2-RSU ankle geometry optimisation, final DE convergence (160 generations)`  (23 s)
+
+**Description:**
+- The optimisation that actually produced the design of record: **v9h2** differential evolution, NP = 80, F = 0.6, CR = 0.9, 160 generations, Deb lexicographic hard constraints (feasibility first, then maximise the worst margin)
+- Left: the 2-RSU geometry of the best individual at each generation (neutral pose). Right top: P99 min-margin vs generation — first feasible at gen 4, final **+3.41 %**. Right bottom: per-constraint margins, orange = binding
+- Final: A_r 65.0 · B_r 62.0 · RP_B 50.5 · RP_r 43.8 · A_h 41.2 · B2RP 200.0 · RP_h 10.0 · A_L 289.1 · B_L 193.3 mm; binding = rod-end swing (JS6) +3.4 %, human-gait coverage +4.1 %, transmission ratio +3.8 %
+- Rendered from the stored per-generation trace (`romscan_gens_v9h2_f0.jsonl`), no optimisation re-run. 1 frame = 1 generation, not real-time. Replaces clip 8 as the optimisation-process clip. docs/71 §17j, docs/76 §1
