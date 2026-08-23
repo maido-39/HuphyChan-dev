@@ -138,13 +138,17 @@ def classify(path):
     return None
 
 
-def main():
-    B = json.load(open(FUS))
+def collect(B):
+    """Every counted body as (link, item) with item = dict(path, m, com[mm], I_o[kg mm2]).
+
+    This is the whole physics of the aggregation in one place so that mass_dr.py can
+    re-run it with perturbed masses: each item's tensor scales with its mass for fixed
+    geometry, so a density error is a scale on (m, I_o) and nothing else.
+    """
     bodies = {b: [] for b in ('pelvis', 'hip_pitch_link', 'hip_roll_link', 'thigh', 'shin',
                               'ankle_pitch_link', 'foot') + UPPER_BODIES}
     rods = []
-    skipped = 0.0
-    hidden_real = 0.0
+    skipped = hidden_real = 0.0
     for path, rec in B.items():
         if is_alternative(path):                              # alternative design branch
             skipped += rec['m']
@@ -162,7 +166,7 @@ def main():
                 f'{path}: CAD says {m * 1000:.1f} g, catalogue {MOTOR_CAT[fam] * 1000:.0f} g - '
                 'run tools/fusion/set_placeholder_density.py --apply')
             m, I_o = MOTOR_CAT[fam], I_o * k
-        item = dict(path=path, m=m, com=com, I_o=I_o)
+        item = dict(path=path, m=m, com=com, I_o=I_o, mat=rec.get('mat', ''))
         if who == 'ANKLE_SPLIT':
             # the two push rods: identified by volume (their COM sits between the ball joints)
             if 15.0 < rec['v'] < 21.0 and -780 < com[2] < -650:
@@ -177,25 +181,41 @@ def main():
         bodies[who].append(item)
         Mx = np.diag([-1.0, 1.0, 1.0])
         if fam and any(k in path for k in MIRROR_TO_PELVIS) and who == 'pelvis':
-            bodies['pelvis'].append(dict(path=path + ' (R mirror)', m=m, com=Mx @ com,
+            bodies['pelvis'].append(dict(item, path=path + ' (R mirror)', com=Mx @ com,
                                          I_o=Mx @ I_o @ Mx))
         if who == 'torso' and 'Shoulder_Pitch' in path:
-            bodies['torso'].append(dict(path=path + ' (mirror)', m=m, com=Mx @ com,
+            bodies['torso'].append(dict(item, path=path + ' (mirror)', com=Mx @ com,
                                         I_o=Mx @ I_o @ Mx))
     for r in rods:                                            # half to each end
         for b in ('shin', 'foot'):
-            bodies[b].append(dict(path=r['path'] + ' /2', m=r['m'] / 2, com=r['com'],
-                                  I_o=r['I_o'] / 2))
+            bodies[b].append(dict(r, path=r['path'] + ' /2', m=r['m'] / 2, I_o=r['I_o'] / 2))
+    return bodies, skipped, hidden_real
 
+
+def aggregate(items, scale=None):
+    """(mass, com[mm], I_com[kg mm2]) of one rigid body from its items.
+
+    `scale` maps item path -> multiplicative factor on that item's mass (and tensor).
+    """
+    M = C = Io = 0.0
+    for it in items:
+        k = 1.0 if scale is None else scale.get(it['path'], 1.0)
+        M = M + k * it['m']
+        C = C + k * it['m'] * it['com']
+        Io = Io + k * it['I_o']
+    C = C / M
+    return M, C, to_com(Io, M, C)
+
+
+def main():
+    B = json.load(open(FUS))
+    bodies, skipped, hidden_real = collect(B)
     out = dict(source='Fusion 360 260819_HumanMesh_wUpper_OMAKASE v4 via MCP',
                units='kg, mm, kg*mm^2', motor_masses=MOTOR_CAT, bodies={})
     tot = 0.0
     print(f"{'body':18s} {'mass':>8s}  {'COM (mm)':>28s}  principal I [kg mm2]")
     for b, items in bodies.items():
-        M = sum(i['m'] for i in items)
-        C = sum(i['m'] * i['com'] for i in items) / M
-        Io = sum(i['I_o'] for i in items)
-        Ic = to_com(Io, M, C)
+        M, C, Ic = aggregate(items)
         w = np.linalg.eigvalsh(Ic)
         assert w.min() > 0, f'{b}: non-physical inertia {w}'
         out['bodies'][b] = dict(mass=float(M), com=[float(v) for v in C],
@@ -209,9 +229,9 @@ def main():
     out['whole_robot_kg'] = float(whole)
     print(f"\nalternative branches excluded: {skipped:.3f} kg "
           f"(ArmR_fullDoF / Actuators-NotUse / Human_Solid REF)")
-    print(f"switched off in the CAD view but counted: {hidden_real * 1000:.1f} g "
-          f"({sum(1 for p, r in B.items() if not r.get('live', True) and not is_alternative(p))} "
-          f"fasteners, all inside CenterParts)")
+    n_hidden = sum(1 for p, r in B.items() if not r.get('live', True) and not is_alternative(p))
+    print(f"hidden in the CAD view but counted (a light bulb is a view state): "
+          f"{n_hidden} bodies, {hidden_real:.3f} kg")
     print(f"one leg {leg:.3f} · one arm side {arms:.3f} · pelvis {out['bodies']['pelvis']['mass']:.3f}"
           f" · torso {out['bodies']['torso']['mass']:.3f}")
     print(f"WHOLE ROBOT {whole:.3f} kg  (pelvis + torso once, legs x2, arms x2)")
