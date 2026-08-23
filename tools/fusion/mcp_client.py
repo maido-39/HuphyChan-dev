@@ -81,6 +81,18 @@ if __name__ == '__main__':
                          ensure_ascii=False, indent=1)[:6000])
 
 
+# The connector silently does NOT execute a script source above 4 KiB and still answers
+# {"success": true, "message": ""} - measured 2026-08-23: 3777 B ran, 4289 B did not. Refuse
+# anything near that rather than let an edit vanish without a trace.
+SCRIPT_MAX = 3800
+
+
+def _guard(src, what):
+    if len(src.encode()) > SCRIPT_MAX:
+        raise ValueError(f'{what}: script is {len(src.encode())} B, above the connector\'s '
+                         f'~4 KiB limit - it would be silently skipped. Split the work.')
+
+
 def script(src, tries=4):
     """Run a Fusion script and get its payload back.
 
@@ -92,6 +104,7 @@ def script(src, tries=4):
     import time
     wrapper = ('import json\nclass _P(Exception):\n    pass\n'
                'def emit(o):\n    raise _P("JSONSTART" + json.dumps(o))\n' + src)
+    _guard(wrapper, 'script')
     last = ''
     for k in range(tries):
         r = call('fusion_mcp_execute', {'featureType': 'script', 'object': {'script': wrapper}})
@@ -116,6 +129,7 @@ def run_script(src):
     when the script ends in an exception - so anything that CHANGES the design has to
     return quietly and be verified by a separate read.
     """
+    _guard(src, 'run_script')
     r = call('fusion_mcp_execute', {'featureType': 'script', 'object': {'script': src}})
     if isinstance(r, dict) and not r.get('success', False):
         raise RuntimeError(r.get('error', r))

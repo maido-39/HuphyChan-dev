@@ -95,11 +95,61 @@ PLA 1.24 / Al 2.70 = **0.459** 가 100 % 충전의 상한이다. 평균 0.34는 
    **예외(사용자 확인 2026-08-23): 발목 AB 푸시로드 `Arm_A`·`Arm_B`(긴 바)는 알루미늄 가공품** — 밀도 갱신 대상에서
    제외, 비율 통계에도 넣지 않는다. 시트에서 회색, CAD 질량 그대로(54.8 / 38.8 g). `alu_parts_measured.json`의
    `aluminium` 목록이 기준.
-3. **밀도 적용 두 가지 중 선택:**
+3. ~~밀도 적용 두 가지 중 선택~~ → **(a)로 완료, §5**:
    - (a) 실측값이 있는 20개는 **실측 질량 그대로**(밀도 = 실측/체적), 나머지 출력 부품은 **0.92 g/cm³**.
    - (b) 전부 0.92 g/cm³ 일괄. 단순하지만 발판 같은 두꺼운 부품은 1.8배 과대.
    → (a) 권장. `set_placeholder_density.py`와 같은 방식(부품별 재질 복사 + 밀도 편집)으로 Fusion에 쓴다.
 4. `dump_bodies.py` → `massprops_fusion.py` → `build_robot.py` → `validate_robot.py` 순으로 재생성.
+
+## §5 CAD 밀도 갱신 → URDF (2026-08-23, 완료)
+
+**Fusion:** 0819 최신본(v7)을 **`260819_HumanMesh_wUpper_URDFexport_printedDensity`** 로 따로 저장하고(설명에
+"URDF export copy … do not design in this file"), 그 복사본에만 밀도를 썼다 (`tools/fusion/set_printed_density.py`,
+v2 저장). 원본 설계 파일은 건드리지 않았다.
+
+적용 규칙 (하체 `Joints_UnderBody`의 Aluminum 6061 바디 **50개**):
+- 측정·대조가 확실한 부품(초록·노랑 9개) → **그 부품의 v5 비율 × 2.70** (형상이 v5↔0819에서 바뀐 부품은 g이 아니라
+  비율이 이전되도록)
+- 나머지, 그리고 판독이 불확실(주황)했던 부품 → **0.329 × 2.70 = 0.888 g/cm³** (SupportB의 0.465를 그대로 쓰면 밀도
+  1.26 > PLA 1.24가 CAD에 박힌다)
+- 제외: `Arm_A`·`Arm_B`(알루 푸시로드), `CenterPin`, 베어링·모터(이미 카탈로그 보정), 상체 전부(실측 없음 → 알루 유지)
+- 전구 꺼짐은 표시 상태일 뿐이라 무시 — 이 문서는 발목 그룹 외 전부 꺼져 있었다
+
+**결과 (링크별, 한쪽 기준):**
+
+| 링크 | 알루 6061 (kg) | **출력물 (kg)** | 변화 |
+|---|---|---|---|
+| pelvis | 5.367 | **4.841** | -10 % |
+| hip_pitch_link | 2.174 | **1.783** | -18 % |
+| hip_roll_link | 1.618 | **1.287** | -20 % |
+| thigh | 2.929 | **2.070** | -29 % |
+| shin | 3.627 | **2.646** | -27 % |
+| ankle_pitch_link | 0.085 | **0.040** | -53 % |
+| foot | 1.030 | **0.424** | -59 % |
+| torso | 5.966 | **5.966** | +0 % |
+| shoulder_pitch_link | 1.178 | **1.178** | +0 % |
+| arm | 2.841 | **2.843** | +0 % |
+
+**전체 42.30 → 35.35 kg** (−6.95 kg). 다리 한쪽 11.46 → 8.25 kg.
+
+**출력 파일 (새 이름, v2 알루 모델은 그대로 둠):**
+- `pygmalion_locomotion/assets/pygmalion_v2/pygmalion_v3_printed.urdf` (+ 같은 이름 `.xml`)
+- `mujoco-sim/mjlab/src/mjlab/asset_zoo/robots/pygmalion/xmls/pygmalion_v3_printed.xml` — `PYG_V2=1 PYG_V2_XML=pygmalion_v3_printed.xml`
+- 질량 원천: `/home/syaro/pyg_fea/fusion/bodies_printed.json` → `robot_massprops_printed.json`
+
+**전방 축:** CAD에서 전방은 **−Y**(발판이 발목축에서 −Y로 180 mm, +Y로 80 mm). 빌더가 `sim = (−y, x, z)`, 즉 z축
++90° 회전을 적용해 URDF/MJCF에서는 **전방 = +X**다. 검증: `foot.stl` 링크프레임에서 발끝 +180 / 뒤꿈치 −80 mm,
+무릎 −60°에서 발이 −x(뒤)로 0.41 m, 발목 RS03이 정강이 −x(뒤)에 위치.
+
+![출력물 모델](img/pygmalion_v3_printed_zero_pose.png)
+
+검증(`validate_robot.py --tag=pygmalion_v3_printed`): 35.348 kg, L/R 규약 pygmalion.xml과 일치, 가동범위 v2와 동일,
+9관절 중 7개 전 범위 자기충돌 0.
+
+### 커넥터 함정 하나 더 (기록)
+`fusion_mcp_execute`는 **스크립트 소스가 4 KiB를 넘으면 실행하지 않고도 `success: true`** 를 돌려준다
+(3777 B 실행, 4289 B 무시). 50개 밀도 계획을 한 스크립트에 넣었다가 "성공 0건"을 세 번 겪고 찾았다.
+`mcp_client`가 3.8 KB 초과를 거부하고, 적용은 묶음으로 나눈다.
 
 ## §4 기록 — 판독 과정의 함정
 

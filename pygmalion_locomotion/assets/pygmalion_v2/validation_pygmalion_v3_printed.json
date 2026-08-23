@@ -1,0 +1,227 @@
+{
+ "mass_total": 35.347532,
+ "hip_to_sole": 0.903,
+ "standing_base_z": 0.903,
+ "sweeps": {
+  "hip_pitch": {
+   "range_deg": [
+    -119.99999999999999,
+    25.0
+   ],
+   "self_contacts": [],
+   "n_contacts": 0,
+   "foot_x": [
+    -0.43142478912475024,
+    0.8631693343982985
+   ],
+   "foot_z": [
+    0.1368631812457417,
+    1.3650480947161667
+   ]
+  },
+  "hip_roll": {
+   "range_deg": [
+    -85.0,
+    25.0
+   ],
+   "self_contacts": [
+    [
+     -85.0,
+     "L_thigh_link",
+     "L_arm_link",
+     -0.0117
+    ],
+    [
+     -83.2,
+     "L_thigh_link",
+     "L_arm_link",
+     -0.0121
+    ],
+    [
+     -81.3,
+     "L_thigh_link",
+     "L_arm_link",
+     -0.0127
+    ],
+    [
+     -79.5,
+     "L_thigh_link",
+     "L_arm_link",
+     -0.0134
+    ],
+    [
+     -77.7,
+     "L_thigh_link",
+     "L_arm_link",
+     -0.0142
+    ],
+    [
+     -75.8,
+     "L_thigh_link",
+     "L_arm_link",
+     -0.0152
+    ]
+   ],
+   "n_contacts": 101,
+   "foot_x": [
+    -0.07500000000000001,
+    -0.07499999999999998
+   ],
+   "foot_z": [
+    0.1400582151167643,
+    0.9250460612370142
+   ]
+  },
+  "hip_yaw": {
+   "range_deg": [
+    -45.0,
+    45.0
+   ],
+   "self_contacts": [],
+   "n_contacts": 0,
+   "foot_x": [
+    -0.075,
+    -0.05303300858899106
+   ],
+   "foot_z": [
+    0.1399999999999998,
+    0.14000000000000018
+   ]
+  },
+  "knee": {
+   "range_deg": [
+    -119.99999999999999,
+    0.0
+   ],
+   "self_contacts": [],
+   "n_contacts": 0,
+   "foot_x": [
+    -0.5358990788396377,
+    -0.075
+   ],
+   "foot_z": [
+    0.14,
+    0.9009807621135331
+   ]
+  },
+  "ankle_pitch": {
+   "range_deg": [
+    -50.0,
+    29.999999999999996
+   ],
+   "self_contacts": [],
+   "n_contacts": 0,
+   "foot_x": [
+    -0.075,
+    -0.075
+   ],
+   "foot_z": [
+    0.14,
+    0.14
+   ]
+  },
+  "ankle_roll": {
+   "range_deg": [
+    -20.0,
+    20.0
+   ],
+   "self_contacts": [],
+   "n_contacts": 0,
+   "foot_x": [
+    -0.075,
+    -0.075
+   ],
+   "foot_z": [
+    0.14,
+    0.14
+   ]
+  },
+  "waist_yaw": {
+   "range_deg": [
+    -59.99999999999999,
+    59.99999999999999
+   ],
+   "self_contacts": [],
+   "n_contacts": 0,
+   "foot_x": [
+    -0.075,
+    -0.075
+   ],
+   "foot_z": [
+    0.14,
+    0.14
+   ]
+  },
+  "shoulder_pitch": {
+   "range_deg": [
+    -180.0,
+    59.99999999999999
+   ],
+   "self_contacts": [],
+   "n_contacts": 0,
+   "foot_x": [
+    -0.075,
+    -0.075
+   ],
+   "foot_z": [
+    0.14,
+    0.14
+   ]
+  },
+  "shoulder_roll": {
+   "range_deg": [
+    -32.0,
+    29.999999999999996
+   ],
+   "self_contacts": [
+    [
+     1.1,
+     "L_thigh_link",
+     "L_arm_link",
+     -0.0008
+    ],
+    [
+     2.1,
+     "L_thigh_link",
+     "L_arm_link",
+     -0.0127
+    ],
+    [
+     2.1,
+     "L_thigh_link",
+     "L_arm_link",
+     -0.011
+    ],
+    [
+     3.1,
+     "L_thigh_link",
+     "L_arm_link",
+     -0.0245
+    ],
+    [
+     3.1,
+     "L_thigh_link",
+     "L_arm_link",
+     -0.0221
+    ],
+    [
+     4.2,
+     "L_thigh_link",
+     "L_arm_link",
+     -0.035
+    ]
+   ],
+   "n_contacts": 83,
+   "foot_x": [
+    -0.075,
+    -0.075
+   ],
+   "foot_z": [
+    0.14,
+    0.14
+   ]
+  }
+ },
+ "I_hip_pitch_axis": 1.6390146024773498,
+ "I_knee_axis": 0.29277063464863556
+}

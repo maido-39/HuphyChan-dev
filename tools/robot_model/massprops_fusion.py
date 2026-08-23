@@ -41,11 +41,12 @@ it does not match is a fastener on a fully visible sub-assembly.
 Usage: massprops_fusion.py   (needs bodies.json from the MCP dump)
 """
 import json
+import os
 
 import numpy as np
 
-FUS = '/home/syaro/pyg_fea/fusion/bodies.json'
-OUT = '/home/syaro/pyg_fea/fusion/robot_massprops_fusion.json'
+FUS = os.environ.get('PYG_BODIES', '/home/syaro/pyg_fea/fusion/bodies.json')
+OUT = os.environ.get('PYG_MASSPROPS', '/home/syaro/pyg_fea/fusion/robot_massprops_fusion.json')
 ANKLE_Z = -800.0                      # mm, CAD frame
 # Catalogue masses (RobStride user manuals 260713, "Mechanical characteristic"). The CAD
 # placeholders now carry these masses directly - tools/fusion/set_placeholder_density.py

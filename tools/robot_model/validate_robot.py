@@ -28,7 +28,10 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.collections import PolyCollection  # noqa: E402
 
 REPO = '/home/syaro/MikuchanRemote/Human-Pygmalion'
-XML = f'{REPO}/mujoco-sim/mjlab/src/mjlab/asset_zoo/robots/pygmalion/xmls/pygmalion_v2.xml'
+TAG = next((a.split('=')[1] for a in sys.argv if a.startswith('--tag=')), 'pygmalion_v2')
+STEM = 'robot_v2' if TAG == 'pygmalion_v2' else TAG
+VAL_SUFFIX = '' if TAG == 'pygmalion_v2' else '_' + TAG
+XML = f'{REPO}/mujoco-sim/mjlab/src/mjlab/asset_zoo/robots/pygmalion/xmls/{TAG}.xml'
 IMG = f'{REPO}/docs/img'
 JOINTS = ['hip_pitch', 'hip_roll', 'hip_yaw', 'knee', 'ankle_pitch', 'ankle_roll']
 # the upper body has no counterpart in pygmalion.xml, so it is swept and drawn but left out
@@ -283,11 +286,11 @@ def main():
     set_free_base(d, rep['standing_base_z'])
     mujoco.mj_forward(m, d)
     draw(ax[0], m, d, 'side')
-    ax[0].set_title('pygmalion_v2 — side (x-z), standing')
+    ax[0].set_title(f'{TAG} — side (x-z), standing')
     draw(ax[1], m, d, 'front')
     ax[1].set_title('front (y-z)')
     fig.tight_layout()
-    fig.savefig(f'{IMG}/robot_v2_zero_pose.png')
+    fig.savefig(f'{IMG}/{STEM}_zero_pose.png')
     rows = (len(frames) + 2) // 3
     fig, axes = plt.subplots(rows, 3, figsize=(9, 2.9 * rows), squeeze=False)
     for i, (j, qd, qpos) in enumerate(frames):
@@ -304,9 +307,9 @@ def main():
     fig.suptitle('Joint sweeps (left side): min / mid / max of each range, '
                  'drawn from the MJCF collision hulls', fontsize=9, y=0.998)
     fig.tight_layout(rect=(0, 0, 1, 0.985))
-    fig.savefig(f'{IMG}/robot_v2_joint_sweeps.png')
-    json.dump(rep, open(f'{REPO}/pygmalion_locomotion/assets/pygmalion_v2/validation.json', 'w'), indent=1)
-    print(f'\n-> {IMG}/robot_v2_zero_pose.png · {IMG}/robot_v2_joint_sweeps.png')
+    fig.savefig(f'{IMG}/{STEM}_joint_sweeps.png')
+    json.dump(rep, open(f'{REPO}/pygmalion_locomotion/assets/pygmalion_v2/validation{VAL_SUFFIX}.json', 'w'), indent=1)
+    print(f'\n-> {IMG}/ zero_pose + joint_sweeps for {TAG}')
 
 
 if __name__ == '__main__':

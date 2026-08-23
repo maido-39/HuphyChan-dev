@@ -199,6 +199,9 @@ def urdf_inertia(I):
 def main():
     mpf = next((a.split('=')[1] for a in sys.argv if a.startswith('--massprops=')),
                '/home/syaro/pyg_fea/steps/robot_massprops_step.json')
+    # output name: a different mass model must not overwrite pygmalion_v2 - the aluminium
+    # build the tasks and keyframes were tuned on
+    tag = next((a.split('=')[1] for a in sys.argv if a.startswith('--tag=')), 'pygmalion_v2')
     mp = json.load(open(mpf))
     # ---- resolve joint ranges from the CAD sweep ----
     rom = json.load(open(ROM_FILE)) if os.path.exists(ROM_FILE) else {}
@@ -277,7 +280,7 @@ def main():
 
     # ---- MJCF ----
     X = []
-    X.append('<mujoco model="pygmalion_v2">\n  <compiler angle="radian" meshdir="assets_v2" autolimits="true"/>\n')
+    X.append(f'<mujoco model="{tag}">\n  <compiler angle="radian" meshdir="assets_v2" autolimits="true"/>\n')
     X.append('''  <default>
     <default class="pygmalion">
       <default class="visual">
@@ -459,14 +462,14 @@ def main():
 </mujoco>
 ''')
     mjcf = ''.join(X)
-    open(f'{OUT_MJCF}/pygmalion_v2.xml', 'w').write(mjcf)
+    open(f'{OUT_MJCF}/{tag}.xml', 'w').write(mjcf)
     link = f'{OUT_MJCF}/assets_v2'
     if not os.path.islink(link) and not os.path.exists(link):
         os.symlink(MESHDIR, link)
-    open(f'{OUT_URDF}/pygmalion_v2.xml', 'w').write(mjcf.replace('meshdir="assets_v2"', 'meshdir="meshes"'))
+    open(f'{OUT_URDF}/{tag}.xml', 'w').write(mjcf.replace('meshdir="assets_v2"', 'meshdir="meshes"'))
 
     # ---- URDF ----
-    U = ['<?xml version="1.0"?>\n<robot name="pygmalion_v2">\n']
+    U = [f'<?xml version="1.0"?>\n<robot name="{tag}">\n']
     def link_xml(name, m, c, I, mesh, hull=None):
         s = f'  <link name="{name}">\n    <inertial>\n      <origin xyz="{c[0]:.6g} {c[1]:.6g} {c[2]:.6g}" rpy="0 0 0"/>\n      <mass value="{m:.5g}"/>\n      {urdf_inertia(I)}\n    </inertial>\n'
         if mesh:
@@ -521,11 +524,11 @@ def main():
                          f'    <limit lower="{rg[0]}" upper="{rg[1]}" effort="{EFFORT[jn]}" velocity="20"/>\n  </joint>\n')
                 parent = f'{s_}_{BNAME[b]}'
     U.append('</robot>\n')
-    open(f'{OUT_URDF}/pygmalion_v2.urdf', 'w').write(''.join(U))
+    open(f'{OUT_URDF}/{tag}.urdf', 'w').write(''.join(U))
 
     # ---- compile check ----
     import mujoco
-    model = mujoco.MjModel.from_xml_path(f'{OUT_MJCF}/pygmalion_v2.xml')
+    model = mujoco.MjModel.from_xml_path(f'{OUT_MJCF}/{tag}.xml')
     print(f'MJCF compiled: {model.nbody} bodies, {model.njnt} joints, {model.ngeom} geoms, '
           f'{model.nmesh} meshes; total mass {model.body_subtreemass[1]:.3f} kg')
     print(f'  base_link (pelvis) = {m_b:.3f} kg · upper body {m_u:.3f} kg '
@@ -543,7 +546,7 @@ def main():
     for jn, lo_d, hi_d, src, bl, bh in rom_log:
         stop = f'{bl or "-"} | {bh or "-"}' if src.startswith('CAD') else ''
         print(f'  {jn:16s} [{lo_d:7.1f},{hi_d:7.1f}]   {src:26s} {stop}')
-    print(f'-> {OUT_MJCF}/pygmalion_v2.xml · {OUT_URDF}/pygmalion_v2.urdf')
+    print(f'-> {OUT_MJCF}/{tag}.xml · {OUT_URDF}/{tag}.urdf')
 
 
 if __name__ == '__main__':
