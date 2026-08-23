@@ -389,6 +389,36 @@
    "width": 460,
    "height": 200,
    "color": "3"
+  },
+  {
+   "id": "n_ankAB3",
+   "type": "file",
+   "file": "experiments/2026-08-24_ankleAB_c3.md",
+   "x": 10900,
+   "y": 0,
+   "width": 400,
+   "height": 400,
+   "color": "2"
+  },
+  {
+   "id": "n_ankRP3",
+   "type": "file",
+   "file": "experiments/2026-08-24_ankleRP_c3.md",
+   "x": 10900,
+   "y": 440,
+   "width": 400,
+   "height": 400,
+   "color": "2"
+  },
+  {
+   "id": "n_soft",
+   "type": "file",
+   "file": "95_soft_landing_prescription.md",
+   "x": 10900,
+   "y": -300,
+   "width": 460,
+   "height": 200,
+   "color": "3"
   }
  ],
  "edges": [
@@ -687,6 +717,38 @@
    "toNode": "n_ankAB",
    "toSide": "top",
    "label": "구속 강성 조사·변인통제 (solimp 0.999 유지, A/B 본런 후)"
+  },
+  {
+   "id": "e_ab23",
+   "fromNode": "n_ankAB",
+   "fromSide": "right",
+   "toNode": "n_ankAB3",
+   "toSide": "left",
+   "label": "warm-start model_3100 + soft-landing"
+  },
+  {
+   "id": "e_rp23",
+   "fromNode": "n_ankRP",
+   "fromSide": "right",
+   "toNode": "n_ankRP3",
+   "toSide": "left",
+   "label": "warm-start model_3100 + soft-landing"
+  },
+  {
+   "id": "e_soft",
+   "fromNode": "n_soft",
+   "fromSide": "bottom",
+   "toNode": "n_ankAB3",
+   "toSide": "top",
+   "label": "시험 2회 → 제곱형 채택"
+  },
+  {
+   "id": "e_ab3rp3",
+   "fromNode": "n_ankAB3",
+   "fromSide": "bottom",
+   "toNode": "n_ankRP3",
+   "toSide": "top",
+   "label": "A/B: 발목 기구 단일변인"
   }
  ]
 }
