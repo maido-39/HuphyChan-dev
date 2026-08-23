@@ -107,6 +107,14 @@
 | **rolloff30_p1** (`2026-07-15_14-17-23`, ✅완주 model_11999) [[2026-07-15_rolloff30_p1]] [[2026-07-15_gen21_rough_uneven2_p2b]] | **PYG_ROLLOFF30 단일변인**(hip_roll축만 외측30mm, yaw이하 원위치·pitch불변). flat, actor-only ws(gen21_bent_p2)+DR-off, 8192env. cant30과 동일방법론 | (학습중) | 🔄 roll-offset **A/B용**(docs/67 §9). 완주→P2(★dr override 12k/24k)→fc→**vs gen21p2_fc**로 roll RMS 상승·재분배 확정 |
 | **gen21_rough_uneven2_p2b** (`2026-07-15_03-48-03`, ✅완주 model_23998) [[2026-07-15_gen21_rough_uneven2_p2b]] [[2026-07-14_gen21_rough_uneven2_p1]] | P1 resume + DR+push, **PYG_DR_START/END_ITER=12000/24000**(dr윈도우 정렬 override) | dr P2b시작부터 램프(0.006→1.0@iter24k)·fell 0.0000 | ✅ **rough 설계앵커 확정**(v2 tile 88.6%). 부하: knee −17%p·**ankle_roll RS00 P99 73→126% peak 초과(험지 병목)**·GRF 1.74BW(flat 1.20). flat(knee 열)과 다른 관절 worst → 하중세트=flat∪rough max. RS00 상향 과제 |
 
+## 8c. Era-10 · 프린트 로봇 + 실측 모터 + 발목 기구 A/B (2026-08-23~)
+> 모델이 바뀐 시대: 3D 프린트 하체 질량(35.35 kg, [[89_printed_parts_density_ratio]]) + 실측 모터 파라미터(armature/damping/friction, 벤치 시스템ID) + 실측 T-N 곡선 액추에이터 + 하드웨어 관절/토크 한계. 발목은 **AB(2-RSU 폐루프, 크랭크 액션)** vs **RP(직렬 + 자세별 선형화 토크 한계)** 두 케이스. 보상 = gen21 번들 그대로, DR·속도·푸시는 단일 런 커리큘럼. [[92_ankle_ab_rp_training_setup]], [[91_closed_loop_ankle_rl]].
+
+| 런 | 변인 (vs 직전) | 정량 | 판정 |
+|---|---|---|---|
+| **ankleAB_c1** "flat-2.5max gen21-bundle curriculum-dr+push ankle-AB-loop (2026-08-23)" (`2026-08-23_20-45-09`, 🔄학습중 32k) [[2026-08-23_ankleAB_c1]] | vs gen21_bent_p2: 프린트 질량·실측 모터(RS04 J .0163/b .0095/tc .269, RS03 .0153/.0223/.285)·T-N 곡선·**폐루프 발목(크랭크 RS03 ×2, Kp 22.3/Kd 1.41/60 N·m)**·단일 런 커리큘럼(DR 10k→20k, vx 단계 2.5@16k)·16384 env | (학습 중) | A/B arm |
+| **ankleRP_c1** "flat-2.5max gen21-bundle curriculum-dr+push ankle-RP-serial (2026-08-23)" (`2026-08-23_20-45-27`, 🔄학습중 32k) [[2026-08-23_ankleRP_c1]] | ankleAB_c1과 **단일변인 = 발목 기구**: 직렬 pitch/roll(Kp 28.5/Kd 1.81) + 루프 자코비안 크랭크공간 클램프(±60, T-N) + 반영 관성/마찰. env.yaml diff = 발목 항목만(launch 직후 확인) | (학습 중) | A/B arm |
+
 ## 9. 측정 캠페인 (2026-07-11, fc/fcp 표준) — 데이터 대응표
 | 태그 | 정책 | 상태 |
 |---|---|---|

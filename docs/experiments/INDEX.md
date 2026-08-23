@@ -83,3 +83,4 @@
 
 ### 그래프 뷰
 - [[experiment_map.canvas]] — 계보 트리(WHY 노트 부착) · [[experiment_tree.canvas]] — ★증거 연결판(실험+근거+결과 이미지/영상, 2026-07-20 신설)
+- [[2026-08-23_ankleAB_c1]] · [[2026-08-23_ankleRP_c1]] — ★Era-10 발목 기구 A/B(폐루프 AB vs 직렬 RP), 프린트 질량·실측 모터·T-N, 단일런 커리큘럼 32k (학습 중)

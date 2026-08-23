@@ -1,612 +1,674 @@
 {
-  "nodes": [
-    {
-      "id": "gaitfix",
-      "type": "file",
-      "x": 0,
-      "y": 0,
-      "width": 360,
-      "height": 130,
-      "color": "2",
-      "file": "experiments/2026-06-22_12-29-19_gaitfix_v7.md"
-    },
-    {
-      "id": "g1van",
-      "type": "file",
-      "x": 760,
-      "y": 0,
-      "width": 360,
-      "height": 120,
-      "color": "2",
-      "file": "experiments/2026-06-22_17-28-08_g1vanilla.md"
-    },
-    {
-      "id": "siek",
-      "type": "file",
-      "x": 1520,
-      "y": 0,
-      "width": 360,
-      "height": 120,
-      "color": "2",
-      "file": "experiments/2026-06-29_13-00-01_siekmann_v8_flat.md"
-    },
-    {
-      "id": "p2fin",
-      "type": "file",
-      "x": 3040,
-      "y": 0,
-      "width": 360,
-      "height": 120,
-      "color": "2",
-      "file": "experiments/2026-07-07_P2_final_analysis.md"
-    },
-    {
-      "id": "f25p1",
-      "type": "file",
-      "x": 3800,
-      "y": 0,
-      "width": 360,
-      "height": 120,
-      "color": "1",
-      "file": "experiments/2026-07-10_flat25_p1.md"
-    },
-    {
-      "id": "progp1",
-      "type": "file",
-      "x": 3800,
-      "y": 340,
-      "width": 360,
-      "height": 120,
-      "color": "2",
-      "file": "experiments/2026-07-10_flat25b_prog_p1.md"
-    },
-    {
-      "id": "gen2p2",
-      "type": "file",
-      "x": 4560,
-      "y": 0,
-      "width": 360,
-      "height": 120,
-      "color": "1",
-      "file": "experiments/2026-07-12_gen2_bent_p2.md"
-    },
-    {
-      "id": "g21p1",
-      "type": "file",
-      "x": 5320,
-      "y": 0,
-      "width": 360,
-      "height": 120,
-      "color": "2",
-      "file": "experiments/2026-07-13_gen21_bent_p1.md"
-    },
-    {
-      "id": "g21p2",
-      "type": "file",
-      "x": 6080,
-      "y": 0,
-      "width": 360,
-      "height": 140,
-      "color": "4",
-      "file": "experiments/2026-07-13_gen21_bent_p2.md"
-    },
-    {
-      "id": "anchor_lbl",
-      "type": "text",
-      "x": 6080,
-      "y": -190,
-      "width": 360,
-      "height": 110,
-      "color": "4",
-      "text": "★★ FLAT 설계앵커\ngen21_bent_p2 (gen21p2_fc)\n게이트 전항목 통과"
-    },
-    {
-      "id": "why_van",
-      "type": "text",
-      "x": 760,
-      "y": -260,
-      "width": 360,
-      "height": 130,
-      "color": "3",
-      "text": "WHY 피벗: 바닐라 G1 > 20-term 커스텀\n(자연스러움·추종·낙상)\n[[g1-vanilla-beats-custom-reward]] → '검증된 베이스라인 먼저'"
-    },
-    {
-      "id": "tiptoe",
-      "type": "file",
-      "x": 1520,
-      "y": -280,
-      "width": 360,
-      "height": 120,
-      "color": "3",
-      "file": "reward_research/2026-06-29_tiptoe_regression.md"
-    },
-    {
-      "id": "why_clock",
-      "type": "text",
-      "x": 1520,
-      "y": 300,
-      "width": 360,
-      "height": 130,
-      "color": "3",
-      "text": "WHY: humanref 관절참조 추적 반복실패(위상 불일치)\n→ Siekmann 위상클록 채택. pushoff 무캡=보상해킹→cap 순서 원칙"
-    },
-    {
-      "id": "kd_ab",
-      "type": "file",
-      "x": 2280,
-      "y": -300,
-      "width": 360,
-      "height": 120,
-      "color": "3",
-      "file": "53_bc_kd_controlled_ab.md"
-    },
-    {
-      "id": "init_ab",
-      "type": "file",
-      "x": 2280,
-      "y": 300,
-      "width": 360,
-      "height": 120,
-      "color": "3",
-      "file": "55_init_pose_straight_vs_bent.md"
-    },
-    {
-      "id": "bent_ab",
-      "type": "file",
-      "x": 4560,
-      "y": 340,
-      "width": 360,
-      "height": 130,
-      "color": "3",
-      "file": "experiments/2026-07-12_bentinit_ab_result.md"
-    },
-    {
-      "id": "stall_note",
-      "type": "file",
-      "x": 5320,
-      "y": -290,
-      "width": 360,
-      "height": 120,
-      "color": "3",
-      "file": "reward_research/2026-07-13_stall_relative_threshold.md"
-    },
-    {
-      "id": "rgh_fail",
-      "type": "file",
-      "x": 6840,
-      "y": -560,
-      "width": 360,
-      "height": 120,
-      "color": "1",
-      "file": "experiments/2026-07-13_gen21_rough_p1.md"
-    },
-    {
-      "id": "blind",
-      "type": "file",
-      "x": 6840,
-      "y": -820,
-      "width": 360,
-      "height": 120,
-      "color": "3",
-      "file": "reward_research/2026-07-14_rough_p1_blind_stairs_diagnosis.md"
-    },
-    {
-      "id": "unv1",
-      "type": "file",
-      "x": 7600,
-      "y": -560,
-      "width": 360,
-      "height": 120,
-      "color": "2",
-      "file": "experiments/2026-07-14_gen21_rough_uneven_p1.md"
-    },
-    {
-      "id": "unv2p1",
-      "type": "file",
-      "x": 8360,
-      "y": -560,
-      "width": 360,
-      "height": 120,
-      "color": "2",
-      "file": "experiments/2026-07-14_gen21_rough_uneven2_p1.md"
-    },
-    {
-      "id": "unv2p2b",
-      "type": "file",
-      "x": 9120,
-      "y": -560,
-      "width": 360,
-      "height": 140,
-      "color": "4",
-      "file": "experiments/2026-07-15_gen21_rough_uneven2_p2b.md"
-    },
-    {
-      "id": "rgh_anchor_lbl",
-      "type": "text",
-      "x": 9120,
-      "y": -730,
-      "width": 360,
-      "height": 90,
-      "color": "4",
-      "text": "★ ROUGH 설계앵커 후보\nuneven2_p2b (v2 측정중)"
-    },
-    {
-      "id": "c30p1",
-      "type": "file",
-      "x": 6840,
-      "y": 560,
-      "width": 360,
-      "height": 120,
-      "color": "2",
-      "file": "experiments/2026-07-14_cant30_p1.md"
-    },
-    {
-      "id": "c30p2",
-      "type": "file",
-      "x": 7600,
-      "y": 560,
-      "width": 360,
-      "height": 120,
-      "color": "2",
-      "file": "experiments/2026-07-14_cant30_p2.md"
-    },
-    {
-      "id": "feet",
-      "type": "file",
-      "x": 7600,
-      "y": 860,
-      "width": 360,
-      "height": 120,
-      "color": "3",
-      "file": "68_hip_geometry_variants_viz.md"
-    },
-    {
-      "id": "c30fp1",
-      "type": "file",
-      "x": 8360,
-      "y": 560,
-      "width": 360,
-      "height": 120,
-      "color": "2",
-      "file": "experiments/2026-07-15_cant30fp_p1.md"
-    },
-    {
-      "id": "c30fp2",
-      "type": "file",
-      "x": 9120,
-      "y": 560,
-      "width": 360,
-      "height": 110,
-      "color": "4",
-      "file": "experiments/2026-07-15_cant30fp_p2.md"
-    },
-    {
-      "id": "cant_design",
-      "type": "file",
-      "x": 6840,
-      "y": 860,
-      "width": 360,
-      "height": 130,
-      "color": "3",
-      "file": "67_hip_cant_and_roll_motor_review.md"
-    },
-    {
-      "id": "roll_p1",
-      "type": "file",
-      "x": 6840,
-      "y": 960,
-      "width": 360,
-      "height": 120,
-      "color": "2",
-      "file": "experiments/2026-07-15_rolloff30_p1.md"
-    },
-    {
-      "id": "roll_p2",
-      "type": "file",
-      "x": 7600,
-      "y": 960,
-      "width": 360,
-      "height": 90,
-      "color": "4",
-      "file": "experiments/2026-07-16_rolloff30_p2.md"
-    },
-    {
-      "id": "n_cant20fp",
-      "type": "file",
-      "x": 9580,
-      "y": 560,
-      "width": 380,
-      "height": 100,
-      "color": "2",
-      "file": "experiments/2026-07-20_cant20fp_p1.md"
-    },
-    {
-      "id": "n_c20p2",
-      "type": "file",
-      "file": "experiments/2026-07-20_cant20fp_p2.md",
-      "x": 9580,
-      "y": 570,
-      "width": 380,
-      "height": 90,
-      "color": "5"
-    },
-    {
-      "id": "n_g1val",
-      "type": "text",
-      "text": "★ 실기 교차검증 (2026-07-24)\nUnitree G1 23DoF 실측 tau_est vs 우리 sim\n스케일 m·g·L → 기하평균 RMS 0.84 · P99 0.79\n= 절대 스케일 일치(앵커 신뢰 상향)\n편차=crouch vs straight-leg gait 차이\n→ docs/65 §9",
-      "x": 6980,
-      "y": -520,
-      "width": 460,
-      "height": 170,
-      "color": "4"
-    },
-    {
-      "id": "n_brg",
-      "type": "text",
-      "text": "베어링 선정 판정 (2026-07-24)\nhip_yaw: 6814(70×90×10) — 내부 61809쌍과 span 29.5mm, s0 1.74\nhip_roll/knee: 포크 양단 + 6910(50×72×12)\nAB 로드엔드: 720kgf, 스톱은 짐벌측 배치\n원칙: 내장 단독 캔틸레버 금지\n→ docs/64 §8~§8f",
-      "x": 6980,
-      "y": -300,
-      "width": 460,
-      "height": 180,
-      "color": "6"
-    }
-  ],
-  "edges": [
-    {
-      "id": "e_gaitfix_g1van",
-      "fromNode": "gaitfix",
-      "toNode": "g1van",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "피벗: 20-term 한계"
-    },
-    {
-      "id": "e_why_van_g1van",
-      "fromNode": "why_van",
-      "toNode": "g1van",
-      "fromSide": "bottom",
-      "toSide": "top",
-      "label": "근거"
-    },
-    {
-      "id": "e_g1van_siek",
-      "fromNode": "g1van",
-      "toNode": "siek",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "까치발→base_height복원 / 위상클록"
-    },
-    {
-      "id": "e_tiptoe_siek",
-      "fromNode": "tiptoe",
-      "toNode": "siek",
-      "fromSide": "bottom",
-      "toSide": "top",
-      "label": "근거"
-    },
-    {
-      "id": "e_why_clock_siek",
-      "fromNode": "why_clock",
-      "toNode": "siek",
-      "fromSide": "top",
-      "toSide": "bottom",
-      "label": "근거"
-    },
-    {
-      "id": "e_siek_p2fin",
-      "fromNode": "siek",
-      "toNode": "p2fin",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "mjlab 이관·튜닝"
-    },
-    {
-      "id": "e_kd_ab_p2fin",
-      "fromNode": "kd_ab",
-      "toNode": "p2fin",
-      "fromSide": "bottom",
-      "toSide": "top",
-      "label": "A/B: Kd6 유지"
-    },
-    {
-      "id": "e_init_ab_p2fin",
-      "fromNode": "init_ab",
-      "toNode": "p2fin",
-      "fromSide": "top",
-      "toSide": "bottom",
-      "label": "A/B(구): bent 재분배"
-    },
-    {
-      "id": "e_p2fin_f25p1",
-      "fromNode": "p2fin",
-      "toNode": "f25p1",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "2.5 커리큘럼 개방"
-    },
-    {
-      "id": "e_f25p1_progp1",
-      "fromNode": "f25p1",
-      "toNode": "progp1",
-      "fromSide": "bottom",
-      "toSide": "top",
-      "label": "WHY: 고속 freeze→진행보상"
-    },
-    {
-      "id": "e_progp1_gen2p2",
-      "fromNode": "progp1",
-      "toNode": "gen2p2",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "Gen-2 번들 4건"
-    },
-    {
-      "id": "e_bent_ab_gen2p2",
-      "fromNode": "bent_ab",
-      "toNode": "gen2p2",
-      "fromSide": "top",
-      "toSide": "bottom",
-      "label": "WHY: init A/B 반전→bent 채택"
-    },
-    {
-      "id": "e_gen2p2_g21p1",
-      "fromNode": "gen2p2",
-      "toNode": "g21p1",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "WHY: creep 게이밍→stall 상대임계"
-    },
-    {
-      "id": "e_stall_note_g21p1",
-      "fromNode": "stall_note",
-      "toNode": "g21p1",
-      "fromSide": "bottom",
-      "toSide": "top",
-      "label": "근거"
-    },
-    {
-      "id": "e_g21p1_g21p2",
-      "fromNode": "g21p1",
-      "toNode": "g21p2",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "P2 DR+push 램프"
-    },
-    {
-      "id": "e_g21p2_rgh_fail",
-      "fromNode": "g21p2",
-      "toNode": "rgh_fail",
-      "fromSide": "top",
-      "toSide": "left",
-      "label": "warm-start rough"
-    },
-    {
-      "id": "e_blind_unv1",
-      "fromNode": "blind",
-      "toNode": "unv1",
-      "fromSide": "bottom",
-      "toSide": "left",
-      "label": "WHY: 장님×계단40%"
-    },
-    {
-      "id": "e_rgh_fail_unv1",
-      "fromNode": "rgh_fail",
-      "toNode": "unv1",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "실패→진단→계단제거"
-    },
-    {
-      "id": "e_unv1_unv2p1",
-      "fromNode": "unv1",
-      "toNode": "unv2p1",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "WHY: 슬로프45°도 불가→17°"
-    },
-    {
-      "id": "e_unv2p1_unv2p2b",
-      "fromNode": "unv2p1",
-      "toNode": "unv2p2b",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "P2 (dr윈도우 버그 수정)"
-    },
-    {
-      "id": "e_g21p2_c30p1",
-      "fromNode": "g21p2",
-      "toNode": "c30p1",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "HW기하: pitch 캔트30°"
-    },
-    {
-      "id": "e_cant_design_c30p1",
-      "fromNode": "cant_design",
-      "toNode": "c30p1",
-      "fromSide": "top",
-      "toSide": "bottom",
-      "label": "설계근거 docs67"
-    },
-    {
-      "id": "e_c30p1_c30p2",
-      "fromNode": "c30p1",
-      "toNode": "c30p2",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "P2 DR+push"
-    },
-    {
-      "id": "e_c30p2_c30fp1",
-      "fromNode": "c30p2",
-      "toNode": "c30fp1",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "WHY: 발 ±9° toe-out→hip_yaw 보정"
-    },
-    {
-      "id": "e_feet_c30fp1",
-      "fromNode": "feet",
-      "toNode": "c30fp1",
-      "fromSide": "top",
-      "toSide": "bottom",
-      "label": "근거 docs68"
-    },
-    {
-      "id": "e_c30fp1_c30fp2",
-      "fromNode": "c30fp1",
-      "toNode": "c30fp2",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "P2"
-    },
-    {
-      "id": "e_g21p2_roll_p1",
-      "fromNode": "g21p2",
-      "toNode": "roll_p1",
-      "fromSide": "bottom",
-      "toSide": "left",
-      "label": "HW기하: roll +30mm 외측"
-    },
-    {
-      "id": "e_roll_p1_roll_p2",
-      "fromNode": "roll_p1",
-      "toNode": "roll_p2",
-      "fromSide": "right",
-      "toSide": "left",
-      "label": "P2 대기"
-    },
-    {
-      "id": "e_fp2_c20",
-      "fromNode": "c30fp2",
-      "fromSide": "right",
-      "toNode": "n_cant20fp",
-      "toSide": "left",
-      "label": "WHY: ankle_pitch 100% peak → α20"
-    },
-    {
-      "id": "e_fp2_c20p2",
-      "fromNode": "c30fp2",
-      "fromSide": "right",
-      "toNode": "n_c20p2",
-      "toSide": "left",
-      "label": "WHY: ankle_pitch 100%peak → α20"
-    },
-    {
-      "id": "e_anchor_g1val",
-      "fromNode": "g21p2",
-      "fromSide": "right",
-      "toNode": "n_g1val",
-      "toSide": "left",
-      "label": "실기 검증"
-    },
-    {
-      "id": "e_anchor_brg",
-      "fromNode": "g21p2",
-      "fromSide": "right",
-      "toNode": "n_brg",
-      "toSide": "left",
-      "label": "하중→부품 선정"
-    }
-  ]
+ "nodes": [
+  {
+   "id": "gaitfix",
+   "type": "file",
+   "x": 0,
+   "y": 0,
+   "width": 360,
+   "height": 130,
+   "color": "2",
+   "file": "experiments/2026-06-22_12-29-19_gaitfix_v7.md"
+  },
+  {
+   "id": "g1van",
+   "type": "file",
+   "x": 760,
+   "y": 0,
+   "width": 360,
+   "height": 120,
+   "color": "2",
+   "file": "experiments/2026-06-22_17-28-08_g1vanilla.md"
+  },
+  {
+   "id": "siek",
+   "type": "file",
+   "x": 1520,
+   "y": 0,
+   "width": 360,
+   "height": 120,
+   "color": "2",
+   "file": "experiments/2026-06-29_13-00-01_siekmann_v8_flat.md"
+  },
+  {
+   "id": "p2fin",
+   "type": "file",
+   "x": 3040,
+   "y": 0,
+   "width": 360,
+   "height": 120,
+   "color": "2",
+   "file": "experiments/2026-07-07_P2_final_analysis.md"
+  },
+  {
+   "id": "f25p1",
+   "type": "file",
+   "x": 3800,
+   "y": 0,
+   "width": 360,
+   "height": 120,
+   "color": "1",
+   "file": "experiments/2026-07-10_flat25_p1.md"
+  },
+  {
+   "id": "progp1",
+   "type": "file",
+   "x": 3800,
+   "y": 340,
+   "width": 360,
+   "height": 120,
+   "color": "2",
+   "file": "experiments/2026-07-10_flat25b_prog_p1.md"
+  },
+  {
+   "id": "gen2p2",
+   "type": "file",
+   "x": 4560,
+   "y": 0,
+   "width": 360,
+   "height": 120,
+   "color": "1",
+   "file": "experiments/2026-07-12_gen2_bent_p2.md"
+  },
+  {
+   "id": "g21p1",
+   "type": "file",
+   "x": 5320,
+   "y": 0,
+   "width": 360,
+   "height": 120,
+   "color": "2",
+   "file": "experiments/2026-07-13_gen21_bent_p1.md"
+  },
+  {
+   "id": "g21p2",
+   "type": "file",
+   "x": 6080,
+   "y": 0,
+   "width": 360,
+   "height": 140,
+   "color": "4",
+   "file": "experiments/2026-07-13_gen21_bent_p2.md"
+  },
+  {
+   "id": "anchor_lbl",
+   "type": "text",
+   "x": 6080,
+   "y": -190,
+   "width": 360,
+   "height": 110,
+   "color": "4",
+   "text": "★★ FLAT 설계앵커\ngen21_bent_p2 (gen21p2_fc)\n게이트 전항목 통과"
+  },
+  {
+   "id": "why_van",
+   "type": "text",
+   "x": 760,
+   "y": -260,
+   "width": 360,
+   "height": 130,
+   "color": "3",
+   "text": "WHY 피벗: 바닐라 G1 > 20-term 커스텀\n(자연스러움·추종·낙상)\n[[g1-vanilla-beats-custom-reward]] → '검증된 베이스라인 먼저'"
+  },
+  {
+   "id": "tiptoe",
+   "type": "file",
+   "x": 1520,
+   "y": -280,
+   "width": 360,
+   "height": 120,
+   "color": "3",
+   "file": "reward_research/2026-06-29_tiptoe_regression.md"
+  },
+  {
+   "id": "why_clock",
+   "type": "text",
+   "x": 1520,
+   "y": 300,
+   "width": 360,
+   "height": 130,
+   "color": "3",
+   "text": "WHY: humanref 관절참조 추적 반복실패(위상 불일치)\n→ Siekmann 위상클록 채택. pushoff 무캡=보상해킹→cap 순서 원칙"
+  },
+  {
+   "id": "kd_ab",
+   "type": "file",
+   "x": 2280,
+   "y": -300,
+   "width": 360,
+   "height": 120,
+   "color": "3",
+   "file": "53_bc_kd_controlled_ab.md"
+  },
+  {
+   "id": "init_ab",
+   "type": "file",
+   "x": 2280,
+   "y": 300,
+   "width": 360,
+   "height": 120,
+   "color": "3",
+   "file": "55_init_pose_straight_vs_bent.md"
+  },
+  {
+   "id": "bent_ab",
+   "type": "file",
+   "x": 4560,
+   "y": 340,
+   "width": 360,
+   "height": 130,
+   "color": "3",
+   "file": "experiments/2026-07-12_bentinit_ab_result.md"
+  },
+  {
+   "id": "stall_note",
+   "type": "file",
+   "x": 5320,
+   "y": -290,
+   "width": 360,
+   "height": 120,
+   "color": "3",
+   "file": "reward_research/2026-07-13_stall_relative_threshold.md"
+  },
+  {
+   "id": "rgh_fail",
+   "type": "file",
+   "x": 6840,
+   "y": -560,
+   "width": 360,
+   "height": 120,
+   "color": "1",
+   "file": "experiments/2026-07-13_gen21_rough_p1.md"
+  },
+  {
+   "id": "blind",
+   "type": "file",
+   "x": 6840,
+   "y": -820,
+   "width": 360,
+   "height": 120,
+   "color": "3",
+   "file": "reward_research/2026-07-14_rough_p1_blind_stairs_diagnosis.md"
+  },
+  {
+   "id": "unv1",
+   "type": "file",
+   "x": 7600,
+   "y": -560,
+   "width": 360,
+   "height": 120,
+   "color": "2",
+   "file": "experiments/2026-07-14_gen21_rough_uneven_p1.md"
+  },
+  {
+   "id": "unv2p1",
+   "type": "file",
+   "x": 8360,
+   "y": -560,
+   "width": 360,
+   "height": 120,
+   "color": "2",
+   "file": "experiments/2026-07-14_gen21_rough_uneven2_p1.md"
+  },
+  {
+   "id": "unv2p2b",
+   "type": "file",
+   "x": 9120,
+   "y": -560,
+   "width": 360,
+   "height": 140,
+   "color": "4",
+   "file": "experiments/2026-07-15_gen21_rough_uneven2_p2b.md"
+  },
+  {
+   "id": "rgh_anchor_lbl",
+   "type": "text",
+   "x": 9120,
+   "y": -730,
+   "width": 360,
+   "height": 90,
+   "color": "4",
+   "text": "★ ROUGH 설계앵커 후보\nuneven2_p2b (v2 측정중)"
+  },
+  {
+   "id": "c30p1",
+   "type": "file",
+   "x": 6840,
+   "y": 560,
+   "width": 360,
+   "height": 120,
+   "color": "2",
+   "file": "experiments/2026-07-14_cant30_p1.md"
+  },
+  {
+   "id": "c30p2",
+   "type": "file",
+   "x": 7600,
+   "y": 560,
+   "width": 360,
+   "height": 120,
+   "color": "2",
+   "file": "experiments/2026-07-14_cant30_p2.md"
+  },
+  {
+   "id": "feet",
+   "type": "file",
+   "x": 7600,
+   "y": 860,
+   "width": 360,
+   "height": 120,
+   "color": "3",
+   "file": "68_hip_geometry_variants_viz.md"
+  },
+  {
+   "id": "c30fp1",
+   "type": "file",
+   "x": 8360,
+   "y": 560,
+   "width": 360,
+   "height": 120,
+   "color": "2",
+   "file": "experiments/2026-07-15_cant30fp_p1.md"
+  },
+  {
+   "id": "c30fp2",
+   "type": "file",
+   "x": 9120,
+   "y": 560,
+   "width": 360,
+   "height": 110,
+   "color": "4",
+   "file": "experiments/2026-07-15_cant30fp_p2.md"
+  },
+  {
+   "id": "cant_design",
+   "type": "file",
+   "x": 6840,
+   "y": 860,
+   "width": 360,
+   "height": 130,
+   "color": "3",
+   "file": "67_hip_cant_and_roll_motor_review.md"
+  },
+  {
+   "id": "roll_p1",
+   "type": "file",
+   "x": 6840,
+   "y": 960,
+   "width": 360,
+   "height": 120,
+   "color": "2",
+   "file": "experiments/2026-07-15_rolloff30_p1.md"
+  },
+  {
+   "id": "roll_p2",
+   "type": "file",
+   "x": 7600,
+   "y": 960,
+   "width": 360,
+   "height": 90,
+   "color": "4",
+   "file": "experiments/2026-07-16_rolloff30_p2.md"
+  },
+  {
+   "id": "n_cant20fp",
+   "type": "file",
+   "x": 9580,
+   "y": 560,
+   "width": 380,
+   "height": 100,
+   "color": "2",
+   "file": "experiments/2026-07-20_cant20fp_p1.md"
+  },
+  {
+   "id": "n_c20p2",
+   "type": "file",
+   "file": "experiments/2026-07-20_cant20fp_p2.md",
+   "x": 9580,
+   "y": 570,
+   "width": 380,
+   "height": 90,
+   "color": "5"
+  },
+  {
+   "id": "n_g1val",
+   "type": "text",
+   "text": "★ 실기 교차검증 (2026-07-24)\nUnitree G1 23DoF 실측 tau_est vs 우리 sim\n스케일 m·g·L → 기하평균 RMS 0.84 · P99 0.79\n= 절대 스케일 일치(앵커 신뢰 상향)\n편차=crouch vs straight-leg gait 차이\n→ docs/65 §9",
+   "x": 6980,
+   "y": -520,
+   "width": 460,
+   "height": 170,
+   "color": "4"
+  },
+  {
+   "id": "n_brg",
+   "type": "text",
+   "text": "베어링 선정 판정 (2026-07-24)\nhip_yaw: 6814(70×90×10) — 내부 61809쌍과 span 29.5mm, s0 1.74\nhip_roll/knee: 포크 양단 + 6910(50×72×12)\nAB 로드엔드: 720kgf, 스톱은 짐벌측 배치\n원칙: 내장 단독 캔틸레버 금지\n→ docs/64 §8~§8f",
+   "x": 6980,
+   "y": -300,
+   "width": 460,
+   "height": 180,
+   "color": "6"
+  },
+  {
+   "id": "n_ankAB",
+   "type": "file",
+   "file": "experiments/2026-08-23_ankleAB_c1.md",
+   "x": 10340,
+   "y": 0,
+   "width": 400,
+   "height": 400,
+   "color": "2"
+  },
+  {
+   "id": "n_ankRP",
+   "type": "file",
+   "file": "experiments/2026-08-23_ankleRP_c1.md",
+   "x": 10340,
+   "y": 440,
+   "width": 400,
+   "height": 400,
+   "color": "2"
+  },
+  {
+   "id": "n_era10",
+   "type": "text",
+   "text": "Era-10 모델 교체 (2026-08-23)\\n프린트 하체 35.35 kg (docs/89) · 실측 모터 J/b/tc + T-N 곡선 · HW 관절/토크 한계\\n발목 AB(폐루프, 크랭크 액션) vs RP(직렬 + 자세별 선형화 토크 클램프)\\n보상 gen21 그대로 · DR/vx/push 단일런 커리큘럼\\n→ docs/92, docs/91",
+   "x": 10340,
+   "y": -300,
+   "width": 460,
+   "height": 200,
+   "color": "6"
+  }
+ ],
+ "edges": [
+  {
+   "id": "e_gaitfix_g1van",
+   "fromNode": "gaitfix",
+   "toNode": "g1van",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "피벗: 20-term 한계"
+  },
+  {
+   "id": "e_why_van_g1van",
+   "fromNode": "why_van",
+   "toNode": "g1van",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "근거"
+  },
+  {
+   "id": "e_g1van_siek",
+   "fromNode": "g1van",
+   "toNode": "siek",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "까치발→base_height복원 / 위상클록"
+  },
+  {
+   "id": "e_tiptoe_siek",
+   "fromNode": "tiptoe",
+   "toNode": "siek",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "근거"
+  },
+  {
+   "id": "e_why_clock_siek",
+   "fromNode": "why_clock",
+   "toNode": "siek",
+   "fromSide": "top",
+   "toSide": "bottom",
+   "label": "근거"
+  },
+  {
+   "id": "e_siek_p2fin",
+   "fromNode": "siek",
+   "toNode": "p2fin",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "mjlab 이관·튜닝"
+  },
+  {
+   "id": "e_kd_ab_p2fin",
+   "fromNode": "kd_ab",
+   "toNode": "p2fin",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "A/B: Kd6 유지"
+  },
+  {
+   "id": "e_init_ab_p2fin",
+   "fromNode": "init_ab",
+   "toNode": "p2fin",
+   "fromSide": "top",
+   "toSide": "bottom",
+   "label": "A/B(구): bent 재분배"
+  },
+  {
+   "id": "e_p2fin_f25p1",
+   "fromNode": "p2fin",
+   "toNode": "f25p1",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "2.5 커리큘럼 개방"
+  },
+  {
+   "id": "e_f25p1_progp1",
+   "fromNode": "f25p1",
+   "toNode": "progp1",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "WHY: 고속 freeze→진행보상"
+  },
+  {
+   "id": "e_progp1_gen2p2",
+   "fromNode": "progp1",
+   "toNode": "gen2p2",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "Gen-2 번들 4건"
+  },
+  {
+   "id": "e_bent_ab_gen2p2",
+   "fromNode": "bent_ab",
+   "toNode": "gen2p2",
+   "fromSide": "top",
+   "toSide": "bottom",
+   "label": "WHY: init A/B 반전→bent 채택"
+  },
+  {
+   "id": "e_gen2p2_g21p1",
+   "fromNode": "gen2p2",
+   "toNode": "g21p1",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "WHY: creep 게이밍→stall 상대임계"
+  },
+  {
+   "id": "e_stall_note_g21p1",
+   "fromNode": "stall_note",
+   "toNode": "g21p1",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "근거"
+  },
+  {
+   "id": "e_g21p1_g21p2",
+   "fromNode": "g21p1",
+   "toNode": "g21p2",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "P2 DR+push 램프"
+  },
+  {
+   "id": "e_g21p2_rgh_fail",
+   "fromNode": "g21p2",
+   "toNode": "rgh_fail",
+   "fromSide": "top",
+   "toSide": "left",
+   "label": "warm-start rough"
+  },
+  {
+   "id": "e_blind_unv1",
+   "fromNode": "blind",
+   "toNode": "unv1",
+   "fromSide": "bottom",
+   "toSide": "left",
+   "label": "WHY: 장님×계단40%"
+  },
+  {
+   "id": "e_rgh_fail_unv1",
+   "fromNode": "rgh_fail",
+   "toNode": "unv1",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "실패→진단→계단제거"
+  },
+  {
+   "id": "e_unv1_unv2p1",
+   "fromNode": "unv1",
+   "toNode": "unv2p1",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "WHY: 슬로프45°도 불가→17°"
+  },
+  {
+   "id": "e_unv2p1_unv2p2b",
+   "fromNode": "unv2p1",
+   "toNode": "unv2p2b",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "P2 (dr윈도우 버그 수정)"
+  },
+  {
+   "id": "e_g21p2_c30p1",
+   "fromNode": "g21p2",
+   "toNode": "c30p1",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "HW기하: pitch 캔트30°"
+  },
+  {
+   "id": "e_cant_design_c30p1",
+   "fromNode": "cant_design",
+   "toNode": "c30p1",
+   "fromSide": "top",
+   "toSide": "bottom",
+   "label": "설계근거 docs67"
+  },
+  {
+   "id": "e_c30p1_c30p2",
+   "fromNode": "c30p1",
+   "toNode": "c30p2",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "P2 DR+push"
+  },
+  {
+   "id": "e_c30p2_c30fp1",
+   "fromNode": "c30p2",
+   "toNode": "c30fp1",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "WHY: 발 ±9° toe-out→hip_yaw 보정"
+  },
+  {
+   "id": "e_feet_c30fp1",
+   "fromNode": "feet",
+   "toNode": "c30fp1",
+   "fromSide": "top",
+   "toSide": "bottom",
+   "label": "근거 docs68"
+  },
+  {
+   "id": "e_c30fp1_c30fp2",
+   "fromNode": "c30fp1",
+   "toNode": "c30fp2",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "P2"
+  },
+  {
+   "id": "e_g21p2_roll_p1",
+   "fromNode": "g21p2",
+   "toNode": "roll_p1",
+   "fromSide": "bottom",
+   "toSide": "left",
+   "label": "HW기하: roll +30mm 외측"
+  },
+  {
+   "id": "e_roll_p1_roll_p2",
+   "fromNode": "roll_p1",
+   "toNode": "roll_p2",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "P2 대기"
+  },
+  {
+   "id": "e_fp2_c20",
+   "fromNode": "c30fp2",
+   "fromSide": "right",
+   "toNode": "n_cant20fp",
+   "toSide": "left",
+   "label": "WHY: ankle_pitch 100% peak → α20"
+  },
+  {
+   "id": "e_fp2_c20p2",
+   "fromNode": "c30fp2",
+   "fromSide": "right",
+   "toNode": "n_c20p2",
+   "toSide": "left",
+   "label": "WHY: ankle_pitch 100%peak → α20"
+  },
+  {
+   "id": "e_anchor_g1val",
+   "fromNode": "g21p2",
+   "fromSide": "right",
+   "toNode": "n_g1val",
+   "toSide": "left",
+   "label": "실기 검증"
+  },
+  {
+   "id": "e_anchor_brg",
+   "fromNode": "g21p2",
+   "fromSide": "right",
+   "toNode": "n_brg",
+   "toSide": "left",
+   "label": "하중→부품 선정"
+  },
+  {
+   "id": "e_g21_ankAB",
+   "fromNode": "g21p2",
+   "fromSide": "right",
+   "toNode": "n_ankAB",
+   "toSide": "left",
+   "label": "보상·init 계승, 모델 교체 (fresh)"
+  },
+  {
+   "id": "e_g21_ankRP",
+   "fromNode": "g21p2",
+   "fromSide": "right",
+   "toNode": "n_ankRP",
+   "toSide": "left",
+   "label": "보상·init 계승, 모델 교체 (fresh)"
+  },
+  {
+   "id": "e_ab_rp",
+   "fromNode": "n_ankAB",
+   "fromSide": "bottom",
+   "toNode": "n_ankRP",
+   "toSide": "top",
+   "label": "A/B: 발목 기구 단일변인"
+  },
+  {
+   "id": "e_era10",
+   "fromNode": "n_era10",
+   "fromSide": "bottom",
+   "toNode": "n_ankAB",
+   "toSide": "top",
+   "label": "변인 정의"
+  }
+ ]
 }
