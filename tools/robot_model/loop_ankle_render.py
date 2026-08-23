@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 REPO = '/home/syaro/MikuchanRemote/Human-Pygmalion'
 XML = f'{REPO}/mujoco-sim/mjlab/src/mjlab/asset_zoo/robots/pygmalion/xmls/pygmalion_v3_printed_loop.xml'
-OUT = f'{REPO}/docs/video/loop_ankle_ab_render.mp4'
+OUT = os.environ.get('AB_RENDER_OUT', f'{REPO}/docs/video/loop_ankle_ab_render.mp4')
 KP, KD, DT, FPS = 22.3, 1.41, 0.001, 25
 W, H = 640, 640
 FAST = '--fast' in sys.argv
@@ -106,7 +106,7 @@ def main():
     def hold_joints(d):
         for j in hold:
             d.qfrc_applied[m.jnt_dofadr[j]] = -300 * d.qpos[m.jnt_qposadr[j]] - 6 * d.qvel[m.jnt_dofadr[j]]
-    T1 = 3.0 if not FAST else 1.5
+    T1 = 3.6 if not FAST else 1.5
     phases = [('HANGING: co-actuation -> foot PITCH (crank A = B, +-30 deg)', lambda t: (np.radians(30) * np.sin(2 * np.pi * t / T1),) * 2),
               ('HANGING: differential -> foot ROLL (crank A = -B, +-14 deg)', lambda t: (np.radians(14) * np.sin(2 * np.pi * t / T1), -np.radians(14) * np.sin(2 * np.pi * t / T1))),
               ('HANGING: both -> foot circles (pitch 25 deg, roll 12 deg)', lambda t: (np.radians(25) * np.sin(2 * np.pi * t / T1) + np.radians(12) * np.cos(2 * np.pi * t / T1),
@@ -135,7 +135,7 @@ def main():
     fid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, 'L_foot_link')
     d.qpos[2] += 0.002 + 0.043 - d.xpos[fid][2]            # sole 2 mm above the floor
     mujoco.mj_forward(m, d); base_q = d.qpos[:7].copy()
-    T2 = 4.0 if not FAST else 2.0
+    T2 = 5.0 if not FAST else 2.0
     def fn2(t):
         if t < T2 / 2:
             c = np.radians(10) * np.sin(2 * np.pi * t / (T2 / 2)); return c, c
