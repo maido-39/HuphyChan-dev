@@ -87,8 +87,70 @@ def mirror_y(m):
     return trimesh.Trimesh(v, m.faces[:, [0, 2, 1]].copy(), process=False)
 
 
+LOOP_PTS = '/home/syaro/pyg_fea/fusion/ankle_loop_points_v3_printed.json'
+# STEP-revision (0814) anchors used only to RECOGNISE which solids are the cranks: the motor
+# axis point and the crank pin of each crank. The frames the meshes are written in come
+# from the export copy (LOOP_PTS), like everything else in the loop model.
+STEP_CRANK = {'A': ([-138.9, 145.0, -500.0], [-83.7, 205.7, -523.2]),
+              'B': ([-108.4, 145.0, -600.0], [-163.7, 208.0, -616.0])}
+
+
+def loop_meshes(size):
+    """crank_A/B.stl in the crank frame (origin on the motor axis), rod_A/B.stl in the rod frame
+    (origin at the crank pin), and shin_noloop.stl / foot_noloop.stl without them."""
+    import json
+    pts = json.load(open(LOOP_PTS))
+    gmsh.initialize()
+    gmsh.option.setNumber('General.Terminal', 0)
+    parts = {'crank_A': [], 'crank_B': [], 'rod_A': [], 'rod_B': [], 'shin': [], 'foot': []}
+    for m, com in solid_meshes(f'{STEPS}/link_L1_ankle_foot.step', size):
+        vol = abs(m.volume) / 1000.0 if m.is_watertight else 0.0
+        rod = next((t for t, (u, d) in JMC.items()
+                    if np.linalg.norm(com - (np.array(u) + np.array(d)) / 2) < 1.5), None)
+        if rod:
+            parts[f'rod_{rod}'].append(m)
+            continue
+        crank = None
+        for t, (mo, pin) in STEP_CRANK.items():
+            mo, pin = np.array(mo), np.array(pin)
+            seg = pin - mo
+            u = np.clip(np.dot(com - mo, seg) / np.dot(seg, seg), 0, 1)
+            if np.linalg.norm(com - (mo + u * seg)) < 45.0 and vol < 60.0 and com[2] > ANKLE_Z + 100:
+                crank = t
+        if crank:
+            parts[f'crank_{crank}'].append(m)
+        elif com[2] <= ANKLE_Z + 0.5:
+            parts['foot'].append(m)
+        else:
+            parts['shin'].append(m)
+    # the shin proper lives in the L2 STEP; the ankle STEP only holds what sits around the joint
+    for m, com in solid_meshes(f'{STEPS}/link_L2_shin.step', size):
+        parts['shin'].append(m)
+    gmsh.finalize()
+    frames = {'crank_A': np.array(pts['A']['motor']), 'crank_B': np.array(pts['B']['motor']),
+              'rod_A': np.array(pts['A']['pin']), 'rod_B': np.array(pts['B']['pin']),
+              'shin': ORIGIN['shin'], 'foot': ORIGIN['foot']}
+    for k, ms in parts.items():
+        if not ms:
+            print(f'  !! no solids for {k}')
+            continue
+        vis = trimesh.util.concatenate([to_link(m, frames[k]) for m in ms])
+        name = k if k.startswith(('crank', 'rod')) else f'{k}_noloop'
+        vis.export(f'{OUT}/{name}.stl')
+        mirror_y(vis).export(f'{OUT}/R_{name}.stl')
+        if not k.startswith(('crank', 'rod')):
+            vis.convex_hull.export(f'{OUT}/{name}_hull.stl')
+            mirror_y(vis.convex_hull).export(f'{OUT}/R_{name}_hull.stl')
+        b = vis.bounds
+        print(f'  {name:14s} {len(ms):3d} solids  {len(vis.faces):6d} faces  bbox {np.round(b[1] - b[0], 3)} m')
+
+
 def main():
     size = float(next((a.split('=')[1] for a in sys.argv if a.startswith('--size=')), 8))
+    if '--loop' in sys.argv:
+        os.makedirs(OUT, exist_ok=True)
+        loop_meshes(size)
+        return
     os.makedirs(OUT, exist_ok=True)
     gmsh.initialize()
     gmsh.option.setNumber('General.Terminal', 0)

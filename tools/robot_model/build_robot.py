@@ -53,6 +53,13 @@ TORSO_CAD = np.array([0.0, 70.0, 177.5])
 SHOULDER_CAD = np.array([-200.0, 85.0, 540.0])
 ARM = ['shoulder_pitch_link', 'arm']            # per side, children of the torso
 ORIGIN_CAD['torso'] = TORSO_CAD
+try:                                    # loop-body frames: crank on its motor axis, rod at its pin
+    _lp = json.load(open('/home/syaro/pyg_fea/fusion/ankle_loop_points_v3_printed.json'))
+    for _t in 'AB':
+        ORIGIN_CAD[f'crank_{_t}'] = np.array(_lp[_t]['motor'])
+        ORIGIN_CAD[f'rod_{_t}'] = np.array(_lp[_t]['pin'])
+except FileNotFoundError:
+    pass
 ORIGIN_CAD['shoulder_pitch_link'] = SHOULDER_CAD
 ORIGIN_CAD['arm'] = SHOULDER_CAD
 # simulator body names: the task configs bind to the old names (L_foot_link etc.)
@@ -103,6 +110,7 @@ DESIGN_CAP = {
                                        # rather than advertising a full turn
 }
 CLOSED_CHAIN = {'ankle_pitch', 'ankle_roll'}
+CRANK_RANGE = (-1.2, 1.2)      # rad, wider than the ankle needs; verified by the sweep
 EFFORT = {'hip_pitch': 120, 'hip_roll': 120, 'hip_yaw': 60, 'knee': 120,
           'ankle_pitch': 90, 'ankle_roll': 50,
           'waist_yaw': 120, 'shoulder_pitch': 60, 'shoulder_roll': 60}   # RS04 / RS03 / RS03
@@ -167,6 +175,128 @@ def mesh_bounds(name):
     return np.asarray(m.bounds[0]), np.asarray(m.bounds[1])
 
 
+def fitted_capsule(name, stl, cls='collision', q=0.90, exclude=None):
+    """A capsule that hugs the mesh: axis = the mesh's longest bounding-box direction, ends
+    = the extreme projections pulled in by the radius, radius = the q-quantile of the
+    vertices' distance from the axis (q < 1 so bolt heads and a flange rim do not fatten the
+    whole link). Never degenerates to a sphere - a pill is what was asked for. `exclude` is
+    an optional vertex mask to drop first (e.g. the fat shoulder end of the arm rod).
+    Non-adjacent overlaps left at the zero pose are trimmed afterwards by
+    resolve_zero_pose_overlaps(), which reports every radius it shrinks."""
+    import trimesh
+    V = np.asarray(trimesh.load(f'{MESHDIR}/{stl}.stl', process=False).vertices)
+    if exclude is not None:
+        V = V[~exclude(V)]
+    c = V.mean(0)
+    a = np.zeros(3)
+    a[int(np.argmax(V.max(0) - V.min(0)))] = 1.0
+    t = (V - c) @ a
+    perp = np.linalg.norm((V - c) - np.outer(t, a), axis=1)
+    r = float(np.quantile(perp, q))
+    half = max((t.max() - t.min()) / 2 - r, 0.005)
+    mid = c + a * (t.max() + t.min()) / 2
+    p0, p1 = mid - a * half, mid + a * half
+    return (f'<geom name="{name}" class="{cls}" type="capsule" fromto="{p0[0]:.4f} {p0[1]:.4f} {p0[2]:.4f}  '
+            f'{p1[0]:.4f} {p1[1]:.4f} {p1[2]:.4f}" size="{r:.4f}"/>')
+
+
+def resolve_zero_pose_overlaps(xml_path, margin=0.002, max_iter=40):
+    """Shrink collision radii until no NON-ADJACENT pair touches at the zero pose.
+
+    The capsules are fitted to the meshes and only adjacent links are excluded, so wherever
+    the CAD nests one link inside another (the roll housing inside the pelvis frame, the
+    dummy arm 5 mm into the hip) the fitted shapes overlap. Rather than hide that behind an
+    exclusion, both shapes give up half the penetration plus a margin, and every change is
+    printed - a radius that had to shrink a lot is a shape the CAD really does overlap.
+    """
+    import mujoco
+    spec = mujoco.MjSpec.from_file(xml_path)
+    log = {}
+    for _ in range(max_iter):
+        m = spec.compile()
+        d = mujoco.MjData(m)
+        d.qpos[:] = m.qpos0
+        d.qpos[2] = 1.5
+        mujoco.mj_forward(m, d)
+        hits = [(d.contact[i].geom1, d.contact[i].geom2, d.contact[i].dist) for i in range(d.ncon)
+                if m.geom_bodyid[d.contact[i].geom1] and m.geom_bodyid[d.contact[i].geom2]]
+        if not hits:
+            break
+        for g1, g2, dist in hits:
+            for g in (g1, g2):
+                name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g)
+                sg = next(x for x in spec.geoms if x.name == name)
+                if sg.type == mujoco.mjtGeom.mjGEOM_BOX:
+                    continue                         # the foot box keeps its footprint
+                cut = -dist / 2 + margin
+                sg.size[0] = max(sg.size[0] - cut, 0.01)
+                log[name] = log.get(name, 0.0) + cut
+    spec.to_file(xml_path)
+    return log
+
+
+LOOP_PTS = '/home/syaro/pyg_fea/fusion/ankle_loop_points_v3_printed.json'
+
+
+def loop_xml(s, ind, mp, sign):
+    """The 2-RSU ankle as the real mechanism, on one leg (children of the shin; the foot's
+    ball sites are emitted by the caller).
+
+    crank_{A,B}   hinge on the shin about the RS03 axis (CAD x -> sim y), origin on that axis
+    rod_{A,B}     child of the crank at the crank pin, a UNIVERSAL joint there (two hinges:
+                  the crank axis, then the axis perpendicular to it and to the rod) - not a
+                  ball joint, so the rod cannot spin about itself and mjlab's joint indexing
+                  sees hinges only
+    connect       rod far-end site <-> foot ball site, 3 constraints
+    DOF: 2 passive ankle hinges + 2 cranks + 2x2 rod hinges - 2x3 connects = 2, exactly the
+    two cranks - the ankle pitch/roll hinges are passive and follow the linkage.
+    Masses and inertias are the real ones (massprops_fusion with PYG_ANKLE_LOOP=1).
+    """
+    pts = json.load(open(LOOP_PTS))
+    out = []
+    for tag in 'AB':
+        P = pts[tag]
+        motor, pin, ball = (np.array(P[k]) for k in ('motor', 'pin', 'ball'))
+        o_c = to_sim_vec((motor - ORIGIN_CAD['shin']) / 1000.0)      # crank origin, shin frame
+        pin_rel = to_sim_vec((pin - motor) / 1000.0)                  # pin, crank frame
+        vec = to_sim_vec((ball - pin) / 1000.0)                       # rod vector, rod frame
+        if sign > 0:                                                  # right leg: mirror y
+            o_c, pin_rel, vec = (v * np.array([1, -1, 1]) for v in (o_c, pin_rel, vec))
+        axis1 = np.array([0.0, 1.0, 0.0])                             # crank axis (CAD x -> sim y)
+        axis2 = np.cross(axis1, vec / np.linalg.norm(vec))
+        axis2 /= np.linalg.norm(axis2)
+        mc, cc, Ic = body_inertial(f'crank_{tag}', mp)
+        mr, cr, Ir = body_inertial(f'rod_{tag}', mp)
+        if sign > 0:
+            cc, Ic = mirror(cc, Ic)
+            cr, Ir = mirror(cr, Ir)
+        pre = 'R_' if sign > 0 else ''
+        out.append(f'{ind}<body name="{s}_crank_{tag}" pos="{o_c[0]:.6g} {o_c[1]:.6g} {o_c[2]:.6g}">')
+        out.append(f'{ind}  <inertial pos="{cc[0]:.6g} {cc[1]:.6g} {cc[2]:.6g}" mass="{mc:.5g}" fullinertia="{fullinertia(Ic)}"/>')
+        out.append(f'{ind}  <joint name="{s}_crank_{tag}_joint" axis="0 1 0" range="{CRANK_RANGE[0]} {CRANK_RANGE[1]}" armature="0.005" damping="0.2"/>')
+        out.append(f'{ind}  <geom mesh="{s}_crank_{tag}" class="visual" material="black"/>')
+        out.append(f'{ind}  <body name="{s}_rod_{tag}" pos="{pin_rel[0]:.6g} {pin_rel[1]:.6g} {pin_rel[2]:.6g}">')
+        out.append(f'{ind}    <inertial pos="{cr[0]:.6g} {cr[1]:.6g} {cr[2]:.6g}" mass="{mr:.5g}" fullinertia="{fullinertia(Ir)}"/>')
+        out.append(f'{ind}    <joint name="{s}_rod_{tag}_u1" axis="{axis1[0]:.4f} {axis1[1]:.4f} {axis1[2]:.4f}" armature="0.0005" damping="0.02"/>')
+        out.append(f'{ind}    <joint name="{s}_rod_{tag}_u2" axis="{axis2[0]:.4f} {axis2[1]:.4f} {axis2[2]:.4f}" armature="0.0005" damping="0.02"/>')
+        out.append(f'{ind}    <geom mesh="{s}_rod_{tag}" class="visual"/>')
+        out.append(f'{ind}    <site name="{s}_rod_{tag}_end" pos="{vec[0]:.6g} {vec[1]:.6g} {vec[2]:.6g}" size="0.004"/>')
+        out.append(f'{ind}  </body>')
+        out.append(f'{ind}</body>')
+    return out
+
+
+def foot_ball_sites(s, sign):
+    pts = json.load(open(LOOP_PTS))
+    out = []
+    for tag in 'AB':
+        b = to_sim_vec((np.array(pts[tag]['ball']) - ORIGIN_CAD['foot']) / 1000.0)
+        if sign > 0:
+            b = b * np.array([1, -1, 1])
+        out.append(f'<site name="{s}_ball_{tag}" pos="{b[0]:.6g} {b[1]:.6g} {b[2]:.6g}" size="0.004"/>')
+    return out
+
+
 def box_geom(name, lo, hi, cls='collision', shrink=0.0):
     c = (lo + hi) / 2
     h = np.maximum((hi - lo) / 2 - shrink, 0.005)
@@ -202,6 +332,11 @@ def main():
     # output name: a different mass model must not overwrite pygmalion_v2 - the aluminium
     # build the tasks and keyframes were tuned on
     tag = next((a.split('=')[1] for a in sys.argv if a.startswith('--tag=')), 'pygmalion_v2')
+    # --ankle=loop: the 2-RSU ankle as the closed mechanism (needs a massprops file made with
+    # PYG_ANKLE_LOOP=1, and the crank/rod/shin_noloop meshes from meshes_step.py --loop)
+    loop = next((a.split('=')[1] for a in sys.argv if a.startswith('--ankle=')), 'serial') == 'loop'
+    if loop:
+        tag = tag + '_loop' if not tag.endswith('_loop') else tag
     mp = json.load(open(mpf))
     # ---- resolve joint ranges from the CAD sweep ----
     # measured ranges are not optional: without the sweep file the old MJCF ranges would come
@@ -294,6 +429,9 @@ def main():
         <default class="foot_capsule">
           <geom type="capsule" size="0.01"/>
         </default>
+        <default class="foot_box">
+          <geom type="box"/>
+        </default>
       </default>
       <default class="hull">
         <geom group="4" type="mesh" density="0" material="hull" contype="0" conaffinity="0"/>
@@ -315,6 +453,13 @@ def main():
             f = f'{"R_" if s == "R" else ""}{b}.stl'
             X.append(f'    <mesh name="{s}_{b}" file="{f}"/>\n')
             X.append(f'    <mesh name="{s}_{b}_hull" file="{f.replace(".stl", "_hull.stl")}"/>\n')
+    if loop:
+        for s_ in 'LR':
+            pre = 'R_' if s_ == 'R' else ''
+            for b in ('crank_A', 'crank_B', 'rod_A', 'rod_B'):
+                X.append(f'    <mesh name="{s_}_{b}" file="{pre}{b}.stl"/>\n')
+            X.append(f'    <mesh name="{s_}_shin_noloop" file="{pre}shin_noloop.stl"/>\n')
+            X.append(f'    <mesh name="{s_}_foot_noloop" file="{pre}foot_noloop.stl"/>\n')
     if articulated:
         X.append('    <mesh name="torso" file="torso.stl"/>\n'
                  '    <mesh name="torso_hull" file="torso_hull.stl"/>\n')
@@ -336,7 +481,7 @@ def main():
         # old model geometry re-expressed at the hip-level base origin (+0.104 x, -0.059 z)
         X.append('      <geom name="base_torso_collision" class="collision" type="capsule" fromto="0.004 0 0.061  0.004 0 0.521" size="0.11"/>\n')
         X.append('      <geom name="base_head_collision" class="collision" type="sphere" pos="0.004 0 0.731" size="0.09"/>\n')
-    X.append('      <geom name="base_pelvis_collision" class="collision" type="box" pos="0 0 0.008" size="0.069 0.045 0.075"/>\n')
+    X.append('      ' + fitted_capsule('base_pelvis_collision', 'pelvis') + '\n')
     X.append('      <site name="imu_in_base" size="0.03" pos="0.004 0 0.241"/>\n')
     for s in 'LR':
         sign = -1.0 if s == 'L' else 1.0
@@ -354,35 +499,30 @@ def main():
             X.append(f'{ind}  <inertial pos="{c[0]:.6g} {c[1]:.6g} {c[2]:.6g}" mass="{m:.5g}" fullinertia="{fullinertia(I)}"/>\n')
             X.append(f'{ind}  <joint name="{s}_{jn}_joint" pos="0 0 0" axis="{ax[0]} {ax[1]} {ax[2]}" range="{rg[0]} {rg[1]}"/>\n')
             if b != 'ankle_pitch_link':
-                X.append(f'{ind}  <geom mesh="{s}_{b}" class="visual"/>\n')
+                vis = f'{s}_{b}'
+                if loop and b in ('shin', 'foot'):
+                    vis = f'{s}_{b}_noloop'          # the cranks and rods are their own bodies now
+                X.append(f'{ind}  <geom mesh="{vis}" class="visual"/>\n')
                 X.append(f'{ind}  <geom name="{s}_{BNAME[b]}_hull" mesh="{s}_{b}_hull" class="hull"/>\n')
             for g in motor_geoms(mp, b, s):
                 X.append(f'{ind}  ' + g + '\n')
-            if b == 'hip_pitch_link':
-                X.append(f'{ind}  <geom name="{s}_hip_pitch_collision" class="collision" type="sphere" pos="0.0 {0.012*sign:.3f} 0.0" size="0.068"/>\n')
-            if b == 'hip_roll_link':
-                X.append(f'{ind}  <geom name="{s}_hip_roll_collision" class="collision" type="capsule" fromto="0 0 0.03  0 0 -0.085" size="0.05"/>\n')
-            if b in ('thigh', 'shin'):
-                # radius from the CAD, not from the old model: the inherited thigh capsule
-                # was 58 mm against a real 34.9 mm half-width, which put the thigh inside
-                # the arm at the zero pose. The axis stays where it was - only the girth
-                # becomes a measurement.
-                lo_m, hi_m = mesh_bounds(('R_' if s == 'R' else '') + b)
-                r_m = round(float(hi_m[1] - lo_m[1]) / 2, 4)
-                ft = ('-0.005 0 -0.13  -0.045 0 -0.37' if b == 'thigh'
-                      else '0 0 0.0  -0.03 0 -0.44')
-                X.append(f'{ind}  <geom name="{s}_{b}_collision" class="collision" '
-                         f'type="capsule" fromto="{ft}" size="{r_m:.4f}"/>\n')
-            if b == 'shin':
-                # the two RS03 on the back of the shin (CAD z -500/-600 -> -0.19/-0.29 below the knee)
-                X.append(f'{ind}  <geom name="{s}_shin_motors_collision" class="collision" type="capsule" fromto="-0.03 0 -0.16  -0.03 0 -0.32" size="0.055"/>\n')
+            # ---- collision: one capsule that hugs each link's mesh (the hip links and the
+            # thigh/shin included), a box for the foot. No hand-typed radii or offsets. ----
+            pre = 'R_' if s == 'R' else ''
+            if b in ('hip_pitch_link', 'hip_roll_link', 'thigh', 'shin'):
+                stl = pre + (f'{b}_noloop' if (loop and b == 'shin') else b)
+                X.append(f'{ind}  ' + fitted_capsule(f'{s}_{BNAME[b]}_collision', stl) + '\n')
             if b == 'foot':
-                X.append(f'{ind}  <site name="{"left" if s == "L" else "right"}_foot" pos="0.05 0 {SOLE_Z:.3f}" size="0.01"/>\n')
-                for i, y in enumerate((-0.04, -0.02, 0.0, 0.02, 0.04), start=2):
-                    x0, x1 = SOLE_X
-                    if abs(y) > 0.03:
-                        x0, x1 = x0 + 0.02, x1 - 0.02
-                    X.append(f'{ind}  <geom name="{s}_foot{i}_collision" class="foot_capsule" fromto="{x0:.3f} {y:.3f} {SOLE_Z+0.01:.3f}  {x1:.3f} {y:.3f} {SOLE_Z+0.01:.3f}"/>\n')
+                lo_f, hi_f = mesh_bounds(pre + ('foot_noloop' if loop else 'foot'))
+                # the sole box: full plate footprint, from the sole up to the ankle-cross
+                # housing; name keeps the foot[1-7] pattern the task's contact config uses
+                X.append(f'{ind}  ' + box_geom(f'{s}_foot1_collision', lo_f, hi_f, cls='foot_box') + '\n')
+                X.append(f'{ind}  <site name="{"left" if s == "L" else "right"}_foot" pos="{(lo_f[0]+hi_f[0])/2:.3f} 0 {lo_f[2]:.3f}" size="0.01"/>\n')
+                if loop:
+                    for g in foot_ball_sites(s, sign):
+                        X.append(f'{ind}  ' + g + '\n')
+            if b == 'shin' and loop:
+                X.extend(l + '\n' for l in loop_xml(s, ind + '  ', mp, sign))
             depth += 1
         for b in reversed(CHAIN):
             depth -= 1
@@ -402,8 +542,7 @@ def main():
         for s_ in 'LR':
             for g in motor_geoms(mp, 'torso', s_):
                 X.append('        ' + g + '\n')
-        lo, hi = mesh_bounds('torso')
-        X.append('        ' + box_geom('torso_collision', lo, hi) + '\n')
+        X.append('        ' + fitted_capsule('torso_collision', 'torso') + '\n')
         for s_ in 'LR':
             sgn = -1.0 if s_ == 'L' else 1.0
             oa = off['shoulder_pitch_link'].copy()
@@ -423,38 +562,51 @@ def main():
                 X.append(f'{ind}  <geom name="{s_}_{BNAME[b]}_hull" mesh="{s_}_{b}_hull" class="hull"/>\n')
                 for g in motor_geoms(mp, b, s_):
                     X.append(f'{ind}  ' + g + '\n')
-                lo, hi = mesh_bounds(('R_' if s_ == 'R' else '') + b)
-                # a box, not a capsule: a capsule sized to the widest section (the shoulder
-                # end) is 44 mm fat all the way down and would sit permanently inside the hip
-                X.append(f'{ind}  ' + box_geom(f'{s_}_{BNAME[b]}_collision', lo, hi) + '\n')
+                # the arm is a straight rod with a fat shoulder end: fit the capsule to the
+                # rod only (drop the top 12 cm) so it does not read as 44 mm all the way down
+                X.append(f'{ind}  ' + fitted_capsule(f'{s_}_{BNAME[b]}_collision', ('R_' if s_ == 'R' else '') + b,
+                                                     exclude=(lambda V: V[:, 2] > -0.12) if b == 'arm' else None) + '\n')
             for _ in ARM:
                 X.append(ind + '</body>\n')
                 ind = ind[:-2]
         X.append('      </body>\n')
     X.append('    </body>\n  </worldbody>\n  <contact>\n')
+    # Only ADJACENT bodies are excluded from collision (user, 2026-08-23). The capsules are
+    # fitted to the meshes, so non-adjacent links must not overlap at the zero pose on their
+    # own; validate_robot.py checks that, and the hip-cluster / arm-hip exclusions the
+    # previous model carried are gone.
     for s in 'LR':
         pairs = ['base_link'] + [f'{s}_{BNAME[b]}' for b in CHAIN]
         for a, b in zip(pairs[:-1], pairs[1:]):
             X.append(f'    <exclude body1="{a}" body2="{b}"/>\n')
-        # the hip is a nested cluster: pelvis, hip_pitch_link and hip_roll_link interpenetrate by
-        # construction (motor housings inside each other's envelopes), so the 2-apart pairs in
-        # that cluster are excluded too; leg-vs-leg and torso-vs-thigh stay live
-        X.append(f'    <exclude body1="base_link" body2="{s}_hip_roll_link"/>\n')
-        X.append(f'    <exclude body1="{s}_hip_pitch_link" body2="{s}_thigh_link"/>\n')
+        # the ankle cross is a 40 g universal-joint body between shin and foot: physically
+        # those two are adjacent, so they are excluded across it
+        X.append(f'    <exclude body1="{s}_shin_link" body2="{s}_foot_link"/>\n')
+        if loop:
+            for t in 'AB':          # the loop bodies carry no collision geoms; listed for clarity
+                X.append(f'    <exclude body1="{s}_shin_link" body2="{s}_crank_{t}"/>\n')
+                X.append(f'    <exclude body1="{s}_crank_{t}" body2="{s}_rod_{t}"/>\n')
+                X.append(f'    <exclude body1="{s}_rod_{t}" body2="{s}_foot_link"/>\n')
     if articulated:
         X.append('    <exclude body1="base_link" body2="torso_link"/>\n')
         for s in 'LR':
             X.append(f'    <exclude body1="torso_link" body2="{s}_shoulder_pitch_link"/>\n')
             X.append(f'    <exclude body1="{s}_shoulder_pitch_link" body2="{s}_arm_link"/>\n')
-            X.append(f'    <exclude body1="torso_link" body2="{s}_arm_link"/>\n')
-            # ArmR_Dummy is a straight rod hanging from a shoulder 76 mm outboard of the hip
-            # axis, and in the CAD's own zero pose it already interferes with the hip roll
-            # link by 5.1 mm (rom_check.py, measured on the triangle meshes - docs/88 s3c).
-            # The simulator would otherwise carry a permanent contact there. This is masked
-            # in the model and REPORTED as a CAD issue, not silently absorbed.
+            # The ONE non-adjacent exclusion kept: ArmR_Dummy is a placeholder rod that the CAD
+            # itself drives 5.1 mm into the hip roll link at the zero pose (docs/88 s3c). Left
+            # to the overlap resolver, clearing it costs the hip roll capsule half its radius
+            # and the arm capsule all of it - a real leg link degraded for a dummy. Excluded
+            # and reported instead; drop these two lines once the arm CAD is fixed.
             for h in ('hip_pitch_link', 'hip_roll_link'):
                 X.append(f'    <exclude body1="{s}_arm_link" body2="{s}_{h}"/>\n')
-    X.append('''  </contact>
+    X.append('  </contact>\n')
+    if loop:
+        X.append('  <equality>\n')
+        for s in 'LR':
+            for t in 'AB':
+                X.append(f'    <connect name="{s}_loop_{t}" site1="{s}_rod_{t}_end" site2="{s}_ball_{t}" solref="0.002 1" solimp="0.999 0.9999 0.0001"/>\n')
+        X.append('  </equality>\n')
+    X.append('''
   <sensor>
     <gyro name="imu_ang_vel" site="imu_in_base"/>
     <velocimeter name="imu_lin_vel" site="imu_in_base"/>
@@ -466,6 +618,12 @@ def main():
 ''')
     mjcf = ''.join(X)
     open(f'{OUT_MJCF}/{tag}.xml', 'w').write(mjcf)
+    trimmed = resolve_zero_pose_overlaps(f'{OUT_MJCF}/{tag}.xml')
+    if trimmed:
+        print('collision radii trimmed to clear non-adjacent overlaps at the zero pose:')
+        for k, v in sorted(trimmed.items(), key=lambda kv: -kv[1]):
+            print(f'   {k:32s} -{v * 1000:5.1f} mm')
+    mjcf = open(f'{OUT_MJCF}/{tag}.xml').read()
     link = f'{OUT_MJCF}/assets_v2'
     if not os.path.islink(link) and not os.path.exists(link):
         os.symlink(MESHDIR, link)

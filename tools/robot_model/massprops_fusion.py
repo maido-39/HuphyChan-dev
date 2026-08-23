@@ -58,6 +58,12 @@ GROUP_BODY = {'CenterParts:1': 'pelvis', 'HipPitch2Roll:1': 'hip_pitch_link',
               'HipRoll2Yaw:1': 'hip_roll_link', 'HipYaw2Knee:1': 'thigh',
               'Knee2Ankle:1': 'shin', 'Torso:1': 'torso', 'Neck:1': 'torso'}
 UPPER_BODIES = ('torso', 'shoulder_pitch_link', 'arm')
+# PYG_ANKLE_LOOP=1: carry the 2-RSU ankle as the CLOSED mechanism. The two cranks and the
+# two push rods become rigid bodies of their own (crank = the printed crank + its cover,
+# rod = the aluminium bar + the two spherical-bearing inserts in its eyes) instead of being
+# lumped into the shin / split half-half between shin and foot.
+LOOP = bool(os.environ.get('PYG_ANKLE_LOOP'))
+LOOP_BODIES = ('crank_A', 'crank_B', 'rod_A', 'rod_B')
 MOTOR_BODY = {'Waist_Yaw': 'pelvis', 'Hip_R': 'pelvis', 'Hip_P': 'hip_pitch_link',
               'Hip_Y': 'hip_roll_link', 'Knee_P': 'thigh',
               'Ankle_A:3': 'shin', 'Ankle_A (1)': 'shin'}
@@ -146,7 +152,8 @@ def collect(B):
     geometry, so a density error is a scale on (m, I_o) and nothing else.
     """
     bodies = {b: [] for b in ('pelvis', 'hip_pitch_link', 'hip_roll_link', 'thigh', 'shin',
-                              'ankle_pitch_link', 'foot') + UPPER_BODIES}
+                              'ankle_pitch_link', 'foot') + UPPER_BODIES
+              + (LOOP_BODIES if LOOP else ())}
     rods = []
     skipped = hidden_real = 0.0
     for path, rec in B.items():
@@ -168,6 +175,17 @@ def collect(B):
             m, I_o = MOTOR_CAT[fam], I_o * k
         item = dict(path=path, m=m, com=com, I_o=I_o, mat=rec.get('mat', ''))
         if who == 'ANKLE_SPLIT':
+            if LOOP:
+                name = path.split('::')[-1]
+                occ = path.split('::')[0].split('/')[-1]
+                tag = next((t for t in 'AB' if name.startswith(f'Crank_{t}') or name == f'Arm_{t}'
+                            or f'JS06_Ankle-{t}' in path or f'JS06_FEET-{t}' in path), None)
+                if tag and name.startswith('Crank_'):
+                    bodies[f'crank_{tag}'].append(item)
+                    continue
+                if tag and (name == f'Arm_{tag}' or 'JS06' in path):
+                    bodies[f'rod_{tag}'].append(item)        # bar + both eye inserts
+                    continue
             # the two push rods: identified by volume (their COM sits between the ball joints)
             if 15.0 < rec['v'] < 21.0 and -780 < com[2] < -650:
                 rods.append(item)
@@ -223,6 +241,7 @@ def main():
                                 principal=[float(v) for v in w], n=len(items))
         tot += M
         print(f'{b:18s} {M:8.3f}  [{C[0]:8.1f}{C[1]:7.1f}{C[2]:8.1f}]  {w.round(0)}  ({len(items)} bodies)')
+    out['ankle_loop'] = LOOP
     leg = tot - sum(out['bodies'][b]['mass'] for b in ('pelvis',) + UPPER_BODIES)
     arms = sum(out['bodies'][b]['mass'] for b in ('shoulder_pitch_link', 'arm'))
     whole = out['bodies']['pelvis']['mass'] + out['bodies']['torso']['mass'] + 2 * leg + 2 * arms

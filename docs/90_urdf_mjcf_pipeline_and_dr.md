@@ -197,3 +197,26 @@ URDF와 MJCF는 **한 빌더(`build_robot.py`)가 같은 수치에서 동시에 
 - 같은 파일의 "v21"은 8/18 저장본이었다 — 버전 번호가 아니라 **저장 시각**을 봐야 했다 ([[89]] §0).
 - 전구 꺼짐 ≠ 억제. 골반 나사 69개를 잃었다 ([[88]] §4b).
 - 순회 스크립트에서 자식 오커런스를 스택에 넣는 한 줄을 빼먹으면 루트만 돌고 "성공 0건"이 된다.
+
+## §5 URDF ↔ MJCF 교차검증 (`tools/robot_model/urdf_crosscheck.py`, 2026-08-23)
+
+URDF가 맞는지는 우리 emitter가 아니라 **독립 파서**로 읽어 확인한다: MuJoCo 자체의 URDF 로더로 `.urdf`를 읽고, `.xml`은 평소 경로로 읽어 베이스를 원점에 고정한 뒤 비교한다.
+
+| 검사 | 기준 | `pygmalion_v3_printed` 결과 |
+|---|---|---|
+| 관절 집합 | 이름 일치 | 17/17 |
+| 관절 축(월드)·앵커·범위 (영점) | < 0.01°, < 0.05 mm, < 1e-5 rad | **0.0000°, 0.0000 mm, 4.9e-6 rad**(텍스트 소수 자릿수) |
+| 관절별 범위 스윕(16점, 나머지 0) → 전 링크 위치/자세 | < 0.05 mm, < 0.01° | **0.0000 mm, 2.4e-6°** |
+| 전 관절 랜덤 자세 200개 | 동일 | 0.0000 mm, 0.0000° |
+| 링크별 질량·COM·관성 | < 1e-4 kg, < 0.05 mm, < 1e-5 kg·m² | 17 링크 전부 통과 (dI ≤ 5e-7) |
+| 루트 링크 | — | URDF 로더가 base_link(4.84 kg)를 월드에 병합 — 로더 관례, 결함 아님 |
+
+판정 **MATCH**. 결과 JSON: `pygmalion_locomotion/assets/pygmalion_v2/pygmalion_v3_printed_urdf_crosscheck.json`.
+
+![urdf crosscheck](img/urdf_crosscheck_pygmalion_v3_printed.png)
+
+*그림 — 관절별 스윕에서의 최대 링크 위치차(mm). 빨간 점선 = 0.05 mm 기준.*
+
+영상 [urdf_crosscheck_pygmalion_v3_printed.mp4](video/urdf_crosscheck_pygmalion_v3_printed.mp4): MJCF 메시(채움) 위에 URDF 메시(빨간 와이어)를 겹쳐 관절 하나씩 범위를 스윕 — 두 모델이 한 로봇으로 보이면 일치. 루프 모델(`_loop`, URDF는 트리)은 같은 스크립트로 `--tag=pygmalion_v3_printed_loop`.
+
+주의: URDF 로더는 `<visual>`을 기본 폐기하므로(`discardvisual`) 스크립트가 `<mujoco><compiler discardvisual="false"/></mujoco>` 확장을 주입해 읽는다. 캡슐 컬리전은 URDF에 없어서(URDF는 box/cylinder/sphere/mesh) URDF 쪽 컬리전은 hull 메시다 — 컬리전 형상은 MJCF만 권위가 있다.

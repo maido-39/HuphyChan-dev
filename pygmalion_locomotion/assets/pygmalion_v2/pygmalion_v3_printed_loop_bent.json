@@ -1,0 +1,26 @@
+{
+ "pose": "KNEES_BENT (hip_pitch -0.32, knee -0.67, ankle_pitch +0.36)",
+ "closure_mm": 0.0,
+ "joint_pos": {
+  "L_crank_A_joint": -0.29883,
+  "L_rod_A_u1": 0.30635,
+  "L_rod_A_u2": 9e-05,
+  "L_crank_B_joint": -0.29884,
+  "L_rod_B_u1": 0.30107,
+  "L_rod_B_u2": 0.00014,
+  "L_ankle_pitch_joint": 0.35959,
+  "L_ankle_roll_joint": 0.00266,
+  "L_hip_pitch_joint": -0.32,
+  "L_knee_joint": -0.67,
+  "R_crank_A_joint": -0.29917,
+  "R_rod_A_u1": 0.3067,
+  "R_rod_A_u2": -9e-05,
+  "R_crank_B_joint": -0.29917,
+  "R_rod_B_u1": 0.3014,
+  "R_rod_B_u2": -0.00014,
+  "R_ankle_pitch_joint": 0.36,
+  "R_ankle_roll_joint": 0.00267,
+  "R_hip_pitch_joint": -0.32,
+  "R_knee_joint": -0.67
+ }
+}
