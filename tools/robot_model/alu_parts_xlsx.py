@@ -38,6 +38,7 @@ CONF_FILL = {'high': PatternFill('solid', fgColor='C8F0C8'),
              'med': PatternFill('solid', fgColor='FFF3B0'),
              'low': PatternFill('solid', fgColor='FFD4A8')}
 CONF_KO = {'high': '확실', 'med': '보통', 'low': '불확실'}
+ALU_FILL = PatternFill('solid', fgColor='D9DEE5')       # machined aluminium, not printed
 PLA_CEILING = 1.24 / 2.70
 THIN = Side(style='thin', color='BFC6CF')
 BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -59,12 +60,15 @@ def main():
     out = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_OUT
     meta = json.load(open(f'{SRC}/index.json'))
     meta.sort(key=lambda r: (r['link'], -r['mass_g']))
-    measured = {}
+    measured, alu = {}, {}
     mpath = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          'alu_parts_measured.json')
     if os.path.exists(mpath):
-        for e in json.load(open(mpath))['entries']:
+        mj = json.load(open(mpath))
+        for e in mj['entries']:
             measured[(e['occ'], e['body'])] = e
+        for e in mj.get('aluminium', []):
+            alu[(e['occ'], e['body'])] = e
 
     wb = Workbook()
     ws = wb.active
@@ -80,7 +84,7 @@ def main():
     ws['A3'].font = Font(name=FONT, size=9, italic=True, color='7A828C')
     if measured:
         ws['A4'] = ('E열 기입값은 출력물 사진의 손글씨를 읽어 CAD 부품에 대조한 것 — '
-                    '초록=확실 · 노랑=보통(A/B 짝 미확정) · 주황=불확실(실물 대조 필요). '
+                    '초록=확실 · 노랑=보통(A/B 짝 미확정) · 주황=불확실(실물 대조 필요) · 회색=알루미늄 가공품(CAD 질량 그대로). '
                     'F열이 46 %를 넘으면 빨강: PLA(1.24)/알루(2.70) 물리 상한 초과 = 오독 또는 오배정.')
         ws['A4'].font = Font(name=FONT, size=9, color='8A4B00')
 
@@ -120,8 +124,15 @@ def main():
         f.number_format = '0.0%'
         f.alignment = Alignment(horizontal='right', vertical='center')
         note = note_for(r)
+        al = alu.get((r['occ'].split(':')[0], r['body']))
         me = measured.get((r['occ'].split(':')[0], r['body']))
-        if me:
+        if al:
+            # machined in aluminium after all: the CAD mass IS the mass, ratio 1.0 by
+            # definition, and the PLA ceiling does not apply
+            e.value = round(r['mass_g'], 2)
+            e.fill = ALU_FILL
+            note = '알루미늄(출력 아님) · ' + al['note']
+        elif me:
             if me.get('g') is not None:
                 e.value = me['g']
                 e.fill = CONF_FILL.get(me['conf'], INPUT_FILL)

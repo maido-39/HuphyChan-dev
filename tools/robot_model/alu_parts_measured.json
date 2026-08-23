@@ -1,5 +1,5 @@
 {
- "_about": "Handwritten masses (g) on the 3D-printed parts, read off five photos the user sent on 2026-08-23 and matched to CAD parts by shape + location + mass ratio. PLA at 100% infill is 1.24/2.70 = 0.46 of the aluminium CAD mass; anything above that is a misread or a misassignment. Confidence: high = shape and number unambiguous; med = shape fits, pair-mate (A/B) or side not provable from the photo; low = reading or shape uncertain - verify against the part in hand. Second batch (photos 6-10, 2026-08-23) added Body4, HipYaw2Knee_outer, the ankle mount plates, the long shin truss, the foot plate and the hip-pitch D-plate, and corrected 67 -> 67.3.",
+ "_about": "Handwritten masses (g) on the 3D-printed parts, read off five photos the user sent on 2026-08-23 and matched to CAD parts by shape + location + mass ratio. PLA at 100% infill is 1.24/2.70 = 0.46 of the aluminium CAD mass; anything above that is a misread or a misassignment. Confidence: high = shape and number unambiguous; med = shape fits, pair-mate (A/B) or side not provable from the photo; low = reading or shape uncertain - verify against the part in hand. Second batch (photos 6-10, 2026-08-23) added Body4, HipYaw2Knee_outer, the ankle mount plates, the long shin truss, the foot plate and the hip-pitch D-plate, and corrected 67 -> 67.3. `aluminium` lists parts that are machined aluminium, not printed: their mass is the CAD mass, they get no density override and are excluded from the ratio statistics.",
  "entries": [
   {
    "occ": "HipYaw2Knee",
@@ -221,6 +221,18 @@
    "photo": 1,
    "read": "R-B 라벨 옆 숫자",
    "note": "판독 불가"
+  }
+ ],
+ "aluminium": [
+  {
+   "occ": "Ankle2Feet",
+   "body": "Arm_A",
+   "note": "AB 푸시로드(긴 바) - 알루미늄 가공품, 출력 아님 (사용자 2026-08-23). CAD 질량 그대로"
+  },
+  {
+   "occ": "Ankle2Feet",
+   "body": "Arm_B",
+   "note": "AB 푸시로드(긴 바) - 알루미늄 가공품, 출력 아님 (사용자 2026-08-23). CAD 질량 그대로"
   }
  ]
 }
