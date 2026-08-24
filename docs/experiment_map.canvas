@@ -429,6 +429,16 @@
    "height": 300,
    "color": "5",
    "text": "**c3 게이트 감시** (docs/95 §7)\n\n- 4k(vx1.2): AB 0.90 m/s·1.00 BW / RP 1.14·1.22 — 스윙 0.092/0.081 m > 역치\n- 8k(vx1.6): **RP가 더 부드러움** 0.85·1.03 vs AB 0.93·1.23; 접지 p90 1.96 꼬리\n- ⚠ AB 정지 제자리걸음 0.115 m/s(duty 0.87) → 12k 재확인\n- 판정: w −1 유지, 두 arm CONTINUE"
+  },
+  {
+   "id": "n_abrp_vid",
+   "type": "text",
+   "x": 11400,
+   "y": 540,
+   "width": 420,
+   "height": 260,
+   "color": "6",
+   "text": "**AB vs RP 1:1 거동 비교** (iter 8000)\n\n- `abrp_sidebyside_g8000.mp4` 전신+발목, 실시간\n- `abrp_shadow_g8000.mp4` 베이스 정렬 쉐도우 중첩\n- `abrp_gait_compare_g8000.png` 접지·발목각·GRF·추종\n\n리듬·추종 동일(err +0.055/+0.056), 차이는 **발목 사용법**: AB 배굴 스파이크 31° vs RP 평탄 18–22°. GRF p99 1.26/1.29 BW, 리플 동률 → docs/93 §5c"
   }
  ],
  "edges": [
@@ -775,6 +785,22 @@
    "toNode": "n_gate_c3",
    "toSide": "left",
    "label": "게이트 측정"
+  },
+  {
+   "id": "e_vid_ab3",
+   "fromNode": "n_ankAB3",
+   "fromSide": "bottom",
+   "toNode": "n_abrp_vid",
+   "toSide": "left",
+   "label": "1:1 영상"
+  },
+  {
+   "id": "e_vid_rp3",
+   "fromNode": "n_ankRP3",
+   "fromSide": "right",
+   "toNode": "n_abrp_vid",
+   "toSide": "left",
+   "label": "1:1 영상"
   }
  ]
 }
