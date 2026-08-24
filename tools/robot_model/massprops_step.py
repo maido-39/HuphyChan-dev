@@ -56,7 +56,12 @@ from OCP.GeomAbs import GeomAbs_Cylinder
 
 STEPS = '/home/syaro/pyg_fea/steps'
 RHO_AL, RHO_STEEL = 2.70e-6, 7.85e-6          # kg/mm3
-MOTOR_KG = {'RS04': 1.42, 'RS03': 0.88}        # catalogue (docs/33, 39)
+# 2026-08-25 MEASURED (user): RS04 1514.4 g WITH its cable on one side, RS03 919.5 g bare
+# motor. Catalogue was 1.42 / 0.88 -> the model was light by 6.6 % / 4.5 % per motor
+# (+0.898 kg on the robot, +2.54 %). Cables are not modelled anywhere in the STEP tree, so
+# folding the RS04 cable into the motor mass is the closer approximation, not a double
+# count; unmodelled cable runs and the many un-torqued screws are left to the mass DR.
+MOTOR_KG = {'RS04': 1.5144, 'RS03': 0.9195}    # measured 2026-08-25 (docs/33, 39 = catalogue)
 ANKLE_Z = -800.0
 
 BODY_OF_GROUP = {'L6_pelvis': 'pelvis', 'L5_hip_pitchroll': 'hip_pitch_link',

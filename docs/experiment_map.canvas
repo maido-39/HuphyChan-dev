@@ -479,6 +479,16 @@
    "width": 400,
    "height": 320,
    "color": "3"
+  },
+  {
+   "id": "n_spec101",
+   "type": "file",
+   "file": "101_policy_spec_and_final_plan.md",
+   "x": 12900,
+   "y": 560,
+   "width": 420,
+   "height": 360,
+   "color": "4"
   }
  ],
  "edges": [
@@ -881,6 +891,22 @@
    "toNode": "n_plan98",
    "toSide": "bottom",
    "label": "관측 설계"
+  },
+  {
+   "id": "e_spec_n_plan98",
+   "fromNode": "n_plan98",
+   "fromSide": "right",
+   "toNode": "n_spec101",
+   "toSide": "left",
+   "label": "최종 계획"
+  },
+  {
+   "id": "e_spec_n_gate_c3",
+   "fromNode": "n_gate_c3",
+   "fromSide": "right",
+   "toNode": "n_spec101",
+   "toSide": "left",
+   "label": "AB/RP 비교"
   }
  ]
 }
