@@ -439,6 +439,16 @@
    "height": 260,
    "color": "6",
    "text": "**AB vs RP 1:1 거동 비교** (iter 8000)\n\n- `abrp_sidebyside_g8000.mp4` 전신+발목, 실시간\n- `abrp_shadow_g8000.mp4` 베이스 정렬 쉐도우 중첩\n- `abrp_gait_compare_g8000.png` 접지·발목각·GRF·추종\n\n리듬·추종 동일(err +0.055/+0.056), 차이는 **발목 사용법**: AB 배굴 스파이크 31° vs RP 평탄 18–22°. GRF p99 1.26/1.29 BW, 리플 동률 → docs/93 §5c"
+  },
+  {
+   "id": "n_track_bneck",
+   "type": "file",
+   "file": "96_tracking_error_bottleneck.md",
+   "x": 11900,
+   "y": 180,
+   "width": 400,
+   "height": 320,
+   "color": "3"
   }
  ],
  "edges": [
@@ -801,6 +811,14 @@
    "toNode": "n_abrp_vid",
    "toSide": "left",
    "label": "1:1 영상"
+  },
+  {
+   "id": "e_bneck_gate",
+   "fromNode": "n_gate_c3",
+   "fromSide": "right",
+   "toNode": "n_track_bneck",
+   "toSide": "left",
+   "label": "err_vel 0.69 분해"
   }
  ]
 }
