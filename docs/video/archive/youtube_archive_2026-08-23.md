@@ -176,3 +176,21 @@ Suggested playlists: **Huphy 1.0 - sim model & RL** (2026-08-23 clips), **Huphy 
 - Left: the 2-RSU geometry of the best individual at each generation (neutral pose). Right top: P99 min-margin vs generation — first feasible at gen 4, final **+3.41 %**. Right bottom: per-constraint margins, orange = binding
 - Final: A_r 65.0 · B_r 62.0 · RP_B 50.5 · RP_r 43.8 · A_h 41.2 · B2RP 200.0 · RP_h 10.0 · A_L 289.1 · B_L 193.3 mm; binding = rod-end swing (JS6) +3.4 %, human-gait coverage +4.1 %, transmission ratio +3.8 %
 - Rendered from the stored per-generation trace (`romscan_gens_v9h2_f0.jsonl`), no optimisation re-run. 1 frame = 1 generation, not real-time. Replaces clip 8 as the optimisation-process clip. docs/71 §17j, docs/76 §1
+
+## 18. `20260824 112300 Huphy 1.0 - ankle AB vs RP, side by side gait at iter 8000`  (24 s)
+
+**Description:**
+- The ankle A/B under training: **AB** = closed-loop crank ankle (two cranks + rods, parallel 2-RSU) vs **RP** = serial roll/pitch ankle with the loop's torque envelope applied as a clamp. Everything else identical — same reward stack, same curriculum, same warm start, same seed
+- Both clips are the **same recorded rollout clock**: command 0 → 0.4 → 0.8 m/s, 8 s each, replayed at 25 fps = real time. Top row whole body, bottom row left-ankle close-up
+- Bottom bar reads the command, each arm's measured forward speed and its error. At 0.8 m/s the tracking error is the same for both (+0.055 vs +0.056 m/s)
+- Chase camera locked to each robot's own base, because the velocity command is body-frame and the two arms yaw apart in the world
+- Iter 8000 of 32000, after the squared soft-landing penalty was added. docs/93 §5c, docs/95 §7
+
+## 19. `20260824 112300 Huphy 1.0 - ankle AB vs RP, ghost overlay at iter 8000`  (24 s)
+
+**Description:**
+- The same two rollouts **overlaid**: bases aligned, 50/50 blend, AB tinted amber and RP tinted blue, so every limb difference at the same instant shows as a ghost offset
+- Right panel is the same overlay on the left ankle, where the two kinematics actually differ
+- What it shows: the gait rhythm is nearly identical (2.0–2.1 strides/s), but AB drives a **sharp dorsiflexion spike at terminal stance (31°)** while RP holds a **flatter 18–22° plateau** — a push-off style difference, not a performance difference
+- Vertical GRF p99 1.26 (AB) vs 1.29 BW (RP) and stance ripple 0.149 vs 0.155 — no measurable "RP trembles more" at this stage
+- Same ghost-overlay convention as clips 1 and 2. docs/93 §5c
