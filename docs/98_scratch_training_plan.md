@@ -18,6 +18,7 @@
 | P3 | 탐색 σ 0.30→0.38·entropy 1.2→4.4, **경계마다 계단 상승 후 미복귀** | `entropy_coef=0.01` 고정, 어닐링 없음 | 명령 커리큘럼 종료 후 **entropy_coef 선형 어닐링** | ⬜ 연구 노트 필요 |
 | P4 | `torque_limit` **weight = −0.0(꺼짐)** — RP ankle_pitch가 T-N의 82 %·3.7 % 스텝 포화인데 보상 신호 없음 | 과거에 비활성화, 게다가 정적 effort_limit 기준 | **T-N 인지 토크 여유 항**(τ vs `tn_limit(ω)`) | ⬜ 연구 노트 필요(1순위) |
 | P5 | `lin_vel_y ±1.0`이 처음부터 끝까지 고정 = 사족 계보 미튜닝 기본값. vx 2.5 단계에서 명령의 45 %가 \|v\|>1.5 | 커리큘럼이 vx·yaw만 램프 | **vy 램프**(최종 ±1.0 유지) ± **norm cap** | ✅ 구현·OFF 대기 |
+| P7 | 단일 롤아웃 프로브가 고분산 — 게이트 오판 유발(RP 스윙 0.039 vs 실제 0.052, 같은 재측정에서 AB가 stall) | 리셋 없는 블록 연쇄 + 단일 env | 게이트 판정은 **내장 평가기**(32 에피소드/시나리오)로 | ✅ 확인·전환 |
 | P6 | 조용한 품질 드리프트: slip 0.085→0.165(2배), contact_excess 3.6→5.5, dof_pos_limits −0.001→−0.014 | 해당 항 가중치가 추종에 비해 약함(원칙 8) | 먼저 **어느 관절/어느 명령인지 측정**, 그 다음 가중치 | ⬜ 측정 먼저 |
 
 ## 2. 바꾸지 않는 것 (확정 원칙 상속)
@@ -67,7 +68,8 @@ P1 8k–14k + P2 12k = **20k–26k iter**(기존 32k). 16384 env·단독 3.2 s/i
 | 4 | 죽은 항 정리 | `soft_landing`(−0.0002), `knee_overspeed`(≈0), `torque_limit`(0) — 기여율 0.1 % 미만(원칙 13) | 제거 자체가 리워드 변경 → 노트에 근거 남기고 일괄 |
 
 ## 5. 측정·보고 프로토콜 (처음부터 이걸로 고정)
-1. **학습 중**: 게이트마다 `snapshot_review.py` 판정행 + `impact_probe`/`hack_check`(스윙높이·접지속도·정지) + `dr_factor`·`lin_vel_x_max` 동시 기록.
+1. **학습 중**: 게이트마다 `snapshot_review.py` 판정행 + **내장 평가기 축소판**(3시나리오×32 env, CPU 8분/arm — 추종·성공률·stall 판정) + `impact_probe`(200 Hz 충격량) + `dr_factor`·`lin_vel_x_max` 동시 기록.
+   ⚠ **단일 롤아웃 프로브(`hack_check`/`measure_loads`)를 판정 게이트로 쓰지 말 것** — 블록을 리셋 없이 이어 붙이고 단일 env라 한 명령에서 stall하면 다음 블록이 오염된다. 2026-08-24에 이 때문에 "RP 스윙 0.039 → 두 arm 재시작" 오판을 낼 뻔했다(실제 0.052, 평가기 96 에피소드에서 stall 0). [[95_soft_landing_prescription]] §7b.
 2. **완주 후**: **mjlab 내장 `src/mjlab/tasks/velocity/scripts/evaluate.py`** — 명령 고정·결정론 정책·warmup 2 s 제외·8방위 격자·mean/RMS/max. 손수 만든 프로브는 보조로만.
 3. **하중**: `measure_loads.py` fc/fcp(15 s dwell, 학습 박스 전체), §7 모터 활용은 **T-N 대비**로.
 4. **지표 표기 규칙**: 논문·노트에는 `error_vel_xy_steady`(결정론)를 쓰고, legacy `error_vel_xy`는 "2.5× 스케일된 학습 지표"라고 명기한다.
