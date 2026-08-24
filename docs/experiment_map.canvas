@@ -449,6 +449,16 @@
    "width": 400,
    "height": 320,
    "color": "3"
+  },
+  {
+   "id": "n_trend97",
+   "type": "file",
+   "file": "97_c3_reward_trend_review.md",
+   "x": 11900,
+   "y": 560,
+   "width": 400,
+   "height": 320,
+   "color": "3"
   }
  ],
  "edges": [
@@ -819,6 +829,14 @@
    "toNode": "n_track_bneck",
    "toSide": "left",
    "label": "err_vel 0.69 분해"
+  },
+  {
+   "id": "e_trend_ab3",
+   "fromNode": "n_ankAB3",
+   "fromSide": "bottom",
+   "toNode": "n_trend97",
+   "toSide": "top",
+   "label": "항별 추세·건강도"
   }
  ]
 }
