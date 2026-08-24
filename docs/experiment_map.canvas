@@ -459,6 +459,16 @@
    "width": 400,
    "height": 320,
    "color": "3"
+  },
+  {
+   "id": "n_plan98",
+   "type": "file",
+   "file": "98_scratch_training_plan.md",
+   "x": 12400,
+   "y": 360,
+   "width": 400,
+   "height": 340,
+   "color": "4"
   }
  ],
  "edges": [
@@ -837,6 +847,22 @@
    "toNode": "n_trend97",
    "toSide": "top",
    "label": "항별 추세·건강도"
+  },
+  {
+   "id": "e_plan_n_trend97",
+   "fromNode": "n_trend97",
+   "fromSide": "right",
+   "toNode": "n_plan98",
+   "toSide": "left",
+   "label": "문제 6건"
+  },
+  {
+   "id": "e_plan_n_track_bneck",
+   "fromNode": "n_track_bneck",
+   "fromSide": "right",
+   "toNode": "n_plan98",
+   "toSide": "left",
+   "label": "지표·박스"
   }
  ]
 }
