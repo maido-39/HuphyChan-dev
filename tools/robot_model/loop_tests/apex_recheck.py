@@ -10,7 +10,7 @@ D, CK, TAG = sys.argv[1:4]
 VX = float(sys.argv[4]) if len(sys.argv) > 4 else 0.8
 OUT = '/home/syaro/pyg_fea/work/apex_recheck'; os.makedirs(OUT, exist_ok=True)
 sys.argv = ['measure_loads.py', '--run-dir', D, '--checkpoint', CK, '--tag', TAG, '--device', 'cpu',
-            '--steps-per-cmd', '750', '--warmup', '250', '--out-dir', OUT]
+            '--steps-per-cmd', os.environ.get('APEX_STEPS','750'), '--warmup', os.environ.get('APEX_WARMUP','250'), '--out-dir', OUT]
 sys.path.insert(0, 'analysis'); import measure_loads
 measure_loads.COMMAND_SCHEDULE = [(VX, 0.0, 0.0)]
 measure_loads.main()
