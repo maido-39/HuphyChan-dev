@@ -67,6 +67,13 @@ P1 8k–14k + P2 12k = **20k–26k iter**(기존 32k). 16384 env·단독 3.2 s/i
 | 3 | action_rate 재검토 | 벌점 예산의 48.6 %를 혼자 차지, 경계마다 악화 | 낮추면 지터 위험 — **낮추기 전에 지터 지표(>5 Hz 토크 파워 비중) 정의** |
 | 4 | 죽은 항 정리 | `soft_landing`(−0.0002), `knee_overspeed`(≈0), `torque_limit`(0) — 기여율 0.1 % 미만(원칙 13) | 제거 자체가 리워드 변경 → 노트에 근거 남기고 일괄 |
 
+## 4b. 관측 설계 변경 ([[100_observation_design_sim2real]])
+비대칭 actor-critic은 이미 적용돼 있고(`base_lin_vel` actor 제거 = 휴머노이드 표준), 다음 세대에 메울 구멍 4개:
+1. **critic에 DR 파라미터 추가**(마찰·질량·CoM·push force/torque) — humanoid-gym·Booster 선례, 배포 비용 0. 지금은 DR을 걸어놓고 가치함수가 그걸 잡음으로만 본다.
+2. **`projected_gravity`를 IMU 센서에서** 뽑기(`projected_gravity_from_sensor` + `imu_in_base`) — 실기 3개 스택 전부 IMU 자세→중력벡터.
+3. (선택) **actor 4프레임 히스토리** — ASAP·humanoid-gym 선례이자 추정기(DreamWaQ형 `v̂`)의 선행 조건.
+4. **URDF에 IMU 링크 추가 + CAD 실측 위치 확인**(현재 XML site `(0.004, 0, 0.241)`, URDF엔 IMU 없음). 장착 프레임이 다르면 H1처럼 보정 필요.
+
 ## 5. 측정·보고 프로토콜 (처음부터 이걸로 고정)
 1. **학습 중**: 게이트마다 `snapshot_review.py` 판정행 + **내장 평가기 축소판**(3시나리오×32 env, CPU 8분/arm — 추종·성공률·stall 판정) + `impact_probe`(200 Hz 충격량) + `dr_factor`·`lin_vel_x_max` 동시 기록.
    ⚠ **단일 롤아웃 프로브(`hack_check`/`measure_loads`)를 판정 게이트로 쓰지 말 것** — 블록을 리셋 없이 이어 붙이고 단일 env라 한 명령에서 stall하면 다음 블록이 오염된다. 2026-08-24에 이 때문에 "RP 스윙 0.039 → 두 arm 재시작" 오판을 낼 뻔했다(실제 0.052, 평가기 96 에피소드에서 stall 0). [[95_soft_landing_prescription]] §7b.

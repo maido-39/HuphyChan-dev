@@ -469,6 +469,16 @@
    "width": 400,
    "height": 340,
    "color": "4"
+  },
+  {
+   "id": "n_obs100",
+   "type": "file",
+   "file": "100_observation_design_sim2real.md",
+   "x": 12400,
+   "y": 760,
+   "width": 400,
+   "height": 320,
+   "color": "3"
   }
  ],
  "edges": [
@@ -863,6 +873,14 @@
    "toNode": "n_plan98",
    "toSide": "left",
    "label": "지표·박스"
+  },
+  {
+   "id": "e_obs_plan",
+   "fromNode": "n_obs100",
+   "fromSide": "top",
+   "toNode": "n_plan98",
+   "toSide": "bottom",
+   "label": "관측 설계"
   }
  ]
 }
