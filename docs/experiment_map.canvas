@@ -529,6 +529,16 @@
    "width": 420,
    "height": 300,
    "color": "3"
+  },
+  {
+   "id": "n_abrp_cmp",
+   "type": "file",
+   "file": "experiments/2026-08-26_ankleAB_vs_RP_comparison.md",
+   "x": 11400,
+   "y": 760,
+   "width": 420,
+   "height": 320,
+   "color": "5"
   }
  ],
  "edges": [
@@ -987,6 +997,22 @@
    "toNode": "n_v2plan",
    "toSide": "bottom",
    "label": "V2 항목 재정의"
+  },
+  {
+   "id": "e_cmp_n_ankAB3",
+   "fromNode": "n_ankAB3",
+   "fromSide": "bottom",
+   "toNode": "n_abrp_cmp",
+   "toSide": "top",
+   "label": "A/B 비교"
+  },
+  {
+   "id": "e_cmp_n_ankRP3",
+   "fromNode": "n_ankRP3",
+   "fromSide": "bottom",
+   "toNode": "n_abrp_cmp",
+   "toSide": "top",
+   "label": "A/B 비교"
   }
  ]
 }

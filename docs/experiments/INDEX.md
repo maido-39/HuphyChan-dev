@@ -85,3 +85,4 @@
 - [[experiment_map.canvas]] — 계보 트리(WHY 노트 부착) · [[experiment_tree.canvas]] — ★증거 연결판(실험+근거+결과 이미지/영상, 2026-07-20 신설)
 - [[2026-08-23_ankleAB_c2]] · [[2026-08-23_ankleRP_c2]] — ★Era-10 발목 기구 A/B(폐루프 AB vs 직렬 RP), 프린트 질량·실측 모터·T-N, 단일런 커리큘럼 32k (학습 중)
 - [[2026-08-24_ankleAB_c3]] · [[2026-08-24_ankleRP_c3]] — c2 model_3100 warm-start + soft-landing 보상(제곱 접지속도 벌점, GRF 캡 1.2 BW) — [[95_soft_landing_prescription]]
+- [[2026-08-26_ankleAB_vs_RP_comparison]] — 발목 AB/RP 단일변인 A/B 완주 비교 (성능 무승부·에너지 RP −12 
