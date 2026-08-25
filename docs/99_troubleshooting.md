@@ -84,3 +84,11 @@
   - 자율/야간(overnight) 학습은 **num_envs 8192** (~6G GPU, RAM ~11G 여유 확보)로.
   - **학습 중 matplotlib/npz 분석 절대 금지** (RAM 스파이크 → 학습 OOM-kill).
   - **GPU 작업은 한 번에 하나만** (동시 실행 금지).
+
+## PYG_MOTOR_MEAS=0 가 RP 모드에서 발목 관절을 무관성·무마찰로 만든다 (2026-08-26, 수정됨)
+- 증상: RP 정책이 `PYG_MOTOR_MEAS=0`으로 재생하면 걷지 못함(1.6 m/s 명령에 0.19 m/s 달성, 네 명령 모두).
+- 원인: `pygmalion_constants.get_spec`의 반사 파라미터 주입 블록이 `if _ANKLE_RP and _MOTOR_MEAS`로 게이트돼 있어
+  끄면 ankle armature 0.020924→0, damping 0.030624→0, frictionloss 0.472450→0. AB 폴백은 공칭값 대체라 정상.
+- 수정: 게이트를 `if _ANKLE_RP`로 넓혀 반사 관성을 항상 적용. 수정 후 추종 0.127 / 0.152로 복구.
+- 잔여: `_ankle_reflected()`가 엔벨로프의 실측 모터 수치를 쓰므로 RP 발목에 대해 `PYG_MOTOR_MEAS`는 이제 무효 토글이다.
+  공칭 반사값이 필요하면 `ankle_rp_envelope.py`를 공칭 수치로 재실행해야 한다.
