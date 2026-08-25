@@ -428,7 +428,7 @@
    "width": 420,
    "height": 300,
    "color": "5",
-   "text": "**c3 완주** (32,000 · 39 h 45 m · 낙상 0 양쪽)\n\n**fc/fcp 전체박스 121명령×15 s**\n- 추종 순수vx AB 0.89 / RP 0.90, vy 0.68 / 0.75\n- 모터 여유(모터축) AB 0.51 / RP 0.48 — **동률**\n  (앞선 'RP 0.80 포화'는 좌표계 오류, 08-26 정정)\n- 발목축 수요 p99 59–65 N·m → RS03 직결 불가\n- 에너지 CoT RP 0.277 < AB 0.314\n- push에도 낙상 0 (fcp 1,815 s)"
+   "text": "**c3 완주** (32,000 · 39 h 45 m · 낙상 0 양쪽)\n\n- 추종 순수vx AB 0.89 / RP 0.90, 평가기 576ep 100 %\n- 모터 여유(모터축) 0.44–0.55 — **동률**\n- 에너지 CoT RP 0.277 < AB 0.314 (−12 %)\n- **T-N 클램프 off에도 정상**(+0.01~0.03)\n- ★버그: MEAS=0이 RP 반사관성 0 → 수정\n- 산출물: accum·demo 영상 각 2편, wrench 3D"
   },
   {
    "id": "n_abrp_vid",
@@ -539,6 +539,16 @@
    "width": 420,
    "height": 320,
    "color": "5"
+  },
+  {
+   "id": "n_bundle_rr",
+   "type": "file",
+   "file": "reward_research/2026-08-26_human_landing_bundle.md",
+   "x": 13900,
+   "y": 760,
+   "width": 420,
+   "height": 300,
+   "color": "3"
   }
  ],
  "edges": [
@@ -1013,6 +1023,14 @@
    "toNode": "n_abrp_cmp",
    "toSide": "top",
    "label": "A/B 비교"
+  },
+  {
+   "id": "e_bundle_104",
+   "fromNode": "n_init104",
+   "fromSide": "right",
+   "toNode": "n_bundle_rr",
+   "toSide": "left",
+   "label": "번들 근거"
   }
  ]
 }
