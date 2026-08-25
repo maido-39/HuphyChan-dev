@@ -499,6 +499,16 @@
    "height": 260,
    "color": "5",
    "text": "**AB vs RP 최종 지표** (model_9500 동일 롤아웃)\n\n- **에너지**: CoT AB 0.314 / **RP 0.277** (−12 %), 1 m/s에서 93 vs 73 W. 속도↑일수록 격차↑\n- **충격**: 4게이트 쌍대차 +0.03±0.27 m/s, +0.04±0.18 BW = **무승부**\n- **모터 여유**: 발목 AB 크랭크 35–38 % / **RP 82 %·포화 3.7 %**\n- 손해 출처: 발목 동률, **무릎 +63 %·힙요 +78 %** → 게인 재조정 여지\n\n거래 = 20 W 더 쓰고 발목 여유 2.2배. docs/101 §5"
+  },
+  {
+   "id": "n_handover102",
+   "type": "file",
+   "file": "102_rebuild_handover.md",
+   "x": 12900,
+   "y": 980,
+   "width": 420,
+   "height": 320,
+   "color": "6"
   }
  ],
  "edges": [
@@ -925,6 +935,14 @@
    "toNode": "n_energy",
    "toSide": "top",
    "label": "§5 결론"
+  },
+  {
+   "id": "e_hand_spec",
+   "fromNode": "n_spec101",
+   "fromSide": "bottom",
+   "toNode": "n_handover102",
+   "toSide": "top",
+   "label": "인계"
   }
  ]
 }
