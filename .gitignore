@@ -52,3 +52,6 @@ pygmalion_locomotion/assets/pygmalion_v2/meshes/
 # collision web viewer meshes (15 MB, regenerable: tools/collision_viewer/build_data.py)
 tools/collision_viewer/meshes/
 tools/collision_viewer/robot.json
+
+# dashboard gallery thumbnails (regenerate with tools/dashboard/gallery.py)
+tools/dashboard/thumbs/
