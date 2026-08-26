@@ -642,13 +642,33 @@
   },
   {
    "id": "n_bD1",
-   "type": "text",
+   "type": "file",
    "x": 16500,
    "y": 300,
    "width": 420,
    "height": 300,
-   "color": "5",
-   "text": "**bundleD1_AB** — 세 채택안 동시 (2026-08-26 15:02)\n\n`INIT_MID` + `KNEE_EXT`(2.0@25°) + `MODE=both`\n16384 env · c3 model_31999 +800 iter → 32799\n대조 = C3\n\n판정: 평가기 32 ep + `eval_raw_stats.py`\n+ 200 Hz 다중 env `impact_probe_multi.py`"
+   "color": "4",
+   "file": "experiments/2026-08-26_bundleD1_AB.md"
+  },
+  {
+   "id": "n_d1_verdict",
+   "type": "text",
+   "x": 17050,
+   "y": 300,
+   "width": 460,
+   "height": 340,
+   "color": "4",
+   "text": "**D1 = 채택** (2026-08-26)\n\n평가기 32 ep: 피크 GRF **1.093 BW**(최저)·입각 무릎 **39.1°**(최저)·오차 0.133(폭 0.011 최협)\n200 Hz × 24 env: 하중률 **21.0 BW/s(최저)** + 피크 1.224 BW\n→ **피크·하중률 두 축을 동시에 잡은 유일한 arm**\n(C5는 피크만, TRT는 하중률만)\n\n⚠ 실제 변인은 하중률 항이 아니라 `foot_impact_velocity` ½ — 하중률 항은 부호버그로 死"
+  },
+  {
+   "id": "n_signbug",
+   "type": "text",
+   "x": 17050,
+   "y": 700,
+   "width": 460,
+   "height": 300,
+   "color": "1",
+   "text": "**부호 버그: `foot_loading_rate`는 한 번도 안 돌았다**\n\n`reduce=\"netforce\"`의 전역 z는 하중 시 **음수**(−577…0 N)인데 `clamp(min=0)`으로 읽음 → `in_contact` 영구 거짓\n→ TRT·B2·D1 **3런 × 800 iter**를 죽은 항으로\n\n다른 접촉 항은 전부 `norm()`이라 부호가 감춰져 있었다\n\n수정 후 w 0.002 → 스텝당 **−0.664**(보상예산의 8배) → 1e-4로 재교정. 항 자체는 **미시험**\n\n규칙: 새 항은 100 iter 안에 `Episode_Reward/<term>` ≠ 0 확인"
   }
  ],
  "edges": [
@@ -1241,6 +1261,21 @@
    "toNode": "n_bD1",
    "toSide": "left",
    "label": "세 안 동시 시험"
+  },
+  {
+   "id": "e_n_bD1_n_d1_verdict",
+   "fromNode": "n_bD1",
+   "fromSide": "right",
+   "toNode": "n_d1_verdict",
+   "toSide": "left"
+  },
+  {
+   "id": "e_n_bD1_n_signbug",
+   "fromNode": "n_bD1",
+   "fromSide": "right",
+   "toNode": "n_signbug",
+   "toSide": "left",
+   "label": "텐서보드 0.00000"
   }
  ]
 }

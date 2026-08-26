@@ -11,9 +11,10 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 D = '/home/syaro/pyg_fea/work/impact_multi'
-ARMS = ['bundleCTL_AB', 'bundleTRT_AB', 'bundleB2_AB', 'bundleC3_AB', 'bundleC5_AB']
+ARMS = ['bundleCTL_AB', 'bundleTRT_AB', 'bundleB2_AB', 'bundleC3_AB', 'bundleC5_AB', 'bundleD1_AB']
 LBL = {'bundleCTL_AB': 'CTL (baseline)', 'bundleTRT_AB': 'TRT (rate-only)',
-       'bundleB2_AB': 'B2 (both)', 'bundleC3_AB': 'C3 (init-mid)', 'bundleC5_AB': 'C5 (+knee ext)'}
+       'bundleB2_AB': 'B2 (both)', 'bundleC3_AB': 'C3 (init-mid)', 'bundleC5_AB': 'C5 (+knee ext)',
+       'bundleD1_AB': 'D1 (all three)'}
 have = [a for a in ARMS if os.path.exists(f'{D}/{a}_raw.npz')]
 
 fig, axes = plt.subplots(len(have), 1, figsize=(11, 2.0 * len(have)), sharex=True)
