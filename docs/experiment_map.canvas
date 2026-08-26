@@ -549,6 +549,26 @@
    "width": 420,
    "height": 300,
    "color": "3"
+  },
+  {
+   "id": "n_bctl",
+   "type": "file",
+   "file": "experiments/2026-08-26_bundleCTL_AB.md",
+   "x": 13900,
+   "y": 180,
+   "width": 400,
+   "height": 320,
+   "color": "2"
+  },
+  {
+   "id": "n_btrt",
+   "type": "file",
+   "file": "experiments/2026-08-26_bundleTRT_AB.md",
+   "x": 13900,
+   "y": 560,
+   "width": 400,
+   "height": 320,
+   "color": "2"
   }
  ],
  "edges": [
@@ -1031,6 +1051,30 @@
    "toNode": "n_bundle_rr",
    "toSide": "left",
    "label": "번들 근거"
+  },
+  {
+   "id": "e_n_bctl",
+   "fromNode": "n_ankAB3",
+   "fromSide": "right",
+   "toNode": "n_bctl",
+   "toSide": "left",
+   "label": "model_31999 +800"
+  },
+  {
+   "id": "e_n_btrt",
+   "fromNode": "n_ankAB3",
+   "fromSide": "right",
+   "toNode": "n_btrt",
+   "toSide": "left",
+   "label": "model_31999 +800"
+  },
+  {
+   "id": "e_bundle_ab",
+   "fromNode": "n_bctl",
+   "fromSide": "bottom",
+   "toNode": "n_btrt",
+   "toSide": "top",
+   "label": "A/B: 착지 번들 3변인"
   }
  ]
 }
