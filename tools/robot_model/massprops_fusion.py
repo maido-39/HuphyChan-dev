@@ -134,12 +134,27 @@ def classify(path):
     if parts[1] == 'Joints_UpperBody:1':
         if 'ArmR_fullDoF' in path:
             return None                                       # suppressed alternative arm
-        if 'ArmR_Dummy' in path:
-            return 'arm'
-        if 'Shoulder-Pitch2Roll' in path or 'Shoulder_Roll' in path:
+        # ORDER MATTERS. In the v22 rework Shoulder-Pitch2Roll was reparented UNDER
+        # ArmR_Dummy (/Arm_R:1/ArmR_Dummy:1/Shoulder-Pitch2Roll:1::...). With the ArmR_Dummy
+        # test first, 3.218 kg of shoulder bracketry migrates across the shoulder-roll joint
+        # into arm_link and shoulder_pitch_link is left as a naked 0.880 kg RS03. So the
+        # specific shoulder tests run BEFORE the catch-all arm test.
+        if 'Torso2ShoulderP' in path:
+            # New in v22, at the torso/shoulder interface. Deliberately dropped: the user
+            # said to ignore the torso rework, so it goes neither to torso nor to the arm.
+            # Recorded as a decision so it cannot be mistaken for the M2 kind of silent loss.
+            return None
+        if ('Shoulder-Pitch2Roll' in path or 'Shoulder_Roll' in path
+                or 'Shoulder-Roll2Yaw' in path):
             return 'shoulder_pitch_link'
         if 'Shoulder_Pitch' in path:
             return 'torso'                                    # its stator rides the torso
+        if '6810ZZ-Roll2Yaw' in path:
+            # Promoted to /Arm_R:1/6810ZZ-Roll2Yaw:1 in v22; it matches no branch below and
+            # would return None, silently dropping 50 g.
+            return 'arm'
+        if 'ArmR_Dummy' in path:
+            return 'arm'
         return None
     return None
 

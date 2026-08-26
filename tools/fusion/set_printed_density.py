@@ -12,8 +12,10 @@ Per body under Joints_UnderBody whose material is Aluminum 6061:
   * Arm_A / Arm_B          -> untouched: the push rods are machined aluminium
   * CenterPin_RS03         -> untouched: 0.4 g pins
 Hidden bodies are included - the light bulb is a view state, and in this document every
-group but the ankle is switched off. The upper body (Joints_UpperBody) is left at aluminium - nothing there was weighed and the
-photos show only the leg printed. Each body gets its own copied material so nothing else in
+group but the ankle is switched off. The SHOULDER was added to scope on 2026-08-26 on the
+user's word that "apart from the bearings it is all printed"; its reworked bodies arrive on
+generic 'Steel', not aluminium, so the material filter accepts that too. The torso stays out
+(the user said to ignore the torso rework). Each body gets its own copied material so nothing else in
 the document shifts.
 
 Usage: set_printed_density.py [--apply]     (dry run by default; Fusion MCP reachable,
@@ -35,6 +37,12 @@ AL = 2.70
 EXPORT_DOC_PREFIX = '260819_HumanMesh_wUpper_URDFexport'
 KEEP_AL = ('Arm_A', 'Arm_B')
 SKIP_OCC = ('CenterPin', 'NoSim', 'DR2020', 'DF2020')
+# The shoulder subtrees added to scope on 2026-08-26. Torso2ShoulderP is NOT here: it sits at
+# the torso/shoulder interface and the torso rework is out of scope by user instruction.
+# Shoulder-Roll2Yaw-dummy is included even though its light bulb is off - in this document a
+# light bulb is a view state (massprops_fusion.py s"hidden"), and the bbox shows it is the
+# yoke whose side plates straddle the DR2020 extrusion and carry the 6810ZZ. Real hardware.
+SHOULDER_SUBTREES = ('Shoulder-Pitch2Roll', 'Shoulder-Roll2Yaw-dummy', 'DummyHand')
 # a light bulb that is off is a VIEW state, not a design decision (docs/88 s4b): in this
 # document every group but the ankle happens to be switched off. Only alternative-design
 # branches are excluded.
@@ -126,13 +134,27 @@ def main():
         # changed measurement moves them (a new 'PLA <body> <density>' material is made when
         # the value changed, the existing one reused when not) - the first version skipped
         # them and was a no-op on any copy that had been converted once
-        if not path.startswith('/Joints_UnderBody') or not ('Alumin' in mat or mat.startswith('PLA ')):
+        # SCOPE (2026-08-26, user: "apart from the bearings the shoulder is all printed"):
+        # the leg, plus the reworked shoulder under Joints_UpperBody. The torso is still
+        # excluded - the user said to ignore the torso rework.
+        in_leg = path.startswith('/Joints_UnderBody')
+        in_shoulder = any(t in path for t in SHOULDER_SUBTREES)
+        if not (in_leg or in_shoulder):
+            continue
+        # MATERIAL: the v22 shoulder bodies came in as generic 'Steel' (7.850), not aluminium -
+        # the document default, not a design intent (the same group was Aluminum 6061 on
+        # 08-22, and the geometry is 3 mm caps and 6 mm plates). Accepting only 'Alumin' here
+        # would make this script run clean and change nothing on the shoulder.
+        if not ('Alumin' in mat or mat.startswith('PLA ') or mat.strip() == 'Steel'):
             continue
         if any(t in path for t in ALT_BRANCH):
             continue
         if body in KEEP_AL or any(s in occ for s in SKIP_OCC):
             continue
-        al_g = vol * AL if mat.startswith('PLA ') else m_g     # what it weighs at aluminium
+        # 'what it weighs at aluminium' is the reference the measured RATIO multiplies. For a
+        # body sitting on Steel (or an earlier PLA copy) the CAD gram figure is the wrong
+        # reference, so it is recomputed from the volume.
+        al_g = m_g if 'Alumin' in mat else vol * AL
         r = ratio_by_body.get(body)
         # a part's own ratio is used only when its reading AND its match are confident;
         # an orange (low) reading such as SupportB's 0.465 would put a density above PLA
