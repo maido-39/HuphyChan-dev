@@ -247,3 +247,34 @@ CAD의 RS03 어깨 모터는 **880 g/개**인데, 이 프로젝트의 **실측 R
 
 ## §R 참조
 [[103_v2_training_plan]] · [[100_observation_design_sim2real]] · [[102_rebuild_handover]] · [[89_printed_density_survey]] · [[reference-robstride-motor-specs]]
+
+---
+
+## 4. v4 모델 생성 완료 (2026-08-26 21:20)
+사용자 확인 두 건으로 막혀 있던 것이 풀렸다: **DummyHand = 출력물**(나중에 여기에 페이로드를 단다),
+그리고 **export 사본 생성 허가**.
+
+`Save As`로 `260819_HumanMesh_wUpper_URDFexport_v22`를 뜨고(마스터는 `isModified=False` 상태 그대로 유지)
+→ 출력물 밀도 **62바디** 적용 → massprops → URDF/MJCF → validate를 **RP·AB 양쪽** 다 돌렸다.
+
+| | v3 | **v4** |
+|---|---|---|
+| 전체 | 35.347 kg | **31.316 kg** |
+| 한쪽 다리 | — | 8.249 kg |
+| **한쪽 팔+어깨** | 4.021 kg | **2.054 kg** |
+| 골반 / 몸통 | 4.841 / 5.965 | 4.841 / 5.870 |
+| IMU site | `0.004 0 0.241` | **`-1e-06 0.007078 -0.0695`** |
+
+검증: hip→knee 0.3700(CAD 0.370) · knee→ankle 0.4900(0.490) · hip→sole 0.9030(0.903) · 보폭 0.2474(0.2474),
+L/R 부호 관례 6관절 일치. v3는 md5 `614f4fce` 그대로라 기존 정책 15개는 무영향. v4는 `PYG_MODEL_V4=1`로만 로드된다.
+
+### 4a. 도중에 잡은 결함 두 개
+1. **`set_printed_density.py`의 `Steel` 수용이 다리까지 덮쳤다.** v3가 한 번도 변환하지 않은 13바디가 새로 잡혔는데
+   그중 **JMC-JS06 로드엔드의 `Inner Ball`/`Outer Shell`(진짜 강재)** 과 **EBIMU-9DOFv5 PCB**가 있었다.
+   어깨와 무관한 이유로 다리 질량이 움직였을 것이다. ⇒ `Steel` 수용은 **어깨 서브트리 한정**(75→62바디).
+2. **`validate_robot.py`의 발바닥 높이 검사가 죽어 있었다.** 캡슐 발 지오메트리만 찾는데 v3·v4 모두 **박스 밑창**이라
+   `min()`이 빈 iterable로 예외를 던졌고, **빌드 5단계가 그동안 아무것도 검증하지 않았다.**
+   박스(회전 포함)·구·캡슐을 모두 처리하도록 고쳤다.
+
+`mass_dr.json`(v3용, md5 `4ee91aed`)은 보존하고 v4 범위는 `mass_dr_v4.json`으로 따로 뒀다 —
+`env_cfgs.py`가 모든 `PYG_INERTIAL_DR` 런에서 v3 경로를 assert하기 때문이다.

@@ -699,6 +699,56 @@
    "height": 360,
    "color": "3",
    "text": "**RP 이식 = 유효하나 이득이 작다** (2026-08-26)\n\nD1_RP vs CTL_RP: 무릎 45.9→**39.9°**, 하중률(200 Hz) 81.5→**64.5 BW/s(−21 %)**, 추종 0.147→**0.140**\n피크 GRF 1.248→1.253 = **변화 없음**\n\n★**RP 대조군엔 AB의 착지 병리가 없었다**\n같은 초기자세·보상인데 200 Hz 피크 **AB 2.353 vs RP 1.248 BW**, 하중률 **277 vs 81.5**, DR하 낙상 **12 vs 0**\n\n⇒ 초기자세의 −48 % 충격 감소는 **AB 한정**(폐루프 발목 + 깊은 굽힘의 결합)\n⚠ 두 정책이 다른 국소최적 → 기구 인과 단정엔 교차시험 필요"
+  },
+  {
+   "id": "n_bD1_ab",
+   "type": "file",
+   "file": "experiments/2026-08-26_bundleD1_AB.md",
+   "x": 16500,
+   "y": 180,
+   "width": 420,
+   "height": 300,
+   "color": "4"
+  },
+  {
+   "id": "n_bCTL_rp",
+   "type": "file",
+   "file": "experiments/2026-08-26_bundleCTL_RP.md",
+   "x": 17050,
+   "y": 120,
+   "width": 420,
+   "height": 300,
+   "color": "6"
+  },
+  {
+   "id": "n_bD1_rp",
+   "type": "file",
+   "file": "experiments/2026-08-26_bundleD1_RP.md",
+   "x": 17050,
+   "y": 480,
+   "width": 420,
+   "height": 300,
+   "color": "4"
+  },
+  {
+   "id": "n_bE1_ab",
+   "type": "file",
+   "file": "experiments/2026-08-26_bundleE1_AB_aborted.md",
+   "x": 17600,
+   "y": 120,
+   "width": 420,
+   "height": 300,
+   "color": "1"
+  },
+  {
+   "id": "n_bV4_ab",
+   "type": "file",
+   "file": "experiments/2026-08-26_bundleV4_AB_aborted.md",
+   "x": 17600,
+   "y": 480,
+   "width": 420,
+   "height": 300,
+   "color": "1"
   }
  ],
  "edges": [
@@ -1328,6 +1378,46 @@
    "fromSide": "right",
    "toNode": "n_rp_verdict",
    "toSide": "left"
+  },
+  {
+   "id": "e_n_bundle_final_n_bD1_ab",
+   "fromNode": "n_bundle_final",
+   "fromSide": "right",
+   "toNode": "n_bD1_ab",
+   "toSide": "left",
+   "label": "세 안 동시"
+  },
+  {
+   "id": "e_n_bD1_ab_n_bCTL_rp",
+   "fromNode": "n_bD1_ab",
+   "fromSide": "right",
+   "toNode": "n_bCTL_rp",
+   "toSide": "left",
+   "label": "RP 이식: 대조"
+  },
+  {
+   "id": "e_n_bD1_ab_n_bD1_rp",
+   "fromNode": "n_bD1_ab",
+   "fromSide": "right",
+   "toNode": "n_bD1_rp",
+   "toSide": "left",
+   "label": "RP 이식: 처치"
+  },
+  {
+   "id": "e_n_bD1_ab_n_bE1_ab",
+   "fromNode": "n_bD1_ab",
+   "fromSide": "right",
+   "toNode": "n_bE1_ab",
+   "toSide": "left",
+   "label": "+수정된 하중률항"
+  },
+  {
+   "id": "e_n_bD1_ab_n_bV4_ab",
+   "fromNode": "n_bD1_ab",
+   "fromSide": "right",
+   "toNode": "n_bV4_ab",
+   "toSide": "left",
+   "label": "+v4 질량"
   }
  ]
 }
