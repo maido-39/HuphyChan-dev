@@ -619,6 +619,16 @@
    "width": 400,
    "height": 300,
    "color": "4"
+  },
+  {
+   "id": "n_bC5",
+   "type": "file",
+   "file": "experiments/2026-08-26_bundleC5_AB.md",
+   "x": 15400,
+   "y": 560,
+   "width": 400,
+   "height": 300,
+   "color": "4"
   }
  ],
  "edges": [
@@ -1173,6 +1183,14 @@
    "toNode": "n_bC4",
    "toSide": "left",
    "label": "16384 env"
+  },
+  {
+   "id": "e_bC5",
+   "fromNode": "n_bC3",
+   "fromSide": "bottom",
+   "toNode": "n_bC5",
+   "toSide": "top",
+   "label": "+무릎 신전항"
   }
  ]
 }
