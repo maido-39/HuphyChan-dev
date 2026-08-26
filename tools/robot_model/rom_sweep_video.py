@@ -89,12 +89,21 @@ def load_signs():
     return json.load(open(SIGN_JSON))
 
 
+HOLD_S = 1.0                      # still frames at neutral before and after each sweep
+
+
 def sweep_profile(lo, hi, n_seg):
-    """neutral -> min -> max -> neutral, as (angle, phase-label) pairs."""
-    out = []
+    """hold at neutral -> min -> max -> neutral -> hold, as (angle, phase-label) pairs.
+
+    The holds exist so the robot can actually be looked at before and after it moves; without
+    them each joint cuts straight from the section card into motion.
+    """
+    hold = int(HOLD_S * FPS)
+    out = [(0.0, 'neutral')] * hold
     for a, b, lab in ((0.0, lo, 'to MIN'), (lo, hi, 'to MAX'), (hi, 0.0, 'back to NEUTRAL')):
         for k in range(n_seg):
             out.append((a + (b - a) * ease(k / (n_seg - 1)), lab))
+    out += [(0.0, 'neutral')] * hold
     return out
 
 
@@ -140,9 +149,15 @@ def draw_frame(rgb_main, rgb_zoom, info):
         d.text((ZOOM_X + 14, by2 + 28), 'MATCHES  + = clockwise' if ok else 'INVERTED vs spec',
                font=f_b(18), fill=POS_C if ok else NEG_C)
         d.text((ZOOM_X + 14, by2 + 54), info['sign_detail'][:46], font=f_r(12), fill=DIM)
-    if abs(info['dir']) > 1e-9:
-        circ_arrow(d, W - 52, by2 + 38, 24, info['dir'] > 0,
-                   POS_C if info['dir'] > 0 else NEG_C)
+    # The arrow shows the sense AS SEEN LOOKING AT THE ROTOR FACE, which is not the same thing
+    # as "the angle is going up": on a joint whose axis is inverted vs spec, a rising angle turns
+    # counter-clockwise from that viewpoint. Drawing it from the sign of dq alone made the arrow
+    # contradict the verdict badge next to it.
+    if abs(info['dir']) > 1e-9 and info['sign_state'] != 'unknown':
+        rising = info['dir'] > 0
+        cw_at_rotor = rising if info['sign_state'] == 'match' else not rising
+        circ_arrow(d, W - 52, by2 + 38, 24, cw_at_rotor, POS_C if rising else NEG_C)
+        d.text((W - 96, by2 + 66), 'CW' if cw_at_rotor else 'CCW', font=f_r(12), fill=DIM)
 
     # ---- read-out band ----
     ang, lo, hi = info['ang'], info['lo'], info['hi']
@@ -169,8 +184,28 @@ def draw_frame(rgb_main, rgb_zoom, info):
     return im
 
 
+class FrameSink:
+    """Write frames straight to disk, numbered.
+
+    The first version built a Python list of every PIL frame and only encoded at the end:
+    2514 frames x 1280x720x3 is about 7 GB resident, which put this machine into swap with
+    kswapd pinned at 100 %. Nothing here ever needs two frames at once.
+    """
+
+    def __init__(self, work):
+        self.work = work
+        self.n = 0
+
+    def add(self, im):
+        im.save(f'{self.work}/f{self.n:05d}.png')
+        self.n += 1
+
+    def hold(self, im, seconds):
+        for _ in range(int(seconds * FPS)):
+            self.add(im)
+
+
 def title_card(text_lines, seconds=3.0):
-    ims = []
     im = Image.new('RGB', (W, H), BG)
     d = ImageDraw.Draw(im)
     d.text((70, 150), text_lines[0], font=f_b(46), fill=FG)
@@ -178,9 +213,7 @@ def title_card(text_lines, seconds=3.0):
     for ln in text_lines[1:]:
         d.text((70, yy), ln, font=f_r(24), fill=DIM if ln.startswith(' ') else FG)
         yy += 42
-    for _ in range(int(seconds * FPS)):
-        ims.append(im.copy())
-    return ims
+    return im, seconds
 
 
 def main():
@@ -226,7 +259,7 @@ def main():
               and not any(t in m.joint(j).name for t in ('_rod_', '_crank_'))]
     if only:
         hinges = [h for h in hinges if any(o in h for o in only)]
-    n_seg = 12 if quick else 34                      # frames per leg of the sweep
+    n_seg = 24 if quick else 68                      # frames per leg; 68 @25fps = half the old speed
 
     renderer = mujoco.Renderer(m, height=768, width=1024)
     rz = mujoco.Renderer(m, height=PANEL, width=PANEL)
@@ -237,7 +270,8 @@ def main():
     opt = mujoco.MjvOption()
     opt.flags[mujoco.mjtVisFlag.mjVIS_JOINT] = True
 
-    frames = title_card([
+    sink = FrameSink(WORK)
+    sink.hold(*title_card([
         'Joint ROM sweep and motor sign check',
         f'model: {os.path.basename(xml)}    {len(hinges)} joints',
         '',
@@ -247,7 +281,7 @@ def main():
         'Sign convention: look straight at the actuator rotor face',
         ' (the face with 6 M4 holes and 3 alignment pins).',
         ' CLOCKWISE from that view is POSITIVE.',
-    ], 4.0)
+    ], 4.0))
 
     log = {}
     for jn in hinges:
@@ -271,8 +305,8 @@ def main():
         else:
             detail = ''
 
-        frames += title_card([f'{jn}', f'range {lo:+.0f} to {hi:+.0f} deg',
-                              '', HUMAN.get(kind, '')], 1.6)
+        sink.hold(*title_card([f'{jn}', f'range {lo:+.0f} to {hi:+.0f} deg',
+                               '', HUMAN.get(kind, '')], 1.6))
         prof = sweep_profile(lo, hi, n_seg)
         prev = 0.0
         rec = []
@@ -288,7 +322,7 @@ def main():
             czoom.distance, czoom.elevation, czoom.azimuth = 0.55, -6, 140
             rz.update_scene(dta, camera=czoom, scene_option=opt)
             zoom_rgb = rz.render()
-            frames.append(draw_frame(main_rgb, zoom_rgb, dict(
+            sink.add(draw_frame(main_rgb, zoom_rgb, dict(
                 title=jn, human=HUMAN.get(kind, ''), ang=ang, lo=lo, hi=hi, phase=phase,
                 model_tag=os.path.basename(xml), dir=ang - prev,
                 sign_state=state, sign_detail=detail)))
@@ -298,14 +332,12 @@ def main():
                        reached_min=float(min(rec)), reached_max=float(max(rec)),
                        returned_to=float(rec[-1]))
 
-    for i, im in enumerate(frames):
-        im.save(f'{WORK}/f{i:05d}.png')
     out = f'{OUTDIR}/rom_sweep_{tag.replace("pygmalion_", "")}_{which}.mp4'
     subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-framerate', str(FPS),
                     '-i', f'{WORK}/f%05d.png', '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
                     '-crf', '20', out], check=True)
     json.dump(log, open(out.replace('.mp4', '.json'), 'w'), indent=1)
-    print(f'wrote {out}  ({len(frames)} frames, {len(frames)/FPS:.1f} s, {len(hinges)} joints)')
+    print(f'wrote {out}  ({sink.n} frames, {sink.n/FPS:.1f} s, {len(hinges)} joints)')
     for jn, r in log.items():
         print(f"  {jn:26s} {r['lo']:+7.1f} .. {r['hi']:+7.1f}  reached "
               f"{r['reached_min']:+7.1f} / {r['reached_max']:+7.1f}  back to {r['returned_to']:+.1f}")

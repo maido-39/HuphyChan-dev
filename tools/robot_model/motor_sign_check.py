@@ -3,13 +3,18 @@
 Convention (user, 2026-08-26): look straight at the actuator ROTOR face - the one carrying 6 M4
 threaded holes and 3 alignment pins - along the axis protruding from it. CLOCKWISE is POSITIVE.
 
-The algebra, spelled out because getting it backwards inverts every joint:
+The algebra, spelled out because getting it backwards inverts every joint. The viewpoint was
+confirmed by the user on 2026-08-26: you look ALONG the normal, i.e. down the axis with the
+rotor face receding from you, NOT face-on.
   n            = OUTWARD normal of the rotor face (points away from the motor body)
-  viewer       = looks along -n, i.e. n points at the viewer
-  right-hand   = a rotation vector along +n appears COUNTER-clockwise to that viewer
-  therefore    = CLOCKWISE (the user's +) is a rotation vector along -n
+  viewer       = looks along +n, i.e. n points AWAY from the viewer, into the screen
+  right-hand   = a rotation vector along +n appears CLOCKWISE to that viewer
+  therefore    = CLOCKWISE (the user's +) is a rotation vector along +n
 
-  required_plus_axis = -n
+  required_plus_axis = +n
+
+(The face-on reading gives -n and flips every verdict; that was the first implementation and it
+was wrong.)
 
 A joint MATCHES when the model's own axis, expressed in the same frame, is parallel to -n
 (dot > 0) and is INVERTED when antiparallel (dot < 0).
@@ -43,7 +48,7 @@ def main():
     if not os.path.exists(src):
         print(f'!! {src} missing - run the CAD rotor-face measurement first')
         return 2
-    rotor = json.load(open(src))
+    rotor = {k: v for k, v in json.load(open(src)).items() if not k.startswith('_')}
     m = mujoco.MjModel.from_xml_path(XML)
 
     out = {}
@@ -53,7 +58,7 @@ def main():
         n_cad = np.array(r['n_root'], dtype=float)
         n_cad /= np.linalg.norm(n_cad)
         n_base = cad_dir_to_base(n_cad)
-        need = -n_base                                     # the user's + axis
+        need = n_base                                      # the user's + axis: CW looking ALONG n
         for jn in [j for j in joints if j]:
             try:
                 jid = m.joint(jn).id

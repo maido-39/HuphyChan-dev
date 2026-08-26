@@ -1,9 +1,9 @@
 {
- "R_hip_roll_joint": {
+ "L_hip_roll_joint": {
   "matches": true,
   "dot": 1.0,
   "axis": [
-   -1.0,
+   1.0,
    0.0,
    0.0
   ],
@@ -20,9 +20,9 @@
   "motor": "RS04 Hip_P (drives HIP ROLL - CAD name is swapped)",
   "note": "rotor face plane y=+43.25 mm, 3 dowel pins protruding to y=+40.25"
  },
- "R_hip_pitch_joint": {
-  "matches": true,
-  "dot": 1.0,
+ "L_hip_pitch_joint": {
+  "matches": false,
+  "dot": -1.0,
   "axis": [
    0.0,
    1.0,
@@ -41,9 +41,9 @@
   "motor": "RS04 Hip_R (drives HIP PITCH - CAD name is swapped)",
   "note": "rotor face plane x=-53.20 mm, 3 dowel pins to x=-56.20, faces laterally outboard"
  },
- "R_hip_yaw_joint": {
-  "matches": false,
-  "dot": -1.0,
+ "L_hip_yaw_joint": {
+  "matches": true,
+  "dot": 1.0,
   "axis": [
    0.0,
    0.0,
@@ -62,9 +62,9 @@
   "motor": "RS03 Hip_Y",
   "note": "rotor face z=-97.00 flush, 3x d4 dowel + 6-hole circle r=15.18, 5 mm running clearance; occurrence flipped 180 deg about Y so the part is installed rotor-down"
  },
- "R_knee_joint": {
-  "matches": false,
-  "dot": -1.0,
+ "L_knee_joint": {
+  "matches": true,
+  "dot": 1.0,
   "axis": [
    0.0,
    -1.0,
@@ -84,8 +84,8 @@
   "note": "rotor face x=-150.45 mm, 3 dowel pins to x=-153.45, faces laterally outboard"
  },
  "waist_yaw_joint": {
-  "matches": false,
-  "dot": -1.0,
+  "matches": true,
+  "dot": 1.0,
   "axis": [
    0.0,
    0.0,
@@ -104,9 +104,9 @@
   "motor": "RS04 Waist_Yaw",
   "note": "rotor face z=+177.50, 3 dowel pins protruding up to z=+180.50, faces up"
  },
- "R_shoulder_pitch_joint": {
-  "matches": true,
-  "dot": 1.0,
+ "L_shoulder_pitch_joint": {
+  "matches": false,
+  "dot": -1.0,
   "axis": [
    0.0,
    1.0,
@@ -125,11 +125,11 @@
   "motor": "RS03 Shoulder_Pitch",
   "note": "rotor face x=-140.00 flush, faces laterally outboard; occurrence flipped 180 deg about X"
  },
- "R_shoulder_roll_joint": {
+ "L_shoulder_roll_joint": {
   "matches": true,
   "dot": 1.0,
   "axis": [
-   -1.0,
+   1.0,
    0.0,
    0.0
   ],
