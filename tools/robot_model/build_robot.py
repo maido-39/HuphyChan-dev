@@ -131,6 +131,35 @@ def to_sim_vec(v):
 
 
 MOTOR_PROXIES = os.environ.get('PYG_MOTOR_PROXIES', '/home/syaro/pyg_fea/fusion/motor_proxies_fusion.json')
+
+# --- IMU site -----------------------------------------------------------------------------
+# Where the E2Box IMU actually is, measured off the live Fusion document on 2026-08-26
+# (docs/105_imu_and_shoulder_cad_update.md s1). The old value 0.004 0 0.241 was inherited from
+# the pre-v2 model ("old model geometry re-expressed at the hip-level base origin") and had
+# never been measured - it sits 310.6 mm away from the real sensor, above the pelvis entirely.
+#
+# The user gave the position as "-Z 187 mm from the yaw motor surface". Enumerating every
+# +-Z face pair 187 +- 1 mm apart found 43 matches and ALL of them are the RS04 Waist_Yaw
+# motor - none is the RS03 Hip_Y - with the best pair exact to 0.00 mm:
+#   Waist_Yaw face  CAD z = +177.50 mm   ->   IMU face  CAD z = -9.50 mm
+# CAD root -> base_link is  (x,y,z) -> (70.0 - y, x, z - 60.0) mm, verified to 0.00 mm against
+# both the hip centre and the knee axis.
+#   spec face      CAD (7.078, 70.001,  -9.500) -> ( 0.000000, 0.007078, -0.069500) m   <- used
+#   EBIMU board CoM CAD (7.078, 70.001, -16.086) -> ( 0.000000, 0.007078, -0.076086) m   (6.6 mm lower)
+# The board's occurrence transform is identity and its faces are axis-aligned, so the site
+# needs no rotation relative to base_link.
+#
+# Safe to change: base_lin_vel (the velocimeter on this site, the only position-dependent
+# consumer) is a CRITIC-ONLY observation here. The actor sees base_ang_vel - a gyro, uniform
+# over a rigid body - and projected_gravity, which is orientation-only. Measured on
+# bundleD1_AB/32798, moving the site shifts base_lin_vel by |omega x dr| = 0.021 m/s median /
+# 0.047 p95, i.e. 1.3 % of the tracked speed and 9 % of the +-0.5 m/s noise already injected
+# into that term (tools/robot_model/loop_tests/imu_site_delta.py).
+# NOTE the parse: `bool(os.environ.get(FLAG))` is true for the string "0", so PYG_X=0 turns
+# such a flag ON. 21 PYG_* flags in this project read that way (docs/99 s"PYG flag parsing");
+# no run has ever tripped it, but this one is written so PYG_IMU_LEGACY=0 means off.
+IMU_LEGACY = os.environ.get('PYG_IMU_LEGACY', '').strip().lower() not in ('', '0', 'false', 'no')
+IMU_POS = (0.004, 0.0, 0.241) if IMU_LEGACY else (-0.000001, 0.007078, -0.069500)
 CENTRELINE_MM = 5.0        # |x_cad| under this = on the centreline, drawn once, not mirrored
 
 
@@ -527,7 +556,7 @@ def main():
         X.append('      <geom name="base_torso_collision" class="collision" type="capsule" fromto="0.004 0 0.061  0.004 0 0.521" size="0.11"/>\n')
         X.append('      <geom name="base_head_collision" class="collision" type="sphere" pos="0.004 0 0.731" size="0.09"/>\n')
     X.append('      ' + fitted_capsule('base_pelvis_collision', 'pelvis') + '\n')
-    X.append('      <site name="imu_in_base" size="0.03" pos="0.004 0 0.241"/>\n')
+    X.append(f'      <site name="imu_in_base" size="0.03" pos="{IMU_POS[0]:.6g} {IMU_POS[1]:.6g} {IMU_POS[2]:.6g}"/>\n')
     for s in 'LR':
         sign = -1.0 if s == 'L' else 1.0
         depth = 3

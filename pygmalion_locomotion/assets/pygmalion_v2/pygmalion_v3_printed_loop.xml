@@ -53,7 +53,7 @@
     <mesh name="L_crank_B" file="crank_B.stl"/>
     <mesh name="L_rod_A" file="rod_A.stl"/>
     <mesh name="L_rod_B" file="rod_B.stl"/>
-    <mesh name="L_shin_noloop" file="shin_noloop.stl"/>
+    <mesh name="L_shin_noloop" content_type="model/stl" file="shin_noloop.stl"/>
     <mesh name="L_foot_noloop" file="foot_noloop.stl"/>
     <mesh name="R_crank_A" file="R_crank_A.stl"/>
     <mesh name="R_crank_B" file="R_crank_B.stl"/>
@@ -71,7 +71,7 @@
     <mesh name="R_torso_shpitch" file="R_torso_shpitch.stl"/>
     <mesh name="R_shoulder_pitch_link" file="R_shoulder_pitch_link.stl"/>
     <mesh name="R_shoulder_pitch_link_hull" file="R_shoulder_pitch_link_hull.stl"/>
-    <mesh name="R_arm" content_type="model/stl" file="R_arm.stl"/>
+    <mesh name="R_arm" file="R_arm.stl"/>
     <mesh name="R_arm_hull" file="R_arm_hull.stl"/>
   </asset>
 
@@ -85,7 +85,7 @@
       <geom name="waist_yaw_motor" class="visual" size="0.06 0.0278" pos="0.00053 0.00058 0.09393" type="cylinder" material="black"/>
       <geom name="R_hip_pitch_motor" class="visual" size="0.06 0.0278" pos="0.00065 0.02962 -0.00044" quat="0.707107 0.707107 0 0" type="cylinder" material="black"/>
       <geom name="base_pelvis_collision" class="collision" size="0.071434 0.005" pos="-0.0007 0.0003 0.0074" quat="0 1 0 0"/>
-      <site name="imu_in_base" pos="0.004 0 0.241" size="0.03"/>
+      <site name="imu_in_base" pos="-1e-06 0.007078 -0.0695" size="0.03"/>
       <body name="L_hip_pitch_link" pos="0 -0.1237 0">
         <inertial pos="0.00137371 0.00686121 0.000902732" quat="0.667369 0.744699 0.0029734 0.0058286" mass="1.7829" diaginertia="0.00411451 0.00293348 0.00262384"/>
         <joint name="L_hip_pitch_joint" pos="0 0 0" axis="0 1 0" range="-2.0944 0.436332"/>
