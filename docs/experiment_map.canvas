@@ -669,6 +669,36 @@
    "height": 300,
    "color": "1",
    "text": "**부호 버그: `foot_loading_rate`는 한 번도 안 돌았다**\n\n`reduce=\"netforce\"`의 전역 z는 하중 시 **음수**(−577…0 N)인데 `clamp(min=0)`으로 읽음 → `in_contact` 영구 거짓\n→ TRT·B2·D1 **3런 × 800 iter**를 죽은 항으로\n\n다른 접촉 항은 전부 `norm()`이라 부호가 감춰져 있었다\n\n수정 후 w 0.002 → 스텝당 **−0.664**(보상예산의 8배) → 1e-4로 재교정. 항 자체는 **미시험**\n\n규칙: 새 항은 100 iter 안에 `Episode_Reward/<term>` ≠ 0 확인"
+  },
+  {
+   "id": "n_bCTL_RP",
+   "type": "file",
+   "x": 17600,
+   "y": 120,
+   "width": 400,
+   "height": 260,
+   "color": "5",
+   "file": "experiments/2026-08-26_bundleCTL_RP.md"
+  },
+  {
+   "id": "n_bD1_RP",
+   "type": "file",
+   "x": 17600,
+   "y": 440,
+   "width": 400,
+   "height": 260,
+   "color": "4",
+   "file": "experiments/2026-08-26_bundleD1_RP.md"
+  },
+  {
+   "id": "n_rp_verdict",
+   "type": "text",
+   "x": 18100,
+   "y": 260,
+   "width": 470,
+   "height": 360,
+   "color": "3",
+   "text": "**RP 이식 = 유효하나 이득이 작다** (2026-08-26)\n\nD1_RP vs CTL_RP: 무릎 45.9→**39.9°**, 하중률(200 Hz) 81.5→**64.5 BW/s(−21 %)**, 추종 0.147→**0.140**\n피크 GRF 1.248→1.253 = **변화 없음**\n\n★**RP 대조군엔 AB의 착지 병리가 없었다**\n같은 초기자세·보상인데 200 Hz 피크 **AB 2.353 vs RP 1.248 BW**, 하중률 **277 vs 81.5**, DR하 낙상 **12 vs 0**\n\n⇒ 초기자세의 −48 % 충격 감소는 **AB 한정**(폐루프 발목 + 깊은 굽힘의 결합)\n⚠ 두 정책이 다른 국소최적 → 기구 인과 단정엔 교차시험 필요"
   }
  ],
  "edges": [
@@ -1276,6 +1306,28 @@
    "toNode": "n_signbug",
    "toSide": "left",
    "label": "텐서보드 0.00000"
+  },
+  {
+   "id": "e_n_d1_verdict_n_bD1_RP",
+   "fromNode": "n_d1_verdict",
+   "fromSide": "right",
+   "toNode": "n_bD1_RP",
+   "toSide": "left",
+   "label": "RP 이식"
+  },
+  {
+   "id": "e_n_bCTL_RP_n_rp_verdict",
+   "fromNode": "n_bCTL_RP",
+   "fromSide": "right",
+   "toNode": "n_rp_verdict",
+   "toSide": "left"
+  },
+  {
+   "id": "e_n_bD1_RP_n_rp_verdict",
+   "fromNode": "n_bD1_RP",
+   "fromSide": "right",
+   "toNode": "n_rp_verdict",
+   "toSide": "left"
   }
  ]
 }
