@@ -89,3 +89,27 @@ deadband가 vault(장애물 넘기 시 일시 상승)를 억제하지 않게 한
 - **앵커는 미분리** → `bundleC4_AB`(16384 env, w −5 → **−15** 상향)로 격리 중. 상향 근거는 [[2026-08-26_init_pose_conventions]]: legged_gym 계열 base_height 가중치가 **G1 −10 / T1 −20**인데 우리는 −5였다.
 
 **규칙으로 승격**: 새 리워드 항은 **검증된 항을 대체하지 말고 병행**하고, **stride/s를 상시 감시 지표**에 넣는다(duty만으로는 이 해킹을 못 잡는다 — TRT는 duty가 정상이었다).
+
+
+## 8. base_height 앵커는 무릎의 레버가 아니다 → 무릎 직접 항으로 교체 (2026-08-26 12:50)
+`bundleC4_AB`(앵커 w −15) 가동 중 실측:
+
+| | 값 |
+|---|---|
+| `Metrics/base_height_mean` | **0.8824** |
+| deadband | 0.87 ± 0.03 = [0.84, 0.90] |
+| `Episode_Reward/base_height` | **−0.0019** (≈0) |
+
+**로봇은 이미 직립 높이(0.951)의 93 %인 0.88 m로 서 있으면서 무릎을 −42° 굽힌다.** 힙 피치가 보상하기 때문에
+**높이와 무릎각이 분리돼 있다** — 높이를 잡아도 무릎은 안 펴진다. 앵커는 가중치를 15로 올려도 무력하다(deadband 안).
+
+⇒ **`stance_knee_extension` 신설**: `Σ_feet relu(|q_knee| − target)² · [접촉]`, 명령 게이트, target 25°.
+- **입각 전용**(접촉 게이트): 스윙 굴곡(−58~−65°, 인간 −60°)은 이미 좋으므로 건드리지 않는다.
+- 선례: arXiv:2505.20619의 "straight knee" 보상(w 0.1) — 같은 실패("overly crouched or energetically suboptimal")를 겨냥.
+- 플래그 `PYG_KNEE_EXT`(기본 OFF), `PYG_KNEE_EXT_W` 기본 2.0, `PYG_KNEE_EXT_DEG` 기본 25.
+
+**초기 결과(`bundleC5_AB`, iter 32267/32799)**: `Metrics/stance_knee_deg` **25.47°**(목표 25°에 수렴),
+기여 −0.037(벌점 예산의 3.7 %), Mean reward 83.53 vs C3 85.38(−2 %). **대조군 중간입각 −40.3° 대비 큰 개선.**
+
+⚠ 기록: B2/B3의 **내장 평가기 측정은 RAM 가드에 잘려 없다**(12:33·12:45 watchdog kill). B2 기각의 추종 수치(0.524)는
+단일 롤아웃이라 약한 근거다 — 기각의 핵심은 duty 0.57→**0.75**와 stride **0.83**이고 TRT가 같은 방향을 보였다는 점. GPU 여유 시 재확인.
