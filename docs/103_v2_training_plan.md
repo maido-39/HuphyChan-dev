@@ -56,6 +56,7 @@ c3 도중 "RP 발목 모터가 82 %로 포화한다"고 보고했는데 **좌표
 | ~~V11~~ | ~~T-N 토크 여유 항~~ | **보류** — 정정 후 활용률 0.44–0.55로 여유 충분 | — | 필요해지면 재개 |
 | V12 | 단일 롤아웃 프로브가 5회 오판 유발 | 게이트 판정은 **내장 평가기**(32 ep/시나리오) | ✅절차 | — |
 | V14 | 50 Hz 평가기가 충격 스파이크(폭 15–25 ms)를 에일리어싱 → arm 순서가 뒤집힘 | **200 Hz 다중 env 프로브**(`impact_probe_multi.py`, 슈미트 트리거+리셋 마스킹+DR 조건 일치) | ✅완료 | 두 도구 대역 분리 §5-2b |
+| V15 | 새 리워드 항이 죽어도 아무도 모른다 | 켠 직후 **`Episode_Reward/<term>` ≠ 0 확인**을 게이트 체크리스트에 | ✅절차 | §5-2a |
 | V13 | 시드 1개 | **최소 2시드**(승자 arm 3시드) | ⬜ | — |
 
 ## 3. 스케줄
@@ -99,7 +100,7 @@ mujoco-sim/mjlab/.venv/bin/python3 tools/robot_model/mass_dr.py --samples=3000
 ```bash
 PYG_V2=1 PYG_INIT_BENT=1 PYG_ARM_ABD_DEG=15 PYG_SOFT_LANDING=1 PYG_INERTIAL_DR=1 \
 PYG_CMD_VY_STAGES=1 PYG_TN=1 PYG_MOTOR_MEAS=1 PYG_ANKLE_MODE=AB PYG_SEED=1 \
-PYG_INIT_MID=1 PYG_SOFT_LANDING_MODE=both PYG_KNEE_EXT=1 PYG_KNEE_EXT_W=2.0 PYG_KNEE_EXT_DEG=25 \
+PYG_INIT_MID=1 PYG_SOFT_LANDING_MODE=half PYG_KNEE_EXT=1 PYG_KNEE_EXT_W=2.0 PYG_KNEE_EXT_DEG=25 \
   <런처>   # 인자·환경의 정본은 mujoco-sim/mjlab/analysis/out/watchdog_runs.json
 ```
 9. **감시 인프라 필수 기동**: `analysis/watchdog.sh`(자동 resume + RAM 가드 2 GB), crontab */5 자기복구, `gate_watch.sh`(마일스톤 + 45분 하트비트), `review_loop.sh`(1시간 자동 기록).
@@ -112,9 +113,10 @@ PYG_INIT_MID=1 PYG_SOFT_LANDING_MODE=both PYG_KNEE_EXT=1 PYG_KNEE_EXT_W=2.0 PYG_
 |---|---|---|---|
 | `PYG_INIT_MID` | `1` | ✅ 채택 | 입각 무릎 −4.9°, 추종 0.163 → 0.119, **리셋 낙하 47 mm 제거**. ★200 Hz 재측정: 피크 GRF **2.35 → 1.25 BW(−47 %)**, 하중률 **277 → 41 BW/s(−85 %)**, DR 하 낙상 **12 → 0** |
 | `PYG_SOFT_LANDING` | `1` | ✅ 유지 | 접지속도 제곱항 — **빼면 안 된다**(아래 참조) |
-| `PYG_SOFT_LANDING_MODE` | `both` | ✅ 채택 | 하중률 항을 **병행**. 추종 0.117·하중률 8.78 BW/s·stride 2.83 모두 최고 |
+| `PYG_SOFT_LANDING_MODE` | **`half`** | ✅ 채택 | ★실제 변인은 **`foot_impact_velocity` 가중치 ½**이다(하중률 항은 부호 버그로 죽어 있었다, [[2026-08-26_human_landing_bundle]] §12). 추종 0.117(최고)·200 Hz 피크 1.26 BW |
 | `PYG_KNEE_EXT` | `1` (`_W=2.0`, `_DEG=25`) | ✅ 조건부 | 무릎 −6.1° 추가·피크 GRF 최저(1.22 BW). 대가는 추종 +0.023 **및 하중률 41 → 70 BW/s**(무릎을 펴면 충격이 빨리 전달). **자세가 목표면 채택, 하중률이 구속이면 제외** |
-| ~~`PYG_SOFT_LANDING_MODE=rate`~~ | — | ❌ 기각 | 하중률이 접지속도를 **대체**하면 하중률 15.78 BW/s로 최악 |
+| ~~`PYG_SOFT_LANDING_MODE=rate`~~ | — | ❌ 기각 | 실제로는 **접지속도 항 완전 제거**. 200 Hz 피크가 처치군 중 최고(1.353 BW) |
+| `PYG_SOFT_LANDING_MODE=both` | — | ⬜ **미시험** | 하중률 항은 부호 수정 후 아직 한 번도 돌지 않았다. 별도 arm으로 시험할 것 |
 | ~~`PYG_BASE_HEIGHT_ANCHOR`~~ | — | ❌ 무력 | 베이스 0.8824가 deadband [0.84, 0.90] 안 → 기여 −0.0019 |
 
 **여기서 승격된 규칙 두 개**
@@ -124,6 +126,7 @@ PYG_INIT_MID=1 PYG_SOFT_LANDING_MODE=both PYG_KNEE_EXT=1 PYG_KNEE_EXT_W=2.0 PYG_
 ## 5. 게이트·측정 프로토콜
 1. 게이트마다: `snapshot_review.py` 판정행 + **평가기 축소판**(3시나리오 × 32 env, CPU 8분/arm) + `impact_probe`(200 Hz) + `dr_factor`·`lin_vel_x_max` 동시 기록.
 2. **단일 롤아웃 프로브를 판정 근거로 쓰지 않는다**(V12).
+2a. ★**새 항이 살아 있는지 100 iter 안에 확인한다**(V15): `Episode_Reward/<term>`가 0이 아니어야 한다. `foot_loading_rate`는 부호 버그로 **세 런(2,400 iter × 3)을 죽은 채** 돌았다(§12).
 2b. ★**계측 대역을 지킨다**(V14): 충격·하중률 = `impact_probe_multi.py`(**200 Hz × 24 env**, `PROBE_NODR=1`로 평가기 조건) / 추종·duty·stride·성공률 = 내장 평가기 32 ep. **50 Hz 평가기의 GRF 피크는 세게 딛는 정책을 절반으로 과소평가한다**([[2026-08-26_human_landing_bundle]] §11c).
 3. 완주 후: 평가기 **전체 격자**(속도별로 3시나리오씩 쪼개서 — 한 번에 25개는 RAM이 터진다) + `measure_full.py` fc/fcp(15 s dwell, 전체 박스) + §7 모터활용(T-N, **모터축으로 사상 후**).
 4. 설계값: 열 = RMS × 1.15, 순시 = P99 × 1.25, **raw peak 단독 금지**(knee τ_max 120.0은 클립 아티팩트).
