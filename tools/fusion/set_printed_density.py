@@ -141,11 +141,19 @@ def main():
         in_shoulder = any(t in path for t in SHOULDER_SUBTREES)
         if not (in_leg or in_shoulder):
             continue
-        # MATERIAL: the v22 shoulder bodies came in as generic 'Steel' (7.850), not aluminium -
-        # the document default, not a design intent (the same group was Aluminum 6061 on
-        # 08-22, and the geometry is 3 mm caps and 6 mm plates). Accepting only 'Alumin' here
-        # would make this script run clean and change nothing on the shoulder.
-        if not ('Alumin' in mat or mat.startswith('PLA ') or mat.strip() == 'Steel'):
+        # MATERIAL, and the acceptance is deliberately DIFFERENT per branch:
+        #  - shoulder: the v22 rework arrived on generic 'Steel' (7.850), which is the document
+        #    default rather than a design intent (the same group was Aluminum 6061 on 08-22, and
+        #    the geometry is 3 mm caps and 6 mm plates). Accepting only 'Alumin' would make this
+        #    script run clean and change nothing there.
+        #  - leg: keep the ORIGINAL aluminium-only filter. Accepting 'Steel' in the leg as well
+        #    would newly capture 13 bodies that v3 never converted - including the JMC-JS06 rod
+        #    ends (Inner Ball / Outer Shell, genuinely steel) and the EBIMU-9DOFv5 PCB - and so
+        #    would move the leg mass for reasons that have nothing to do with the shoulder.
+        ok_mat = 'Alumin' in mat or mat.startswith('PLA ')
+        if in_shoulder:
+            ok_mat = ok_mat or mat.strip() == 'Steel'
+        if not ok_mat:
             continue
         if any(t in path for t in ALT_BRANCH):
             continue

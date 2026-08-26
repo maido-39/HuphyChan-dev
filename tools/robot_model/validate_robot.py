@@ -131,9 +131,24 @@ def main():
     mujoco.mj_forward(m, d)
     P = {n: d.xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, n)].copy()
          for n in ('base_link', 'L_hip_pitch_link', 'L_shin_link', 'L_foot_link', 'R_foot_link')}
-    sole = min(d.geom_xpos[g][2] - m.geom_size[g][0] for g in range(m.ngeom)
-               if 'foot' in (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g) or '')
-               and m.geom_type[g] == mujoco.mjtGeom.mjGEOM_CAPSULE)
+    # Lowest point of any foot COLLISION geom. This used to look only at capsules and take
+    # geom_size[0] as the radius, which silently stopped matching when the sole became a BOX:
+    # min() then raised "iterable argument is empty" and stage 5 of the build died without
+    # validating anything. Handle both, taking the half-extent along the axis that matters.
+    def _lowest(g):
+        t = m.geom_type[g]
+        if t == mujoco.mjtGeom.mjGEOM_CAPSULE or t == mujoco.mjtGeom.mjGEOM_SPHERE:
+            return d.geom_xpos[g][2] - m.geom_size[g][0]
+        if t == mujoco.mjtGeom.mjGEOM_BOX:
+            # rotated boxes: project the three half-extents onto world -z
+            R = d.geom_xmat[g].reshape(3, 3)
+            return d.geom_xpos[g][2] - float(np.abs(R[2, :] * m.geom_size[g][:3]).sum())
+        return None
+    cand = [z for g in range(m.ngeom)
+            if 'foot' in (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g) or '')
+            and m.geom_contype[g] and (z := _lowest(g)) is not None]
+    assert cand, 'no foot collision geom found - the sole check cannot run'
+    sole = min(cand)
     hip = P['L_hip_pitch_link']
     print('\n== zero-pose geometry (base at z=1.0)')
     print(f"  hip->knee {hip[2]-P['L_shin_link'][2]:.4f} m (CAD 0.370)  knee->ankle {P['L_shin_link'][2]-P['L_foot_link'][2]:.4f} (CAD 0.490)"
