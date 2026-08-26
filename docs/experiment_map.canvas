@@ -599,6 +599,26 @@
    "width": 400,
    "height": 300,
    "color": "2"
+  },
+  {
+   "id": "n_bC3",
+   "type": "file",
+   "file": "experiments/2026-08-26_bundleC3_AB.md",
+   "x": 15400,
+   "y": 180,
+   "width": 400,
+   "height": 300,
+   "color": "4"
+  },
+  {
+   "id": "n_bC4",
+   "type": "file",
+   "file": "experiments/2026-08-26_bundleC4_AB.md",
+   "x": 15400,
+   "y": 540,
+   "width": 400,
+   "height": 300,
+   "color": "4"
   }
  ],
  "edges": [
@@ -1137,6 +1157,22 @@
    "toNode": "n_bB3",
    "toSide": "left",
    "label": "원인분리"
+  },
+  {
+   "id": "e_n_bC3",
+   "fromNode": "n_bB3",
+   "fromSide": "right",
+   "toNode": "n_bC3",
+   "toSide": "left",
+   "label": "16384 env"
+  },
+  {
+   "id": "e_n_bC4",
+   "fromNode": "n_bB3",
+   "fromSide": "right",
+   "toNode": "n_bC4",
+   "toSide": "left",
+   "label": "16384 env"
   }
  ]
 }
