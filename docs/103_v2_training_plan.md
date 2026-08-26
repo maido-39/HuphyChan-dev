@@ -44,7 +44,7 @@ c3 도중 "RP 발목 모터가 82 %로 포화한다"고 보고했는데 **좌표
 | # | 문제 (측정값) | 처방 | 상태 | 검증법 |
 |---|---|---|---|---|
 | **V1** | 저속 명령 무시 — 0.25 m/s 달성률 **0 %**(양 arm) | `stand_still_penalty` 재설계 또는 저속 구간 tracking σ 축소. **연구 노트 선행 필수** | ⬜ | fc 표에서 0.25·0.5 달성률 > 0.7 |
-| **V2** | **굽힌 채 착지**(접지 무릎 −30/−38°, 인간 −5°) + push-off 부재(발목 −5° vs 인간 −17°). 원인 3요인 분석 → [[104_init_pose_gait_style]] | **번들로** 변경: ① 초기자세 중간값(knee −20°) ② **base_height 앵커 복원**(deadband) ③ soft-landing을 접지속도 → **하중률** 기준으로 ④ toe-off 스택([[62]] §2). **연구 노트 선행 필수** | ⬜ | 접지 무릎 ≤ −15°, GRF 2차 봉우리, 스윙 −55~−65° 유지, 낙상 0 |
+| **V2** | **굽힌 채 착지**(접지 무릎 −30/−38°, 인간 −5°) + push-off 부재(발목 −5° vs 인간 −17°). 원인 3요인 분석 → [[104_init_pose_gait_style]] | 번들 시험 완료 → **채택: `PYG_INIT_MID` + `PYG_SOFT_LANDING_MODE=both` (+선택 `PYG_KNEE_EXT`)**. **기각: `=rate`(대체형)·`PYG_BASE_HEIGHT_ANCHOR`(무력)**. toe-off 스택([[62]] §2)은 미착수 | ✅검증(§4a) | 입각 무릎 51.1°→40.1°, 추종 0.163→0.117, 하중률 9.92→8.78 BW/s, 낙상 0 |
 | V3 | 커리큘럼 간격 4,000 iter인데 적응은 **4–20 iter** | **성능 게이트형 진급**(§3a) | ⬜ | 진급 로그에 실제 dwell 기록 |
 | V4 | σ 0.296 → 0.474, 어닐링 없음 | `entropy_coef` 0.01 → 0.002 선형(P2 구간) | ⬜ | 종료 시 σ ≤ 0.35 |
 | V5 | `vy ±1.0` 미램프, 측면 달성률 0.68/0.75(vx 0.89/0.90) | `PYG_CMD_VY_STAGES=1`(구현 완료, 기본 OFF) | ✅구현 | 측면 달성률 ≥ 0.8, 최종 ±1.0 유지 |
@@ -55,6 +55,7 @@ c3 도중 "RP 발목 모터가 82 %로 포화한다"고 보고했는데 **좌표
 | V10 | `projected_gravity`가 IMU 미경유, URDF에 IMU 없음 | `projected_gravity_from_sensor` + URDF IMU 링크 | ⬜ | [[100_observation_design_sim2real]] |
 | ~~V11~~ | ~~T-N 토크 여유 항~~ | **보류** — 정정 후 활용률 0.44–0.55로 여유 충분 | — | 필요해지면 재개 |
 | V12 | 단일 롤아웃 프로브가 5회 오판 유발 | 게이트 판정은 **내장 평가기**(32 ep/시나리오) | ✅절차 | — |
+| V14 | 50 Hz 평가기가 충격 스파이크(폭 15–25 ms)를 에일리어싱 → arm 순서가 뒤집힘 | **200 Hz 다중 env 프로브**(`impact_probe_multi.py`, 슈미트 트리거+리셋 마스킹+DR 조건 일치) | ✅완료 | 두 도구 대역 분리 §5-2b |
 | V13 | 시드 1개 | **최소 2시드**(승자 arm 3시드) | ⬜ | — |
 
 ## 3. 스케줄
@@ -98,13 +99,32 @@ mujoco-sim/mjlab/.venv/bin/python3 tools/robot_model/mass_dr.py --samples=3000
 ```bash
 PYG_V2=1 PYG_INIT_BENT=1 PYG_ARM_ABD_DEG=15 PYG_SOFT_LANDING=1 PYG_INERTIAL_DR=1 \
 PYG_CMD_VY_STAGES=1 PYG_TN=1 PYG_MOTOR_MEAS=1 PYG_ANKLE_MODE=AB PYG_SEED=1 \
+PYG_INIT_MID=1 PYG_SOFT_LANDING_MODE=both PYG_KNEE_EXT=1 PYG_KNEE_EXT_W=2.0 PYG_KNEE_EXT_DEG=25 \
   <런처>   # 인자·환경의 정본은 mujoco-sim/mjlab/analysis/out/watchdog_runs.json
 ```
 9. **감시 인프라 필수 기동**: `analysis/watchdog.sh`(자동 resume + RAM 가드 2 GB), crontab */5 자기복구, `gate_watch.sh`(마일스톤 + 45분 하트비트), `review_loop.sh`(1시간 자동 기록).
 
+### 4a. 확정 레시피 (2026-08-26 번들 시험 결과)
+> *쉽게*: 아래 플래그 조합이 "지금까지 실측으로 이긴" 설정이다. 근거는 [[2026-08-26_human_landing_bundle]] §10,
+> 판정은 전부 **내장 평가기 32 에피소드**(단일 롤아웃 금지).
+
+| 플래그 | 값 | 판정 | 효과 (대조군 CTL 대비) |
+|---|---|---|---|
+| `PYG_INIT_MID` | `1` | ✅ 채택 | 입각 무릎 −4.9°, 추종 0.163 → 0.119, **리셋 낙하 47 mm 제거**. ★200 Hz 재측정: 피크 GRF **2.35 → 1.25 BW(−47 %)**, 하중률 **277 → 41 BW/s(−85 %)**, DR 하 낙상 **12 → 0** |
+| `PYG_SOFT_LANDING` | `1` | ✅ 유지 | 접지속도 제곱항 — **빼면 안 된다**(아래 참조) |
+| `PYG_SOFT_LANDING_MODE` | `both` | ✅ 채택 | 하중률 항을 **병행**. 추종 0.117·하중률 8.78 BW/s·stride 2.83 모두 최고 |
+| `PYG_KNEE_EXT` | `1` (`_W=2.0`, `_DEG=25`) | ✅ 조건부 | 무릎 −6.1° 추가·피크 GRF 최저(1.22 BW). 대가는 추종 +0.023 **및 하중률 41 → 70 BW/s**(무릎을 펴면 충격이 빨리 전달). **자세가 목표면 채택, 하중률이 구속이면 제외** |
+| ~~`PYG_SOFT_LANDING_MODE=rate`~~ | — | ❌ 기각 | 하중률이 접지속도를 **대체**하면 하중률 15.78 BW/s로 최악 |
+| ~~`PYG_BASE_HEIGHT_ANCHOR`~~ | — | ❌ 무력 | 베이스 0.8824가 deadband [0.84, 0.90] 안 → 기여 −0.0019 |
+
+**여기서 승격된 규칙 두 개**
+1. 새 리워드 항은 **검증된 항을 대체하지 말고 병행**한다. `both`(✅)와 `rate`(❌)는 같은 항의 두 배치일 뿐인데 결과가 정반대였다.
+2. **stride/s를 상시 감시 지표에 넣는다.** duty만 보면 "발을 바닥에 붙여 dF/dt=0으로 만드는" 해킹을 놓친다.
+
 ## 5. 게이트·측정 프로토콜
 1. 게이트마다: `snapshot_review.py` 판정행 + **평가기 축소판**(3시나리오 × 32 env, CPU 8분/arm) + `impact_probe`(200 Hz) + `dr_factor`·`lin_vel_x_max` 동시 기록.
 2. **단일 롤아웃 프로브를 판정 근거로 쓰지 않는다**(V12).
+2b. ★**계측 대역을 지킨다**(V14): 충격·하중률 = `impact_probe_multi.py`(**200 Hz × 24 env**, `PROBE_NODR=1`로 평가기 조건) / 추종·duty·stride·성공률 = 내장 평가기 32 ep. **50 Hz 평가기의 GRF 피크는 세게 딛는 정책을 절반으로 과소평가한다**([[2026-08-26_human_landing_bundle]] §11c).
 3. 완주 후: 평가기 **전체 격자**(속도별로 3시나리오씩 쪼개서 — 한 번에 25개는 RAM이 터진다) + `measure_full.py` fc/fcp(15 s dwell, 전체 박스) + §7 모터활용(T-N, **모터축으로 사상 후**).
 4. 설계값: 열 = RMS × 1.15, 순시 = P99 × 1.25, **raw peak 단독 금지**(knee τ_max 120.0은 클립 아티팩트).
 
