@@ -148,12 +148,15 @@ def draw_frame(rgb_main, rgb_zoom, info):
     ang, lo, hi = info['ang'], info['lo'], info['hi']
     d.rectangle([0, BAND_Y, W, H], fill=(26, 29, 37))
     col = POS_C if ang >= 0 else NEG_C
-    d.text((24, BAND_Y + 24), f'{ang:+.1f}', font=f_b(44), fill=col)
-    d.text((150, BAND_Y + 46), 'deg', font=f_r(20), fill=DIM)
-    d.text((215, BAND_Y + 20), info['phase'], font=f_b(19), fill=FG)
-    d.text((215, BAND_Y + 48), f'limits {lo:+.0f} to {hi:+.0f}', font=f_r(15), fill=DIM)
+    num = f'{ang:+.1f}'
+    d.text((24, BAND_Y + 24), num, font=f_b(44), fill=col)
+    nx = 24 + d.textlength(num, font=f_b(44)) + 8          # place 'deg' after the number
+    d.text((nx, BAND_Y + 46), 'deg', font=f_r(20), fill=DIM)
+    px0 = max(nx + 46, 215)
+    d.text((px0, BAND_Y + 20), info['phase'], font=f_b(19), fill=FG)
+    d.text((px0, BAND_Y + 48), f'limits {lo:+.0f} to {hi:+.0f}', font=f_r(15), fill=DIM)
 
-    bx0, bx1, by = 430, W - 40, BAND_Y + 52
+    bx0, bx1, by = 470, W - 40, BAND_Y + 52
     d.line([bx0, by, bx1, by], fill=(58, 64, 78), width=7)
     zx = bx0 + (bx1 - bx0) * (0 - lo) / (hi - lo)
     px = bx0 + (bx1 - bx0) * (ang - lo) / (hi - lo)
@@ -185,7 +188,8 @@ def main():
     which = next((a.split('=')[1] for a in args if a.startswith('--model=')), 'serial')
     only = next((a.split('=')[1].split(',') for a in args if a.startswith('--joints=')), None)
     quick = '--quick' in args
-    xml = f'{XMLS}/pygmalion_v3_printed{"_loop" if which == "loop" else ""}.xml'
+    tag = next((a.split('=')[1] for a in args if a.startswith('--tag=')), 'pygmalion_v4_printed')
+    xml = f'{XMLS}/{tag}{"_loop" if which == "loop" else ""}.xml'
     # A floor and a couple of lights: the raw robot XML renders as a grey object in a void,
     # which makes it genuinely hard to tell which way a limb is swinging. Added through MjSpec
     # so the shipped model file is not touched.
@@ -259,7 +263,13 @@ def main():
 
         sg = (signs or {}).get(jn)
         state = 'unknown' if not sg else ('match' if sg.get('matches') else 'inverted')
-        detail = '' if not sg else f"rotor n = {sg.get('n_base')}   model axis = {sg.get('axis')}"
+        if sg:
+            detail = f"rotor n {sg.get('n_base')}  axis {sg.get('axis')}"
+        elif jn.startswith('L_'):
+            detail = ''
+            state = 'unknown'
+        else:
+            detail = ''
 
         frames += title_card([f'{jn}', f'range {lo:+.0f} to {hi:+.0f} deg',
                               '', HUMAN.get(kind, '')], 1.6)
@@ -290,11 +300,11 @@ def main():
 
     for i, im in enumerate(frames):
         im.save(f'{WORK}/f{i:05d}.png')
-    out = f'{OUTDIR}/rom_sweep_{which}.mp4'
+    out = f'{OUTDIR}/rom_sweep_{tag.replace("pygmalion_", "")}_{which}.mp4'
     subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-framerate', str(FPS),
                     '-i', f'{WORK}/f%05d.png', '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
                     '-crf', '20', out], check=True)
-    json.dump(log, open(f'{OUTDIR}/rom_sweep_{which}.json', 'w'), indent=1)
+    json.dump(log, open(out.replace('.mp4', '.json'), 'w'), indent=1)
     print(f'wrote {out}  ({len(frames)} frames, {len(frames)/FPS:.1f} s, {len(hinges)} joints)')
     for jn, r in log.items():
         print(f"  {jn:26s} {r['lo']:+7.1f} .. {r['hi']:+7.1f}  reached "
