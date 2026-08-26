@@ -579,6 +579,26 @@
    "height": 300,
    "color": "1",
    "text": "**착지 번들 1차 = 기각** (2026-08-26)\n\n- 하중률 벌점 → 하중률 46.2→**84.5**(악화)\n- **stride/s 1.40→0.93 = \"발 안 떼기\" 해킹**\n  (duty 동일 0.57 → air_time만 봤으면 놓침)\n- 접지속도 0.873→1.589 (항 제거의 대가)\n- ✓ 초기자세는 무릎 +5° 개선\n- ⚠ 1024env 드리프트로 대조군도 −17°\n\n교훈: 검증된 항을 **대체하지 말고 병행**"
+  },
+  {
+   "id": "n_bB2",
+   "type": "file",
+   "file": "experiments/2026-08-26_bundleB2_AB.md",
+   "x": 14900,
+   "y": 180,
+   "width": 400,
+   "height": 300,
+   "color": "2"
+  },
+  {
+   "id": "n_bB3",
+   "type": "file",
+   "file": "experiments/2026-08-26_bundleB3_AB.md",
+   "x": 14900,
+   "y": 540,
+   "width": 400,
+   "height": 300,
+   "color": "2"
   }
  ],
  "edges": [
@@ -1101,6 +1121,22 @@
    "toNode": "n_bundle_verdict",
    "toSide": "left",
    "label": "판정"
+  },
+  {
+   "id": "e_n_bB2",
+   "fromNode": "n_bundle_verdict",
+   "fromSide": "right",
+   "toNode": "n_bB2",
+   "toSide": "left",
+   "label": "원인분리"
+  },
+  {
+   "id": "e_n_bB3",
+   "fromNode": "n_bundle_verdict",
+   "fromSide": "right",
+   "toNode": "n_bB3",
+   "toSide": "left",
+   "label": "원인분리"
   }
  ]
 }
