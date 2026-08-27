@@ -19,7 +19,9 @@ REPO = '/home/syaro/MikuchanRemote/Human-Pygmalion'
 URDF = sys.argv[1] if len(sys.argv) > 1 else \
     f'{REPO}/pygmalion_locomotion/assets/pygmalion_v2/pygmalion_v4_printed.urdf'
 OUT = sys.argv[2] if len(sys.argv) > 2 else '/home/syaro/pyg_fea/usd/pygmalion_v4_printed.usd'
-RES = '/home/syaro/pyg_fea/work/urdf_to_usd.json'
+RES = sys.argv[3] if len(sys.argv) > 3 else '/home/syaro/pyg_fea/work/urdf_to_usd.json'
+# a 3rd arg keeps a second model's result from silently overwriting the first's - the
+# default path is shared, so back-to-back conversions used to leave only the last one.
 res = {'ok': False, 'urdf': URDF, 'usd': OUT}
 
 try:

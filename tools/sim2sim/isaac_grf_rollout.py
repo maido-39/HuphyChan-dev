@@ -54,6 +54,31 @@ stdout - the same trap the other scripts in this directory document.
 
   OMNI_KIT_ACCEPT_EULA=YES ~/isaacsim_venv/bin/python3 tools/sim2sim/isaac_grf_rollout.py \
       [usd] [seconds]
+
+CONTACT / SOLVER SWEEP (env vars, one knob at a time)
+-----------------------------------------------------
+With no PYG_* set the run is byte-identical to the baseline above. Setting any of them
+writes the result to work/contact_sweep/ instead, with the exact knob values echoed into
+`res['knobs']` so a JSON alone identifies its own configuration.
+
+  PYG_TAG=a_maxdepen1     name of the run; also selects the contact_sweep output dir
+  PYG_MAXDEPEN=1.0        PhysxRigidBodyAPI:maxDepenetrationVelocity on all 18 robot links
+  PYG_ITERS=8,4           PhysxArticulationAPI solver position,velocity iteration count
+  PYG_OFFSETS=0.005,0.0   PhysxCollisionAPI contactOffset,restOffset on the two foot hulls
+  PYG_DEINST=1            de-instance the foot collision subtree and change nothing else
+                          (the control for PYG_OFFSETS / PYG_FOOTMAT, which need it)
+  PYG_FOOTMAT=1           bind an explicit foot physics material (1.0/1.0/0.0) to the hulls
+  PYG_COMPLIANT=44184,1767   compliantContactStiffness,Damping on the ground AND foot
+                          material (implies PYG_FOOTMAT); PYG_COMPLIANT_ACC=1 switches to
+                          the acceleration-spring form, whose units are MuJoCo's own
+  PYG_BOUNCE=0.2          PhysxSceneAPI:bounceThreshold
+
+WHERE THE COLLIDERS HIDE: the URDF importer writes an *instanceable* stage - every link's
+`visuals`/`collisions` subtree is a USD instance, so `stage.Traverse()` finds 0 colliders on
+the robot and any attempt to author on `.../collisions/foot_hull/mesh` hits a read-only
+instance proxy. `SetInstanceable(False)` on the `collisions` prim composes the prototype in
+place (identical geometry, identical physics - it is a memory decision, not a physical one)
+and the mesh becomes an editable prim. PYG_DEINST=1 exists to prove that claim empirically.
 """
 import json
 import os
@@ -67,8 +92,15 @@ ONNX = (f'{REPO}/mujoco-sim/mjlab/logs/rsl_rl/pygmalion_velocity/'
         '2026-08-26_15-45-16_bundleD1_RP/2026-08-26_15-45-16_bundleD1_RP.onnx')
 CONTRACT = '/home/syaro/pyg_fea/work/rp_policy_contract.json'
 TAG = os.path.splitext(os.path.basename(USD))[0]
-RES = f'/home/syaro/pyg_fea/work/isaac_grf_{TAG}.json'
-TRACE = f'/home/syaro/pyg_fea/work/isaac_grf_{TAG}_traces.npz'
+SWEEP = os.environ.get('PYG_TAG', '').strip()
+if SWEEP:
+    OUTDIR = '/home/syaro/pyg_fea/work/contact_sweep'
+    os.makedirs(OUTDIR, exist_ok=True)
+    STEM = f'{OUTDIR}/isaac_grf_{TAG}_{SWEEP}'
+else:
+    STEM = f'/home/syaro/pyg_fea/work/isaac_grf_{TAG}'
+RES = f'{STEM}.json'
+TRACE = f'{STEM}_traces.npz'
 # the MuJoCo side of the table: 200 Hz raw traces, 24 envs, DR off, already in BW
 MJ_NPZ = '/home/syaro/pyg_fea/work/impact_multi_nodr/bundleD1_RP_raw.npz'
 MJ_JSON = '/home/syaro/pyg_fea/work/impact_multi_nodr/bundleD1_RP.json'
@@ -148,7 +180,7 @@ try:
     from isaacsim import SimulationApp
     app = SimulationApp({"headless": True})
     import omni.usd
-    from pxr import Usd, UsdPhysics
+    from pxr import Usd, UsdGeom, UsdPhysics, UsdShade, PhysxSchema
     from isaacsim.core.api import World
     from isaacsim.core.prims import Articulation, RigidPrim
 
@@ -208,6 +240,143 @@ try:
 
     if ground is None:
         raise RuntimeError('ground collider not found under /World/defaultGroundPlane')
+
+    # ---- the sweep knobs ------------------------------------------------------------------
+    # Authored on the USD stage BEFORE world.reset(), which is when omni.physx parses it.
+    # Every value read back after the Set() lands in res['knobs'], so a result JSON states
+    # its own configuration - including the value each attribute had BEFORE the change,
+    # which is the only way to know what the "default" on this build actually was.
+    K = {'sweep_tag': SWEEP or None}
+
+    def _f(name):
+        v = os.environ.get(name, '').strip()
+        return float(v) if v else None
+
+    def _pair(name):
+        v = os.environ.get(name, '').strip()
+        return [float(x) for x in v.split(',')] if v else None
+
+    robot_links = [p for p in stage.TraverseAll()
+                   if p.HasAPI(UsdPhysics.RigidBodyAPI)
+                   and p.GetPath().pathString.startswith(root)]
+
+    md = _f('PYG_MAXDEPEN')
+    if md is not None:
+        rows = []
+        for p in robot_links:
+            a = PhysxSchema.PhysxRigidBodyAPI.Apply(p)
+            at = a.CreateMaxDepenetrationVelocityAttr()
+            rows.append([p.GetName(), at.Get()])
+            at.Set(md)
+        K['max_depenetration_velocity'] = dict(set_to=md, n_links=len(rows),
+                                               was=rows[0][1] if rows else None,
+                                               had_api_before=False)
+
+    it = _pair('PYG_ITERS')
+    if it is not None:
+        rows = []
+        for p in stage.TraverseAll():
+            if p.HasAPI(UsdPhysics.ArticulationRootAPI):
+                a = PhysxSchema.PhysxArticulationAPI.Apply(p)
+                pi = a.CreateSolverPositionIterationCountAttr()
+                vi = a.CreateSolverVelocityIterationCountAttr()
+                rows.append(dict(path=p.GetPath().pathString, was=[pi.Get(), vi.Get()]))
+                pi.Set(int(it[0])); vi.Set(int(it[1]))
+        K['solver_iterations'] = dict(set_to=[int(it[0]), int(it[1])], prims=rows)
+
+    # de-instancing: required by any knob that authors on the collider mesh itself
+    need_deinst = (os.environ.get('PYG_DEINST', '').strip() == '1'
+                   or _pair('PYG_OFFSETS') is not None
+                   or os.environ.get('PYG_FOOTMAT', '').strip() == '1'
+                   or _pair('PYG_COMPLIANT') is not None)
+    foot_cols = []
+    if need_deinst:
+        for f in FEET:
+            cp = stage.GetPrimAtPath(f'{root}/{f}/collisions')
+            if cp and cp.IsInstanceable():
+                cp.SetInstanceable(False)
+        for p in stage.TraverseAll():
+            s = p.GetPath().pathString
+            if p.HasAPI(UsdPhysics.CollisionAPI) and any(f'/{f}/' in s for f in FEET):
+                foot_cols.append(p)
+        K['deinstanced'] = dict(foot_colliders=[p.GetPath().pathString for p in foot_cols])
+        if len(foot_cols) != len(FEET):
+            raise RuntimeError(f'de-instancing gave {len(foot_cols)} foot colliders, '
+                               f'expected {len(FEET)}')
+        # the hull's own size, for the record: PhysX's auto contact offset is
+        # 0.02 * min(extent) when the attribute is left unauthored
+        ext = []
+        for p in foot_cols:
+            pts = UsdGeom.Mesh(p).GetPointsAttr().Get()
+            if pts:
+                arr = np.array([[q[0], q[1], q[2]] for q in pts])
+                ext.append([round(float(v), 5) for v in (arr.max(0) - arr.min(0))])
+        K['foot_hull_extent_m'] = ext
+        if ext:
+            K['physx_auto_contact_offset_m'] = round(0.02 * min(min(e) for e in ext), 6)
+
+    off = _pair('PYG_OFFSETS')
+    if off is not None:
+        rows = []
+        for p in foot_cols:
+            a = PhysxSchema.PhysxCollisionAPI.Apply(p)
+            co, ro = a.CreateContactOffsetAttr(), a.CreateRestOffsetAttr()
+            rows.append(dict(path=p.GetPath().pathString, was=[co.Get(), ro.Get()]))
+            co.Set(off[0]); ro.Set(off[1])
+            rows[-1]['now'] = [co.Get(), ro.Get()]
+        K['foot_offsets'] = dict(set_to=off, prims=rows)
+
+    comp = _pair('PYG_COMPLIANT')
+    if comp is not None or os.environ.get('PYG_FOOTMAT', '').strip() == '1':
+        acc = os.environ.get('PYG_COMPLIANT_ACC', '').strip() == '1'
+        # An explicit foot material. Until now the foot hulls carried no physics material at
+        # all, so PhysX gave them its own default - the ground's 1.0/1.0/0.0 was only ever
+        # half of the pair. This binds the ground's numbers to the foot too, which is why
+        # PYG_FOOTMAT=1 alone is run as its own arm: it separates "the feet finally have the
+        # friction we thought they had" from "the contact is now compliant".
+        mp = '/World/Physics_Materials/foot_material'
+        mprim = UsdShade.Material.Define(stage, mp)
+        ma = UsdPhysics.MaterialAPI.Apply(mprim.GetPrim())
+        ma.CreateStaticFrictionAttr().Set(1.0)
+        ma.CreateDynamicFrictionAttr().Set(1.0)
+        ma.CreateRestitutionAttr().Set(0.0)
+        bound = []
+        for p in foot_cols:
+            b = UsdShade.MaterialBindingAPI.Apply(p)
+            b.Bind(mprim, bindingStrength=UsdShade.Tokens.strongerThanDescendants,
+                   materialPurpose='physics')
+            rel = p.GetRelationship('material:binding:physics')
+            bound.append([t.pathString for t in rel.GetTargets()] if rel else None)
+        K['foot_material'] = dict(path=mp, static_friction=1.0, dynamic_friction=1.0,
+                                  restitution=0.0, bound_to=bound)
+        if comp is not None:
+            mats = []
+            for p in stage.TraverseAll():
+                if p.HasAPI(UsdPhysics.MaterialAPI):
+                    pm = PhysxSchema.PhysxMaterialAPI.Apply(p)
+                    ks = pm.CreateCompliantContactStiffnessAttr()
+                    kd_ = pm.CreateCompliantContactDampingAttr()
+                    sp = pm.CreateCompliantContactAccelerationSpringAttr()
+                    was = [ks.Get(), kd_.Get(), sp.Get()]
+                    ks.Set(comp[0]); kd_.Set(comp[1]); sp.Set(acc)
+                    mats.append(dict(path=p.GetPath().pathString, was=was,
+                                     now=[ks.Get(), kd_.Get(), sp.Get()]))
+            K['compliant_contact'] = dict(stiffness=comp[0], damping=comp[1],
+                                          acceleration_spring=acc, materials=mats)
+
+    bt = _f('PYG_BOUNCE')
+    if bt is not None:
+        rows = []
+        for p in stage.TraverseAll():
+            if p.IsA(UsdPhysics.Scene):
+                a = PhysxSchema.PhysxSceneAPI.Apply(p)
+                at = a.CreateBounceThresholdAttr()
+                rows.append(dict(path=p.GetPath().pathString, was=at.Get()))
+                at.Set(bt)
+                rows[-1]['now'] = at.Get()
+        K['bounce_threshold'] = dict(set_to=bt, prims=rows)
+    res['knobs'] = K
+
     art = Articulation(root, name='robot')
     by_name = {}
     for p in stage.Traverse():
@@ -244,6 +413,14 @@ try:
         cv.initialize(SimulationManager.get_physics_sim_view())
     res['contact_view'] = dict(num_shapes=int(cv.num_shapes), num_filters=int(cv.num_filters))
     res['foot_paths'] = list(feet.prim_paths)
+    # what PhysX actually ingested, read back from the live articulation - a USD attribute
+    # that was Set() but not parsed would otherwise look identical in the JSON
+    try:
+        K['runtime_solver_iters'] = [
+            int(np.asarray(art.get_solver_position_iteration_counts()).flatten()[0]),
+            int(np.asarray(art.get_solver_velocity_iteration_counts()).flatten()[0])]
+    except Exception as e:
+        K['runtime_solver_iters_err'] = f'{type(e).__name__}: {e}'
 
     isaac_names = list(art.dof_names)
     n_all = len(isaac_names)
@@ -470,9 +647,9 @@ try:
                         friction=[1.0, 0.005, 1e-4], timestep=0.005),
             isaac=dict(engine='IsaacSim 5.0 / PhysX (TGS)',
                        restitution=0.0, static_friction=1.0, dynamic_friction=1.0,
-                       note='rigid contact resolved inside a single 5 ms substep; no '
-                            'compliance term equivalent to solref',
-                       timestep=dt_phys))
+                       note='rigid contact resolved inside a single 5 ms substep unless '
+                            'compliant contact is switched on (see knobs)',
+                       knobs=K, timestep=dt_phys))
     except Exception as e:
         res['mujoco_error'] = f'{type(e).__name__}: {e}'
 
