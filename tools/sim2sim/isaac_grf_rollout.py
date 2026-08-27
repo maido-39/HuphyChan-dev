@@ -72,6 +72,8 @@ writes the result to work/contact_sweep/ instead, with the exact knob values ech
                           material (implies PYG_FOOTMAT); PYG_COMPLIANT_ACC=1 switches to
                           the acceleration-spring form, whose units are MuJoCo's own
   PYG_BOUNCE=0.2          PhysxSceneAPI:bounceThreshold
+  PYG_ARM_ABD_DEG=15      arm abduction of the five WELDED upper-body joints (mjlab's own
+                          default). 0 = the pre-2026-08-27 behaviour every sweep row used.
 
 WHERE THE COLLIDERS HIDE: the URDF importer writes an *instanceable* stage - every link's
 `visuals`/`collisions` subtree is a USD instance, so `stage.Traverse()` finds 0 colliders on
@@ -442,6 +444,24 @@ try:
 
     q_init = np.zeros(n_all)
     q_init[pol2isaac] = q0
+    # THE WELDED UPPER BODY IS NOT AT ZERO (fixed 2026-08-27, after the AB port).
+    # mjlab deletes the five upper-body joints but first ROTATES the arm body quat by
+    # -PYG_ARM_ABD_DEG about the shoulder_roll axis, so the trained robot walks with its arms
+    # held 15 deg out. Holding the Isaac joints at 0 instead hangs each 2.843 kg arm 66.8 mm
+    # further inboard than the policy ever saw. Measured against the mjlab-compiled model:
+    # shoulder_roll = -15 deg reproduces the baked arm COM to 0.000 mm on BOTH sides (the R
+    # joint axis is itself mirrored, -1 0 0, so the sign is negative on both), +15 deg is
+    # 132.5 mm wrong and 0 deg is 66.8 mm wrong.
+    # PYG_ARM_ABD_DEG=0 restores the pre-fix behaviour, which is what every row of the
+    # 2026-08-27 contact sweep was run with.
+    ARM_ABD = float(os.environ.get('PYG_ARM_ABD_DEG', '15'))
+    upper_target = {}
+    for i in upper:
+        n = isaac_names[i]
+        q_init[i] = np.radians(-ARM_ABD) if n.endswith('_shoulder_roll_joint') else 0.0
+        upper_target[n] = float(q_init[i])
+    res['arm_abduction_deg'] = ARM_ABD
+    res['upper_body_hold_rad'] = upper_target
     spawn_z = C.get('spawn_base_z', 0.9085)
 
     def reset_robot():
@@ -472,7 +492,7 @@ try:
                 tau[pol2isaac] = tn_clamp_vec(raw, dq_all[pol2isaac])
                 tau -= visc * dq_all + fric * np.tanh(dq_all / 0.05)
                 for i in upper:
-                    tau[i] = 400.0 * (0.0 - q_all[i]) - 20.0 * dq_all[i]
+                    tau[i] = 400.0 * (q_init[i] - q_all[i]) - 20.0 * dq_all[i]
             art.set_joint_efforts(tau.reshape(1, -1))
             world.step(render=False)
 
@@ -574,7 +594,7 @@ try:
             tau[pol2isaac] = tn_clamp_vec(raw, dq_all[pol2isaac])
             tau -= visc * dq_all + fric * np.tanh(dq_all / 0.05)
             for i in upper:
-                tau[i] = 400.0 * (0.0 - q_all[i]) - 20.0 * dq_all[i]
+                tau[i] = 400.0 * (q_init[i] - q_all[i]) - 20.0 * dq_all[i]
             art.set_joint_efforts(tau.reshape(1, -1))
             world.step(render=False)
             net, mat = read_contacts()          # read AFTER the step, like the mjlab hook
