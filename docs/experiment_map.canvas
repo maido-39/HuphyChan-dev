@@ -779,6 +779,16 @@
    "height": 320,
    "color": "4",
    "text": "**bundleV4_AB** — v4 질량 이식 (2026-08-27)\n\n31.316 kg (D1은 35.347)\n32/32 성공 · 낙상 0 · 전진 추종 0.123\n\n★**감량이 충격 여유를 사주지 않는다**\n  절대 착지력 424 → 434 N (그대로)\n  체중 대비 1.224 → **1.412 BW (+15 %)**\n\n계측버그 수정: BW 346.8 하드코딩 →\n모델에서 유도"
+  },
+  {
+   "id": "n_p1low",
+   "type": "file",
+   "file": "experiments/2026-08-27_bundleP1_AB.md",
+   "x": 17550,
+   "y": 300,
+   "width": 400,
+   "height": 300,
+   "color": "5"
   }
  ],
  "edges": [
@@ -1472,6 +1482,14 @@
    "toNode": "n_v4",
    "toSide": "left",
    "label": "v4 질량"
+  },
+  {
+   "id": "e_n_bD1_n_p1low",
+   "fromNode": "n_bD1",
+   "fromSide": "right",
+   "toNode": "n_p1low",
+   "toSide": "left",
+   "label": "저속 deadband A/B"
   }
  ]
 }
