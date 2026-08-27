@@ -39,6 +39,11 @@ Usage (mjlab venv, Fusion MCP reachable):
     upper_meshes_fusion.py --dry-run       # fetch into staging, report, publish nothing
     upper_meshes_fusion.py --stats         # no Fusion at all: measure what is on disk now
     upper_meshes_fusion.py --probe         # measure the connector's actual payload ceiling
+                                           # ** DESTRUCTIVE: the deliberate over-limit requests
+                                           # re-wedged a freshly restarted host on 2026-08-27.
+                                           # The answer is already known (~524288 B per response,
+                                           # 98304 floats) - do not run this against a live host
+                                           # unless the ceiling itself is in question.
 """
 import argparse
 import base64
@@ -363,7 +368,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--dry-run', action='store_true', help='fetch and report, publish nothing')
     ap.add_argument('--stats', action='store_true', help='measure the meshes on disk, no Fusion')
-    ap.add_argument('--probe', action='store_true', help='measure the connector payload ceiling')
+    ap.add_argument('--probe', action='store_true', help='measure the connector payload ceiling (DESTRUCTIVE - re-wedged the host once; ceiling is ~524288 B, default chunk already safe)')
     ap.add_argument('--quality', default='Low', choices=['Low', 'Medium', 'High'])
     ap.add_argument('--chunk', type=int, default=16000, help='values per slice, halved on need')
     args = ap.parse_args()
