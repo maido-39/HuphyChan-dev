@@ -637,7 +637,10 @@ try:
                              ratio=None if not a or not b else round(a / b, 3),
                              pct_diff=None if not a or not b else round(100 * (a / b - 1), 1)))
         res['comparison'] = rows
-        # Contact models, for the record - this is the difference the table is measuring.
+        # Contact models, for the record. NOT the explanation for the peak gap - that was
+        # this file's original claim and the 22-arm sweep disproved it. The gap is the
+        # solver iteration counts (see `knobs`); a compliant-contact arm derived from the
+        # solref below closed the peak but made tracking worse (vx_err 0.139 -> 0.195).
         # MuJoCo values read off the loaded model (mjlab xmls/pygmalion_v3_printed.xml).
         res['contact_models'] = dict(
             mujoco=dict(engine='MuJoCo (mjlab, Newton solver, 100 iters)',

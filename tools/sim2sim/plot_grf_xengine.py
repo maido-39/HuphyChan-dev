@@ -1,4 +1,17 @@
-"""Draw the Isaac-vs-MuJoCo landing comparison: the same gait, a different contact model.
+"""Draw the Isaac-vs-MuJoCo landing comparison for the PhysX baseline AS IMPORTED.
+
+CORRECTED 2026-08-27: this figure first carried the caption "MuJoCo soft contact (20 ms
+time constant) vs PhysX rigid contact", i.e. it named the CONTACT MODEL as the reason the
+PhysX peak is twice MuJoCo's. A 22-arm one-knob-at-a-time sweep disproved that. The cause
+is the solver ITERATION COUNTS the URDF importer silently wrote (32 position / 1 velocity):
+at 4/8 the peak ratio falls from x1.97 to x1.10 and the loading rate from x2.92 to x1.14.
+The compliant-contact arm derived from MuJoCo's own solref was measured too and did NOT
+explain the gap - it closed the peak but pushed the tracking error from 0.139 to 0.195.
+See docs/img/xengine_contact_sweep.png and tools/sim2sim/plot_contact_sweep.py.
+
+The DATA here is unchanged and still correct - the sweep's baseline arm reproduces it bit
+for bit (peak 2.4713 BW, rate 188.4 BW/s, 101 strikes, vx_err 0.13858409302325575). Only
+the causal caption was wrong, so only the caption was rewritten.
 
 Three panels, because the claim has three parts and a table alone hides the shape of it:
   (a) every detected strike from both engines, aligned on touchdown, one faint line each,
@@ -90,11 +103,11 @@ ax.plot(tm, np.median(Wm, axis=0), color=C_M, lw=2.6,
         label=f'MuJoCo  ({len(pm)} strikes, {len(Wm)} drawn)')
 ax.plot(ti, np.median(Wi, axis=0), color=C_I, lw=2.6,
         label=f'IsaacSim / PhysX  ({len(pi)} strikes, {len(Wi)} drawn)')
-ax.annotate('PhysX: one 5 ms sample,\nthen a rebound dip',
+ax.annotate('PhysX as imported (32/1 iters):\none 5 ms spike, then a rebound dip',
             xy=(0, float(np.median(Wi, axis=0).max())), xytext=(26, 3.15),
             fontsize=8.5, color=C_I,
             arrowprops=dict(arrowstyle='->', color=C_I, lw=1.0))
-ax.annotate('MuJoCo: 20 ms rise', xy=(12, 1.22), xytext=(46, 1.75),
+ax.annotate('MuJoCo: smooth rise', xy=(12, 1.22), xytext=(46, 1.75),
             fontsize=8.5, color=C_M,
             arrowprops=dict(arrowstyle='->', color=C_M, lw=1.0))
 ax.axvline(0, color='0.5', lw=0.8, ls='--')
@@ -135,9 +148,13 @@ dist(fig.add_subplot(gs[0, 2]), ri, rm,
      f'(c) Loading rate  x{np.median(ri)/np.median(rm):.2f}', 'rate [body weights / s]')
 
 fig.suptitle('Foot-strike load, same policy at 1.6 m/s, same 35.35 kg robot, same detector'
-             f'   -   MuJoCo soft contact (20 ms time constant) vs PhysX rigid contact'
-             f'   -   mean support 1.00 BW both engines',
-             fontsize=10.5, y=1.0)
+             '   -   MuJoCo vs PhysX AS IMPORTED (32/1 solver iterations)'
+             '   -   mean support 1.00 BW both engines',
+             fontsize=10.5, y=1.02)
+fig.text(0.5, 0.955, 'The gap is the URDF importer\'s solver iteration counts, not the contact '
+         'model: at 4 position / 8 velocity iterations the peak ratio falls to x1.10 and the '
+         'rate ratio to x1.14  (see xengine_contact_sweep.png)',
+         ha='center', fontsize=9, color='#7b241c')
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 fig.savefig(OUT, dpi=140, bbox_inches='tight')
 print('wrote', OUT)
