@@ -21,7 +21,11 @@ import mjlab.tasks  # noqa
 D, CK, TAG = sys.argv[1:4]
 VX = float(sys.argv[4]) if len(sys.argv) > 4 else 1.6
 NE = int(sys.argv[5]) if len(sys.argv) > 5 else 16
-SEC, WARM, BW = 14.0, 3.0, 346.8
+SEC, WARM = 14.0, 3.0
+# BW is derived from the loaded model, not hardcoded. It used to be 346.8 N, which is v3's
+# 35.347 kg - correct for every v3 run, silently wrong by 12.9 % for the 31.316 kg v4 model,
+# where it understates every force expressed in body weights.
+BW = None
 OUT = '/home/syaro/pyg_fea/work/impact_multi'
 if os.environ.get('PROBE_NODR') == '1':
     OUT += '_nodr'; os.makedirs(OUT, exist_ok=True)
@@ -47,6 +51,8 @@ runner = (load_runner_cls('Mjlab-Velocity-Flat-Pygmalion') or MjlabOnPolicyRunne
 runner.load(CK, load_cfg={'actor': True}, strict=True, map_location='cpu')
 policy = runner.get_inference_policy(device='cpu')
 cs = env.scene['feet_ground_contact']
+BW = float(env.sim.mj_model.body_mass.sum()) * 9.81
+print(f'[multi] model mass {BW / 9.81:.3f} kg -> 1 BW = {BW:.1f} N', flush=True)
 sim = env.sim
 dt_phys = float(env.sim.mj_model.opt.timestep)
 print(f'[multi] {NE} envs, physics dt {dt_phys} ({1/dt_phys:.0f} Hz), vx {VX}', flush=True)
