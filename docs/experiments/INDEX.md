@@ -93,3 +93,6 @@
 - [[2026-08-27_bundleE1_AB]]
 - [[2026-08-27_bundleV4_AB]]
 - [[2026-08-27_bundleP1_AB]]
+- [[2026-08-27_bundleP1s2_AB]]
+- [[2026-08-27_bundleP1s3_AB]]
+- [[2026-08-27_bundleD1s2_AB]]

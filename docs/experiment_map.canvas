@@ -789,6 +789,36 @@
    "width": 400,
    "height": 300,
    "color": "5"
+  },
+  {
+   "id": "n_p1s2",
+   "type": "file",
+   "file": "experiments/2026-08-27_bundleP1s2_AB.md",
+   "x": 18070,
+   "y": -60,
+   "width": 400,
+   "height": 300,
+   "color": "5"
+  },
+  {
+   "id": "n_p1s3",
+   "type": "file",
+   "file": "experiments/2026-08-27_bundleP1s3_AB.md",
+   "x": 18070,
+   "y": 300,
+   "width": 400,
+   "height": 300,
+   "color": "5"
+  },
+  {
+   "id": "n_d1s2",
+   "type": "file",
+   "file": "experiments/2026-08-27_bundleD1s2_AB.md",
+   "x": 18070,
+   "y": 660,
+   "width": 400,
+   "height": 300,
+   "color": "4"
   }
  ],
  "edges": [
@@ -1490,6 +1520,30 @@
    "toNode": "n_p1low",
    "toSide": "left",
    "label": "저속 deadband A/B"
+  },
+  {
+   "id": "e_p1low_p1s2",
+   "fromNode": "n_p1low",
+   "fromSide": "right",
+   "toNode": "n_p1s2",
+   "toSide": "left",
+   "label": "seed 2 복제"
+  },
+  {
+   "id": "e_p1low_p1s3",
+   "fromNode": "n_p1low",
+   "fromSide": "right",
+   "toNode": "n_p1s3",
+   "toSide": "left",
+   "label": "seed 3 복제"
+  },
+  {
+   "id": "e_bD1_d1s2",
+   "fromNode": "n_bD1",
+   "fromSide": "right",
+   "toNode": "n_d1s2",
+   "toSide": "left",
+   "label": "seed 2 대조(분산 바닥)"
   }
  ]
 }
