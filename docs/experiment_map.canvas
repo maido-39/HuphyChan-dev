@@ -749,6 +749,26 @@
    "width": 420,
    "height": 300,
    "color": "1"
+  },
+  {
+   "id": "n_rp_transfer",
+   "type": "text",
+   "x": 16500,
+   "y": 760,
+   "width": 430,
+   "height": 300,
+   "color": "4",
+   "text": "**RP 이식 시험** (2026-08-26)\n\n`bundleCTL_RP` vs `bundleD1_RP`\n16384 env · RP c3 +800 → 32798\n\n✅ **이식 성공**\n- 입각 무릎 45.9° → **39.9°**\n- 전진 오차 0.147 → **0.140**\n- 200 Hz 하중률 81.5 → **64.5 BW/s**\n- 낙상 0 / 96·96 성공\n\n★대조군이 AB와 다름: CTL_AB 277 BW/s·낙상12\nvs CTL_RP 81.5·낙상0"
+  },
+  {
+   "id": "n_e1v4",
+   "type": "text",
+   "x": 17050,
+   "y": 300,
+   "width": 430,
+   "height": 300,
+   "color": "1",
+   "text": "**bundleE1_AB** — 하중률 항 기각 (2026-08-27)\n\n부호 수정 후 항이 처음 동작 (−0.0637)\n\n❌ **하중률을 벌했더니 하중률이 악화**\n  200 Hz: D1 21.0 → E1 **54.1 BW/s**\n  피크 1.224 → 1.205 BW\n\n원인: 항이 50 Hz로 dF/dt를 재는데\n스파이크 폭은 15–25 ms\n→ 에일리어싱된 양을 최소화\n→ 제어 틱 사이로 충격을 숨김\n\n**레시피는 `half` 유지**"
   }
  ],
  "edges": [
@@ -1418,6 +1438,22 @@
    "toNode": "n_bV4_ab",
    "toSide": "left",
    "label": "+v4 질량"
+  },
+  {
+   "id": "e_n_bundle_final_n_rp_transfer",
+   "fromNode": "n_bundle_final",
+   "fromSide": "right",
+   "toNode": "n_rp_transfer",
+   "toSide": "left",
+   "label": "RP arm"
+  },
+  {
+   "id": "e_n_bD1_n_e1v4",
+   "fromNode": "n_bD1",
+   "fromSide": "right",
+   "toNode": "n_e1v4",
+   "toSide": "left",
+   "label": "+ 수정된 항 / v4 질량"
   }
  ]
 }
