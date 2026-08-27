@@ -94,16 +94,39 @@ mujoco-sim/mjlab/.venv/bin/python3 tools/robot_model/mass_dr.py --samples=3000
 ```
 4. **연구 노트 작성**(리워드 변경 전 훅이 강제): V1(저속 무시), V2(push-off). `docs/reward_research/`에 근거 노트 없으면 편집이 차단된다.
 5. **구현**: 게이트형 커리큘럼(V3), entropy 어닐링(V4), critic DR 관측(V9), IMU 관측(V10) — 전부 `PYG_*` 플래그로 **기본 OFF** 후 개별 검증.
-6. **런처 수정**: P1 실측 길이 → DR start/end 자동 계산.
-7. **스모크 런**: 1024 env · 1,500 iter. 확인 항목 = 게이트 전이 로그, DR 계산값, 새 지표 3종 동시 로깅, 낙상 0.
-8. **본 런**(AB·RP 동시, 2시드):
+6. **런처**: ✅ **완료** — `mujoco-sim/mjlab/analysis/run_v2_scratch.sh` (구현 `run_v2_scratch.py`). 두 단계를 한 프로세스가 오케스트레이션한다. §4b 참조.
 ```bash
-PYG_V2=1 PYG_INIT_BENT=1 PYG_ARM_ABD_DEG=15 PYG_SOFT_LANDING=1 PYG_INERTIAL_DR=1 \
-PYG_CMD_VY_STAGES=1 PYG_TN=1 PYG_MOTOR_MEAS=1 PYG_ANKLE_MODE=AB PYG_SEED=1 \
-PYG_INIT_MID=1 PYG_SOFT_LANDING_MODE=half PYG_KNEE_EXT=1 PYG_KNEE_EXT_W=2.0 PYG_KNEE_EXT_DEG=25 \
-  <런처>   # 인자·환경의 정본은 mujoco-sim/mjlab/analysis/out/watchdog_runs.json
+cd mujoco-sim/mjlab
+bash analysis/run_v2_scratch.sh --dry-run          # 두 단계의 env·명령 전문 출력, 실행 안 함
+bash analysis/run_v2_scratch.sh --smoke            # 1024 env·소형 캡·게이트 완화, 오케스트레이션 검증
+```
+7. **스모크 런**: `--smoke` (1024 env, P1 캡 400, 램프 120 + 소화 80). 확인 항목 = 게이트 전이 로그, **P1 실측 길이에서 계산된 DR 창**, dr_factor 0 → 1 상승, 크래시 후 resume.
+8. **본 런**(AB·RP 동시, 2시드) — 환경변수를 손으로 나열하지 않는다. 정본은 런처이고, 런처가 `watchdog_runs.json`에 두 단계를 모두 등록한다:
+```bash
+cd mujoco-sim/mjlab
+nohup bash analysis/run_v2_scratch.sh --run v2s1_AB --ankle AB --vy-stages \
+      > analysis/out/v2s1_AB.out 2>&1 &
+nohup bash analysis/run_v2_scratch.sh --run v2s1_RP --ankle RP --vy-stages \
+      > analysis/out/v2s1_RP.out 2>&1 &   # ★ GPU 락 때문에 두 번째는 첫 번째가 끝날 때까지 대기한다
 ```
 9. **감시 인프라 필수 기동**: `analysis/watchdog.sh`(자동 resume + RAM 가드 2 GB), crontab */5 자기복구, `gate_watch.sh`(마일스톤 + 45분 하트비트), `review_loop.sh`(1시간 자동 기록).
+
+### 4b. 런처 `run_v2_scratch.sh` — 무엇을 대신 해 주나 (2026-08-27)
+> *쉽게*: P1이 언제 끝날지는 **성적표가 정한다**(§3a). 그러니 "DR을 몇 번째 iter부터 켤지"를 미리 적어 둘 수가 없다.
+> 런처는 P1을 지켜보다가 **끝난 그 자리의 iter 번호**로 DR 창을 계산해서 P2를 띄운다. 2026-07-15에 이걸 손으로 적어 두었다가
+> **DR이 0.33에 고착**한 사고가 이 자동화의 이유다(§3b ⚠).
+
+| 단계 | 런처가 세우는 것 | 근거 |
+|---|---|---|
+| **P1** | 처음부터(`--agent.resume` 없음) · flat · **DR OFF**(`PYG_DR_START_ITER=100000000` → `dr_levels` factor 0.0 고정) · `PYG_GATED_CURRICULUM=1` · entropy 어닐링 **OFF** · **`PYG_CRITIC_DR_OBS=1`을 처음부터** · 확정 레시피(§4a) + 표준 스택 · 16384 env | `PYG_NO_DR=1`을 **쓰지 않는다**: 그건 push/friction/encoder/base_com 이벤트를 통째로 제거해 `dr_factor` 로깅도, `PYG_INERTIAL_DR`도 죽는다. critic DR 관측을 P1부터 켜는 이유는 **관측 폭을 두 단계에서 동일하게** 만들어 P2가 actor+critic+optimizer를 **완전 resume** 할 수 있게 하기 위함(중간에 폭이 바뀌면 actor-only warm-start = 가치함수 폐기) |
+| **P1 종료 판정** | 콘솔 로그를 폴링해서 ① 승급 로그(`[gated-curriculum] stage a -> b at iter N`) 수집 ② **최상위 단계에서 게이트가 성립**하면 졸업. 성립 조건은 `commands_vel_gated`가 쓰는 산수 그대로: `stage == 4` ∧ `dwell ≥ PYG_GATE_MIN_DWELL` ∧ `episodes ≥ MIN_EPISODES` ∧ `fell_over ≤ FELL_MAX` ∧ `err_steady ≤ baseline × ERR_RATIO`, **연속 `--settle-hold`(기본 10) iter 유지**. 아니면 하드 캡 `--p1-max-iters`(기본 16000 = 5단계 × 최대 dwell 3000 + 최상위 min dwell 800) | 최상위 단계는 **승급이 없으므로 자기 로그 줄이 없다** → 게이트 조건을 런처가 같은 식으로 다시 계산해야 한다. tfevents가 아니라 **콘솔 로그**를 1차 소스로 쓰는 이유: 승급 줄이 거기에만 있고, 로거 백엔드와 무관하게 존재하며, tfevents의 120 s flush 지연이 없다(tfevents는 `--source` 로 전환 가능한 자동 폴백) |
+| **P2** | P1 마지막 체크포인트에서 **완전 resume**. **그때** DR 창 계산: `PYG_DR_START_ITER = P1_END`, `PYG_DR_END_ITER = P1_END + --ramp-iters`(기본 10000), 뒤에 `--digest-iters`(기본 4000) 소화. `PYG_ENTROPY_ANNEAL=1`을 P2 전 구간(0.01 → 0.002)에 적용 | §3b. push/friction/encoder가 `dr_levels`로 0 → 1 램프 |
+| **P2 커리큘럼 스냅백** | P2에서는 `PYG_GATE_MIN_DWELL=0 / MAX_DWELL=0` | ★게이트의 단계 상태(`_pyg_gate_state`)는 **체크포인트에 없다**. 그냥 resume하면 명령 상자가 stage 0으로 되돌아가 **좁아진다**. dwell 0은 첫 리셋 배치에서 최상위 단계까지 강제 승급시켜 P1이 두고 간 상자를 복원한다(§3b: P2에서 명령 범위는 고정, DR만 램프) |
+| **크래시 내성** | 두 단계 모두 `watchdog_runs.json`에 **enabled + 전체 env**로 등록. P1은 **졸업 순간 disabled**(안 그러면 와치독이 "iter 9000 < 16000, 죽었네" 하고 되살린다). 런처 자신도 죽은 트레이너를 `--resume-grace`(기본 420 s) 뒤 직접 resume | |
+| **재실행 가능** | 상태 파일 `analysis/out/v2_scratch_<run>.json`. 다시 호출하면 **이어서 한다** — 살아 있으면 붙고, 죽었으면 최신 체크포인트에서 resume(`r` 접미사 체인), P1이 끝났으면 P2로 바로 간다. **체크포인트가 있으면 절대 처음부터 다시 시작하지 않는다** | |
+| **동시 실행 방지** | `/home/syaro/pyg_fea/locks/gpu.lock` 취득 **및** 다른 트레이너가 끝날 때까지 대기 | 호스트 RAM은 트레이너 두 개를 못 버틴다. ★락은 **디렉터리**(`mkdir` 원자성)이고 안에 `owner` 파일이 `"<pid> <who> <iso8601>"` 한 줄로 들어간다 — 일반 파일 락과 호환되지 않는다(2026-08-27 스모크에서 파일형 구현이 디렉터리 락을 읽지도 잡지도 못하고 무한 대기했다). 죽은 pid면 탈취, 읽을 수 없는 락은 30분 지나야 탈취 |
+
+**P1이 최상위 단계에 못 가고 캡에 걸리면 런처는 P2를 시작하지 않고 멈춘다**(`--force-p2`로 무시 가능). P2의 스냅백이 정책이 한 번도 겪지 않은 명령 상자를 강제로 씌우기 때문이다.
 
 ### 4a. 확정 레시피 (2026-08-26 번들 시험 결과)
 > *쉽게*: 아래 플래그 조합이 "지금까지 실측으로 이긴" 설정이다. 근거는 [[2026-08-26_human_landing_bundle]] §10,
