@@ -11,6 +11,13 @@ import os
 import sys
 import urllib.request
 
+# Hard ceiling on how many values any script may request per response. The measured host
+# ceiling is 98304 floats (524288 B); requests beyond it do not fail cleanly - a burst of
+# over-limit responses wedged the script host TWICE on 2026-08-27, and recovery needs a
+# person at the CAD PC. 65536 = 2/3 of measured, clamped here so no caller can exceed it
+# by convention-breaking; run_script refuses rather than truncates.
+SLICE_VALUES_MAX = 65536
+
 URL = os.environ.get('FUSION_MCP', 'http://127.0.0.1:27182/mcp')
 _session = {'id': None, 'n': 0}
 
@@ -124,6 +131,12 @@ def host_alive():
     if isinstance(r, dict) and _wedged(str(r.get('error', ''))):
         return False
     return 'PONG' in (r.get('message', '') if isinstance(r, dict) else str(r))
+
+
+def assert_slice_ok(count):
+    if count > SLICE_VALUES_MAX:
+        raise ValueError(f'slice of {count} values exceeds SLICE_VALUES_MAX={SLICE_VALUES_MAX}; '
+                         'over-limit requests wedge the Fusion script host (2026-08-27 x2)')
 
 
 def script(src, tries=4):

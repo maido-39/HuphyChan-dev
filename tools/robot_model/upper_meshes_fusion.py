@@ -171,6 +171,8 @@ class Fetcher:
         return json.loads(self._run(LIST_SCRIPT.replace('WANT', json.dumps(want))))
 
     def _slice(self, path, idx, what, start=0, count=0):
+        if count:
+            M.assert_slice_ok(count)
         src = (MESH_SCRIPT.replace('TARGET', json.dumps(path)).replace('IDX', str(idx))
                .replace('QUALITY', self.quality).replace('WHAT', json.dumps(what))
                .replace('START', str(start)).replace('COUNT', str(count)))
@@ -371,6 +373,8 @@ def main():
     ap.add_argument('--probe', action='store_true', help='measure the connector payload ceiling (DESTRUCTIVE - re-wedged the host once; ceiling is ~524288 B, default chunk already safe)')
     ap.add_argument('--quality', default='Low', choices=['Low', 'Medium', 'High'])
     ap.add_argument('--chunk', type=int, default=16000, help='values per slice, halved on need')
+    ap.add_argument('--i-accept-rewedging-the-host', action='store_true',
+                    help='required to run --probe; see the refusal message for why')
     args = ap.parse_args()
 
     names = files_of(GROUPS)
@@ -379,6 +383,12 @@ def main():
         report(names, old, old)
         return
     M.connect()
+    if args.probe and not getattr(args, 'i_accept_rewedging_the_host', False):
+        print('REFUSED: --probe sends deliberately over-limit requests and re-wedged a freshly\n'
+              'restarted host on 2026-08-27, costing a walk to the CAD PC. The ceiling is already\n'
+              'known (524288 B/response, 98304 floats). If the ceiling itself is in question, rerun\n'
+              'with --i-accept-rewedging-the-host and a person standing at the CAD PC.')
+        return
     if args.probe:
         probe()
         return
