@@ -89,10 +89,16 @@ PhysX도 사정이 같다. articulation(축소좌표 솔버)은 **반드시 트�
 
 ## 6. 남은 것
 
-- 정적 일치 ≠ 동적 일치. 다음은 **AB 정책 롤아웃**(접촉 포함) 대조 — RP에서 했던 것과 같은 순서.
+- ~~정적 일치 ≠ 동적 일치. 다음은 AB 정책 롤아웃~~ **완료** → [[2026-08-27_ab_dynamic_rollout]].
+  ⚠ 그 롤아웃은 **v3 루프 USD**를 새로 빌드해 썼다 — `bundleD1_AB`가 학습한 모델이 v3(35.347 kg)이고
+  이 노트의 USD는 v4(31.320 kg)이기 때문이다. 이 노트의 정적 검증은 v4 자산에 대한 것으로 유효하다.
 - 폐쇄 조인트의 **compliance(MuJoCo `solref`/`solimp`)는 이식되지 않는다**(손 저작이든 임포터든 동일).
   현재는 PhysX의 강체 구속으로 근사되어 있고, 충격 시 이 차이가 어떻게 드러나는지는 미측정.
-- 루프 벌어짐은 **정적 하중**에서의 값이다. 착지 충격 하중에서 같은 수준인지는 별도 확인 필요.
+- ~~루프 벌어짐은 정적 하중에서의 값이다~~ ★**측정했고, 같은 수준이 아니다**
+  ([[2026-08-27_ab_dynamic_rollout]] §5): 걷는 동안 Isaac은 반복수 32/16에서 평균 0.043 / 최대
+  2.82 mm, 4/8에서 평균 2.56 / 최대 **12.94 mm**까지 벌어진다. **비교 기준도 0이 아니다** —
+  같은 정책으로 굴린 MuJoCo 자신이 최대 **0.626 mm** 벌어진다(`connect`는 소프트 구속).
+  ⇒ 본 노트의 0.0003 mm는 *정지 하중*의 값으로만 인용할 것.
 
 도구: `tools/sim2sim/{author_loop_usd,xengine_loop_mujoco,xengine_loop_isaac_side,xengine_loop_report,plot_loop_xengine,mjcf_import_probe}.py`
 드라이버: `tools/sim2sim/run_loop_usd_build.sh` (공용 GPU 락 `~/pyg_fea/locks/gpu.lock`을 mkdir로 잡고 전체 순서 실행)

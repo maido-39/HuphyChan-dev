@@ -37,7 +37,10 @@ REPO = '/home/syaro/MikuchanRemote/Human-Pygmalion'
 USD = '/home/syaro/pyg_fea/usd/pygmalion_v4_printed_loop.usd'
 MJCF = (f'{REPO}/mujoco-sim/mjlab/src/mjlab/asset_zoo/robots/pygmalion/xmls/'
         'pygmalion_v4_printed_loop.xml')
-RES = '/home/syaro/pyg_fea/work/author_loop_usd.json'
+# PYG_LOOP_RES lets a second model (v3 vs v4) keep its own record instead of
+# silently overwriting the first one's - the two loop USDs are built from
+# different URDFs and their anchor tables are not interchangeable.
+RES = os.environ.get('PYG_LOOP_RES', '/home/syaro/pyg_fea/work/author_loop_usd.json')
 VENV = '/home/syaro/isaacsim_venv'
 
 
