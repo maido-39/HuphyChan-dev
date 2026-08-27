@@ -149,7 +149,8 @@ def main():
     tot_al = sum(x['al_g'] for x in rows)
     tot_pla = sum(x['pla_g'] for x in rows)
     tot_cad = sum(x['cad_g'] for x in rows)
-    print(f"\n{'TOTAL':53s} {tot_al:9.2f} {tot_pla:9.2f} {tot_cad:9.2f}")
+    tot_vol = sum(x['vol'] for x in rows)
+    print(f"{'':22s} {'TOTAL':30s} {tot_vol:8.2f} {tot_al:9.2f} {tot_pla:9.2f} {tot_cad:9.2f}")
     print(f'CAD 현재값이 PLA 기준보다 {tot_cad - tot_pla:+.1f} g 무겁습니다.')
 
 
