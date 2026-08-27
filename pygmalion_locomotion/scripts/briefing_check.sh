@@ -66,9 +66,13 @@ except Exception:
     print('')
 PY
 )
-if echo "$cur" | grep -qiE '학습|training|런|run'; then
-  if ! pgrep -f "train_wandb_video|run_training" >/dev/null 2>&1; then
-    msg+="  - '지금 하고 있는 일'은 학습을 가리키는데 학습 프로세스가 없습니다 → now 갱신\n"
+# Fire only when the title claims training is RUNNING and neither a trainer nor any other
+# measurement/eval process exists. The first version matched the bare word "학습", which
+# flagged "학습 완료, 채점 중" while the evaluator was busily running - a false positive
+# from our own heuristic, twice in one evening.
+if echo "$cur" | grep -qiE '학습 중|학습중|training|본런|스모크 실행'; then
+  if ! pgrep -f "train_wandb_video|run_training|run_v2_scratch" >/dev/null 2>&1; then
+    msg+="  - '지금 하고 있는 일'은 진행 중인 학습을 가리키는데 학습 프로세스가 없습니다 → now 갱신\n"
   fi
 fi
 
