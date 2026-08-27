@@ -1,8 +1,8 @@
 {
  "now": {
-  "title": "어깨 출력물 조사표 완료, Fusion 연결 복구 대기",
-  "detail": "숫자는 다 채웠고 사진만 비어 있습니다. 저울 측정은 지금 바로 시작하실 수 있습니다.",
-  "since": "2026-08-27 15:25"
+  "title": "로봇 모델 USD 변환 준비",
+  "detail": "설치는 끝났습니다. 다음은 같은 로봇을 두 시뮬레이터에 올려 같은 동작을 시키고, 관절에 걸리는 힘이 일치하는지 보는 것입니다.",
+  "since": "2026-08-27 17:11"
  },
  "items": {
   "v4model": {
@@ -49,14 +49,6 @@
     "/home/syaro/MikuchanRemote/Human-Pygmalion/docs/mujoco/assets/v4demo_loadviz_excerpt.mp4"
    ],
    "section": "done",
-   "changed": "2026-08-27 15:09"
-  },
-  "isaacsim": {
-   "id": "isaacsim",
-   "created": "2026-08-27 15:09",
-   "title": "다른 시뮬레이터(IsaacSim)로 교차 검증",
-   "needs": "디스크 공간 결정. 설치에 약 16 GB가 필요한데 남은 공간이 17 GB뿐입니다. 사용자의 AI 모델 캐시가 82 GB를 쓰고 있는데, 제 것이 아니라 지울지 여부는 확인이 필요합니다. 라이선스 동의는 받았습니다.",
-   "section": "blocked",
    "changed": "2026-08-27 15:09"
   },
   "shouldermesh": {
@@ -122,6 +114,24 @@
    "needs": "부품 사진을 뽑으려면 Fusion에서 형상을 받아와야 하는데, 스크립트 실행 통로가 고장났습니다(빈 스크립트도 같은 오류). 통신 자체는 정상이라 Fusion 쪽 애드인 재시작이 필요합니다. 복구되면 조사표의 사진 칸이 자동으로 채워집니다.",
    "section": "blocked",
    "changed": "2026-08-27 15:25"
+  },
+  "isaacinstall": {
+   "id": "isaacinstall",
+   "created": "2026-08-27 17:11",
+   "title": "IsaacSim 설치 완료",
+   "why": "지금까지 결과는 전부 시뮬레이터 한 종류에서 나왔습니다. 하드웨어 설계 근거로 쓰려면 다른 엔진에서도 같은 힘이 나오는지 확인해야 합니다.",
+   "finding": "설치하고 실제로 실행되는 것까지 확인했습니다. 물리 장면 생성도 됩니다. 처음 실행은 5분 걸렸지만 이후에는 7초입니다.",
+   "number": "16 GB 설치, 디스크 69 GB 남음",
+   "section": "done",
+   "changed": "2026-08-27 17:11"
+  },
+  "usdconv": {
+   "id": "usdconv",
+   "created": "2026-08-27 17:11",
+   "title": "로봇 모델을 IsaacSim 형식으로 변환",
+   "why": "두 시뮬레이터가 같은 로봇을 써야 결과를 비교할 수 있습니다. 지금 모델을 IsaacSim이 읽는 형식(USD)으로 바꾸는 단계입니다.",
+   "section": "next",
+   "changed": "2026-08-27 17:11"
   }
  },
  "order": [
@@ -129,14 +139,15 @@
   "romsweep",
   "e1",
   "v4train",
-  "isaacsim",
   "shouldermesh",
   "v2train",
   "signconv",
   "bwnorm",
   "briefingsys",
   "shouldersurvey",
-  "fusionconn"
+  "fusionconn",
+  "isaacinstall",
+  "usdconv"
  ],
- "updated": "2026-08-27 15:25"
+ "updated": "2026-08-27 17:11"
 }
