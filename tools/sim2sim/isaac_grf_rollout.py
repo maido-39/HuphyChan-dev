@@ -565,6 +565,10 @@ try:
     Fzbuf = []         # [T_phys, 2] vertical component, N
     devbuf = []        # net vs ground-filtered max abs deviation, N
     log = {'t': [], 'base_z': [], 'vx_b': [], 'fell': False}
+    LOG_QPOS = os.environ.get('PYG_LOG_QPOS', '0') == '1'   # side-by-side video dump
+    log['qpos'] = []       # [T, 12] leg joints, mjlab/policy order (pol_names)
+    log['base_pos'] = []   # [T, 3]
+    log['base_quat'] = []  # [T, 4] wxyz
     for k in range(steps):
         pos, quat = art.get_world_poses()
         quat = np.asarray(quat).flatten()
@@ -609,6 +613,11 @@ try:
         log['t'].append(round(k * dt_ctrl, 3))
         log['base_z'].append(round(float(pos[2]), 4))
         log['vx_b'].append(round(float(vb[0]), 4))
+        if LOG_QPOS:
+            q_all_post = np.asarray(art.get_joint_positions()).flatten()
+            log['qpos'].append(q_all_post[pol2isaac].astype(np.float32).copy())
+            log['base_pos'].append(pos.astype(np.float32).copy())
+            log['base_quat'].append(np.asarray(pos_q[1]).flatten().astype(np.float32).copy())
         if pos[2] < 0.45:
             log['fell'] = True
             break
@@ -676,10 +685,17 @@ try:
     except Exception as e:
         res['mujoco_error'] = f'{type(e).__name__}: {e}'
 
+    _extra = {}
+    if LOG_QPOS and log['qpos']:
+        _extra = dict(qpos=np.array(log['qpos'], np.float32),
+                      base_pos=np.array(log['base_pos'], np.float32),
+                      base_quat=np.array(log['base_quat'], np.float32),
+                      pol_names=np.array(pol_names),
+                      arm_abd_deg=np.float32(ARM_ABD))
     np.savez_compressed(TRACE, F_BW=F.astype(np.float32), Fz_BW=Fz.astype(np.float32),
                         dt=dt_phys, BW_N=BW, warm_s=WARM, feet=np.array(FEET),
                         t_ctrl=np.array(log['t']), base_z=np.array(log['base_z']),
-                        vx_b=np.array(log['vx_b']))
+                        vx_b=np.array(log['vx_b']), **_extra)
     res['ok'] = True
     res['trace_npz'] = TRACE
     json.dump(res, open(RES, 'w'), indent=1)
