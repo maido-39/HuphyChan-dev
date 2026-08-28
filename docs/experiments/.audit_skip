@@ -1,18 +1,8 @@
-gpu_
-flat_teacher
-flat_curric
-_test
-_configtest
-_cfgtest
-vidtest
-# superseded (broken-gait + no-video; re-run after gait fix 2026-06-22):
 2026-06-21_22-30-15_sweep_g1p0
 2026-06-21_23-01-44_sweep_g1p5
 2026-06-21_23-38-32_sweep_g2p0
 2026-06-22_00-07-58_sweep_g2p5
-# INVALID config-bug run (G1Vanilla inherited BipedRoughEnvCfg = ROUGH terrain; should be FLAT; killed iter750, superseded by g1van_flat 2026-06-22):
 2026-06-22_17-28-08_g1vanilla
-# A/B negative result (OUR gaitfix reward under G1 conditions = DOESN'T walk, error_vel 0.90; killed iter612; finding captured in g1van_full report + chat 2026-06-22):
 2026-06-22_20-02-38_ours_g1cond
 2026-07-08_13-33-33_bent_kd6
 2026-07-09_11-45-26_rough_warmstart_p2final
@@ -21,3 +11,16 @@ vidtest
 2026-07-10_16-52-10_flat25_p2_vid
 2026-07-11_15-52-17_flat25b_prog_p2
 2026-07-13_02-45-30_gen2_rough_p1
+# A/B negative result (OUR gaitfix reward under G1 conditions = DOESN'T walk, error_vel 0.90; killed iter612; finding captured in g1van_full report + chat 2026-06-22):
+_cfgtest
+_configtest
+flat_curric
+flat_teacher
+gpu_
+# INVALID config-bug run (G1Vanilla inherited BipedRoughEnvCfg = ROUGH terrain; should be FLAT; killed iter750, superseded by g1van_flat 2026-06-22):
+# superseded (broken-gait + no-video; re-run after gait fix 2026-06-22):
+_test
+v2s1_p1
+v2s1_p2
+vidtest
+# v2s1_p1/p2 = 2단계 단일 런, 통합노트 2026-08-28_v2s1_AB.md 가 커버 (측정 후 §2 채움)
