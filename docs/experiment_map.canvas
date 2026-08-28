@@ -829,6 +829,16 @@
    "width": 420,
    "height": 320,
    "color": "6"
+  },
+  {
+   "id": "n_ankleaudit",
+   "type": "file",
+   "file": "experiments/2026-08-28_ab_ankle_usage_audit.md",
+   "x": 16500,
+   "y": 1100,
+   "width": 420,
+   "height": 260,
+   "color": "4"
   }
  ],
  "edges": [
@@ -1562,6 +1572,14 @@
    "toNode": "n_v2s1",
    "toSide": "left",
    "label": "저속 기각 반영"
+  },
+  {
+   "id": "e_n_rp_transfer_n_ankleaudit",
+   "fromNode": "n_rp_transfer",
+   "fromSide": "right",
+   "toNode": "n_ankleaudit",
+   "toSide": "left",
+   "label": "발목 사용 감사"
   }
  ]
 }
