@@ -21,7 +21,10 @@
 #       PER INVOCATION, max_parallel_envs=8  -- a 32-parallel run swapped this
 #       box once; the per-scenario RSS bound is max_parallel_envs, kept at 8.
 #   (d) analysis/actuator_eval.py on the fc tag  -- §7 motor utilisation
-#       (RMS/P99/peak vs RobStride rated/peak, TN-envelope saturation %).
+#       (RMS/P99/peak vs RobStride rated/peak, TN-envelope saturation %). It
+#       auto-detects the AB loop model from the npz and sizes the ankle MOTORS
+#       as the two RS03 CRANKS (the direct-ankle tau is ~0 by construction),
+#       and also prints the amplified ankle-axis equivalent for interpretation.
 #
 # The env toggles below are v2s1's EXACT training flags. load_env_cfg reads them
 # and PYG_INIT_BENT/INIT_MID/ANKLE_MODE/MODEL_V4 change the default pose and the
