@@ -25,6 +25,13 @@
 #       auto-detects the AB loop model from the npz and sizes the ankle MOTORS
 #       as the two RS03 CRANKS (the direct-ankle tau is ~0 by construction),
 #       and also prints the amplified ankle-axis equivalent for interpretation.
+#   (e) invariant_gate.py on the fc + fcp npz  -- the red-team #2 reward-hack /
+#       degenerate-gait detector (docs/research_raw/2026-08-28_redteam_load_study).
+#       Four physical invariants (vertical-impulse balance, CoP/support polygon,
+#       friction cone, torque-vs-TN envelope); prints a PASS/FLAG table with the
+#       numeric margin on each. NON-FATAL (reports loudly, never aborts the
+#       measurement) but exits non-zero on a hard violation so a mis-stated load
+#       is caught before the numbers are trusted. AB-aware (sizes the RS03 cranks).
 #
 # The env toggles below are v2s1's EXACT training flags. load_env_cfg reads them
 # and PYG_INIT_BENT/INIT_MID/ANKLE_MODE/MODEL_V4 change the default pose and the
@@ -51,7 +58,7 @@ PY="$MJ/.venv/bin/python3"
 LOCK=/home/syaro/pyg_fea/locks/gpu.lock
 WORK=/home/syaro/pyg_fea/work
 TAG=v2s1
-STAGES=${STAGES:-"a b c d"}
+STAGES=${STAGES:-"a b c d e"}
 cd "$MJ" || { echo "!! cannot cd $MJ"; exit 1; }
 
 DRY=0
@@ -209,6 +216,12 @@ if [ "$DRY" -eq 1 ]; then
   echo "# (d) actuator_eval.py  §7 motor utilisation on the fc tag:"
   echo "  cd analysis && $PY actuator_eval.py --tags ${TAG}_fc --labels flat"
   echo
+  echo "# (e) invariant_gate.py  red-team #2 4-invariant gate (fc + fcp), non-fatal:"
+  for tg in "${TAG}_fc" "${TAG}_fcp"; do
+    echo "  CUDA_VISIBLE_DEVICES=\"\" $PY ../../tools/robot_model/loop_tests/invariant_gate.py \\"
+    echo "      analysis/out/${tg}.npz -v --json $WORK/invariant_gate_${tg}.json"
+  done
+  echo
   echo "==== end dry run ===="
   exit 0
 fi
@@ -306,6 +319,37 @@ if run_stage d; then
   else
     echo "   !! analysis/out/${TAG}_fc.npz missing -- run stage (a) first"
   fi
+fi
+
+# ---- (e) invariant-violation gate (red-team #2) on fc + fcp ----------------
+# NON-FATAL reward-hack / degenerate-gait detector: 4 physical invariants on the
+# measured rollout. Reports PASS/FLAG loudly (and a non-zero rc per npz) but never
+# aborts the measurement -- a FLAG means "inspect these loads before trusting",
+# not "the measurement failed".
+if run_stage e; then
+  echo "== (e) invariant gate (red-team #2)  $(date +%H:%M:%S)"
+  GATE="../../tools/robot_model/loop_tests/invariant_gate.py"
+  for tg in "${TAG}_fc" "${TAG}_fcp"; do
+    if [ -f "analysis/out/${tg}.npz" ]; then
+      echo "-- gate ${tg}"
+      CUDA_VISIBLE_DEVICES="" nice -n 10 "$PY" "$GATE" \
+          "analysis/out/${tg}.npz" -v \
+          --json "$WORK/invariant_gate_${tg}.json"
+      grc=$?
+      if [ "$grc" -eq 0 ]; then
+        echo "   invariant gate PASS ${tg} (rc=0)"
+      elif [ "$grc" -eq 1 ]; then
+        echo "   !!! INVARIANT GATE FLAGGED ${tg} (rc=1) -- a hard invariant is"
+        echo "       violated; the measured loads may be mis-stated. Inspect the"
+        echo "       PASS/FLAG table above (+ $WORK/invariant_gate_${tg}.json) before"
+        echo "       trusting any design value from this npz."
+      else
+        echo "   !! invariant gate ERRORED ${tg} (rc=$grc) -- see output above"
+      fi
+    else
+      echo "   !! analysis/out/${tg}.npz missing -- run stage (a) first"
+    fi
+  done
 fi
 
 echo "== measure_v2s1 done  $(date +%H:%M:%S)"
