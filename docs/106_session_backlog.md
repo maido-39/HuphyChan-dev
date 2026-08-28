@@ -33,7 +33,8 @@
 |---|---|---|---|
 | C1 | V2 P1 완주 → P2(DR램프+entropy) 자동전이 감시 | B1 | 런처 자동, 게이트 종료 감시 |
 | C2 | V2 완주 → fc/fcp 측정 + §7 모터활용 + 정식 노트 | C1 | 하중 스터디 본론 |
-| C3 | 저속 수정 재설계(서브스텝 누적 하중률 항) | 리워드 연구노트 선행 | P1 deadband 기각(착지 경직) |
+| C3 | 저속 수정 재설계 = **peak substep force 항**(1순위) | ✅연구노트 완료 [[reward_research/2026-08-28_substep_landing_rate]] | P1 deadband 기각(착지 경직). history_length=decimation 배선 |
+| **C3★** | ★**전역 결함**: 발 접촉 리워드 **전부**(soft_landing·impact_velocity·loading_rate·knee_ext·contact_force_cap)가 50Hz `data.force` 읽음 = 에일리어싱. `feet_ground_cfg`에 `history_length=4` 배선하면 200Hz 노출 | 리워드 노트 완료 | 조사 발견. self_collision은 이미 4로 되어있음 = 발 센서만 누락 |
 | C4 | 측방/후진/저속 yaw 측정(전진 격자만 했음) | — | P1 미측정 축 |
 | C5 | AB 동적 GRF(정책+접촉) 잔여 비교 | 32/16 확정됨 | 교차엔진 완결 |
 
