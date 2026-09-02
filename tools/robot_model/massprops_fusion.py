@@ -47,16 +47,39 @@ import numpy as np
 
 FUS = os.environ.get('PYG_BODIES', '/home/syaro/pyg_fea/fusion/bodies.json')
 OUT = os.environ.get('PYG_MASSPROPS', '/home/syaro/pyg_fea/fusion/robot_massprops_fusion.json')
+CAD_SOURCE = os.environ.get('PYG_CAD_SOURCE', 'Fusion 360 live document via MCP')
 ANKLE_Z = -800.0                      # mm, CAD frame
 # Catalogue masses (RobStride user manuals 260713, "Mechanical characteristic"). The CAD
 # placeholders now carry these masses directly - tools/fusion/set_placeholder_density.py
 # rescaled their density - so this table is a cross-check rather than a correction, and it
 # asserts against the document. RS02 is 380 g in the manual; the 405 g that circulates is a
 # reseller figure.
-MOTOR_CAT = {'RS04': 1.42, 'RS03': 0.88, 'RS02': 0.380, 'RS00': 0.310}
+# RS03 and RS04 are deliberately the user's physical scale measurements, not catalogue
+# values or the older CAD placeholder masses. Keep the environment overrides only for
+# reproducible sensitivity comparisons; the nominal Sim2Real build uses these measurements.
+RS04_MEASURED_KG = float(os.environ.get('PYG_RS04_MASS_KG', '1.514'))
+RS03_MEASURED_KG = float(os.environ.get('PYG_RS03_MASS_KG', '0.9195'))
+MOTOR_CAT = {'RS04': RS04_MEASURED_KG, 'RS03': RS03_MEASURED_KG,
+             'RS02': 0.380, 'RS00': 0.310}
+MOTOR_MASS_SOURCE = {
+    'RS04': 'physical scale measurement supplied by user (1.514 kg)',
+    'RS03': 'physical scale measurement supplied by user (0.9195 kg; catalogue 0.880 kg)',
+    'RS02': 'RobStride catalogue', 'RS00': 'RobStride catalogue',
+}
+# Mean Well RSP-2000-48 datasheet/user-supplied specification (2026-09-01).  The live v30
+# CAD body is 1.677251 kg because its placeholder material is generic Steel.  Preserve the
+# measured CAD shape/COM and scale its complete origin inertia tensor with mass, exactly as
+# for the motor placeholders.  This is a specification correction, not domain randomisation.
+PSU_SPEC_KG = float(os.environ.get('PYG_PSU_MASS_KG', '1.95'))
 GROUP_BODY = {'CenterParts:1': 'pelvis', 'HipPitch2Roll:1': 'hip_pitch_link',
               'HipRoll2Yaw:1': 'hip_roll_link', 'HipYaw2Knee:1': 'thigh',
-              'Knee2Ankle:1': 'shin', 'Torso:1': 'torso', 'Neck:1': 'torso'}
+              'Knee2Ankle:1': 'shin', 'Torso:1': 'torso', 'Neck:1': 'torso',
+              # The physical E2Box IMU board (docs/105): present in the CAD under
+              # Joints_UnderBody:1/E2Box-IMU:1 but never classified before, so it silently
+              # fell through to None and carried neither mass nor mesh -- the user noticed
+              # it missing by comparing against the teammate's huphy_mjcf repo, which models
+              # it. It sits at the pelvis (imu_in_base site is defined at the pelvis frame).
+              'E2Box-IMU:1': 'pelvis'}
 UPPER_BODIES = ('torso', 'shoulder_pitch_link', 'arm')
 # PYG_ANKLE_LOOP=1: carry the 2-RSU ankle as the CLOSED mechanism. The two cranks and the
 # two push rods become rigid bodies of their own (crank = the printed crank + its cover,
@@ -64,6 +87,12 @@ UPPER_BODIES = ('torso', 'shoulder_pitch_link', 'arm')
 # lumped into the shin / split half-half between shin and foot.
 LOOP = bool(os.environ.get('PYG_ANKLE_LOOP'))
 LOOP_BODIES = ('crank_A', 'crank_B', 'rod_A', 'rod_B')
+MODEL_VARIANT = os.environ.get('PYG_MODEL_VARIANT', 'FullDoF')
+LEG_ONLY = MODEL_VARIANT.lower() in ('legonly', 'leg_only', 'leg')
+# User contract (2026-09-01): LegOnly ends at the waist flange, with no mesh or mass from
+# that flange upward.  The flange is a CenterParts body and the waist motor otherwise rides
+# the pelvis, so removing only the upper-body links would silently leave 1.612 kg behind.
+LEG_ONLY_CUT = ('::Baselink_toWaistYaw', 'Robstride RS04 - Waist_Yaw')
 MOTOR_BODY = {'Waist_Yaw': 'pelvis', 'Hip_R': 'pelvis', 'Hip_P': 'hip_pitch_link',
               'Hip_Y': 'hip_roll_link', 'Knee_P': 'thigh',
               'Ankle_A:3': 'shin', 'Ankle_A (1)': 'shin'}
@@ -118,6 +147,23 @@ def classify(path):
     grp = parts[2] if len(parts) > 2 else ''
     if grp.startswith('Hexagon') or grp.startswith('NoSim'):
         return None                                           # loose screws / non-sim marker
+    # ORDER MATTERS, same reason as the shoulder block below: these two bodies sit inside a
+    # GROUP_BODY component but are not part of what actually rotates with it, so the specific
+    # test must run before the wholesale component mapping swallows them.
+    #   HipPitchFlange   the Hip_P/Hip_R (RS04) motor's STATOR flange, under HipPitch2Roll:1
+    #                    (-> hip_pitch_link by GROUP_BODY) but bolted to the pelvis side of
+    #                    the hip_pitch joint, not the rotor side. HipPitch2Roll_A/B and
+    #                    HipPitchRotor are the actual rotating bracket and stay hip_pitch_link.
+    #                    User's viewer review, 2026-09-02: it visibly followed hip_pitch when
+    #                    it should have stayed with the pelvis.
+    #   HipYaw2Knee_outer  the Hip_Y (RS03) motor's stator housing, under HipYaw2Knee:1 (->
+    #                    thigh by GROUP_BODY) but bolted to hip_roll_link (the joint's
+    #                    parent), not the thigh it drives. HipYaw2Knee_Rotor is the actual
+    #                    rotor bracket and stays thigh. Same 2026-09-02 review.
+    if 'HipPitchFlange' in path:
+        return 'pelvis'
+    if 'HipYaw2Knee_outer' in path:
+        return 'hip_roll_link'
     if grp in GROUP_BODY:
         return GROUP_BODY[grp]
     if grp == 'Actuators-LegR:1':
@@ -134,19 +180,44 @@ def classify(path):
     if parts[1] == 'Joints_UpperBody:1':
         if 'ArmR_fullDoF' in path:
             return None                                       # suppressed alternative arm
-        # ORDER MATTERS. In the v22 rework Shoulder-Pitch2Roll was reparented UNDER
-        # ArmR_Dummy (/Arm_R:1/ArmR_Dummy:1/Shoulder-Pitch2Roll:1::...). With the ArmR_Dummy
-        # test first, 3.218 kg of shoulder bracketry migrates across the shoulder-roll joint
-        # into arm_link and shoulder_pitch_link is left as a naked 0.880 kg RS03. So the
-        # specific shoulder tests run BEFORE the catch-all arm test.
+        # ORDER MATTERS: the specific shoulder tests must run before the catch-all arm test
+        # (both 'ArmR_Dummy' and 'Shoulder-Pitch2Roll' appear together in every one of these
+        # paths, e.g. /Arm_R:1/ArmR_Dummy:1/Shoulder-Pitch2Roll:1::...).
         if 'Torso2ShoulderP' in path:
-            # New in v22, at the torso/shoulder interface. Deliberately dropped: the user
-            # said to ignore the torso rework, so it goes neither to torso nor to the arm.
-            # Recorded as a decision so it cannot be mistaken for the M2 kind of silent loss.
+            # New in v22, at the torso/shoulder interface: the bracket that carries the
+            # shoulder-pitch motor's stator on the torso (same non-rotating side as the
+            # Shoulder_Pitch motor itself, further down). Was deliberately dropped
+            # (2026-08-26) pending the user's call on the wider "torso rework" scope; the
+            # user's 2026-09-02 viewer review flagged it as missing, resolving that
+            # decision -- it goes to torso.
+            return 'torso'
+        # Shoulder_Stopper_P is a hard-stop that limits shoulder_pitch travel; a stop only
+        # works bolted to the non-rotating side of the joint it limits, so it rides the torso
+        # like the Shoulder_Pitch motor stator further down, not the bracket it stops.
+        # User's viewer review, 2026-09-02: it visibly followed shoulder_pitch when it
+        # should have stayed with the torso. Must run before the Shoulder-Pitch2Roll test
+        # below since its path is nested under that occurrence.
+        if 'Shoulder_Stopper_P' in path:
+            return 'torso'
+        # 2026-09-02 REVERSAL of the 2026-09-01 fix (docs/112 s1), confirmed wrong by the
+        # user on a second viewer review: Shoulder-Roll2Yaw-dummy is UNUSED -- the CAD
+        # occurrence name says "-dummy" for a reason, it is a placeholder shape, not the
+        # real geometry, and it must contribute neither mesh nor mass.
+        if 'Shoulder-Roll2Yaw' in path:
             return None
-        if ('Shoulder-Pitch2Roll' in path or 'Shoulder_Roll' in path
-                or 'Shoulder-Roll2Yaw' in path):
+        # Shoulder-Pitch2Roll is NOT one rigid block: it is itself the housing that carries
+        # the shoulder-roll motor's STATOR (ShoulderP2R, ShoulderR_holderA/B -- "holder" as
+        # in "holds the motor"), which stays with shoulder_pitch_link the same as the roll
+        # motor stator two tests below, PLUS the pieces downstream of the roll motor's rotor
+        # (Arm_ConnectorA/B/alpha/MIDConnect, the bearing cap) which do rotate with the arm.
+        # A third viewer review (2026-09-02) caught the first version of this fix treating
+        # the whole occurrence as one block and sending the holder/stator bracket to arm too.
+        if any(n in path for n in ('ShoulderR_holderA', 'ShoulderR_holderB', 'ShoulderP2R')):
             return 'shoulder_pitch_link'
+        if 'Shoulder-Pitch2Roll' in path:
+            return 'arm'
+        if 'Shoulder_Roll' in path:
+            return 'shoulder_pitch_link'                      # roll motor stator, pitch side
         if 'Shoulder_Pitch' in path:
             return 'torso'                                    # its stator rides the torso
         if '6810ZZ-Roll2Yaw' in path:
@@ -172,6 +243,8 @@ def collect(B):
     rods = []
     skipped = hidden_real = 0.0
     for path, rec in B.items():
+        if LEG_ONLY and any(token in path for token in LEG_ONLY_CUT):
+            continue
         if is_alternative(path):                              # alternative design branch
             skipped += rec['m']
             continue
@@ -184,10 +257,16 @@ def collect(B):
         fam = family(path)
         if fam:                                               # placeholder -> catalogue mass
             k = MOTOR_CAT[fam] / m
-            assert abs(k - 1.0) < 0.02, (
+            # RS03/RS04 placeholders still carry older nominal masses. Their measured
+            # replacements intentionally sit outside the normal 2 % placeholder sanity band.
+            tol = {'RS03': 0.06, 'RS04': 0.08}.get(fam, 0.02)
+            assert abs(k - 1.0) < tol, (
                 f'{path}: CAD says {m * 1000:.1f} g, catalogue {MOTOR_CAT[fam] * 1000:.0f} g - '
                 'run tools/fusion/set_placeholder_density.py --apply')
             m, I_o = MOTOR_CAT[fam], I_o * k
+        if 'PSU-RSP-2000-48' in path:
+            k = PSU_SPEC_KG / m
+            m, I_o = PSU_SPEC_KG, I_o * k
         item = dict(path=path, m=m, com=com, I_o=I_o, mat=rec.get('mat', ''))
         if who == 'ANKLE_SPLIT':
             if LOOP:
@@ -213,10 +292,24 @@ def collect(B):
             continue
         bodies[who].append(item)
         Mx = np.diag([-1.0, 1.0, 1.0])
-        if fam and any(k in path for k in MIRROR_TO_PELVIS) and who == 'pelvis':
+        # who == 'pelvis' collapses BOTH hips onto one shared, unmirrored body, but the CAD
+        # only has one physical leg -- anything routed to pelvis from that one-sided leg data
+        # (the Hip_R/Hip_P motor stators, and, since 2026-09-02, HipPitchFlange) represents
+        # only ONE side unless explicitly mirrored here. HipPitchFlange itself is not a motor
+        # (fam is None for it), so the MIRROR_TO_PELVIS/fam test alone missed it -- the
+        # 2026-09-02 fix moved it onto pelvis but left the right side's flange missing
+        # entirely (user's viewer review caught the gap as "R_hip_pitch motor mount bracket
+        # missing", which is exactly what an un-mirrored one-sided body looks like).
+        if who == 'pelvis' and ((fam and any(k in path for k in MIRROR_TO_PELVIS))
+                                or 'HipPitchFlange' in path):
             bodies['pelvis'].append(dict(item, path=path + ' (R mirror)', com=Mx @ com,
                                          I_o=Mx @ I_o @ Mx))
-        if who == 'torso' and 'Shoulder_Pitch' in path:
+        # Same one-sided-CAD-onto-a-shared-body gap as pelvis above, this time on torso:
+        # Shoulder_Pitch (the motor stator) already had this mirror; Torso2ShoulderP
+        # (2026-09-02, reinstated after being dropped) is single-arm CAD data exactly like
+        # HipPitchFlange was single-leg, and the user's re-review caught the same symptom --
+        # "the right side is also missing" -- for the same un-mirrored-onto-torso reason.
+        if who == 'torso' and ('Shoulder_Pitch' in path or 'Torso2ShoulderP' in path):
             bodies['torso'].append(dict(item, path=path + ' (mirror)', com=Mx @ com,
                                         I_o=Mx @ I_o @ Mx))
     for r in rods:                                            # half to each end
@@ -243,11 +336,17 @@ def aggregate(items, scale=None):
 def main():
     B = json.load(open(FUS))
     bodies, skipped, hidden_real = collect(B)
-    out = dict(source='Fusion 360 260819_HumanMesh_wUpper_OMAKASE v4 via MCP',
-               units='kg, mm, kg*mm^2', motor_masses=MOTOR_CAT, bodies={})
+    out = dict(source=CAD_SOURCE, units='kg, mm, kg*mm^2', motor_masses=MOTOR_CAT,
+               motor_mass_sources=MOTOR_MASS_SOURCE,
+               psu_spec_mass_kg=PSU_SPEC_KG, model_variant=MODEL_VARIANT,
+               leg_only_cut=list(LEG_ONLY_CUT) if LEG_ONLY else [], bodies={})
     tot = 0.0
     print(f"{'body':18s} {'mass':>8s}  {'COM (mm)':>28s}  principal I [kg mm2]")
-    for b, items in bodies.items():
+    lower_names = ('pelvis', 'hip_pitch_link', 'hip_roll_link', 'thigh', 'shin',
+                   'ankle_pitch_link', 'foot')
+    emit_names = lower_names + ((LOOP_BODIES if LOOP else ())) if LEG_ONLY else tuple(bodies)
+    for b in emit_names:
+        items = bodies[b]
         M, C, Ic = aggregate(items)
         w = np.linalg.eigvalsh(Ic)
         assert w.min() > 0, f'{b}: non-physical inertia {w}'
@@ -257,18 +356,28 @@ def main():
         tot += M
         print(f'{b:18s} {M:8.3f}  [{C[0]:8.1f}{C[1]:7.1f}{C[2]:8.1f}]  {w.round(0)}  ({len(items)} bodies)')
     out['ankle_loop'] = LOOP
-    leg = tot - sum(out['bodies'][b]['mass'] for b in ('pelvis',) + UPPER_BODIES)
-    arms = sum(out['bodies'][b]['mass'] for b in ('shoulder_pitch_link', 'arm'))
-    whole = out['bodies']['pelvis']['mass'] + out['bodies']['torso']['mass'] + 2 * leg + 2 * arms
+    # In loop mode crank/rod bodies are split out of shin/foot, but remain physical leg
+    # mass.  Omitting them here made whole_robot_kg smaller by 2 x 0.2167 kg even though
+    # the generated MJCF correctly contained the bodies.
+    leg_names = tuple(b for b in lower_names if b != 'pelvis') + (LOOP_BODIES if LOOP else ())
+    leg = sum(out['bodies'][b]['mass'] for b in leg_names)
+    arms = 0.0 if LEG_ONLY else sum(out['bodies'][b]['mass'] for b in ('shoulder_pitch_link', 'arm'))
+    whole = out['bodies']['pelvis']['mass'] + 2 * leg
+    if not LEG_ONLY:
+        whole += out['bodies']['torso']['mass'] + 2 * arms
     out['whole_robot_kg'] = float(whole)
     print(f"\nalternative branches excluded: {skipped:.3f} kg "
           f"(ArmR_fullDoF / Actuators-NotUse / Human_Solid REF)")
     n_hidden = sum(1 for p, r in B.items() if not r.get('live', True) and not is_alternative(p))
     print(f"hidden in the CAD view but counted (a light bulb is a view state): "
           f"{n_hidden} bodies, {hidden_real:.3f} kg")
-    print(f"one leg {leg:.3f} · one arm side {arms:.3f} · pelvis {out['bodies']['pelvis']['mass']:.3f}"
-          f" · torso {out['bodies']['torso']['mass']:.3f}")
-    print(f"WHOLE ROBOT {whole:.3f} kg  (pelvis + torso once, legs x2, arms x2)")
+    if LEG_ONLY:
+        print(f"one leg {leg:.3f} · pelvis below flange {out['bodies']['pelvis']['mass']:.3f}")
+        print(f"WHOLE ROBOT {whole:.3f} kg  (LegOnly: pelvis below flange + legs x2)")
+    else:
+        print(f"one leg {leg:.3f} · one arm side {arms:.3f} · pelvis {out['bodies']['pelvis']['mass']:.3f}"
+              f" · torso {out['bodies']['torso']['mass']:.3f}")
+        print(f"WHOLE ROBOT {whole:.3f} kg  (pelvis + torso once, legs x2, arms x2)")
     json.dump(out, open(OUT, 'w'), indent=1)
     print(f'-> {OUT}')
 
