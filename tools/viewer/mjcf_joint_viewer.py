@@ -131,6 +131,47 @@ def build_model(kind: str):
   return m, crank_actuators
 
 
+class ComMarkers:
+  """Per-body COM coordinate frame + a "name / mass" label, toggled by one GUI checkbox.
+  Reads d.xipos/d.ximat (world-frame inertial-frame position/orientation MuJoCo already
+  computes every mj_forward) so the markers track the live pose the same way the mesh
+  scene does -- no extra kinematics here. Skipped for body 0 (world) and any body with
+  zero mass (nothing meaningful to show; a couple of loop sub-bodies are like this)."""
+
+  def __init__(self, server: viser.ViserServer, m: mujoco.MjModel):
+    self.m = m
+    self.frames: dict[int, viser.FrameHandle] = {}
+    self.labels: dict[int, viser.LabelHandle] = {}
+    with server.gui.add_folder("COM / mass"):
+      self.toggle = server.gui.add_checkbox(
+        "show COM markers", initial_value=False,
+        hint="coordinate frame + mass label at each link's centre of mass")
+      self.toggle.on_update(lambda _: self._set_visible(self.toggle.value))
+      for b in range(1, m.nbody):
+        if m.body_mass[b] <= 0:
+          continue
+        name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b) or f"body{b}"
+        self.frames[b] = server.scene.add_frame(
+          f"/com_frame/{name}", axes_length=0.05, axes_radius=0.003, visible=False)
+        self.labels[b] = server.scene.add_label(
+          f"/com_label/{name}", f"{name}  {m.body_mass[b]:.3f} kg", visible=False)
+
+  def _set_visible(self, v: bool):
+    for h in (*self.frames.values(), *self.labels.values()):
+      h.visible = v
+
+  def update(self, d: mujoco.MjData):
+    if not self.toggle.value:
+      return
+    quat = np.empty(4)
+    for b, frame in self.frames.items():
+      pos = d.xipos[b]
+      mujoco.mju_mat2Quat(quat, d.ximat[b])
+      frame.position = pos
+      frame.wxyz = quat
+      self.labels[b].position = pos
+
+
 def run_generic(xml_path: str, host: str, port: int, label: str):
   """Generic joint viewer for an arbitrary flat-hinge MJCF (no closed loop / crank
   handling) -- e.g. a teammate's model that isn't part of this repo's build pipeline.
@@ -165,6 +206,7 @@ def run_generic(xml_path: str, host: str, port: int, label: str):
   mujoco.mj_forward(m, d)
   server = viser.ViserServer(host=host, port=port, label=label)
   scene = ViserMujocoScene(server, m, num_envs=1)
+  com = ComMarkers(server, m)
 
   readout_handles = {}
 
@@ -190,6 +232,7 @@ def run_generic(xml_path: str, host: str, port: int, label: str):
     mujoco.mj_forward(m, d)
     refresh_readouts()
     scene.update_from_mjdata(d)
+    com.update(d)
 
   for group_name, joints in groups.items():
     with server.gui.add_folder(group_name):
@@ -213,10 +256,12 @@ def run_generic(xml_path: str, host: str, port: int, label: str):
       mujoco.mj_forward(m, d)
       refresh_readouts()
       scene.update_from_mjdata(d)
+      com.update(d)
     server.gui.add_button("Zero all joints").on_click(reset_all)
 
   refresh_readouts()
   scene.update_from_mjdata(d)
+  com.update(d)
   print(f"[mjcf_joint_viewer] xml={xml_path}")
   print(f"[mjcf_joint_viewer] serving on http://{host}:{port}")
   while True:
@@ -276,6 +321,7 @@ def main():
   server = viser.ViserServer(host=args.host, port=args.port,
                               label=f"Pygmalion FullDoF joint viewer [{args.model}]")
   scene = ViserMujocoScene(server, m, num_envs=1)
+  com = ComMarkers(server, m)
 
   def settle_loop():
     """Ramp all 4 crank servo targets to `target` over half the burst, hold for the
@@ -303,6 +349,7 @@ def main():
       mujoco.mj_forward(m, d)
     refresh_readouts()
     scene.update_from_mjdata(d)
+    com.update(d)
 
   readout_handles = {}
 
@@ -368,10 +415,12 @@ def main():
       mujoco.mj_forward(m, d)
       refresh_readouts()
       scene.update_from_mjdata(d)
+      com.update(d)
     server.gui.add_button("Zero all joints").on_click(reset_all)
 
   refresh_readouts()
   scene.update_from_mjdata(d)
+  com.update(d)
 
   print(f"[mjcf_joint_viewer] model={args.model} ({MODELS[args.model]})")
   print(f"[mjcf_joint_viewer] serving on http://{args.host}:{args.port}  "
