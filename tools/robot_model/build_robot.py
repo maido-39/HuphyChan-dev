@@ -487,6 +487,23 @@ def box_geom(name, lo, hi, cls='collision', shrink=0.0):
             f'pos="{c[0]:.4f} {c[1]:.4f} {c[2]:.4f}" size="{h[0]:.4f} {h[1]:.4f} {h[2]:.4f}"/>')
 
 
+FOOT_SOLE_SEGMENTS = 3   # toe / mid / heel, along the foot's long (fore-aft, sim X) axis
+
+
+def foot_sole_boxes(name_prefix, lo, hi, n=FOOT_SOLE_SEGMENTS):
+    """N box_geoms tiling the foot's full bounding volume along X (fore-aft), keeping the
+    same total Y/Z coverage a single box had. Several small pads under a sole give MuJoCo
+    real multi-point ground contact (roll/tip about a toe or heel edge) instead of one slab
+    that behaves like a rigid skate; still one geom per segment, no per-corner primitives."""
+    xs = np.linspace(lo[0], hi[0], n + 1)
+    out = []
+    for i in range(n):
+        seg_lo = np.array([xs[i], lo[1], lo[2]])
+        seg_hi = np.array([xs[i + 1], hi[1], hi[2]])
+        out.append(box_geom(f'{name_prefix}{i + 1}_collision', seg_lo, seg_hi, cls='foot_box'))
+    return out
+
+
 def body_inertial(b, mp):
     """(com_sim m, I_sim kg m2 about COM) of a massprops body, in its link frame."""
     d = mp['bodies'][b]
@@ -711,9 +728,12 @@ def main():
     X.append('  </asset>\n  <worldbody>\n    <body name="base_link" childclass="pygmalion">\n      <freejoint name="root"/>\n')
     X.append(f'      <inertial pos="{c_b[0]:.6g} {c_b[1]:.6g} {c_b[2]:.6g}" mass="{m_b:.5g}" fullinertia="{fullinertia(I_b)}"/>\n')
     X.append('      <geom mesh="pelvis" class="visual"/>\n      <geom name="pelvis_hull" mesh="pelvis_hull" class="hull"/>\n')
-    for g in motor_geoms(mp, 'pelvis', 'L', omit_waist=leg_only):
+    # waist-yaw motor stays visible even in LegOnly (2026-09-02): it is real pelvis-mounted
+    # mass on the actual hardware regardless of what, if anything, is bolted above it -- see
+    # massprops_fusion.LEG_ONLY_CUT for the mass-side half of this same decision.
+    for g in motor_geoms(mp, 'pelvis', 'L'):
         X.append('      ' + g + '\n')
-    for g in motor_geoms(mp, 'pelvis', 'R', omit_waist=leg_only):
+    for g in motor_geoms(mp, 'pelvis', 'R'):
         X.append('      ' + g + '\n')
 
     if not articulated and not leg_only:
@@ -772,9 +792,12 @@ def main():
                 X.append(f'{ind}  ' + fitted_capsule(f'{s}_{BNAME[b]}_collision', stl) + '\n')
             if b == 'foot':
                 lo_f, hi_f = mesh_bounds(pre + ('foot_noloop' if loop else 'foot'))
-                # the sole box: full plate footprint, from the sole up to the ankle-cross
-                # housing; name keeps the foot[1-7] pattern the task's contact config uses
-                X.append(f'{ind}  ' + box_geom(f'{s}_foot1_collision', lo_f, hi_f, cls='foot_box') + '\n')
+                # the sole: FOOT_SOLE_SEGMENTS boxes tiling the same footprint/height a
+                # single foot1_collision box had (2026-09-03, replaces the one-box sole) --
+                # multi-point ground contact instead of one rigid slab. Names keep the
+                # foot[1-7] pattern the task's contact config expects.
+                for g in foot_sole_boxes(f'{s}_foot', lo_f, hi_f):
+                    X.append(f'{ind}  ' + g + '\n')
                 X.append(f'{ind}  <site name="{"left" if s == "L" else "right"}_foot" pos="{(lo_f[0]+hi_f[0])/2:.3f} 0 {lo_f[2]:.3f}" size="0.01"/>\n')
                 if loop:
                     for g in foot_ball_sites(s, sign):

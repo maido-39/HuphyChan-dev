@@ -89,10 +89,16 @@ LOOP = bool(os.environ.get('PYG_ANKLE_LOOP'))
 LOOP_BODIES = ('crank_A', 'crank_B', 'rod_A', 'rod_B')
 MODEL_VARIANT = os.environ.get('PYG_MODEL_VARIANT', 'FullDoF')
 LEG_ONLY = MODEL_VARIANT.lower() in ('legonly', 'leg_only', 'leg')
-# User contract (2026-09-01): LegOnly ends at the waist flange, with no mesh or mass from
-# that flange upward.  The flange is a CenterParts body and the waist motor otherwise rides
-# the pelvis, so removing only the upper-body links would silently leave 1.612 kg behind.
-LEG_ONLY_CUT = ('::Baselink_toWaistYaw', 'Robstride RS04 - Waist_Yaw')
+# User contract, revised 2026-09-02: LegOnly ends at the waist flange PLATE, with no mesh
+# or mass from that plate upward -- but the RS04 waist-yaw motor itself stays. On the real
+# hardware it is bolted into the pelvis regardless of whether anything is mounted above it,
+# and LegOnly keeps that actuator's mass even though the model gives it no joint (no torso
+# body is ever built when LEG_ONLY is set, so there is nothing for a waist_yaw DOF to
+# drive -- the motor is inert extra pelvis mass, not a moving joint). Only the flange
+# (Baselink_toWaistYaw, a CenterParts body) and anything genuinely above it are cut.
+# 2026-09-01 originally cut the motor too, based on treating the whole waist-yaw assembly
+# as "everything above the flange"; the user's 2026-09-02 clarification narrowed that.
+LEG_ONLY_CUT = ('::Baselink_toWaistYaw',)
 MOTOR_BODY = {'Waist_Yaw': 'pelvis', 'Hip_R': 'pelvis', 'Hip_P': 'hip_pitch_link',
               'Hip_Y': 'hip_roll_link', 'Knee_P': 'thigh',
               'Ankle_A:3': 'shin', 'Ankle_A (1)': 'shin'}

@@ -157,9 +157,12 @@ def main() -> None:
                "unclassified": 0, "leg_only_cut": 0}
     for occ_path, idx, body_name, mass, volume, com_cm, material, live in listing["rows"]:
         key = occ_path + "::" + body_name
+        # 2026-09-02: the waist-yaw motor itself is no longer cut here (massprops_fusion.
+        # LEG_ONLY_CUT has the authoritative reasoning) -- moot for meshes specifically
+        # since motors are never meshed regardless (the `family()` test below always skips
+        # "Robstride" bodies), but kept in sync so this condition documents the same policy.
         if args.leg_only and (occ_path.startswith("/Joints_UpperBody")
-                              or "::Baselink_toWaistYaw" in key
-                              or "Robstride RS04 - Waist_Yaw" in key):
+                              or "::Baselink_toWaistYaw" in key):
             skipped["leg_only_cut"] += 1
             continue
         if MP.is_alternative(key):
