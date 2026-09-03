@@ -68,7 +68,7 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
 
 ## 9. 진행 로그 (코더가 phase 완료마다 추가 — 시각·결과 숫자·커밋·문제)
 - 09-03 21:15 — 계획 승인, P0/P1 구현 착수(코더). 이 문서 생성.
-- 09-03 22:20 — **P0+P1 완료**. 6변형 bake, SimCore 200/50 Hz, viser 패널, FastAPI, pytest 98개 통과. 상세는 아래.
+- 09-03 22:20 — **P0+P1 완료**. 6변형 bake, SimCore 200/50 Hz, viser 패널, FastAPI, pytest 98개 통과. 커밋 `70eb5aa`(본체·3,710줄) + `c6aef14`(`-m tools.pygviewer` 진입점). 가동 중: viser `http://192.168.20.177:8094`, API `http://192.168.20.177:8095/docs`, 로그 `tools/pygviewer/logs/pygviewer.log`. 상세는 아래.
 
 ### P0/P1 결과 (2026-09-03, 코더)
 
