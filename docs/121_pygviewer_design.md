@@ -9,7 +9,7 @@
 | # | 요구 | 구현 | Phase |
 |---|---|---|---|
 | 1 | 모델 3종×2분파(RP/AB) | bake로 6변형 `.mjb`+계약 JSON, UI 드롭다운 | P0 |
-| 2 | base_link 고정(완전/회전자유, 위치 지정) | mocap 앵커 + `eq weld`(fixed) / `eq connect`(pivot, 사용자 오프셋 점) 런타임 토글, 높이 슬라이더, 지면 on/off | P1 |
+| 2 | base_link 고정(완전/회전자유, 위치 지정) | mocap 앵커 + `eq weld`(fixed) / `eq connect`(pivot, 사용자 오프셋 점) 런타임 토글, 높이 슬라이더, 지면 on/off. **09-04 추가: `string`(안전 테더)** — spatial tendon LIMITED [0,L0], z_set 아래서만 팽팽(단방향 캐치, 마운트 아님), 수평 항상 자유 | P1 (+string P1+, 09-04) |
 | 3 | 중력 유지 | `m.opt.gravity` 불변(코드로 보장) | P0 |
 | 4 | 관절 raw 모니터링 | Snapshot(q·qd·τ·target) 30 Hz 리드아웃 + 미러축 관절은 물리각 병기 | P1 |
 | 5 | 관절 목표 q 입력 UI/API | 슬라이더+숫자 양방향, `POST /target`; AB는 발목공간 슬라이더(역해 그리드) + 크랭크 | P1 |
@@ -57,6 +57,7 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
 | P3 | 스키마·WS/REST·HUPHY UDP 어댑터·더미·레코더 | `test_schema` · 더미 sine→real_replay · WS 50 Hz · 10 s 기록 RSS 불증 | ✅ 09-04 (161 tests, WS 49.4 msg/s, RSS +0.3 MB/10s) |
 | P4 | 스크립트 플레이어·compare·obs mux·섀도우 | 지연 주입 더미 오버레이 png · 더미 IMU가 액션 변화 | ✅ 09-04 (offset 32.0ms vs 30ms 주입, Δaction 평균 0.270 rad, pytest 198) |
 | 등록 | dashboard PORTS·start_all·README·launch.json·브리핑 | — | ✅ 22:20 (8094/8095) |
+| P1+ string | 안전 테더 base 모드(사용자 요청 09-04 01:20) | 낙하 캐치(z_set±0.02, 장력≈무게 231.8N±10%) · 기립중 슬랙(0N)→PD넘어짐 시 taut 전환·z≥z_set-0.02 유지 · 모드 왕복 NaN 無 · 6변형 계약에 tendon id | ✅ 09-04 (아래 §9, pytest 210) |
 
 ## 7. 재사용 소스
 `tools/sim2sim/mujoco_ab_loop_drift.py`(PD/T-N/obs) · `tools/sim2sim/dump_contract_ab.py`(계약) · `tools/viewer/mjcf_joint_viewer.py`(viser·settle) ·
@@ -97,6 +98,16 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
 
 - 09-04 — **P4 항목6 완료 (실측 검증 수치)**. 라이브 2-프로세스 방식(스크립트를 실제 소켓으로 별도 SimCore에 더미송신)을 두 차례 시도했으나 셸/서브프로세스 기동 타이밍 스큐가 수백ms~수초 단위로 30ms 신호를 압도(같은 머신의 CLOCK_MONOTONIC은 프로세스간 공유되어 절대시간 가정 자체는 타당 — 문제는 순수 기동 타이밍 정밀도이지 알고리즘이 아님, 기록만 하고 채택 안 함). 대신 `record.Recorder`/`schema.JointState` 실제 코드 + `bridge/dummy_tx.py`의 실제 `ScriptSource`+지연/지터 모델을 직접 사용(재구현 아님)해 sim 기록·real 기록을 생성 → `compare.py` 실행: **`step_knee_5x10deg.json`**(급경사 에지)로 주입 30ms/5ms지터 → 추정 **offset=32.0ms**(지터std 1.41ms, 주입 지터 이내) — `docs/img/compare_p4item6_step_dummy30ms_L_knee.png`. `sine_hips_knees_1hz_20deg.json`은 스크립트 자체 원본샘플이 50Hz(20ms) 격자라 30ms지연 분해능이 낮아 offset~8ms만 나옴(오버레이 시각화용으로만 유지, ms정밀 주장은 스텝스크립트 결과에 근거) — `docs/img/compare_p4item6_dummy30ms_{L,R}_{hip_pitch,knee}.png` 4장. `compare.py`에 `--offset-dt`(기본 5ms, 기존 10ms 기본값은 30ms 신호 분해에 조악) 추가 + 범례 경고 가드. **정책 섀도우 IMU tilt**: 10° 기울임 더미 IMU를 `base_ang_vel`/`projected_gravity`에 real로 라우팅 → 동일 sim상태·명령에서 baseline 대비 **평균|Δaction|=0.270 rad(raw action), 최대 0.912 rad** — 명백히 유의미(회귀테스트로 0.02rad 초과 고정, `test_policy_shadow.py` +1건). `protocol.py` 자동 4단계 여전히 PASS(항목5와 동일). **pytest 198 passed**(항목5의 197에서 +1). **RSS**: headless 5s **147 MB**, 라이브 운영 뷰어 프로세스 **226 MB** — 둘 다 300MB 예산 이내. 커밋 `22088f1`.
 - 09-04 — **§6 표 갱신**: P4 행을 ✅로 표시(위 항목1~6 완료), 요구매핑표 §0 '+' 행도 완료로 갱신.
+
+- 09-04 02:20 — **base 모드 `string`(안전 테더) 완료** (사용자 요청 01:20: "위에서 가상의 끈이 잡고 있는 모드. z_set 아래로 내려가면 팽팽해져 받쳐주고, 그 위에서는 느슨해져 스스로 서 있어야 함"). 기존 free/fixed/pivot과 같은 계열, MuJoCo 표준 메커니즘(spatial tendon LIMIT)으로 구현 — 손수 힘 법칙을 쓰지 않음.
+  - **bake.py**: 6변형 모두에 `pyg_string_anchor` 사이트(기존 `pyg_anchor` mocap 바디 위) + `pyg_string_hook` 사이트(base_link 원점, 런타임에 `site_pos`로 이동 — `base_pivot`의 `eq_data` 오프셋 재작성과 같은 기법) + `pyg_string` 2-사이트 spatial tendon 신규. 텐던은 `limited=false`로 구워 비활성(weld/pivot의 `active=False`와 같은 관례), `range=[0,L0]`(L0=1.0m), `solref_limit=(0.02,1.0)`(weld/pivot의 (0.002,1.0)보다 10배 완만 — 급낙하 충격 흡수). 계약에 `string_rig{tendon_id,anchor_site_id,hook_site_id,L0,solref_limit}` 신규 필드, `CONTRACT_VERSION` 1→2(필수 필드 변경이므로).
+  - **sim_core.py**: `BASE_MODES`에 `"string"` 추가. `string` 모드에서 mocap 앵커의 world Z = `z_set + L0`(고정), (x,y)는 모드 진입 시점의 base (x,y)에 고정(기본, 실제 끈처럼 그네 운동 허용) 또는 `follow_xy=True`면 매틱 base (x,y) 추적(수직 레일, 그네 없음). `set_base(z_set=, hook_offset=, follow_xy=)` 신규 파라미터. 텐던 장력은 계산이 아니라 MuJoCo 솔버가 실제로 쓴 라그랑주 승수를 `d.efc_force`(제약타입 `mjCNSTR_LIMIT_TENDON`)에서 직접 읽음 — 슬랙일 땐 정확히 0.0(비활성 제약은 efc 행 자체가 없음). `Snapshot["string"] = {z_set,length,ten_length,taut,tension_N,hook_offset,follow_xy}`. mjviser는 텐던을 캡슐로 네이티브 렌더하므로(`tendon_width`/`tendon_rgba`) 커스텀 3D선 코드 없이 팽팽=빨강/슬랙=회색을 실시간 반영(`_string_status`가 매 publish마다 `tendon_rgba` 갱신), 다른 모드에서는 alpha=0으로 숨김.
+  - **api/schema/ui**: `BaseState.mode`/`BaseIn.mode`에 `"string"` 추가(스키마 변경 불가피 — 안 하면 `/status`가 pydantic ValidationError로 즉시 깨짐), `BaseIn`에 `z_set/hook_offset/follow_xy`, `Status.string` 필드. UI Base 폴더에 `string` 라디오, Z_set 슬라이더(0.3~1.2m), pivot/hook 오프셋 xyz 공용 필드, follow_xy 체크박스, "z_set/길이/taut·slack/장력N" 실시간 마크다운. `__main__.py`에 `--base string`/`--string-z-set`/`--string-follow-xy`. `record.py` 헤더·`compare.py`의 R9 조건경고에 `z_set` 포함.
+  - **물리 검증(격리 테스트, 로봇 없이)**: 23.63kg 점질량을 동일 텐던 리그로 낙하시켜 z_set=0.6에서 정착 오차 0(부동소수 잡음 수준), 장력 = 무게(231.8103N)를 6자리까지 정확히 재현 — 이 결과로 sim_core 배선을 신뢰하고 실모델로 확장.
+  - **실측(LegOnly-AB, tests/test_string_mode.py)**: (1) 지면 off, 0.9m에서 낙하, Z_set=0.6 → 정착 z **0.6±0.001m**(20샘플 std<0.01), 정지 후 평균 장력 **231.8N** 근방(허용 10%, 로봇 자중과 일치) — 매달림 확인. (2) 지면 on, 기립 자세, Z_set=기립높이−0.15m → 시작 시 **슬랙(0N, taut=False)** 확인, 정책 없이 PD만으로 넘어지기 시작 → 텐던이 taut로 전환된 이후 매 샘플 `base z ≥ z_set−0.02m` 유지 확인. (3) string→fixed→free→string 왕복에서 NaN 無, `eq_active`/`tendon_limited` 잔류 無. (4) `hook_offset`이 실제 `site_pos`를 이동시킴, `follow_xy`가 수평 오프셋에도 앵커를 base 위에 유지. 신규 6개 + `test_bake_contract.py` 확장(6변형 모두 `string_rig` 존재·id 상이) 6개 = **pytest 210 passed**(기존 198 + 12), 6변형 재bake 전부 성공(변형당 ~7-9s). 기존 LegOnly-AB baked policy 2개(model_700/model_5200)는 모델 재bake로 contract_sha가 바뀌어 재bake 필요했음(예상된 부작용, 즉시 재baked·재검증).
+  - **라이브 API 종단검증**: 별도 포트(18094/18095)에 재기동 → `POST /base {mode:string,z_set:0.6,ground:false}` → `GET /status`에서 `base.mode=string`, `string.taut=true`, `string.tension_N`(토폴된 자세라 순수 수직이 아니어서 166.8N — 각도 고려하면 정상) 확인 후 종료.
+  - **함정**: (a) `contract_sha`가 `bake_utc` 타임스탬프를 포함해 매 재bake마다 바뀜(기존 설계) → 재bake할 때마다 그 변형에 물린 정책도 다시 구워야 함, 처음에 1번 놓쳐서(스크래치 디렉터리 시험bake) 다시 정합. (b) MuJoCo 텐던 LIMIT은 단방향(로프)이라 range=[0,L]이 정확히 "그 이상 못 벌어짐"을 뜻함 — 스프링이 아니므로 슬랙 구간엔 힘이 전혀 없음, 설계 그대로.
+  - 6변형 재bake(캐시, git 비포함) 완료, 뷰어(8094/8095) 재기동 완료. 커밋 `12ca371`(코드+테스트), 이 문서/README/API.md 갱신은 뒤이은 커밋.
 
 ### P0/P1 결과 (2026-09-03, 코더)
 

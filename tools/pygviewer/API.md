@@ -34,13 +34,13 @@ sim and, separately, on the robot produces two recordings `compare.py` can align
 
 | method | path | body | returns |
 |---|---|---|---|
-| GET | `/status` | - | `Status`: variant, mode, sim time, rates (`phys_hz`, `ctrl_hz`, `drops`), base state, contract freshness, **`telemetry`** (P3: rx rate/age/seq-gaps/clock-offset/jitter/contract-mismatches/wrap-events/range-violations/bridge-errors/sign-sanity/replay-progress), warnings, RSS |
+| GET | `/status` | - | `Status`: variant, mode, sim time, rates (`phys_hz`, `ctrl_hz`, `drops`), base state, **`string`** (base mode `string` only: `{z_set, length, ten_length, taut, tension_N}`), contract freshness, **`telemetry`** (P3: rx rate/age/seq-gaps/clock-offset/jitter/contract-mismatches/wrap-events/range-violations/bridge-errors/sign-sanity/replay-progress), warnings, RSS |
 | GET | `/contract` | - | the whole baked model contract + its freshness verdict |
 | GET | `/snapshot` | - | the raw simulator snapshot: every joint's q/qd, actuated tau/target, base pose, IMU sensors, loop closure |
 | GET | `/joints` | - | one `JointState` (canonical actuated set) |
 | POST | `/target` | `{"values": {"L_knee_joint": 0.9}}` | `{ok, clamped_to}` - values are **clamped** to the contract's `safe_clip`, not rejected; the applied window is echoed |
 | POST | `/ankle` | `{"side": "L", "pitch": -0.30, "roll": 0.10}` | AB only: foot-space command, inverted to a crank pair. 409 on an RP variant |
-| POST | `/base` | `{"mode": "fixed", "pos": [0,0,1.05], "rpy": [0,0.1,0], "pivot_offset": [0,0,0.06], "ground": true}` | any subset; omitted fields keep their value |
+| POST | `/base` | `{"mode": "fixed", "pos": [0,0,1.05], "rpy": [0,0.1,0], "pivot_offset": [0,0,0.06], "ground": true}` or `{"mode": "string", "z_set": 0.6, "hook_offset": [0,0,0], "follow_xy": false}` | any subset; omitted fields keep their value. `string` is a safety tether: a tendon LIMIT holds the base no lower than `z_set` (slack above it), horizontal motion always free |
 | POST | `/reset` | `{"keyframe": "knees_bent"}` | restores joints **and** base pose |
 | POST | `/mode` | `{"mode": "manual"}` | `idle`/`manual`/`policy_sim`/`policy_shadow`/`real_replay`/`file_replay`, all six implemented (`policy_sim`/`policy_shadow` 409 without a loaded policy, `file_replay` 409 without a loaded recording) |
 | POST | `/policy/load` | `{"name": "<baked>"}` or `{"onnx": "...", "pt": null}` | loads a baked ONNX (default) or a direct `.pt` (slow, mjlab env build); 409 if `policy_contract.model_contract_sha` &ne; the loaded model's, or the default pose differs by > 1e-4 rad |
@@ -149,6 +149,7 @@ returns one shot; `WS /ws/out?types=PolicyIO` streams it while a policy is loade
 
 `{variant, mode, policy, sim_time_s, rates{phys_hz, ctrl_hz, drops, phys_steps},
 base{mode, pos, quat, rpy, cmd_pos, cmd_quat, pivot_offset, ground},
+string{z_set, length, ten_length, taut, tension_N} | null,
 contract_stale, contract_checks, telemetry, warnings[], rss_mb}`.
 
 ## Hardware bridge (P3, implemented)

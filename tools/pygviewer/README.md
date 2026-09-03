@@ -32,8 +32,9 @@ CUDA_VISIBLE_DEVICES="" mujoco-sim/mjlab/.venv/bin/python3 \
 ... tools/pygviewer/run.py --variant LegOnly-AB --headless --seconds 5
 ```
 
-Options: `--base free|fixed|pivot` (default `fixed` - nothing balances the robot in P1, so a
-free base topples in about 2 s), `--keyframe home|knees_bent`, `--stale-ok`,
+Options: `--base free|fixed|pivot|string` (default `fixed` - nothing balances the robot in P1,
+so a free base topples in about 2 s), `--string-z-set METERS` and `--string-follow-xy`
+(`--base string` only), `--keyframe home|knees_bent`, `--stale-ok`,
 `--no-api`, `--cache DIR`.  The process refuses to start if 8094 or 8095 is already taken.
 
 LAN: `http://192.168.20.177:8094` and `http://192.168.20.177:8095/docs`.
@@ -53,10 +54,13 @@ CUDA_VISIBLE_DEVICES="" mujoco-sim/mjlab/.venv/bin/python3 \
 Output goes to `/home/syaro/pyg_fea/pygviewer/cache/<variant>.mjb` +
 `<variant>.model_contract.json`.  Six variants: `{FullDoF,SemiFullDoF,LegOnly}-{AB,RP}`.
 
-The bake adds exactly three things to the scene spec and edits **no XML**:
+The bake adds these things to the scene spec and edits **no XML**:
 `pyg_anchor` (mocap body, no geom - a geom would change the total mass, which the bake
 asserts is unchanged), `base_weld` (equality/weld, inactive) and `base_pivot`
-(equality/connect, inactive).  It then asserts the compiled model matches the env on `nu`,
+(equality/connect, inactive) for `fixed`/`pivot`; and, for `string`, two sites
+(`pyg_string_anchor` on the anchor body, `pyg_string_hook` on `base_link`) plus the
+`pyg_string` spatial tendon between them, baked LIMITED=false (inert until `sim_core.py`
+turns it on for that one mode).  It then asserts the compiled model matches the env on `nu`,
 `nq/nv`, mass, keyframe qpos, actuator force range and gain, gravity, and the whole
 `opt` block (timestep, integrator, solver, iterations, cone, impratio).
 
@@ -79,20 +83,48 @@ PYG_ARM_ABD_DEG=15` plus the per-variant selector (AB: `PYG_ANKLE_MODE=AB` +
 
 ## Base fixing
 
-| mode | equality | what is held | what is free |
+| mode | constraint | what is held | what is free |
 |---|---|---|---|
 | `free` | none | - | everything (gravity only) |
-| `fixed` | `base_weld` | base position **and** orientation = the mocap anchor | joints |
-| `pivot` | `base_pivot` | the point `pivot_offset` (in the BASE frame) sits at the anchor | base orientation, joints |
+| `fixed` | `base_weld` (equality/weld) | base position **and** orientation = the mocap anchor | joints |
+| `pivot` | `base_pivot` (equality/connect) | the point `pivot_offset` (in the BASE frame) sits at the anchor | base orientation, joints |
+| `string` | `pyg_string` (spatial tendon, LIMITED) | base never sinks below `z_set` (a one-directional catch, not a mount) | orientation, horizontal position, and vertical position ABOVE `z_set` |
 
-Both equalities use `solref (0.002, 1)` / `solimp (0.9999, 0.99999, 1e-5)`.  With MuJoCo's
+`fixed`/`pivot` use `solref (0.002, 1)` / `solimp (0.9999, 0.99999, 1e-5)`.  With MuJoCo's
 default softness the 23 kg robot sags 3.7e-4 m off its "fixed" mount and keeps creeping
 1.9e-4 m per 2 s; with these numbers it is 2.4e-13 m of drift over 2 s.  Do not relax them.
+
+**`string`** is a real safety-harness tether, not a mount: a 2-site spatial tendon between
+the mocap anchor and a `pyg_string_hook` site on `base_link`, tendon-LIMITED to length
+`[0, L0]` (`L0 = 1.0 m`, baked). The mocap anchor's world Z is always `z_set + L0` and its
+(x, y) is either fixed at wherever the base was when the mode was entered (default - the
+base can swing, like a real string) or tracks the base's own (x, y) every tick when
+`follow_xy` is set (a vertical rail - no swing). Below `z_set` the tendon is taut and pulls
+the base back up; above it, it is slack and the base is exactly as free as in `free` mode. A
+MuJoCo tendon **limit** is a one-directional (rope) constraint - it can only be reached from
+one side, unlike a spring - which is exactly a catch, never a mount. `solref_limit (0.02, 1)`
+is deliberately 10x softer than the weld/pivot's `(0.002, 1)`: a rigid catch on a 23 kg
+falling body is a jolt no real harness gives; the softer setting still lands within 2e-4 m of
+`z_set` with zero steady-state error (`tools/pygviewer/tests/test_string_mode.py`). Tension is
+read straight off the tendon-limit constraint's Lagrange multiplier (`d.efc_force`), not
+computed - a controlled vertical drop of the 23.63 kg LegOnly model settles with a measured
+tension equal to its own weight (231.8 N) to within measurement noise. `hook_offset` moves the
+attachment point in the BASE frame, same convention as `pivot_offset` (the panel's `pivot/hook
+offset x/y/z` fields drive both).
 
 **Gravity is never modified.**  The ground is toggled by setting the floor geom's
 `contype`/`conaffinity` to 0, not by removing weight.
 
 `reset to home / knees_bent` restores the joints **and** the base pose, in every mode.
+
+**Scenario: run a policy while hanging from the harness.**  `string` catches a fall without
+constraining anything else, so it is meant to be left on WHILE a policy runs (unlike
+`fixed`/`pivot`, which would fight the policy's own balance): `POST /base
+{"mode":"string","z_set":<standing height - 0.15>}`, then `POST /policy/load` and `POST
+/mode {"mode":"policy_sim"}` as usual. A policy that is upright and walking never feels the
+tether (it stays slack, `GET /status` shows `string.taut: false`); if it falls, the tether
+catches it at `z_set` instead of the floor - the same purpose a real overhead test harness
+serves during early hardware bring-up.
 
 ## Ankle in foot space (AB only)
 
@@ -319,12 +351,13 @@ cd tools/pygviewer && CUDA_VISIBLE_DEVICES="" \
     ../../mujoco-sim/mjlab/.venv/bin/python3 -m pytest
 ```
 
-198 tests, CPU only:
+210 tests, CPU only:
 
 | file | what it pins |
 |---|---|
-| `test_bake_contract.py` | all six contracts: required fields, sizes, AB action order vs docs/112, gravity, 200/50 Hz, default inside range and clip, **command window >= 0.2 rad each side of default**, no window effectively zero, mirror flags by range AND by axis, travel-sign direction, freshness, sha stability, ankle inverse residual |
+| `test_bake_contract.py` | all six contracts: required fields (incl. `string_rig`), sizes, AB action order vs docs/112, gravity, 200/50 Hz, default inside range and clip, **command window >= 0.2 rad each side of default**, no window effectively zero, mirror flags by range AND by axis, travel-sign direction, freshness, sha stability, ankle inverse residual, string tendon+sites present and distinct |
 | `test_basefix.py` | fixed drift < 1e-6 m per 2 s and pose error < 1e-5 m; pivot point < 1e-4 m with the orientation actually free; ground carries the robot when on and it free-falls when off; keyframe sole penetration; gravity untouched |
+| `test_string_mode.py` | a 23.63 kg free-fall from 0.9 m is caught by `z_set=0.6` (settles within 0.02 m, tension 231.8 N +/-10% of the robot's own weight); starts slack (0 N) while standing, goes taut and holds `base z >= z_set - 0.02` once a PD-only (no policy) topple reaches it; string -> fixed -> free -> string round trip leaves no NaN and no stale `eq_active`/`tendon_limited`; `hook_offset` moves the compiled model's `site_pos`; `follow_xy` keeps the anchor over a horizontally-offset base; an isolated single-tendon rig (no bake) settles at `z_set` with tension = weight to 1e-4 relative |
 | `test_loop_settle.py` | AB loop closure < 0.01 mm at rest and at six foot-space commands; each command lands within 0.05 rad; transmission magnitude within 5 % of `loop_ankle_verify.json`; the two cranks of one leg have opposite axes; RP drives its ankle directly |
 | `test_sim_rate.py` | >= 195 Hz physics wall-clock with 0 drops and < 600 MB RSS, AB and RP; snapshot/queue do not accumulate |
 | `test_policy_parity.py` | ONNX vs the exported `.pt` agree within 1e-4 on 32 held-out observations; obs/action dims match the contract; a foreign-model or shifted-default-pose contract is REFUSED |
