@@ -1,20 +1,29 @@
-"""P2-P4 SKELETON - the run-mode state machine and the target-script player.
+"""Run-mode reference + the P4 target-script player skeleton.
 
-P0/P1 use only two of these and they live in ``SimCore.mode`` as a label; the machine below
-is what P2+ grows into.
+There is no separate ``ModeMachine`` object: every mode below lives as the plain string
+``SimCore.mode``, dispatched in ``SimCore._apply_cmd``/``_on_control_tick``/``_substep`` -
+the same pattern P2 used for ``policy_sim`` before P3 added the two replay modes the same
+way. This module is the reference table plus the one thing that genuinely has nothing to
+attach to yet: the P4 script player.
 
     idle ---> manual ---> policy_sim ---> policy_shadow
                  |                            |
                  +--> real_replay        (obs per-term sim|real; NEVER transmits)
                  +--> file_replay
 
-``manual``       UI/API joint targets (implemented in P1 by SimCore.set_target).
+``manual``       UI/API joint targets (P1, ``SimCore.set_target``).
 ``policy_sim``   the loaded policy drives, all observations from the simulator.       P2
 ``policy_shadow``observations per-term from sim or from the received real stream, with a
                  staleness guard; the action is displayed and plotted ONLY.           P4
-``real_replay``  received q drives the sim joints kinematically, base fixed.  For AB the
-                 cranks are PD-followed, never qpos-snapped, or the loop tears.        P3
-``file_replay``  the same, from a recorded jsonl.gz.                                   P3
+``real_replay``  received q drives the sim joints kinematically, base FORCED fixed on
+                 entry.  Direct-drive joints (everything but an AB crank) are snapped
+                 exactly, per control tick, when data was received that tick - with no
+                 data they get an ordinary PD hold (never torque-free).  Cranks are always
+                 PD-tracked, never qpos-snapped, or the closed loop tears (QACC NaN,
+                 documented in ``sim_core.py`` and ``tools/viewer/mjcf_joint_viewer.py``).
+                 ``SimCore._update_replay_targets``/``_apply_replay_drive``.          P3
+``file_replay``  the same drive split, sourced from a loaded ``record.Replayer`` instead
+                 of ``core.real``.                                                     P3
 
 ``TargetScript``: {"joint_names": [...], "rows": [[t_s, q...], ...]} played in ``manual`` and
 tagged with a run_id so ``compare.py`` can overlay the sim run against the robot run driven
@@ -24,7 +33,7 @@ by the same file.                                                               
 from __future__ import annotations
 
 MODES = ("idle", "manual", "policy_sim", "policy_shadow", "real_replay", "file_replay")
-IMPLEMENTED = ("idle", "manual")
+IMPLEMENTED = ("idle", "manual", "policy_sim", "real_replay", "file_replay")
 
 # A shadow-mode action must never leave this process. This is a constant, not a setting,
 # so that turning it on requires a code change and a review.

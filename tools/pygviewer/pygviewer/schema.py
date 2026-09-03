@@ -22,6 +22,7 @@ documented here but their endpoints are P2/P3 - see ``api.py`` and ``API.md``.
 
 from __future__ import annotations
 
+import json
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -235,3 +236,56 @@ class CmdIn(BaseModel):
   vx: float = 0.0
   vy: float = 0.0
   wz: float = 0.0
+
+
+# ----------------------------------------------------------------- P3 wire helpers
+# One message per line, exactly ``model_dump_json()`` - this is the ONLY place that
+# decides which pydantic class a "type" field maps to, so the recorder, the replayer, the
+# WS /ws/in ingest and the dummy transmitter can never disagree with each other about it.
+MESSAGE_TYPES: dict[str, type[Header]] = {
+  "JointState": JointState,
+  "ImuState": ImuState,
+  "JointTarget": JointTarget,
+  "PolicyIO": PolicyIO,
+  "Status": Status,
+}
+
+
+def to_jsonl(msg: Header) -> str:
+  """One wire message -> one JSONL line (newline included)."""
+  return msg.model_dump_json() + "\n"
+
+
+def from_jsonl(line: str) -> Header:
+  """One JSONL line -> the typed message it names in ``type``.
+
+  Raises ``ValueError`` for anything that is not valid JSON, has no recognised ``type``, or
+  fails the model's own validation (e.g. a header field of the wrong shape). A caller that
+  wants to survive a corrupt line should catch ``ValueError``, not assume this always
+  succeeds - a dropped or torn UDP/websocket frame is a normal event on this project.
+  """
+  line = line.strip()
+  if not line:
+    raise ValueError("empty line")
+  try:
+    obj = json.loads(line)
+  except json.JSONDecodeError as exc:
+    raise ValueError(f"not valid JSON: {exc}") from exc
+  typ = obj.get("type") if isinstance(obj, dict) else None
+  cls = MESSAGE_TYPES.get(typ)
+  if cls is None:
+    raise ValueError(f"unknown or missing 'type' {typ!r}; have {sorted(MESSAGE_TYPES)}")
+  return cls.model_validate(obj)
+
+
+def validate_joint_names(names: list[str], allowed: set[str] | list[str]) -> list[str]:
+  """Return the subset of ``names`` NOT in ``allowed``.  Empty = all recognised.
+
+  This is the single gate that makes "reject an unknown joint name" true everywhere: the
+  ``/ws/in`` handler, the HUPHY UDP bridge and the dummy transmitter's own self-check all
+  call it instead of inventing their own regex or default.  There is no fallback path - an
+  unknown name is a configuration error (wrong joint_map, wrong model variant) and must be
+  visible, not silently dropped or silently accepted.
+  """
+  allowed = set(allowed)
+  return [n for n in names if n not in allowed]

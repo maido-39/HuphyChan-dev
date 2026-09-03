@@ -64,11 +64,29 @@ def test_mode_accepts_policy_sim_once_a_policy_is_loaded(client):
   assert core.mode == "policy_sim"
 
 
-def test_mode_rejects_replay_modes_as_not_yet_implemented(client):
+def test_mode_accepts_real_replay_and_forces_base_fixed(client):
+  """real_replay is P3 (see test_replay.py for the full drive-from-telemetry behaviour);
+  this only checks the API-level contract: it is accepted, and the safety rule (design doc
+  section 6 / item 6) that entering it always forces the base to fixed."""
+  client, core = client
+  core.set_base(mode="free")
+  r = client.post("/mode", json={"mode": "real_replay"})
+  assert r.status_code == 200, r.text
+  core.step_n(core.decimation)
+  assert core.mode == "real_replay"
+  assert core.base_mode == "fixed"
+
+
+def test_mode_rejects_file_replay_without_a_loaded_recording(client):
   client, _ = client
-  for m in ("real_replay", "file_replay"):
-    r = client.post("/mode", json={"mode": m})
-    assert r.status_code == 501, r.text
+  r = client.post("/mode", json={"mode": "file_replay"})
+  assert r.status_code == 409, r.text
+
+
+def test_mode_rejects_policy_shadow_as_p4(client):
+  client, _ = client
+  r = client.post("/mode", json={"mode": "policy_shadow"})
+  assert r.status_code == 501, r.text
 
 
 def test_policy_load_refuses_a_foreign_contract(tmp_path, client):

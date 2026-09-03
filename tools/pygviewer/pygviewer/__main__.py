@@ -1,8 +1,10 @@
-"""CLI: serve the viewer, or bake a model.
+"""CLI: serve the viewer, bake a model, or run a P3 telemetry bridge.
 
     ... tools/pygviewer/run.py --variant LegOnly-AB --port 8094 --api-port 8095
     ... tools/pygviewer/run.py bake model --all
     ... tools/pygviewer/run.py --variant LegOnly-AB --headless --seconds 5   # rate check
+    ... tools/pygviewer/run.py bridge huphy --variant LegOnly-AB --port 9871
+    ... tools/pygviewer/run.py bridge dummy --pattern sine --target ws,udp
 """
 
 from __future__ import annotations
@@ -47,6 +49,17 @@ def main(argv: list[str] | None = None) -> int:
     from .bake import main as bake_main
 
     return bake_main(argv[1:])
+  if argv and argv[0] == "bridge":
+    if len(argv) < 2 or argv[1] not in ("huphy", "dummy"):
+      print("usage: run.py bridge {huphy,dummy} ...", file=sys.stderr)
+      return 2
+    if argv[1] == "huphy":
+      from .bridge.huphy_udp import main as huphy_main
+
+      return huphy_main(argv[2:])
+    from .bridge.dummy_tx import main as dummy_main
+
+    return dummy_main(argv[2:])
 
   ap = argparse.ArgumentParser(prog="pygviewer", description=__doc__)
   ap.add_argument("--variant", default="LegOnly-AB", choices=list(VARIANTS))

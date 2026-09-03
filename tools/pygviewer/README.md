@@ -6,9 +6,10 @@ it as a 3D scene with a control panel (viser, **:8094**) plus a REST/WebSocket A
 the same number read in training - not merely similar.
 
 Status: **P0 (bake + sim loop + scene + /status), P1 (manual joint control, base fixing,
-ground toggle, plots) and P2 (ONNX/`.pt` policy, obs builder, PD gain source, velocity
-command, per-term obs-source switch) are implemented.**  P3 telemetry bridge and P4
-comparison/shadow mode are skeletons with the interfaces fixed - see
+ground toggle, plots), P2 (ONNX/`.pt` policy, obs builder, PD gain source, velocity
+command, per-term obs-source switch) and P3 (wire schema, `/ws/in`, HUPHY UDP bridge, dummy
+transmitter, record/replay, `real_replay`/`file_replay` drive, Telemetry panel) are
+implemented.**  P4 comparison/shadow mode is a skeleton with the interface fixed - see
 `docs/121_pygviewer_design.md` section 6.
 
 ---
@@ -163,6 +164,72 @@ against `mujoco-sim/mjlab/analysis/out/legonly_ab_v2_vel0_vx0.npz` (produced by
 `analysis/gait_kinematics_probe.py` from the *same checkpoint*, tolerance 0.02), then walk at
 `cmd_vx` and check it does not fall and tracks within ~0.1 m/s.
 
+## Telemetry, bridges, record/replay (P3)
+
+Wire schema (`schema.py`): `Header{v, type, t_ns, seq, src, frame, contract_hash}` plus
+`JointState`, `ImuState`, `PolicyIO`, `Status` (all implemented) and `JointTarget` (defined,
+documented, never emitted - see docs/121 section 1 and API.md). `to_jsonl`/`from_jsonl` are
+the one place a "type" string maps to a pydantic class, shared by the recorder, the replayer,
+`/ws/in` and the dummy transmitter. `validate_joint_names` is the one gate that rejects an
+unknown joint name, used by `/ws/in` and the tests - never a regex, never a default.
+
+```bash
+# receive telemetry into the viewer's own RealState
+curl -s :8095/status | jq '.telemetry'          # rx rate, age, seq gaps, clock offset/jitter,
+                                                 # contract mismatches, wrap events, range
+                                                 # violations, bridge errors, sign sanity
+websocat 'ws://127.0.0.1:8095/ws/in'            # then paste a JointState/ImuState JSON line
+
+# HUPHY UDP bridge - standalone process, its own SimCore + RealState (see API.md for how to
+# route it into a running viewer instead)
+mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/run.py bridge huphy \
+    --variant LegOnly-AB --port 9871
+
+# dummy transmitter - sine/script/jsonl -> /ws/in and/or HUPHY-format UDP
+mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/run.py bridge dummy \
+    --pattern sine --joints L_knee_joint,R_knee_joint --amplitude 0.2 --freq 0.25 \
+    --target ws,udp --ws-url ws://127.0.0.1:8095/ws/in --udp-port 9871
+
+# record / replay
+curl -s -X POST :8095/record/start -d '{}'; sleep 10; curl -s -X POST :8095/record/stop
+curl -s -X POST :8095/replay/load -d '{"path": "<path>"}'
+curl -s -X POST :8095/mode -d '{"mode": "file_replay"}'
+```
+
+**`real_replay`/`file_replay`** (`sim_core.py`): entering either mode ALWAYS forces the base
+to `fixed` first (a kinematically-driven leg on a `free` base with no balance policy is not
+"replaying the robot", it is a controlled fall). Every control tick, each actuated joint is
+either:
+
+* **direct-drive** (everything except an AB crank - hips/knee, or the RP ankle): snapped to
+  the received `qpos` exactly (qvel zeroed), if a value was received THIS tick. With no data
+  it gets an ordinary PD hold at its current target (== default right after a reset) - never
+  torque-free. An earlier version zeroed torque for every direct-drive joint whenever the
+  MODE was a replay mode, not just the ones with fresh data, so an unreceived joint free-fell
+  under gravity; caught by `tests/test_record.py`'s differential trajectory tests.
+* **PD-tracked** (an AB crank): the received value becomes `self.target`, reached through the
+  ordinary PD/T-N torque path - a crank `qpos` is never snapped, or the closed loop tears open
+  (module docstring, same NaN failure mode `mjcf_joint_viewer.py` documents).
+
+`file_replay` drives from a loaded `Replayer` (`record.py`) instead of `core.real`; both paths
+share the exact same direct/PD split.
+
+`Recorder`/`Replayer` (`record.py`): one plain-JSON header line (`contract_hash`, `variant`,
+base mode/height/ground/pivot, gains source, `env_toggles`, the bake's `mjb_sha256`,
+`started_utc`), then one `JointState` wire line per published snapshot, append-and-flush
+(`gzip.open(..., "wt")`) so a long recording never grows an in-memory list. `Replayer` loads
+the whole file (recordings in this project's scope are seconds long, not hours - a genuinely
+long recording would need streaming, not implemented) and REFUSES to load a file whose
+`contract_hash` does not match the live model (R11) unless the caller passes an explicit
+override.
+
+**Sign sanity** (`telemetry.py` `RealState.sign_sanity_update`/`sign_sanity`): whenever ANY
+real telemetry has been received, every control tick compares `sign(q_real - default)` vs
+`sign(q_sim - default)` per joint over a rolling 2 s window, gated by a 0.05 rad deadband on
+both sides. A joint disagreeing more than 50% of the time in that window is flagged `red` in
+`Status.telemetry.sign_sanity` and the UI - this runs continuously, in every mode, not only
+`real_replay`, so it doubles as a live check of the bridge's own sign convention.
+
 ## Tests
 
 ```bash
@@ -170,7 +237,7 @@ cd tools/pygviewer && CUDA_VISIBLE_DEVICES="" \
     ../../mujoco-sim/mjlab/.venv/bin/python3 -m pytest
 ```
 
-130 tests, ~13 s, CPU only:
+161 tests, CPU only:
 
 | file | what it pins |
 |---|---|
@@ -180,7 +247,10 @@ cd tools/pygviewer && CUDA_VISIBLE_DEVICES="" \
 | `test_sim_rate.py` | >= 195 Hz physics wall-clock with 0 drops and < 600 MB RSS, AB and RP; snapshot/queue do not accumulate |
 | `test_policy_parity.py` | ONNX vs the exported `.pt` agree within 1e-4 on 32 held-out observations; obs/action dims match the contract; a foreign-model or shifted-default-pose contract is REFUSED |
 | `test_obs_order.py` | `ObsBuilder` reproduces the env's own 40-step obs trace term-by-term (order, joint subset, history backfill), for every baked policy |
-| `test_api_policy.py` | the FastAPI layer actually exposes what P2 implements (not a stale P1 allow-list): `/mode` accepts `policy_sim` only once a policy is loaded and rejects replay modes as 501; `/policy/load` 409s a foreign contract and 404s an unknown name; `/policy/cmd` + `/policy/io` round-trip; `/obs_source` 501s `real`; `/gains` 400s `real` with no hardware table |
+| `test_api_policy.py` | the FastAPI layer actually exposes what P2/P3 implement (not a stale allow-list): `/mode` accepts `policy_sim` only once a policy is loaded, accepts `real_replay` and forces the base `fixed`, 409s `file_replay` without a loaded recording, 501s `policy_shadow` (P4); `/policy/load` 409s a foreign contract and 404s an unknown name; `/policy/cmd` + `/policy/io` round-trip; `/obs_source` 501s `real`; `/gains` 400s `real` with no hardware table |
+| `test_schema.py` | `JointState`/`ImuState`/`Status`/`JointTarget`/`PolicyIO` round-trip through `to_jsonl`/`from_jsonl`; required header fields (`t_ns`) and required `PolicyIO` fields raise without them; `from_jsonl` rejects invalid JSON, an empty line and an unknown `type`; `validate_joint_names` flags exactly the unrecognised names |
+| `test_bridge_huphy.py` | the joint map has exactly 12 motor rows and starts `side_mapping_verified: false`; an unlisted `(limb, motor)` raises (hard failure, not a guess); the exact synthetic case from the task brief (+30 deg both knees -> sim `L_knee +0.5236`/`R_knee -0.5236` rad, contract `travel_sign` +1/-1, 1e-6); velocity/torque get the same sign treatment; the -1 sentinel nulls a field and warns on 3-in-a-row; `ankle_derived` stays separate from the canonical `q`; diag/CAN fields are ignored, not hard failures; an IMU packet prefers `grav_*` over reconstructing a quaternion (and does NOT treat `grav_z=-1.0`, a real upright reading, as HUPHY's "missing" sentinel - that only applies to `age`/`sensor_dt`) |
+| `test_record.py` | record -> replay is byte-for-byte identical, including the header; a foreign `contract_hash` is refused; a 10 s recording does not grow RSS (measured: 0.3 MB on the live process); `real_replay` snaps direct-drive joints to 1e-6 and routes a crank's received value into its PD target exactly; with no telemetry received at all, `real_replay` is numerically identical to staying in `manual` (differential test, 1e-9 - the actual regression this file caught); a left-leg command does not move a right-leg joint (differential, base fixed => no physical coupling path) |
 
 Evidence figure (no OpenGL on this host, so it is matplotlib):
 `mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/make_verification_figure.py` ->
@@ -241,7 +311,15 @@ tools/pygviewer/
                              ~11s/~1.3GB, lazy import), ObsSourceMux, action_to_target,
                              check_compatible (contract-sha + default-pose gate)
     _bake_policy.py          `.pt` -> ONNX export + parity/obs-order fixtures (bake-time only)
-    modes.py record.py bridge/   P3/P4 skeletons with the interfaces fixed
+    telemetry.py             RealState: latest-only receive buffer, rx rate/age/seq-gaps/
+                             clock-offset, wrap/range flags, sign sanity (P3)
+    record.py                Recorder (streaming jsonl.gz) / Replayer (seek, speed) (P3)
+    bridge/
+      huphy_udp.py           HUPHY UDP -> canonical JointState/ImuState (P3)
+      joint_map_huphy.json   explicit 12-row limb/motor -> sim-joint table (P3)
+      dummy_tx.py            sine/script/jsonl -> /ws/in and/or HUPHY-format UDP (P3)
+    modes.py                 mode constants + P4 skeletons (ModeMachine, TargetScript);
+                             real_replay/file_replay themselves live in sim_core.py
   tests/
 ```
 

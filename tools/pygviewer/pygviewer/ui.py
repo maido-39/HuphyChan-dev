@@ -428,10 +428,105 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
         return
       gtxt.content = _gains_md()
 
+  # ------------------------------------------------------------------ Telemetry (P3)
+  with gui.add_folder("Telemetry"):
+    jmap_path = Path(__file__).parent / "bridge" / "joint_map_huphy.json"
+    try:
+      side_verified = bool(json.loads(jmap_path.read_text()).get("side_mapping_verified"))
+    except Exception:
+      side_verified = False
+    if not side_verified:
+      gui.add_markdown(
+        "**UNVERIFIED** - the HUPHY limb/motor->sim map is USER-ASSERTED (L=left), not yet "
+        "confirmed by the verification protocol's sign-sweep step (docs/121 section 5, "
+        "step 2). Do not trust a sim<->real overlay until that step passes."
+      )
+    tele_md = gui.add_markdown("no telemetry received yet")
+
+    gui.add_markdown("**Record**")
+    rec_path = gui.add_text("path (blank = auto)", initial_value="")
+    rec_start = gui.add_button("start recording")
+    rec_stop = gui.add_button("stop recording")
+    rec_status = gui.add_markdown("not recording")
+
+    @rec_start.on_click
+    def _(_evt):
+      try:
+        info = state["core"].start_recording(rec_path.value or None)
+        rec_status.content = f"recording -> `{info['path']}`"
+      except Exception as exc:
+        rec_status.content = f"**{type(exc).__name__}: {exc}**"
+
+    @rec_stop.on_click
+    def _(_evt):
+      try:
+        info = state["core"].stop_recording()
+        rec_status.content = f"stopped - {info['n_lines']} lines, {info['errors']} errors -> `{info['path']}`"
+      except Exception as exc:
+        rec_status.content = f"**{type(exc).__name__}: {exc}**"
+
+    gui.add_markdown("**Replay** (file_replay mode)")
+    replay_path = gui.add_text("recording path", initial_value="")
+    replay_load = gui.add_button("load")
+    replay_run = gui.add_dropdown("run mode", ("idle", "manual", "file_replay"), initial_value="idle")
+    replay_speed = gui.add_slider("speed", min=0.1, max=4.0, step=0.1, initial_value=1.0)
+    replay_status = gui.add_markdown("no recording loaded")
+
+    @replay_load.on_click
+    def _(_evt):
+      try:
+        info = state["core"].load_replay(replay_path.value)
+        replay_status.content = f"loaded {info['n_rows']} rows, {info['duration_s']:.1f} s"
+      except Exception as exc:
+        replay_status.content = f"**{type(exc).__name__}: {exc}**"
+
+    @replay_run.on_update
+    def _(_evt):
+      try:
+        state["core"]._apply_cmd({"op": "mode", "value": replay_run.value})
+      except Exception as exc:
+        replay_status.content = f"**{exc}**"
+        replay_run.value = state["core"].mode
+
+    @replay_speed.on_update
+    def _(_evt):
+      state["core"].submit({"op": "replay_speed", "speed": replay_speed.value})
+
+  def _telemetry_md() -> str:
+    s = state["core"].snapshot()
+    if not s:
+      return "no telemetry received yet"
+    t = s.get("telemetry", {})
+    if not t.get("rx_count"):
+      return "no telemetry received yet (no /ws/in or UDP bridge traffic)"
+    lines = [
+      f"rx **{t['rx_hz']:.1f} Hz**  age {t['age_s']}s  {'**STALE**' if t['stale'] else 'fresh'}  "
+      f"seq gaps {t['seq_gaps']}",
+      f"clock offset {t['clock_offset_ms']} ms  jitter {t['clock_jitter_ms']} ms "
+      f"{'**(grey: >15 ms)**' if t.get('jitter_grey') else ''}",
+      f"contract mismatches {t['contract_mismatches']}  wrap events {t['wrap_events']}  "
+      f"bridge errors {t['bridge_errors']}",
+    ]
+    if t.get("range_violations"):
+      lines.append(f"range violations: {t['range_violations']}")
+    if t.get("bridge_last_error"):
+      lines.append(f"last bridge error: `{t['bridge_last_error']}`")
+    ss = t.get("sign_sanity") or {}
+    red = {n: v for n, v in ss.items() if v.get("red")}
+    if red:
+      lines.append("**SIGN SANITY RED**: " + ", ".join(f"{n} ({v['disagree_frac']:.0%})" for n, v in red.items()))
+    if "replay" in t:
+      r = t["replay"]
+      if r.get("playing"):
+        lines.append(f"replay: {r['cursor']}/{r['n_rows']} rows ({r['frac']:.0%}) speed {r['speed']:.1f}x")
+    return "  \n".join(lines)
+
+  state["telemetry_md"] = lambda: setattr(tele_md, "content", _telemetry_md())
+
   # ------------------------------------------------------------------ Plots
   chan_names = []
   for n in c.action_joint_names:
-    chan_names += [f"{n}|q", f"{n}|target", f"{n}|tau"]
+    chan_names += [f"{n}|q", f"{n}|target", f"{n}|tau", f"{n}|real"]
   ring = RingPlot(chan_names, int(PLOT_WINDOW_S * PLOT_HZ))
   sel_joint: dict[str, object] = {}
   with gui.add_folder("Plots"):
@@ -442,6 +537,7 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
     sig_q = gui.add_checkbox("q", initial_value=True)
     sig_t = gui.add_checkbox("target", initial_value=True)
     sig_u = gui.add_checkbox("tau [N*m]", initial_value=False)
+    sig_r = gui.add_checkbox("real (P3)", initial_value=False)
     with gui.add_folder("joints", expand_by_default=False):
       for n in c.action_joint_names:
         sel_joint[n] = gui.add_checkbox(
@@ -459,7 +555,7 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
     )
 
   def selected_channels() -> list[str]:
-    sigs = [s for s, on in (("q", sig_q.value), ("target", sig_t.value), ("tau", sig_u.value)) if on]
+    sigs = [s for s, on in (("q", sig_q.value), ("target", sig_t.value), ("tau", sig_u.value), ("real", sig_r.value)) if on]
     out = [f"{n}|{s}" for n in c.action_joint_names if sel_joint[n].value for s in sigs]
     return out[:MAX_CHANNELS], len(out)
 
@@ -546,6 +642,7 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
     if s.get("warnings"):
       lines += ["", "**" + " / ".join(s["warnings"]) + "**"]
     status_md.content = "\n".join(lines)
+    state["telemetry_md"]()
 
   state["readout"] = readout
 
@@ -562,6 +659,12 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
       vals[f"{n}|q"] = snap["q"][qi[n]]
       vals[f"{n}|target"] = snap["target"][k]
       vals[f"{n}|tau"] = snap["tau"][k]
+    # P3: the real channel, when present - omitted (not zeroed) for a joint with no data
+    # yet, so the ring buffer holds its last real value rather than showing a false zero.
+    real_q = state["core"].real.snapshot_joints()
+    for n, v in real_q.items():
+      if v["q"] is not None:
+        vals[f"{n}|real"] = v["q"]
     ring.push(snap["t"], vals)
 
   core.add_hook(hook)

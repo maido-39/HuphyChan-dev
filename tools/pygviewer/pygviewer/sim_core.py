@@ -35,8 +35,10 @@ import numpy as np
 
 from .contract import ModelContract
 from .policy import ObsBuilder, ObsSourceMux, action_to_target, check_compatible
+from .telemetry import RealState
 
 BASE_MODES = ("free", "fixed", "pivot")
+REPLAY_MODES = ("real_replay", "file_replay")
 
 
 def quat_mul(a, b):
@@ -190,6 +192,14 @@ class SimCore:
     self.default_q = np.array([r["default_q"][n] for n in self.act_names])
     self.clip_lo = np.array([contract.clip(n)[0] for n in self.act_names])
     self.clip_hi = np.array([contract.clip(n)[1] for n in self.act_names])
+    self.default_q_map = {n: float(v) for n, v in zip(self.act_names, self.default_q)}
+
+    # Replay drive split (P3): a crank (AB only) can only be reached through the PD - see
+    # the module docstring - everything else (hips/knees, and the RP ankle) is kinematically
+    # snapped to the received value each substep.  Precomputed once so real_replay/file_replay
+    # never has to re-derive it per tick.
+    self._direct_idx = np.array([i for i, n in enumerate(self.act_names) if "_crank_" not in n])
+    self._pd_idx = np.array([i for i, n in enumerate(self.act_names) if "_crank_" in n])
 
     self.free_adr = int(self.m.jnt_qposadr[0])
     a = r["anchor_eq_ids"]
@@ -238,6 +248,14 @@ class SimCore:
     self.gains_overrides: dict[str, dict] = {}
     self._kp_train, self._kd_train = self.kp.copy(), self.kd.copy()
 
+    # ---------------------------------------------------------------- telemetry (P3)
+    joint_ranges = {n: tuple(r["joint_contract"][n]["range"]) for n in self.act_names}
+    self.real = RealState(self.act_names, joint_ranges, contract.contract_sha)
+    self.replayer = None
+    self.recorder = None
+    self._replay_direct_now: list[int] = []
+    self._replay_direct_vals_now: dict[int, float] = {}
+
     self._cmds: deque = deque(maxlen=512)
     self._lock = threading.Lock()
     self._snap: dict[str, Any] = {}
@@ -266,6 +284,33 @@ class SimCore:
   def add_hook(self, fn: Callable[[dict], None]) -> None:
     """Called with each new snapshot on the sim thread.  Must be fast and must not block."""
     self._hooks.append(fn)
+
+  # ------------------------------------------------------------------ record/replay (P3)
+  def start_recording(self, path: str | None = None) -> dict:
+    from .record import RECORD_DIR, Recorder, header_from_core
+
+    if self.recorder is not None:
+      raise RuntimeError("already recording; POST /record/stop first")
+    path = path or f"{RECORD_DIR}/{self.c.variant}_{time.strftime('%Y%m%d_%H%M%S')}.jsonl.gz"
+    self.recorder = Recorder(path, header_from_core(self))
+    return dict(path=str(self.recorder.path), started=True)
+
+  def stop_recording(self) -> dict:
+    if self.recorder is None:
+      raise RuntimeError("not recording")
+    info = self.recorder.close()
+    self.recorder = None
+    return info
+
+  def load_replay(self, path: str) -> dict:
+    from .record import Replayer
+
+    rep = Replayer(path, expected_contract_hash=self.c.contract_sha)
+    self.replayer = rep
+    return dict(
+      path=str(rep.path), n_rows=len(rep.rows), duration_s=round(rep.duration_s, 3),
+      header=rep.header,
+    )
 
   def start(self) -> None:
     if self._running:
@@ -541,15 +586,57 @@ class SimCore:
     qv = self.d.qvel[self.a_d]
     raw = np.clip(self.kp * (self.target - q) - self.kd * qv, -self.eff, self.eff)
     tau = self._tn_clamp(raw, qv)
+    direct_now = getattr(self, "_replay_direct_now", None)
+    if direct_now:
+      # Only the direct-drive joints that ACTUALLY have a fresh value this control tick get
+      # zero torque (they are kinematically snapped below, so PD fighting the snap would
+      # only waste effort); a direct-drive joint with NO data this tick keeps its ordinary
+      # PD hold at `self.target` (== the default pose, since nothing has moved it) - the
+      # design's "missing telemetry holds default" rule (item 6), not a free-floating joint.
+      # A version of this that zeroed torque unconditionally for every direct-drive index
+      # let an un-received joint drift under gravity with no holding torque at all; caught
+      # by test_record.py::test_real_replay_leaves_unreceived_joints_at_their_last_value.
+      tau = tau.copy()
+      tau[list(direct_now)] = 0.0
     self.d.qfrc_applied[:] = 0.0
     self.d.qfrc_applied[self.a_d] = tau
     self._tau = tau
     mujoco.mj_step(self.m, self.d)
+    if direct_now:
+      for i, v in self._replay_direct_vals_now.items():
+        self.d.qpos[self.a_q[i]] = v
+        self.d.qvel[self.a_d[i]] = 0.0
+      mujoco.mj_forward(self.m, self.d)
     if self.base_mode != "free":
       # keep the anchor exactly where the user put it (mocap bodies never integrate, but a
       # /base command may have landed mid-substep)
       self.d.mocap_pos[self.mocap_id] = self.base_pos
       self.d.mocap_quat[self.mocap_id] = self.base_quat
+
+  def _replay_source(self) -> dict[str, float | None] | None:
+    if self.mode == "real_replay":
+      s = self.real.snapshot_joints()
+      return {n: v["q"] for n, v in s.items()}
+    if self.mode == "file_replay" and self.replayer is not None:
+      return self.replayer.current_q(self.d.time)
+    return None
+
+  def _update_replay_targets(self) -> None:
+    """Once per control tick (not every substep, same cadence ``self.target`` is normally
+    updated at): read whichever source the mode names and split it into (a) the AB cranks'
+    NEW PD target and (b) which direct-drive joints have fresh data this tick, cached for
+    ``_substep`` to snap.  A joint the source has no value for is untouched here - it keeps
+    whatever ``self.target``/qpos it already had, which is the default pose right after a
+    reset (design item 6: "no data" holds default, it is never guessed)."""
+    src = self._replay_source() or {}
+    self._replay_direct_now = [
+      i for i in self._direct_idx if src.get(self.act_names[i]) is not None
+    ]
+    self._replay_direct_vals_now = {i: float(src[self.act_names[i]]) for i in self._replay_direct_now}
+    for i in self._pd_idx:
+      v = src.get(self.act_names[i])
+      if v is not None:
+        self.target[i] = float(np.clip(v, self.clip_lo[i], self.clip_hi[i]))
 
   def _drain(self) -> None:
     with self._lock:
@@ -575,11 +662,21 @@ class SimCore:
       want = cmd["value"]
       if want.startswith("policy") and self.policy is None:
         raise RuntimeError("no policy loaded; POST /policy/load first")
-      if want not in ("idle", "manual", "policy_sim", "policy_shadow"):
+      if want == "file_replay" and self.replayer is None:
+        raise RuntimeError("no recording loaded; POST /replay/load first")
+      if want not in ("idle", "manual", "policy_sim", "policy_shadow", *REPLAY_MODES):
         raise NotImplementedError(f"mode {want!r} is not implemented yet")
       if want.startswith("policy"):
         self.last_action = np.zeros(len(self.act_names))
         self.q_hist.clear()
+      if want in REPLAY_MODES:
+        # Safety (design doc section 6): entering a mode that drives joints from an
+        # external stream ALWAYS forces the base to `fixed` first - a kinematically driven
+        # leg on a `free` base with no balance policy running is not "replaying the robot",
+        # it is a controlled fall.
+        self.set_base(mode="fixed")
+        if want == "file_replay":
+          self.replayer.start(self.d.time)
       self.mode = want
     elif op == "cmd":
       self.cmd = np.asarray(cmd["value"], dtype=float).reshape(3)
@@ -589,8 +686,34 @@ class SimCore:
       if self.obs_mux is None:
         raise RuntimeError("no policy loaded; there are no observation terms to route")
       self.obs_mux.set(cmd["sources"])
+    elif op == "replay_seek":
+      if self.replayer is None:
+        raise RuntimeError("no recording loaded")
+      self.replayer.seek(float(cmd["frac"]))
+    elif op == "replay_speed":
+      if self.replayer is None:
+        raise RuntimeError("no recording loaded")
+      self.replayer.speed = float(cmd["speed"])
     else:
       raise ValueError(f"unknown command op {op!r}")
+
+  def _on_control_tick(self) -> None:
+    """Everything that happens once per control tick (50 Hz), regardless of which of the
+    three loop drivers (realtime loop, headless loop, ``step_n``) called it."""
+    self._drain()
+    if self.policy is not None and self.mode.startswith("policy"):
+      self._policy_tick()
+    if self.mode in REPLAY_MODES:
+      self._update_replay_targets()
+    elif getattr(self, "_replay_direct_now", None):
+      self._replay_direct_now = []  # left a replay mode: stop snapping, resume ordinary PD
+    # Sign sanity (P3, design doc R1): whenever real telemetry is flowing, cross-check its
+    # sign against sim's, regardless of run mode - this is what makes real_replay itself
+    # self-verifying (sim is slaved to real for direct joints, so a red flag there means the
+    # bridge's own sign convention is wrong, not that sim and the robot disagree).
+    if self.real.rx_count:
+      sim_q = {n: float(self.d.qpos[self.a_q[i]]) for i, n in enumerate(self.act_names)}
+      self.real.sign_sanity_update(self.d.time, sim_q, self.default_q_map)
 
   def _loop(self) -> None:
     t0 = time.perf_counter()
@@ -612,9 +735,7 @@ class SimCore:
         due = self.decimation
       for _ in range(due):
         if self._step_i % self.decimation == 0:
-          self._drain()
-          if self.policy is not None and self.mode.startswith("policy"):
-            self._policy_tick()
+          self._on_control_tick()
           self._stats["ctrl_ticks"] += 1
         self._substep()
         self._step_i += 1
@@ -667,7 +788,11 @@ class SimCore:
       ),
       warnings=self._warnings(q_all),
       gains_source=self.gains_source,
+      telemetry=self.real.status(),
+      sign_sanity=self.real.sign_sanity(),
     )
+    if self.replayer is not None:
+      snap["replay"] = self.replayer.progress()
     if self.policy is not None:
       snap["policy"] = dict(
         kind=self.policy.name,
@@ -693,6 +818,8 @@ class SimCore:
       snap["closure_mm"] = self.closure_mm()
     with self._lock:
       self._snap = snap
+    if self.recorder is not None:
+      self.recorder.write_snapshot(snap, self.c.contract_sha)
     for h in self._hooks:
       try:
         h(snap)
@@ -748,9 +875,7 @@ class SimCore:
         due = self.decimation
       for _ in range(due):
         if self._step_i % self.decimation == 0:
-          self._drain()
-          if self.policy is not None and self.mode.startswith("policy"):
-            self._policy_tick()
+          self._on_control_tick()
           self._stats["ctrl_ticks"] += 1
         self._substep()
         self._step_i += 1
@@ -769,9 +894,8 @@ class SimCore:
     """
     for _ in range(n):
       if self._step_i % self.decimation == 0:
-        self._drain()
-        if self.policy is not None and self.mode.startswith("policy"):
-          self._policy_tick()
+        self._on_control_tick()
+        self._stats["ctrl_ticks"] += 1
       self._substep()
       self._step_i += 1
       self._stats["phys_steps"] += 1

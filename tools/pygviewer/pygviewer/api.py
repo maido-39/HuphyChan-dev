@@ -4,10 +4,12 @@ P0/P1 implements: ``GET /status``, ``GET /contract``, ``GET /snapshot``, ``POST 
 ``POST /ankle``, ``POST /base``, ``POST /mode``, ``POST /reset`` and ``WS /ws/out``.
 P2 adds: ``POST /policy/load``, ``GET /policy/list``, ``POST /policy/unload``,
 ``POST /policy/cmd``, ``GET /policy/io``, ``POST /obs_source`` (per-term switch; ``real``
-answers 501 until the P3 bridge exists), ``GET|POST /gains`` and ``POST /mode`` with
-``policy_sim``/``policy_shadow``. Everything else in ``schema.py`` is documented but answers
-501 with the phase that owns it, so a client author can see the whole contract today and
-code against it.
+answers 501 until P4's obs mux exists), ``GET|POST /gains`` and ``POST /mode`` with
+``policy_sim``. P3 adds: ``WS /ws/in`` (JointState/ImuState ingest into ``core.real``),
+``POST /record/{start,stop}``, ``POST /replay/{load,seek,speed}`` and ``POST /mode`` with
+``real_replay``/``file_replay``. ``POST /mode`` with ``policy_shadow`` and
+``POST /obs_source`` with a ``real`` value are the only things still 501 (P4 - the per-term
+obs mux), so a client author can see the whole contract today and code against it.
 
 The WebSocket is **latest-only**: it samples the current snapshot at the requested rate and
 never queues.  A slow consumer sees a lower frame rate, it does not make the process grow.
@@ -33,6 +35,7 @@ from .schema import (
   BaseState,
   ContractOut,
   GainsIn,
+  ImuState,
   JointState,
   ModeIn,
   ObsSourceIn,
@@ -42,13 +45,11 @@ from .schema import (
   Status,
   TargetIn,
   WIRE_VERSION,
+  validate_joint_names,
 )
 
 _NOT_YET = {
   "/script/run": "P4",
-  "/record/start": "P3",
-  "/record/stop": "P3",
-  "/ws/in": "P3",
 }
 
 
@@ -86,6 +87,11 @@ def build_app(core, freshness: dict) -> FastAPI:
       base=BaseState(**s.get("base", {})),
       contract_stale=bool(freshness.get("stale")),
       contract_checks=freshness.get("checks", {}),
+      telemetry=dict(
+        s.get("telemetry", {}),
+        sign_sanity=s.get("sign_sanity", {}),
+        **({"replay": s["replay"]} if "replay" in s else {}),
+      ),
       warnings=s.get("warnings", []),
       rss_mb=round(rss_mb() or 0.0, 1),
     )
@@ -153,16 +159,20 @@ def build_app(core, freshness: dict) -> FastAPI:
 
   @app.post(
     "/mode",
-    summary="Run mode: idle|manual|policy_sim|policy_shadow now; replay modes are P3/P4",
+    summary="Run mode: idle|manual|policy_sim|policy_shadow|real_replay|file_replay",
   )
   def post_mode(body: ModeIn):
-    """``policy_sim``/``policy_shadow`` need a policy loaded first (``POST /policy/load``) -
-    checked here synchronously so the caller gets an immediate 409 rather than a silent
+    """``policy_sim``/``policy_shadow`` need a policy loaded first (``POST /policy/load``);
+    ``file_replay`` needs a recording loaded first (``POST /replay/load``); ``policy_shadow``
+    is P4 (the obs-source mux only accepts ``real`` once shadow mixing is implemented).
+    Checked here synchronously so the caller gets an immediate 409/501 rather than a silent
     failure on the sim thread, which only ever sees commands through the async queue."""
-    if body.mode in ("real_replay", "file_replay"):
-      raise HTTPException(501, f"mode {body.mode!r} needs the P3/P4 telemetry bridge (see API.md)")
+    if body.mode == "policy_shadow":
+      raise HTTPException(501, "policy_shadow (per-term obs mux) is P4 - see API.md")
     if body.mode.startswith("policy") and core.policy is None:
       raise HTTPException(409, f"mode {body.mode!r} needs a policy loaded first (POST /policy/load)")
+    if body.mode == "file_replay" and core.replayer is None:
+      raise HTTPException(409, "mode 'file_replay' needs a recording loaded first (POST /replay/load)")
     core.submit({"op": "mode", "value": body.mode})
     return {"ok": True}
 
@@ -257,6 +267,45 @@ def build_app(core, freshness: dict) -> FastAPI:
       raise HTTPException(400, str(exc))
     return {"sources": core.obs_mux.sources, "mask": "".join(core.obs_mux.mask())}
 
+  @app.post("/record/start", summary="Start streaming JointState to a jsonl.gz recording")
+  def post_record_start(body: dict | None = None):
+    path = (body or {}).get("path") if body else None
+    try:
+      return core.start_recording(path)
+    except RuntimeError as exc:
+      raise HTTPException(409, str(exc))
+
+  @app.post("/record/stop", summary="Stop the current recording; returns path and line count")
+  def post_record_stop():
+    try:
+      return core.stop_recording()
+    except RuntimeError as exc:
+      raise HTTPException(409, str(exc))
+
+  @app.post("/replay/load", summary="Load a jsonl.gz recording for mode=file_replay")
+  def post_replay_load(body: dict):
+    path = body.get("path")
+    if not path:
+      raise HTTPException(400, "body needs {'path': '...'}")
+    try:
+      return core.load_replay(path)
+    except (FileNotFoundError, ValueError) as exc:
+      raise HTTPException(400, f"{type(exc).__name__}: {exc}")
+
+  @app.post("/replay/seek", summary="Seek the loaded recording to a fraction [0,1]")
+  def post_replay_seek(body: dict):
+    if core.replayer is None:
+      raise HTTPException(409, "no recording loaded")
+    core.submit({"op": "replay_seek", "frac": float(body.get("frac", 0.0))})
+    return {"ok": True}
+
+  @app.post("/replay/speed", summary="Set the loaded recording's playback speed multiplier")
+  def post_replay_speed(body: dict):
+    if core.replayer is None:
+      raise HTTPException(409, "no recording loaded")
+    core.submit({"op": "replay_speed", "speed": float(body.get("speed", 1.0))})
+    return {"ok": True}
+
   @app.get("/gains", summary="Current PD gains, with the training values alongside")
   def get_gains():
     return {"source": core.gains_source, "gains": core.gains_table()}
@@ -315,8 +364,40 @@ def build_app(core, freshness: dict) -> FastAPI:
 
   @app.websocket("/ws/in")
   async def ws_in(ws: WebSocket):
+    """Receive JointState/ImuState (schema.py wire format), one JSON object per text frame.
+
+    Every accepted message gets ``{"ok": true, "seq": ...}`` back; a bad one gets
+    ``{"error": "..."}`` and the connection stays open - one malformed frame from a dummy
+    transmitter or a real host must not tear down the whole telemetry session (R3/R5)."""
     await ws.accept()
-    await ws.send_text(json.dumps({"error": "/ws/in is P3 (telemetry ingest); see API.md"}))
-    await ws.close()
+    try:
+      while True:
+        text = await ws.receive_text()
+        try:
+          obj = json.loads(text)
+        except json.JSONDecodeError as exc:
+          await ws.send_text(json.dumps({"error": f"invalid JSON: {exc}"}))
+          continue
+        typ = obj.get("type") if isinstance(obj, dict) else None
+        try:
+          if typ == "JointState":
+            msg = JointState.model_validate(obj)
+            unknown = validate_joint_names(msg.joint_names, core.act_names)
+            if unknown:
+              await ws.send_text(json.dumps({"error": f"unknown joints: {unknown}"}))
+              continue
+            core.real.ingest_joint_state(msg)
+          elif typ == "ImuState":
+            core.real.ingest_imu_state(ImuState.model_validate(obj))
+          else:
+            await ws.send_text(
+              json.dumps({"error": f"/ws/in accepts JointState/ImuState, not {typ!r}"})
+            )
+            continue
+          await ws.send_text(json.dumps({"ok": True, "seq": obj.get("seq")}))
+        except Exception as exc:  # a bad frame must never take the socket down
+          await ws.send_text(json.dumps({"error": f"{type(exc).__name__}: {exc}"}))
+    except WebSocketDisconnect:
+      return
 
   return app
