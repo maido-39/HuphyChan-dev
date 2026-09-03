@@ -101,4 +101,5 @@
 - [[2026-09-02_v30proxyfix_AB_st45_imuclip_idrsmoke_test]]
 - [[2026-09-03_legonly_ab_smoke_test]] — ★Era-11 LegOnly(상체 제거 12-DOF) 첫 오케스트레이션 스모크, v2s1 레시피 상속
 - [[2026-09-03_legonly_ab_v1]] — LegOnly 본학습(16384 env), 스모크 PASS 후 launch
+- [[2026-09-03_legonly_ab_v2_smoke]] — ★미러축 버그픽스 검증 스모크: 프리플라이트 게이트 수정전 FAIL(L_knee 사용창 0.00°)→수정후 12관절 PASS, 발목 폐루프 리셋 closure 37.27→0.001 mm, L_knee qtarget 진폭 0.00→27~33°·사용ROM 0.21→30~37°·스톱 상시토크 21.8→6.4 N·m. v2/v3/v4 회귀 Δdefault 0.0
 - [[2026-09-03_legonly_gait_kinematics]] — ★legonly_ab_v1 iter5600 보행 운동학 측정(순수 측정, 학습 미개입): 무릎 스윙 굴곡 8~10°(사람 60°)·왼무릎 사용ROM 0.2%·qtarget이 클립에 100% 붙음(정책 문제, PD 아님)·왼발 toe-off 부재(발피치 −0.1°)·**v30 모델 좌우 관절 부호 불일치로 L_knee 사용가능폭 0°** 발견

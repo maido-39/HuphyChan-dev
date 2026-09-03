@@ -60,3 +60,57 @@ R_knee axis −Y [−120,0]) + 런 env.yaml(`.*_knee_joint: −0.35`, 단일 cli
    로터면 규약은 배포 어댑터의 부호맵(HUPHY sign=±1 캘리브레이션, docs/116)으로 이관 —
    업계 관행(조사 13/13 설정 단일 default, 팀원 huphy.xml도 대칭+gear부호). 장기적으로
    우월하나 모델 재감사 필요 → 사용자 결정 항목으로 브리핑에 게시.
+
+## 3. 부호가정 전수감사 (2026-09-03 수정 시 실시)
+
+감사 범위: `legonly_ab_v1` 런 설정이 실제로 활성화하는 **모든** 리워드·관측·이벤트·종료·
+액추에이터 항 + 초기자세 키프레임. 판정 기준은 "좌우 관절 부호 규약이 반대인 모델에서
+좌우가 다른 의미를 갖는가".
+
+### 3a. 관절 부호가 결과를 바꿀 수 있는 항
+
+| 항 | 부호를 어떻게 쓰는가 | 판정 | 조치 |
+|---|---|---|---|
+| `stance_knee_extension` (w −2.0, 25°) | `torch.abs(q)` − target | **이미 안전** | 없음. 무릎 range는 어느 규약에서도 0이 완전신전이라 `abs(q)` = 굴곡각. 다만 버그 상태에서는 왼무릎이 0에 고정돼 이 항이 "완전히 편 무릎"이라는 **허구의 측정치**(2.52°)를 냈다 — 항 자체는 정상, 입력이 오염이었다 |
+| `variable_posture` (pose, w 1.0) | $(q - q_{default})^2 / \sigma^2$ | **default가 유일한 부호원** | 1번 픽스로 해결. `std_*` 정규식은 전부 크기(σ)라 부호 없음 |
+| `dof_pos_limits` (w −1.0) | 모델의 `soft_joint_pos_limits` 사용 | **이미 안전**(관절별) | 없음. 단 버그 상태에서 L_knee가 소프트 하한 밖 6°에 상시 눌려 **상시 페널티 −0.105/step**을 내고 있었다 |
+| `joint_pos_rel` 관측(actor·critic) | $q - q_{default}$ | **default가 유일한 부호원** | 1번 픽스로 해결 |
+| bent 키프레임 크랭크·로드 각 | v3 기하 해를 그대로 대입 | **버그(신규 발견)** | `_reexpress_loop_pose()` 추가 — 축이 뒤집힌 힌지의 각도만 부호 반전. v30 closure **37.3 mm → 0.001 mm**, v3/v4는 0.001 mm 불변 |
+| action clip (`PYG_SAFE_TARGET_CLIP`) | 손으로 적은 정규식 표 | **버그(본건)** | `safe_target_clip()` 관절별 유도 |
+| `_bent_joint_pos` hip_pitch/knee default | 단일 정규식 | **버그(본건)** | `signed_pose()` 크기+range유도 부호 |
+| cant30/cant20 키프레임 `L_hip_yaw −0.165 / R +0.165` | 명시적 좌우 반대값 | **정상** | 없음. hip_yaw는 좌우 축·range 동일(대칭)이라 이건 규약 아티팩트가 아니라 **진짜 좌우 비대칭**(발끝 벌어짐 보정) |
+| `.*_ankle_pitch_joint: 0.36` (serial bent) | 단일 정규식 | **현재 정상, 미래 취약** | 값 유지(+0.36은 range의 **짧은** 쪽이라 `signed_pose`를 쓰면 오히려 뒤집힌다). 대신 `assert_unmirrored("ankle_pitch")`로 미래 미러링 시 import 실패 |
+
+### 3b. 부호와 무관함을 확인한 항 (변경 없음)
+
+`knee_overspeed`(|q̇|) · `thermal_effort`(τ²/rated²) · `torque_limit`(|F_cmd|, w 0) ·
+`action_rate_l2`/`action_l2`(액션 차분) · `foot_clearance` · `foot_swing_height` ·
+`foot_slip` · `soft_landing` · `foot_impact_velocity` · `contact_force_cap` · `air_time` ·
+`self_collisions` · `track_linear_velocity` · `track_lin_vel_progress` ·
+`track_angular_velocity` · `stand_still_penalty`(명령 프레임 부호만) · `upright` ·
+`body_ang_vel` · `angular_momentum` · 종료항 3종 · `encoder_bias`(±0.015 대칭) ·
+`push_robot`(베이스 속도) · `reset_robot_joints`(범위 0) · `PYG_ACTION_SCALE`(전 관절 0.25) ·
+액추에이터 Kp/Kd/effort/T-N 파라미터(전부 크기).
+
+`pseudo_inertia`(inertial DR): COM 오프셋 `t1/t2/t3` 범위가 0 대칭(±5 mm, 최대 비대칭
+1.6 mm)이고 좌우가 **독립 추출**이므로 바디 프레임이 미러여도 통계적으로 동일 — 부호 버그
+아님. 1.6 mm 비대칭은 무의미한 크기로 판단해 기록만 한다.
+
+### 3c. 미해결로 남긴 것 (상체 전용, 이번 픽스 범위 밖)
+
+**`shoulder_roll` 부호 규약이 코드 두 곳에서 서로 반대다.** 이 픽스에서 고치지 않았다 —
+LegOnly 모델에는 어깨 관절이 아예 없어 이번 런에 영향이 0이고, 고치면 `v2u1` 계통의
+재현성이 깨지기 때문이다.
+
+- `get_spec()`(용접 경로, `PYG_UPPER_DOF` OFF): 주석 "a NEGATIVE shoulder_roll is abduction
+  on both sides", 코드도 `np.radians(-abd)`.
+- `_bent_joint_pos()`(`PYG_UPPER_DOF` ON): 주석 "Both shoulder-roll axes use +q for
+  abduction", 코드는 `+radians(abd)`.
+
+두 주석은 직접 모순이며, v3/v4의 shoulder_roll range는 좌우 동일 `[−32°, +30°]`(축만 미러)라
+range 유도 부호는 **−1** = 용접 경로 쪽이다. 즉 `v2u1`은 `v2s1`과 **팔 자세가 좌우 반전된
+상태**로 학습했을 가능성이 높다. 게다가 v30 FullDoF는 shoulder_roll range 자체가 미러
+(`L [−15°, +130°]` / `R [−130°, +15°]`)라 단일 정규식 `+15°`는 오른팔에서 range 끝
+(내전 한계)이 된다. 신설 프리플라이트 게이트가 이 경우 `offset-outside-window` **경고**를
+띄운다(FAIL은 아님 — 창 자체는 130.5° 열려 있으므로). **상체 런을 다시 돌리기 전에 결론이
+필요한 항목.**

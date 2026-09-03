@@ -869,6 +869,16 @@
    "width": 440,
    "height": 320,
    "color": "6"
+  },
+  {
+   "id": "n_legonly_v2_smoke",
+   "type": "file",
+   "file": "experiments/2026-09-03_legonly_ab_v2_smoke.md",
+   "x": 20020,
+   "y": 300,
+   "width": 440,
+   "height": 320,
+   "color": "6"
   }
  ],
  "edges": [
@@ -1636,6 +1646,12 @@
    "fromNode": "n_v2s1",
    "toNode": "n_legonly_v1",
    "label": "recipe inherited"
+  },
+  {
+   "id": "e_v1_v2smoke",
+   "fromNode": "n_legonly_v1",
+   "toNode": "n_legonly_v2_smoke",
+   "label": "v1 halted (L_knee action window 0 deg) -> config side-aware fix, verified by smoke"
   }
  ]
 }
