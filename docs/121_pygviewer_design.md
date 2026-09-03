@@ -91,6 +91,8 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
 
 - 09-04 — **P4 항목3 완료 (`compare.py`)**. 두 `record.py` jsonl.gz 녹화(헤더+JointState 행)를 직접 읽어 R11(contract_hash 불일치 시 `--i-know` 없으면 SystemExit 거부)·R9(base 모드/높이/지면/gains_source 상이 시 경고 배너, 거부는 안 함)·R5(공통 **절대** t_ns 기준 격자에서 상호상관으로 clock offset 추정 — 파일별 자기 시작시각 기준 상대시간으로 하면 지연이 재영점화로 상쇄되어 사라짐을 30ms 주입 합성테스트가 실제로 잡아냄: 첫 구현은 5ms만 반환했고 `_series_abs`로 절대시간 사용하도록 수정 후 통과, 세그먼트 분할 재추정으로 지터 프록시)를 구현. joint별 target/q/tau_est PNG(영어 라벨, sim 실선/real 점선)를 `docs/img/`에 저장. `tests/test_compare.py` 7건(합성 30ms+5ms지터 녹화로 오프셋 회수 15ms 이내, 계약불일치 거부/우회, 조건경고, PNG 출력, 관절 결측 graceful). **pytest 188 passed**(항목2의 181에서 +7). 커밋 `8be2921`.
 
+- 09-04 — **P4 항목4 완료 (Gains diff 표, R7)**. `RealState`가 `JointState.gains`(스키마엔 P0/P1부터 있었으나 아무도 안 읽던 필드)를 저장; `SimCore.gains_table()`이 관절별 모터 기종(`joint_family`: RS03/RS04, 계약에 이미 구워져 있던 값 노출만 추가)·수신된 real kp/kd·5% 초과 시 플래그되는 real/sim 비율을 추가. UI Gains 폴더는 real 데이터가 있을 때만 확장 표를 렌더(없으면 기존 sim전용 표 유지)하고 플래그를 빨간 글씨로 표시, 매 readout tick마다 갱신(이전엔 패널 생성/소스전환 시에만 갱신 — 텔레메트리는 라이브로 들어오므로 정정). `tests/test_gains_diff.py` 3건(텔레메트리 전 real열 없음, 의도적 kp 불일치 플래그+kd 비플래그, 5%이내 비플래그). **pytest 191 passed**(항목3의 188에서 +3). 커밋 `1bd76bb`.
+
 ### P0/P1 결과 (2026-09-03, 코더)
 
 **bake 6변형** — `/home/syaro/pyg_fea/pygviewer/cache/`, 변형당 서브프로세스 1개(약 8 s, RAM 1.3 GB 피크).
