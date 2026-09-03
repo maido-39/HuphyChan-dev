@@ -53,6 +53,11 @@ class RealState:
     self.qd: dict[str, float | None] = {n: None for n in act_names}
     self.tau: dict[str, float | None] = {n: None for n in act_names}
     self.target: dict[str, float | None] = {n: None for n in act_names}
+    # P4/R7: the hardware's OWN reported PD gains, when a JointState carries them - kept
+    # separately from q/qd/tau/target because unlike those, a gains report is expected to be
+    # nearly static (it changes on a config reload, not every packet), so "last received" is
+    # simply "current", with no staleness clock of its own.
+    self.gains: dict[str, dict | None] = {n: None for n in act_names}
     self.ankle_derived: dict[str, dict[str, float]] = {}
     self.imu: dict[str, Any] | None = None
     self.imu_age_ref: float | None = None
@@ -115,6 +120,10 @@ class RealState:
         self.qd[n] = qd
         self.tau[n] = tau
         self.target[n] = tgt
+      if msg.gains:
+        for n, g in msg.gains.items():
+          if n in self.gains and g:
+            self.gains[n] = dict(g)
       if msg.ankle_derived:
         self.ankle_derived = msg.ankle_derived
 

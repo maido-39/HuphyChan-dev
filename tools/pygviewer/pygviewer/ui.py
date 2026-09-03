@@ -419,11 +419,31 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
 
     def _gains_md():
       t = state["core"].gains_table()
-      rows = ["| joint | kp | kd | kp train | kd train |", "|---|---|---|---|---|"]
+      have_real = any(g.get("real_kp") is not None for g in t.values())
+      if not have_real:
+        rows = ["| joint | motor | kp | kd | kp train | kd train |", "|---|---|---|---|---|---|"]
+        for n, g in t.items():
+          rows.append(
+            f"| {n.replace('_joint', '')} | {g.get('motor', '?')} | {g['kp']:.1f} | "
+            f"{g['kd']:.2f} | {g['kp_train']:.1f} | {g['kd_train']:.2f} |"
+          )
+        return "\n".join(rows) + "\n\n*(no hardware gains received yet - real columns appear once telemetry reports them, R7)*"
+      # P4/R7: real gains have arrived - show them alongside sim with a ratio, red when >5% off.
+      rows = ["| joint | motor | kp sim | kp real | kp ratio | kd sim | kd real | kd ratio |",
+              "|---|---|---|---|---|---|---|---|"]
       for n, g in t.items():
+        def _cell(sim_v, real_v, ratio, flag):
+          if real_v is None:
+            return "-", "-"
+          txt = f"{ratio:.3f}" if ratio is not None else "-"
+          if flag:
+            txt = f'<span style="color:#e45756;font-weight:bold">{txt}</span>'
+          return f"{real_v:.2f}", txt
+        rp, rrp = _cell(g["kp"], g.get("real_kp"), g.get("real_ratio_kp"), g.get("real_flag_kp"))
+        rd, rrd = _cell(g["kd"], g.get("real_kd"), g.get("real_ratio_kd"), g.get("real_flag_kd"))
         rows.append(
-          f"| {n.replace('_joint', '')} | {g['kp']:.1f} | {g['kd']:.2f} | "
-          f"{g['kp_train']:.1f} | {g['kd_train']:.2f} |"
+          f"| {n.replace('_joint', '')} | {g.get('motor', '?')} | {g['kp']:.1f} | {rp} | {rrp} | "
+          f"{g['kd']:.2f} | {rd} | {rrd} |"
         )
       return "\n".join(rows)
 
@@ -700,6 +720,7 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
       lines += ["", "**" + " / ".join(s["warnings"]) + "**"]
     status_md.content = "\n".join(lines)
     state["telemetry_md"]()
+    gtxt.content = _gains_md()  # R7: refresh so a newly-received hardware gains report shows
 
   state["readout"] = readout
 

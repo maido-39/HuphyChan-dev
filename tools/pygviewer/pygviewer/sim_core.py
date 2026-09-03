@@ -575,17 +575,34 @@ class SimCore:
     return self.gains_table()
 
   def gains_table(self) -> dict:
-    return {
-      n: dict(
+    """P4/R7 adds the RECEIVED hardware gains (when any have arrived over telemetry) next to
+    the sim ones, per joint, with the ratio flagged when it is off by more than 5% - a
+    response overlay is meaningless if the two controllers are not even running similar
+    gains, so this has to be visible before anyone trusts one."""
+    fam = self.c.raw.get("joint_family", {})
+    out = {}
+    for i, n in enumerate(self.act_names):
+      row = dict(
         kp=float(self.kp[i]),
         kd=float(self.kd[i]),
         kp_train=float(self._kp_train[i]),
         kd_train=float(self._kd_train[i]),
         effort=float(self.eff[i]),
         overridden=n in self.gains_overrides,
+        motor=fam.get(n),
       )
-      for i, n in enumerate(self.act_names)
-    }
+      real = self.real.gains.get(n)
+      if real:
+        for k in ("kp", "kd"):
+          rv = real.get(k)
+          row[f"real_{k}"] = rv
+          sim_v = row[k]
+          if rv is not None and sim_v:
+            ratio = float(rv) / float(sim_v)
+            row[f"real_ratio_{k}"] = round(ratio, 4)
+            row[f"real_flag_{k}"] = abs(ratio - 1.0) > 0.05
+      out[n] = row
+    return out
 
   def _policy_tick(self) -> None:
     """One control tick of policy inference, at the trainer's own 50 Hz.
