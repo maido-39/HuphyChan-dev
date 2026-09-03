@@ -103,48 +103,91 @@ base z **0.903 m**(std 0), base vx −0.001±0.000 m/s — 완전 정지.
 | crank_A | RS03 | 22.3 | 1.41 | 60 |
 | crank_B | RS03 | 22.3 | 1.41 | 60 |
 
+**설계 해석 주석(수동)** — 크랭크 Kp/Kd(22.3/1.41)는 `loop_ankle_verify` 물리 앵커값(발목 관절측
+등가강성 기준)이며 자유 노브가 아니다. Kp/Kd 실물 이식 시 RS03/RS04 인코딩 범위 차이(docs/118 §2-A)
+주의. §1b-3의 좌우 부호가 반대인 것은 v30 모델의 미러축 때문이며 물리 의미는 대칭(굴곡 +20°)이다 —
+이 표의 부호 그대로 실물 배포 어댑터에 쓰면 안 되고 docs/116의 부호맵을 거쳐야 한다.
+프리플라이트 게이트 PASS 12/12.
 
+<!-- SPEC-TABLES:BEGIN (analysis/run_spec_tables.py) -->
 
-**§1b-2. 액추에이터 동역학·한계 (런 env.yaml 파싱, 2026-09-03 사용자 요청)**
+**§1b-2. 액추에이터 동역학·한계** (이 런의 `params/env.yaml` 파싱 — `2026-09-03_13-21-11_legonly_ab_v2_p1`)
 
 | 관절 그룹 | 모터 | Kp [N·m/rad] | Kd [N·m·s/rad] | effort 한계 [N·m] | 무부하 속도 [rad/s] | 로터 관성 armature [kg·m²] | 쿨롱 마찰 [N·m] | 점성 [N·m·s/rad] | T-N 곡선 |
 |---|---|--:|--:|--:|--:|--:|--:|--:|---|
-| hip_pitch, hip_roll | RS04 | 150 | 6 | 120 (stall 120.1) | 20.94 | 0.01633 | 0.269 | 0.0095 | 실측 22점 (`PYG_TN=1`) |
-| knee | RS04 | 220 | 6 | 120 (stall 120.1) | 20.94 | 0.01633 | 0.269 | 0.0095 | 실측 22점 |
-| hip_yaw | RS03 | 150 | 6 | 60 (stall 59.7) | 20.94 | 0.01527 | 0.285 | 0.0223 | 실측 37점 |
-| crank_A, crank_B (발목 2-RSU 구동) | RS03 | 22.3 | 1.41 | 60 (stall 59.7) | 20.94 | 0.01527 | 0.285 | 0.0223 | 실측 37점 |
-| ankle_pitch / ankle_roll | (수동, 크랭크로 구동) | — | — | — | — | — | — | — | 폐루프 등식구속 |
+| crank_A, crank_B | RS03 | 22.266 | 1.414 | 60 (stall 59.7) | 20.94 | 0.01527 | 0.285 | 0.0223 | 실측 37점 (`PYG_TN=1`) |
+| hip_yaw | RS03 | 150 | 6 | 60 (stall 59.7) | 20.94 | 0.01527 | 0.285 | 0.0223 | 실측 37점 (`PYG_TN=1`) |
+| hip_pitch | RS04 | 150 | 6 | 120 (stall 120.1) | 20.94 | 0.01633 | 0.269 | 0.0095 | 실측 22점 (`PYG_TN=1`) |
+| knee | RS04 | 220 | 6 | 120 (stall 120.1) | 20.94 | 0.01633 | 0.269 | 0.0095 | 실측 22점 (`PYG_TN=1`) |
+| ankle_pitch / ankle_roll | (수동, 크랭크가 구동) | — | — | — | — | — | — | — | 폐루프 `equality/connect` 등식구속 |
 
-크랭크 Kp/Kd(22.3/1.41)는 loop_ankle_verify 물리 앵커값(발목 관절측 등가강성 기준)이며 자유 노브가
-아니다. 토크는 `effort_limit`과 실측 T-N 곡선(속도 의존 상한) 중 작은 값으로 클램프된다
-(`PYG_MOTOR_MEAS=1`: J/b/쿨롱 실측). Kp/Kd 실물 이식 시 RS03/RS04 인코딩 범위 차이(docs/118 §2-A) 주의.
+토크는 `effort_limit`과 (있으면) 실측 T-N 곡선의 속도의존 상한 중 **작은 값**으로 클램프된다. armature/쿨롱/점성은 모터 실측값(`PYG_MOTOR_MEAS=1`)이면 실측, 아니면 카탈로그 추정치다.
 
-**§1b-3. ROM 한계·액션 창** (모델 XML range × soft factor 0.9 = 리워드 `dof_pos_limits` 기준; 액션 clip =
-`PYG_SAFE_TARGET_CLIP` 관절별 유도; 창 = clip ∩ range; default = 액션 0 자세; 프리플라이트 PASS 12/12)
+**§1b-3. ROM 한계·액션 창** (모델 XML range · soft 한계 = 중심±0.5·range×0.9 (mjlab `Entity` 규약) · 액션 clip = env.yaml `actions.joint_pos.clip` · 창 = clip 폭 · default = 액션 0 자세)
 
-| 관절 | XML range [°] | soft 한계(×0.9) [°] | 액션 clip [°] | 사용가능 창 [°] | default [°] |
-|---|---|---|---|--:|--:|
-| L_hip_pitch | [−120, +25] | [−108, +22.5] | [−112.75, +17.75] | 130.5 | −10.03 |
-| R_hip_pitch | [−25, +120] | [−22.5, +108] | [−17.75, +112.75] | 130.5 | +10.03 |
-| L_hip_roll | [−25, +85] | [−22.5, +76.5] | [−19.5, +79.5] | 99.0 | 0 |
-| R_hip_roll | [−85, +25] | [−76.5, +22.5] | [−79.5, +19.5] | 99.0 | 0 |
-| L/R_hip_yaw | [−45, +45] | [−40.5, +40.5] | [−40.5, +40.5] | 81.0 | 0 |
-| L_knee | [0, +120] | [0, +108] | [+6, +114] | 108.0 | +20.05 |
-| R_knee | [−120, 0] | [−108, 0] | [−114, −6] | 108.0 | −20.05 |
-| L/R_crank_A, _B | [−68.75, +68.75] | [−61.9, +61.9] | [−61.88, +61.88] | 123.8 | −17.1 |
-| L/R_ankle_pitch (수동) | [−50, +30] | [−45, +27] | — | — | +20.6 (크랭크 유도) |
-| L/R_ankle_roll (수동) | [−20, +20] | [−18, +18] | — | — | +0.15 |
+**soft 한계와 액션 clip은 같은 공식이다** — `Entity.soft_joint_pos_limits`와 `pygmalion_constants.safe_target_clip()`이 둘 다 *중심 ± 0.5·range·factor*를 쓴다(각 경계에 factor를 곱하는 것이 아니다: 비대칭 관절에서 두 식이 갈린다 — knee `[0,120]`은 `[6,114]`이지 `[0,108]`이 아니다). 그래서 `PYG_SAFE_TARGET_CLIP=1`인 런에서는 두 열이 정확히 일치하고, 정책이 통과하는 클램프와 시뮬레이터가 강제하는 클램프가 하나의 계약이 된다.
 
-액션 스케일 0.25 rad/단위(전 관절), 오프셋 = default(`use_default_offset`). 좌우 부호가 반대인 것은
-v30 모델의 미러축 때문이며 물리 의미는 대칭(굴곡 +20°)이다 — 이 표의 부호 그대로 실물 배포 어댑터에
-쓰면 안 되고 docs/116의 부호맵을 거쳐야 한다.
+모델 출처: 런 디렉토리 `repro/` 스냅샷 (권위) — `LegOnly_prototype-tempmass-motormeasured-armfix_v30_proxyfix_loop.xml`
 
-**§1b-4. 이 런의 리워드 스택 플래그** (env.yaml 가중치는 위 §1b 표가 정본): `PYG_INIT_MID=1`·`PYG_INIT_BENT=1`
-(bent 키프레임, §1d) · `PYG_KNEE_EXT=1` w−2.0 @25°(stance_knee_extension) · `PYG_SOFT_LANDING=1
-MODE=half`(foot_impact_velocity ×0.5 → −0.5) · `PYG_CMD_VY_STAGES=1` · `PYG_GATED_CURRICULUM=1`
-(dwell 800~3000, err ratio 1.1, fell ≤0.005, 최소 64 ep) · `PYG_CRITIC_DR_OBS=1`(critic 82D) ·
-`PYG_STUDENT_TEACHER=1`(actor 45D) · P1은 DR off(`PYG_DR_START_ITER=1e8`), P2에서 질량 DR
-(`mass_dr_legonly_fastener50_prototype-tempmass.json`)+push 램프.
+| 관절 | XML range [°] | soft 한계 [°] | 액션 clip [°] | 사용가능 창 [°] | default [°] | 구동 |
+|---|---|---|---|--:|--:|---|
+| L_hip_pitch_joint | [-120, 25] | [-112.8, 17.7] | [-112.8, 17.7] | 130.5 | -10.03 | 액션 |
+| L_hip_roll_joint | [-25, 85] | [-19.5, 79.5] | [-19.5, 79.5] | 99 | 0 | 액션 |
+| L/R_hip_yaw_joint | [-45, 45] | [-40.5, 40.5] | [-40.5, 40.5] | 81 | 0 | 액션 |
+| L_knee_joint | [0, 120] | [6, 114] | [6, 114] | 108 | 20.05 | 액션 |
+| L_crank_A_joint | [-68.8, 68.8] | [-61.9, 61.9] | [-61.9, 61.9] | 123.8 | -17.12 | 액션 |
+| L_crank_B_joint | [-68.8, 68.8] | [-61.9, 61.9] | [-61.9, 61.9] | 123.8 | -17.12 | 액션 |
+| L_ankle_pitch_joint | [-50, 30] | [-46, 26] | — (수동) | — | 20.6 | 수동 |
+| L_ankle_roll_joint | [-20, 20] | [-18, 18] | — (수동) | — | 0.15 | 수동 |
+| R_hip_pitch_joint | [-25, 120] | [-17.7, 112.8] | [-17.7, 112.8] | 130.5 | 10.03 | 액션 |
+| R_hip_roll_joint | [-85, 25] | [-79.5, 19.5] | [-79.5, 19.5] | 99 | 0 | 액션 |
+| R_knee_joint | [-120, 0] | [-114, -6] | [-114, -6] | 108 | -20.05 | 액션 |
+| R_crank_A_joint | [-68.8, 68.8] | [-61.9, 61.9] | [-61.9, 61.9] | 123.8 | -17.14 | 액션 |
+| R_crank_B_joint | [-68.8, 68.8] | [-61.9, 61.9] | [-61.9, 61.9] | 123.8 | -17.14 | 액션 |
+| R_ankle_pitch_joint | [-50, 30] | [-46, 26] | — (수동) | — | 20.63 | 수동 |
+| R_ankle_roll_joint | [-20, 20] | [-18, 18] | — (수동) | — | 0.15 | 수동 |
+
+액션 스케일 0.25 rad/단위, 오프셋 = default (`use_default_offset`). clip이 없는 구 설정에서는 정책 목표각을 시뮬레이터의 soft 한계가 사후에 잡는다 — 창은 soft 한계 폭으로 읽는다.
+
+**§1b-4. 이 런의 스택 플래그 (`PYG_*`)**
+
+출처: 런 디렉토리 `repro/launch_manifest.json` (권위)
+
+| 플래그 | 값 |
+|---|---|
+| `PYG_ANKLE_MODE` | AB |
+| `PYG_ARM_ABD_DEG` | 15 |
+| `PYG_CMD_VY_STAGES` | 1 |
+| `PYG_CRITIC_DR_OBS` | 1 |
+| `PYG_DR_END_ITER` | 100000001 |
+| `PYG_DR_START_ITER` | 100000000 |
+| `PYG_GATED_CURRICULUM` | 1 |
+| `PYG_GATE_ERR_RATIO` | 1.1 |
+| `PYG_GATE_FELL_MAX` | 0.005 |
+| `PYG_GATE_MAX_DWELL` | 3000 |
+| `PYG_GATE_MIN_DWELL` | 800 |
+| `PYG_GATE_MIN_EPISODES` | 64 |
+| `PYG_GATE_WINDOW` | 100 |
+| `PYG_INIT_BENT` | 1 |
+| `PYG_INIT_MID` | 1 |
+| `PYG_KNEE_EXT` | 1 |
+| `PYG_KNEE_EXT_DEG` | 25 |
+| `PYG_KNEE_EXT_W` | 2.0 |
+| `PYG_MASS_DR_JSON` | `mass_dr_legonly_fastener50_prototype-tempmass.json` |
+| `PYG_MODEL_TAG` | LegOnly_prototype-tempmass-motormeasured-armfix_v30_proxyfix |
+| `PYG_MOTOR_MEAS` | 1 |
+| `PYG_SAFE_TARGET_CLIP` | 1 |
+| `PYG_SOFT_LANDING` | 1 |
+| `PYG_SOFT_LANDING_MODE` | half |
+| `PYG_STUDENT_TEACHER` | 1 |
+| `PYG_TN` | 1 |
+| `PYG_V2` | 1 |
+
+§1b의 리워드 가중치 표가 정본이다 — 플래그는 그 가중치가 어떻게 조립됐는지의 기록이다.
+
+**P2 (`2026-09-03_19-49-49_legonly_ab_v2_p2`)**: 액추에이터 게인·한계·액션 clip이 위 P1 표와 **동일** (env.yaml 대조). 달라지는 것은 도메인 랜덤화·push 등 학습 조건뿐이다.
+
+<!-- SPEC-TABLES:END -->
 
 ## §2 이하 — 완주 후 측정으로 채운다 (fc/fcp + 200Hz 프로브 + §7 모터활용)
 
@@ -160,6 +203,7 @@ MODE=half`(foot_impact_velocity ×0.5 → −0.5) · `PYG_CMD_VY_STAGES=1` · `P
 | 09-03 19:27 | 3867 | 99.3 (50avg 100.4) | 986 | 0.265 | 0.0617 | -2.16 | 0.0004 / 7.7e-05 | 0.000 / 0.167 | 0.957 / 0.765 | 0.00 / 2.5 | 2.49 | **계속** — 게이트 6(19:38): 최종 stage(2.5) dwell 754/800, 낙상 0, err_xy 0.957(개선 추세), 런처 게이트 err 0.247 vs base 0.234(비 1.06 < 1.1 기준) → 졸업 조건 근접, 안정 스트릭(0/10) 채우면 P2 자동전이. ⚠watch: thermal 2.49(v1 동일 단계 2.22)·ep_len 986(low_base 0.167) — 중단 사유 아님, P2 전이 후 추이 확인. 감시자 정상(리뷰루프 1·와치독 1·로그 19:37) |
 | 09-03 19:48 | 4100 | — | — | — | — | — | — | 0.000 / — | gate err 0.247 vs base 0.234 | 0.00 / 2.5 | — | **P1 졸업 → P2 자동전이**: 게이트 커리큘럼(dwell ≥800 + 안정 스트릭) 통과, 런처가 model_4100에서 FULL RESUME으로 P2 발사(19:49:49, 18,100 iter, DR 램프 window 4100→14100). 와치독 `legonly_ab_v2_p2` 등록, 리뷰루프 p2 디렉토리로 재시작(20:12). 판정: **계속** — 다음 스냅샷(20:27)에서 전이 dip 회복 확인(v1 전례 1 h 내 회복) |
 | 09-03 19:48 | 4101 | 102.1 (50avg 101.0) | 1000 | 0.266 | 0.0562 | -2.19 | -0.0008 / 1.7e-04 | 0.000 / 0.083 | 0.977 / 0.778 | 0.00 / 2.5 | 2.52 | P1 phase-end: review before P2 |
+| 09-03 21:08 | 4758 | 102.5 (50avg 102.2) | 1000 | 0.264 | 0.0567 | -2.29 | 0.0001 / 2.6e-04 | 0.000 / 0.083 | 0.928 / 0.764 | 0.07 / 2.5 | 2.65 | **계속** — 게이트 7(21:20, P2 첫 스냅샷): 전이 dip 없음(v1은 4531에서 69/50avg 35.7로 급락) — FULL RESUME 후 reward 102.5 유지, ep_len 1000, 낙상 0, err_xy 0.928(개선), DR 램프 0.07 진행. ⚠watch 지속: thermal 2.17→2.49→2.65 상승(v1 P2 초 2.23) — DR 램프 중 추세 감시, 3.0 초과 시 §7 모터활용 조기 측정 |
 
 ## §R 참조
 [[2026-09-03_legonly_ab_v1]] · [[2026-09-03_legonly_ab_sideaware_smoke]] ·
