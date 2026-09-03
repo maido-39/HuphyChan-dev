@@ -10,6 +10,9 @@ up 8891 || (nohup python3 -m http.server 8891 --directory $R/tools/assembly_view
 up 6006 || (cd $M && nohup .venv/bin/tensorboard --logdir logs/rsl_rl/pygmalion_velocity --port 6006 --bind_all > analysis/out/tensorboard.log 2>&1 &)
 up 8089 || bash $M/analysis/viser_live.sh AB 8089
 up 8090 || bash $M/analysis/viser_live.sh RP 8090
+# pygviewer: sim<->real comparison viewer (viser 8094 + REST/WS API 8095). CPU only.
+up 8094 || (cd $R && CUDA_VISIBLE_DEVICES="" setsid nohup $M/.venv/bin/python3 tools/pygviewer/run.py \
+  --variant LegOnly-AB --port 8094 --api-port 8095 > tools/pygviewer/logs/pygviewer.log 2>&1 < /dev/null &)
 pgrep -f "gpu_sample[r].sh" >/dev/null || (cd $M && nohup bash analysis/gpu_sampler.sh analysis/out/gpu_usage.csv > /dev/null 2>&1 &)
 pgrep -f "review_loo[p].sh" >/dev/null || (cd $M && nohup bash analysis/review_loop.sh > analysis/out/review_loop.log 2>&1 &)
-sleep 2; ss -ltn | grep -E ":(8890|8891|8892|6006|8089|8090) " | awk '{print $4}'
+sleep 2; ss -ltn | grep -E ":(8890|8891|8892|6006|8089|8090|8094|8095) " | awk '{print $4}'

@@ -51,12 +51,12 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
 ## 6. 단계·검증 기준
 | Phase | 내용 | 완료 기준(검증) | 상태 |
 |---|---|---|---|
-| P0 | bake 6변형, SimCore, viser 씬, `/status` | 6 mjb+json; headless 5 s ≥195 Hz 물리·RSS<600 MB; `curl :8095/status` | 🔄 착수 21:15 |
-| P1 | 관절 UI/API, base 3모드, 지면, 폐루프 settle, 플롯 | `test_basefix`(fixed 드리프트<1e-6, pivot 위치<1e-4) · `test_loop_settle`(vs loop_ankle_verify.json, closure<0.01 mm) · `test_bake_contract` · `test_sim_rate` | 🔄 |
+| P0 | bake 6변형, SimCore, viser 씬, `/status` | 6 mjb+json; headless 5 s ≥195 Hz 물리·RSS<600 MB; `curl :8095/status` | ✅ 21:55 (199.8 Hz·drops 0·RSS 147 MB) |
+| P1 | 관절 UI/API, base 3모드, 지면, 폐루프 settle, 플롯 | `test_basefix`(fixed 드리프트<1e-6, pivot 위치<1e-4) · `test_loop_settle`(vs loop_ankle_verify.json, closure<0.01 mm) · `test_bake_contract` · `test_sim_rate` | ✅ 22:05 (98 tests / 11.7 s, 전부 통과) |
 | P2 | ONNX/.pt 정책, obs 빌더, 게인 소스 | `test_policy_parity`(<1e-4) · `test_obs_order` · 워킹 스모크(drift 러너와 vx 오차≤0.05) | ⏳ |
 | P3 | 스키마·WS/REST·HUPHY UDP 어댑터·더미·레코더 | `test_schema` · 더미 sine→real_replay · WS 50 Hz · 10 s 기록 RSS 불증 | ⏳ |
 | P4 | 스크립트 플레이어·compare·obs mux·섀도우 | 지연 주입 더미 오버레이 png · 더미 IMU가 액션 변화 | ⏳ |
-| 등록 | dashboard PORTS·start_all·README·launch.json·브리핑 | — | ⏳ |
+| 등록 | dashboard PORTS·start_all·README·launch.json·브리핑 | — | ✅ 22:20 (8094/8095) |
 
 ## 7. 재사용 소스
 `tools/sim2sim/mujoco_ab_loop_drift.py`(PD/T-N/obs) · `tools/sim2sim/dump_contract_ab.py`(계약) · `tools/viewer/mjcf_joint_viewer.py`(viser·settle) ·
@@ -68,3 +68,69 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
 
 ## 9. 진행 로그 (코더가 phase 완료마다 추가 — 시각·결과 숫자·커밋·문제)
 - 09-03 21:15 — 계획 승인, P0/P1 구현 착수(코더). 이 문서 생성.
+- 09-03 22:20 — **P0+P1 완료**. 6변형 bake, SimCore 200/50 Hz, viser 패널, FastAPI, pytest 98개 통과. 상세는 아래.
+
+### P0/P1 결과 (2026-09-03, 코더)
+
+**bake 6변형** — `/home/syaro/pyg_fea/pygviewer/cache/`, 변형당 서브프로세스 1개(약 8 s, RAM 1.3 GB 피크).
+`nq`가 AB 31 / RP 19인 것은 폐루프의 로드 유니버설 힌지 8개 + 수동 발목 4개 차이다.
+
+| variant | nu | nq | joints | mass [kg] | actor obs | contract sha | ankle inverse 잔차 [rad] | loop closure [mm] |
+|---|---|---|---|---|---|---|---|---|
+| FullDoF-AB | 12 | 31 | 24 | 35.6744 | 45 | `ade40b5b0de3` | 0.00815 | 0.00155 |
+| FullDoF-RP | 12 | 19 | 12 | 35.674332 | 45 | `e089dba18224` | — | — |
+| SemiFullDoF-AB | 12 | 31 | 24 | 35.6744 | 45 | `c9572af40b54` | 0.00788 | 0.00166 |
+| SemiFullDoF-RP | 12 | 19 | 12 | 35.674332 | 45 | `c05e871d0173` | — | — |
+| LegOnly-AB | 12 | 31 | 24 | 23.63014 | 45 | `46e0c18a820a` | 0.00788 | 0.00167 |
+| LegOnly-RP | 12 | 19 | 12 | 23.630072 | 45 | `2c58faf8e478` | — | — |
+
+**검증 수치**
+
+| 항목 | 기준 | 실측 |
+|---|---|---|
+| 물리 실시간 (LegOnly-AB, CPU) | ≥195 Hz | **199.8 Hz**, 제어 50.1 Hz, drop 0 |
+| RSS (headless / 뷰어 가동) | <600 MB | **147 MB / 218 MB** |
+| base `fixed` 2 s 드리프트 | <1e-6 m | **2.4e-13 m** (MuJoCo 기본 solref면 1.9e-4 m) |
+| base `pivot` 회전중심 이동 (5 s) | <1e-4 m | **1.1e-8 m**, 자세는 중력으로 자유 회전 |
+| AB 폐루프 closure (정지·명령 6점) | <0.01 mm | **0.0017~0.0091 mm** |
+| 발목 명령 → 실제 각 (6점, 좌측) | — | 부호맵 적용 **0.008 rad** / 미적용 **0.360 rad** |
+| 전달비 vs `loop_ankle_verify.json`(v3) | 5 % 이내 | pitch 1.172 vs 1.210, roll 1.378 vs 1.418 (3 %) |
+| pytest | ≤2 분 | **98 passed / 11.7 s** |
+
+그림: `docs/img/pygviewer_p1_verification.png` (이 호스트에 오프스크린 OpenGL이 없어 matplotlib 스틱피겨 + 그래프).
+
+### P0/P1에서 발견한 함정 (계획 대비 정정 4건)
+
+1. **`ankle_rp_envelope.json`의 크랭크 격자는 v30에 그대로 쓸 수 없다.** 계획 §1은 이 격자를
+   역해로 지정했으나, 격자는 `pygmalion_v3_printed_loop`에서 푼 것이고 v30 생성기가 크랭크
+   관절축 부호를 바꿨다. 그대로 쓰면 발 자세가 명령에서 **0.360 rad(20.7°)** 어긋난다. bake가
+   격자를 직접 명령해 보고 8가지 (swap, ±A, ±B) 중 최적을 **측정으로 적합**한다(L: A→−A,
+   R: B→−B) → 잔차 0.008 rad. 실패 시(`usable:false`) bake가 측정한 2×2 야코비의 선형 역해로
+   자동 대체하고 UI에 표기.
+2. **한 다리 안에서 crank_A와 crank_B의 관절축이 서로 반대다**(L: A=−Y, B=+Y). 그래서 v3의
+   "공통 크랭크당 피치"는 v30 q공간에서 **대향 모드**다. 좌우 사이에서도 crank·ankle_roll 축이
+   미러인데 **range가 대칭이라 range 비교만으로는 미러가 안 잡힌다** → 계약에
+   `range_mirrored`/`axis_mirrored`를 분리 기록하고 테스트로 고정.
+3. **씬 spec을 다시 compile하면 mjlab의 SimulationCfg가 사라진다.** mjlab은 timestep·solver를
+   *컴파일된 모델*에 적용하므로 spec에는 XML 원래 `<option>`(timestep 0.002)이 남아 있다. 처음
+   구운 모델은 500 Hz·다른 solver 설정이었다. 이제 bake가 `opt` 블록 전체를 env에서 복사하고
+   timestep/integrator/solver/iterations/cone/impratio를 **계약으로 검증**한다.
+4. **bent 키프레임이 발바닥을 바닥 아래 38.6 mm에 놓는다.** `_v2_standing_z()`가 pygmalion_v2
+   검증 파일의 `standing_base_z`를 읽는데 v30은 다른 로봇이라, 매 학습 리셋이 발이 묻힌 상태로
+   시작하고 솔버가 첫 ~20 스텝에 밀어낸다(base z 0.868 → 0.906). 뷰어는 학습과 동일하게
+   재현하고 값을 계약(`keyframe_sole_penetration_m`)과 테스트에 기록만 한다 — **모델·설정은
+   건드리지 않음**.
+
+추가 관측: RP 3변형의 `ankle_pitch`는 default +0.360 rad가 자기 `safe_clip` 상한(+0.454)에서
+**0.094 rad(5.4°)** 밖에 안 떨어져 있다(반대쪽은 66.6°). legonly_ab_v1의 창 0° 사고와 같은 계열이며
+치명적 수준은 아니라 테스트에 측정값으로 고정해 두었다(더 좁아지면 실패).
+
+### 계획 대비 의도적 편차 (승인 필요)
+
+* bake 토글에 과제 지시 목록(`PYG_INIT_MID/MOTOR_MEAS/TN/STUDENT_TEACHER`) 외에
+  **`PYG_V2` `PYG_INIT_BENT` `PYG_SAFE_TARGET_CLIP` `PYG_ARM_ABD_DEG=15`를 추가**했다. `PYG_INIT_MID`는
+  `PYG_INIT_BENT` 없이는 무효이고, 이 조합이 현재 학습(legonly_ab_v2)의 매니페스트와 일치한다.
+  `--no-init-bent`로 끌 수 있고 `env_toggles`에 그대로 기록된다.
+* 뷰어 기본 base 모드를 `fixed`로 했다(`--base free`로 변경). P1에는 균형을 잡는 것이 없어
+  free로 두면 약 2 s 만에 넘어져 첫 화면이 쓰러진 로봇이 된다.
+

@@ -5,7 +5,7 @@ import json, os, re, socket, subprocess, time, glob, shutil
 REPO = '/home/syaro/MikuchanRemote/Human-Pygmalion'; MJ = f'{REPO}/mujoco-sim/mjlab'
 RUNS = {'ankleAB_c3': dict(wandb='https://wandb.ai/dongyub39-snu/pygmalion/runs/4ogmqfot', viser=8089, note='c2r model_3100 + PYG_SOFT_LANDING (squared foot_impact_velocity w -1, cap 420/560)'),
         'ankleRP_c3': dict(wandb='https://wandb.ai/dongyub39-snu/pygmalion/runs/1691r7uo', viser=8090, note='c2 model_3100 + PYG_SOFT_LANDING')}
-PORTS = {'dashboard': 8890, 'viser_AB': 8089, 'viser_RP': 8090, 'tensorboard': 6006, 'assembly_viewer': 8891, 'collision_viewer': 8892}
+PORTS = {'dashboard': 8890, 'viser_AB': 8089, 'viser_RP': 8090, 'tensorboard': 6006, 'assembly_viewer': 8891, 'collision_viewer': 8892, 'pygviewer': 8094, 'pygviewer_api': 8095}
 HELPERS = {'gate_watch': 'gate_watc[h].sh', 'review_loop': 'review_loo[p].sh', 'gpu_sampler': 'gpu_sample[r].sh', 'viser_live': 'viser_liv[e].py', 'train': 'train_wandb_vide[o].py'}
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 

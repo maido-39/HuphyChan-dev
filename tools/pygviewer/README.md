@@ -1,0 +1,195 @@
+# pygviewer - Pygmalion Sim &harr; Real comparison web viewer
+
+One process that owns one MuJoCo model, runs it at the training rates on the CPU, and serves
+it as a 3D scene with a control panel (viser, **:8094**) plus a REST/WebSocket API
+(FastAPI, **:8095**, OpenAPI at `/docs`).  Built so that a number read here is comparable to
+the same number read in training - not merely similar.
+
+Status: **P0 (bake + sim loop + scene + /status) and P1 (manual joint control, base fixing,
+ground toggle, plots) are implemented.**  P2 policy, P3 telemetry, P4 comparison are
+skeletons with the interfaces fixed - see `docs/121_pygviewer_design.md` section 6.
+
+---
+
+## Run
+
+```bash
+cd /home/syaro/MikuchanRemote/Human-Pygmalion
+
+# viewer (viser 8094 + API 8095), CPU only - the GPU belongs to the trainer
+CUDA_VISIBLE_DEVICES="" mujoco-sim/mjlab/.venv/bin/python3 \
+    tools/pygviewer/run.py --variant LegOnly-AB --port 8094 --api-port 8095
+
+# equivalent, as a module (namespace package, no tools/__init__.py needed)
+CUDA_VISIBLE_DEVICES="" mujoco-sim/mjlab/.venv/bin/python3 \
+    -m tools.pygviewer --variant LegOnly-AB
+
+# rate / footprint check, no browser
+... tools/pygviewer/run.py --variant LegOnly-AB --headless --seconds 5
+```
+
+Options: `--base free|fixed|pivot` (default `fixed` - nothing balances the robot in P1, so a
+free base topples in about 2 s), `--keyframe home|knees_bent`, `--stale-ok`,
+`--no-api`, `--cache DIR`.  The process refuses to start if 8094 or 8095 is already taken.
+
+LAN: `http://192.168.20.177:8094` and `http://192.168.20.177:8095/docs`.
+
+## Bake
+
+The Pygmalion MJCF in `asset_zoo` has **no actuators, no floor and no keyframe** (`nu=0`) -
+mjlab attaches all three at env-build time.  So the viewer runs a model *baked out of the
+training env*:
+
+```bash
+CUDA_VISIBLE_DEVICES="" mujoco-sim/mjlab/.venv/bin/python3 \
+    tools/pygviewer/run.py bake model --variant LegOnly-AB
+... bake model --all          # all six, one subprocess each (~8 s and ~1.3 GB per variant)
+```
+
+Output goes to `/home/syaro/pyg_fea/pygviewer/cache/<variant>.mjb` +
+`<variant>.model_contract.json`.  Six variants: `{FullDoF,SemiFullDoF,LegOnly}-{AB,RP}`.
+
+The bake adds exactly three things to the scene spec and edits **no XML**:
+`pyg_anchor` (mocap body, no geom - a geom would change the total mass, which the bake
+asserts is unchanged), `base_weld` (equality/weld, inactive) and `base_pivot`
+(equality/connect, inactive).  It then asserts the compiled model matches the env on `nu`,
+`nq/nv`, mass, keyframe qpos, actuator force range and gain, gravity, and the whole
+`opt` block (timestep, integrator, solver, iterations, cone, impratio).
+
+The contract records, among other things: `joint_names`, `action_joint_names` and
+`obs_joint_names` **in the env's own resolved order**, `obs_layout` (the actor group's terms,
+because their names change with `PYG_STUDENT_TEACHER`), `default_q`, `gains` (kp/kd from the
+mjlab actuator objects, effort from the model), `tn_curves`, `dof_props`, `safe_clip`,
+`joint_contract` (axis, range, `travel_sign`, `mirrored` / `range_mirrored` / `axis_mirrored`),
+`keyframes`, `spawn_base_z`, `env_toggles`, `sim_options`, `anchor_eq_ids`, `floor_geom`,
+`loop_transmission` (AB) and source hashes.  The viewer re-hashes the XML,
+`pygmalion_constants.py` and the `.mjb` at startup and refuses to run on a stale cache
+unless `--stale-ok`.
+
+Bake toggles are the ones the current runs train under
+(`docs/experiments/2026-09-03_legonly_ab_v2.md` section 1b-4): `PYG_V2 PYG_INIT_BENT
+PYG_INIT_MID PYG_MOTOR_MEAS PYG_TN PYG_SAFE_TARGET_CLIP PYG_STUDENT_TEACHER
+PYG_ARM_ABD_DEG=15` plus the per-variant selector (AB: `PYG_ANKLE_MODE=AB` +
+`PYG_MODEL_TAG`; RP: `PYG_ANKLE_MODE=RP` + `PYG_V2_XML` - the loop branch has no
+`PYG_V2_XML` override at all, docs/112 L44).  `--no-init-bent` bakes the HOME keyframe.
+
+## Base fixing
+
+| mode | equality | what is held | what is free |
+|---|---|---|---|
+| `free` | none | - | everything (gravity only) |
+| `fixed` | `base_weld` | base position **and** orientation = the mocap anchor | joints |
+| `pivot` | `base_pivot` | the point `pivot_offset` (in the BASE frame) sits at the anchor | base orientation, joints |
+
+Both equalities use `solref (0.002, 1)` / `solimp (0.9999, 0.99999, 1e-5)`.  With MuJoCo's
+default softness the 23 kg robot sags 3.7e-4 m off its "fixed" mount and keeps creeping
+1.9e-4 m per 2 s; with these numbers it is 2.4e-13 m of drift over 2 s.  Do not relax them.
+
+**Gravity is never modified.**  The ground is toggled by setting the floor geom's
+`contype`/`conaffinity` to 0, not by removing weight.
+
+`reset to home / knees_bent` restores the joints **and** the base pose, in every mode.
+
+## Ankle in foot space (AB only)
+
+The AB build's ankle pitch/roll have no motor - they are dragged by two push rods off the
+crank pair.  The panel offers pitch/roll sliders anyway, inverted through the `crank_rad`
+grid in `pygmalion_locomotion/assets/pygmalion_v2/ankle_rp_envelope.json`.
+
+That grid was solved on `pygmalion_v3_printed_loop`.  **On the v30 build, used as-is, it puts
+the foot 0.36 rad (20.7 deg) away from the commanded angle** - the v30 generator re-signed
+the crank joint axes.  The bake therefore *fits* the per-leg sign map by commanding the grid
+and reading the ankle back (L: `A -> -A`, R: `B -> -B`), which brings the worst probe
+residual to 0.008 rad, and records both numbers in the contract.  If a future model makes
+the fit fail (`usable: false`), the viewer falls back to the linear inverse from the 2x2
+Jacobian the bake measured on that model, and the panel says so.
+
+Crank targets are only ever reached through the PD.  Snapping a crank `qpos` tears the four
+`equality/connect` closures open and MuJoCo answers with QACC NaN
+(`tools/viewer/mjcf_joint_viewer.py`).  There is no code path here that does it.
+
+## Mirrored axes
+
+On v30 the two legs have opposite joint axes for the knee, the hips, the cranks and the
+ankle roll.  `+0.35 rad` is flexion on the left knee and extension on the right.  Every
+default, clip window and sign in this tool comes from the contract
+(`signed_pose` / `safe_target_clip` / `joint_travel_sign`), never from a regex.  Mirrored
+joints carry a second readout, `phys = travel_sign * q`, so the same physical motion reads
+the same on both legs.  Note that a range-only mirror test is not enough: `ankle_roll` has
+the same symmetric range on both legs and *opposite axes*, so the contract flags
+`range_mirrored` and `axis_mirrored` separately.
+
+## Tests
+
+```bash
+cd tools/pygviewer && CUDA_VISIBLE_DEVICES="" \
+    ../../mujoco-sim/mjlab/.venv/bin/python3 -m pytest
+```
+
+98 tests, ~12 s, CPU only:
+
+| file | what it pins |
+|---|---|
+| `test_bake_contract.py` | all six contracts: required fields, sizes, AB action order vs docs/112, gravity, 200/50 Hz, default inside range and clip, **command window >= 0.2 rad each side of default**, no window effectively zero, mirror flags by range AND by axis, travel-sign direction, freshness, sha stability, ankle inverse residual |
+| `test_basefix.py` | fixed drift < 1e-6 m per 2 s and pose error < 1e-5 m; pivot point < 1e-4 m with the orientation actually free; ground carries the robot when on and it free-falls when off; keyframe sole penetration; gravity untouched |
+| `test_loop_settle.py` | AB loop closure < 0.01 mm at rest and at six foot-space commands; each command lands within 0.05 rad; transmission magnitude within 5 % of `loop_ankle_verify.json`; the two cranks of one leg have opposite axes; RP drives its ankle directly |
+| `test_sim_rate.py` | >= 195 Hz physics wall-clock with 0 drops and < 600 MB RSS, AB and RP; snapshot/queue do not accumulate |
+
+Evidence figure (no OpenGL on this host, so it is matplotlib):
+`mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/make_verification_figure.py` ->
+`docs/img/pygviewer_p1_verification.png`.
+
+## Verification protocol before trusting a sim/real overlay
+
+Running the tests proves the *simulator* side.  Before any overlay of simulated and measured
+data is worth reading, all eight of these must pass (docs/121 section 5; P2-P4 own most of
+them):
+
+1. **Zero pose.**  Both sides at the default keyframe: `|dq| < 0.02 rad` per joint and
+   `|dg| < 0.05` on the gravity vector.
+2. **Per-joint sign sweep.**  Move each physical joint +20 deg, read the canonical value,
+   fill the table, and update `side_mapping_verified` in
+   `tools/robot_model/motor_sign_convention.json`.  Until this passes the UI shows
+   "side mapping: user-asserted, UNVERIFIED".
+3. **Ankle FK cross-check.**  25 points: drive the sim forward from the *real* crank angles
+   and compare pitch/roll, tolerance 0.02 rad, loop closure < 1 mm.  This is also what
+   decides whether HUPHY `ankle_a` is `crank_A` or `crank_B`.
+4. **Velocity sanity.**  0.5 Hz sine; finite-differenced position vs reported velocity,
+   RMS < 0.3 rad/s, and the sign convention applied to velocity and torque as well as
+   position.
+5. **Latency.**  Five step commands; estimate the clock offset by cross-correlating the
+   command edges; jitter must be < 15 ms or the overlay is greyed out.
+6. **Same-target response overlay.**  1 Hz +-20 deg on one joint, sim and robot driven from
+   the same script file.  Only meaningful *after* the PD gains have been matched (the panel
+   has a train/real gain switch and a diff table).
+7. **IMU tilt.**  +-10 deg static tilts agree within 3 deg.
+8. **Recording round trip.**  Record, replay, compare bit-for-bit.
+
+## Ports and registration
+
+| port | service |
+|---|---|
+| 8094 | pygviewer viser scene + panel |
+| 8095 | pygviewer API (`/docs`) |
+
+Registered in `tools/dashboard/status.py` (`PORTS`), `tools/dashboard/start_all.sh` and
+`tools/dashboard/README.md`.  Logs: `tools/pygviewer/logs/pygviewer.log`.
+
+## Layout
+
+```
+tools/pygviewer/
+  run.py                     entry point (works without tools/__init__.py)
+  README.md  API.md  pytest.ini
+  make_verification_figure.py
+  pygviewer/
+    __init__.py  __main__.py CLI, port pre-emption check, LAN IP
+    bake.py                  the ONLY module that imports mjlab/torch
+    contract.py              contract accessor + freshness hashes
+    sim_core.py              200 Hz physics / 50 Hz control, PD+T-N, base modes, snapshots
+    ui.py                    viser panel
+    api.py                   FastAPI REST + WS
+    schema.py                wire schema v1 (pydantic), including the deferred models
+    policy.py modes.py record.py bridge/   P2-P4 skeletons with the interfaces fixed
+  tests/
+```

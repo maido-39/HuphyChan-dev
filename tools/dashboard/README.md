@@ -10,6 +10,7 @@
 | 6006 | TensorBoard (`logs/rsl_rl/pygmalion_velocity` 전 런) |
 | 8892 | 컬리전 웹 뷰어 (`tools/collision_viewer`) |
 | 8891 | 조립(나사) 뷰어 (`tools/assembly_viewer`) |
+| 8094 / 8095 | pygviewer — sim↔real 비교 뷰어(6변형 구운 모델, 학습과 동일 200 Hz 물리·50 Hz 제어·PD+T-N). 8094 = viser 씬+패널(관절 목표, base free/fixed/pivot·회전중심 지정, 지면 on/off, AB 발목공간 명령, 10 s 플롯), 8095 = REST/WS API + OpenAPI `/docs`. CPU 전용 — `tools/pygviewer/README.md` |
 | — | wandb: https://wandb.ai/dongyub39-snu/pygmalion |
 
 헬스: `status.py`가 15 s마다 `status.json`을 갱신 — 런별 생존/iter/reward/낙상/s·iter/ETA/최신 체크포인트 나이(>20 min이면 ⚠ stale)/롤아웃 클립 수, 서비스 포트 up/down, 백그라운드 헬퍼(gate_watch·review_loop·gpu_sampler·viser_live·train) 프로세스 수, GPU util/메모리, load, 디스크.
