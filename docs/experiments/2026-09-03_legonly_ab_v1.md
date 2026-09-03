@@ -67,3 +67,13 @@ dip(4531: reward 69/50avg 35.7, ep_len 762)은 resume 직후 1시간 내 완전 
 도달. 보수적 중단 사유(docs/27) 없음. ⚠질적 플래그: 사용자 라이브 관찰(09-02 23:49) stiff-knee /
 AB 미활용 / toe-off 부재 — 별도 운동학 정량화(2026-09-03_legonly_gait_kinematics) + 리워드
 연구노트 진행 중. 리워드 개입은 연구노트 확정 후 결정(현 런은 계속 학습).
+
+**★최종 판정 (09-03 12:05, iter ~5.7k): 보수적 중단 — 모델-설정 부호 불일치로 런 무효.**
+운동학 정량화([[2026-09-03_legonly_gait_kinematics]], model_5600)가 원인을 확정: v30 MJCF는
+L/R 축이 미러인데 설정은 단일 default/clip을 양쪽에 적용 → **L_knee 사용가능 창 0°**(명령대역
+−114~−6° vs 기계범위 0~+120°), default −20°가 관절범위 밖, 스톱에 상시 21.8 N·m. R_hip_pitch
+43/145°, L_hip_roll 44/110°로 동반 축소. 무릎 qtarget 100% 클립 고정(정책 문제 아님, 구조 문제),
+하중 데이터 오염으로 측정 목적 상실 → 잔여 13k iter 중단이 옳음. 근본원인·조치:
+[[../reward_research/2026-09-03_stiff_knee_root_cause]]. 후속 = 설정 side-aware 수정 +
+프리플라이트 게이트 + `legonly_ab_v2` 재발사. 와치독 엔트리 disabled(자동부활 차단),
+launcher(754406)·trainer(1325381) PID 지정 종료 12:04.
