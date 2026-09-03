@@ -161,4 +161,4 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
   `--no-init-bent`로 끌 수 있고 `env_toggles`에 그대로 기록된다.
 * 뷰어 기본 base 모드를 `fixed`로 했다(`--base free`로 변경). P1에는 균형을 잡는 것이 없어
   free로 두면 약 2 s 만에 넘어져 첫 화면이 쓰러진 로봇이 된다.
-
+- 09-04 01:15 — **P0~P4 전부 완료(계획자 스팟체크)**: API 25 엔드포인트(/script/run·/policy/shadow_follow·/replay/* 포함) 노출 확인, compare 오버레이 png 3장 존재, P4 커밋 7건(c6d9a46…db25e5c) 확인, 뷰어 8094/8095 200. 실물 필요 단계(프로토콜 ②③⑥⑦)는 하드웨어 연결 후.
