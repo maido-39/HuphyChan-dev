@@ -224,7 +224,8 @@ def plot_joint(
       ax.plot(tr, vr, "--", color="#f58518", label="real", linewidth=1.5)
     ax.set_ylabel(label)
     ax.grid(alpha=0.3)
-  axes[0].legend(loc="upper right")
+    if ax.get_legend_handles_labels()[0]:
+      ax.legend(loc="upper right", fontsize=8)
   axes[0].set_title(f"{joint} - sim vs real ({tag})")
   axes[-1].set_xlabel("time since recording start [s]")
   fig.tight_layout()
@@ -243,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
   ap.add_argument("--joints", default=None, help="comma-separated; default = all joints common to both files")
   ap.add_argument("--offset-joint", default=None, help="joint used for the clock-offset estimate (default: first --joints entry)")
   ap.add_argument("--offset-field", default="q", choices=("q", "target", "tau_est"))
+  ap.add_argument("--offset-dt", type=float, default=0.005, help="resample grid for the clock-offset cross-correlation [s]")
   ap.add_argument("--out-dir", default=str(DOCS_IMG_DIR))
   ap.add_argument("--tag", default=None, help="filename tag; default derived from --real's stem")
   ap.add_argument("--i-know", action="store_true", help="override the R11 contract_hash refusal")
@@ -269,7 +271,7 @@ def main(argv: list[str] | None = None) -> int:
 
   offset_joint = args.offset_joint or joints[0]
   try:
-    offset = estimate_clock_offset_ms(rows_sim, rows_real, offset_joint, args.offset_field)
+    offset = estimate_clock_offset_ms(rows_sim, rows_real, offset_joint, args.offset_field, dt=args.offset_dt)
     print(
       f"clock offset estimate ({offset_joint}/{offset['field']}, {offset['window_s']}s window): "
       f"{offset['offset_ms']} ms  (per-segment: {offset['per_segment_ms']}, "

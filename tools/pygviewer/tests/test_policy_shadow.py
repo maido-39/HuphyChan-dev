@@ -126,6 +126,28 @@ def test_shadow_follow_drives_the_local_sim_only(core):
   assert np.allclose(core.target, core._policy_target)
 
 
+def test_shadow_real_imu_tilt_meaningfully_changes_the_policy_action(core):
+  """P4 item 6 verification: a dummy IMU tilt routed to real for base_ang_vel/
+  projected_gravity must produce a substantively different action, not a rounding-noise
+  difference - this is the quantitative half of 'the shadow mux actually does something',
+  the qualitative half being test_shadow_uses_fresh_real_imu_for_gyro_and_gravity above."""
+  core._apply_cmd({"op": "cmd", "value": [0.3, 0.0, 0.0]})
+  _tick_shadow(core, 1)
+  baseline = core.last_action.copy()
+
+  tilt = np.radians(10.0)
+  core.real.ingest_imu_state(
+    ImuState(t_ns=0, seq=1, src="dummy", contract_hash=core.c.contract_sha,
+              gravity_b=[np.sin(tilt), 0.0, -np.cos(tilt)], gyro_rad_s=[0.4, -0.1, 0.05])
+  )
+  core.obs_mux.set({"base_ang_vel": "real", "projected_gravity": "real"})
+  _tick_shadow(core, 1)
+  tilted = core.last_action.copy()
+
+  mean_abs_delta = float(np.mean(np.abs(tilted - baseline)))
+  assert mean_abs_delta > 0.02, f"mean |delta action|={mean_abs_delta} too small to be meaningful"
+
+
 def test_shadow_action_has_no_transmit_path():
   """Structural guarantee (design doc R10), not a behavioural one: the constant that would
   have to flip for a future implementer to wire a shadow action to a real robot."""
