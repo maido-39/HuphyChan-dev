@@ -89,6 +89,8 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
 
 - 09-04 — **P4 항목2 완료 (동일 목표 시퀀스 플레이어)**. `modes.TargetScript`(스텁이었음)가 `{joint_names, rows:[[t_s, q...]], loop}`를 로드해 경과 sim시간 기준 선형보간; `SimCore.run_script`가 manual 모드에서 재생(정책/리플레이 모드 중엔 시작 거부, 비구동 관절명 거부), 이후 모든 `JointState`에 `run_id` 태그(스키마 `Header`에 신규 옵션 필드) — 같은 스크립트 파일을 실물 브리지로 재생한 녹화와 `compare.py`가 나중에 정렬할 수 있도록. `POST /script/run{path,run_id}`/`POST /script/stop` + 뷰어 최소 패널. 표본 스크립트 2개(`tools/pygviewer/scripts/`)를 구운 LegOnly-AB 계약의 실제 default_q/관절명으로 생성: `sine_hips_knees_1hz_20deg.json`(양쪽 hip_pitch+knee, 각자 자기 default 기준 1Hz·20° 진폭, 3s@50Hz), `step_knee_5x10deg.json`(L_knee_joint 10° 스텝 5회, 1s dwell) — 검증 프로토콜 ⑤(지연보정, 급경사 스텝엣지)·⑥(동일목표 오버레이)용. `tests/test_script_player.py` 11건(보간/루프/클램프, run_script 모드·관절명 가드, 자연종료시 run_id 해제, 녹화 run_id 왕복, REST 엔드포인트 2개). **pytest 181 passed**(항목1의 170에서 +11). 커밋 `9da79eb`.
 
+- 09-04 — **P4 항목3 완료 (`compare.py`)**. 두 `record.py` jsonl.gz 녹화(헤더+JointState 행)를 직접 읽어 R11(contract_hash 불일치 시 `--i-know` 없으면 SystemExit 거부)·R9(base 모드/높이/지면/gains_source 상이 시 경고 배너, 거부는 안 함)·R5(공통 **절대** t_ns 기준 격자에서 상호상관으로 clock offset 추정 — 파일별 자기 시작시각 기준 상대시간으로 하면 지연이 재영점화로 상쇄되어 사라짐을 30ms 주입 합성테스트가 실제로 잡아냄: 첫 구현은 5ms만 반환했고 `_series_abs`로 절대시간 사용하도록 수정 후 통과, 세그먼트 분할 재추정으로 지터 프록시)를 구현. joint별 target/q/tau_est PNG(영어 라벨, sim 실선/real 점선)를 `docs/img/`에 저장. `tests/test_compare.py` 7건(합성 30ms+5ms지터 녹화로 오프셋 회수 15ms 이내, 계약불일치 거부/우회, 조건경고, PNG 출력, 관절 결측 graceful). **pytest 188 passed**(항목2의 181에서 +7). 커밋 `8be2921`.
+
 ### P0/P1 결과 (2026-09-03, 코더)
 
 **bake 6변형** — `/home/syaro/pyg_fea/pygviewer/cache/`, 변형당 서브프로세스 1개(약 8 s, RAM 1.3 GB 피크).
