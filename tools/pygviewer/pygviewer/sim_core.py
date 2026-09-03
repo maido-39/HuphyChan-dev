@@ -34,6 +34,7 @@ import mujoco
 import numpy as np
 
 from .contract import ModelContract
+from .policy import ObsBuilder, ObsSourceMux, action_to_target, check_compatible
 
 BASE_MODES = ("free", "fixed", "pivot")
 
@@ -222,12 +223,32 @@ class SimCore:
     self.ground = True
     self.mode = "idle"
 
+    # ---------------------------------------------------------------- policy (P2)
+    self.action_scale = np.array([r["action_scale"][n] for n in self.act_names])
+    self.policy = None
+    self.policy_contract: dict | None = None
+    self.obs_builder: ObsBuilder | None = None
+    self.obs_mux: ObsSourceMux | None = None
+    self.clip_actions: float | None = None
+    self.cmd = np.zeros(3)
+    self.last_action = np.zeros(len(self.act_names))
+    self.q_hist: deque = deque(maxlen=4)
+    self.last_obs: np.ndarray | None = None
+    self.gains_source = "train"
+    self.gains_overrides: dict[str, dict] = {}
+    self._kp_train, self._kd_train = self.kp.copy(), self.kd.copy()
+
     self._cmds: deque = deque(maxlen=512)
     self._lock = threading.Lock()
     self._snap: dict[str, Any] = {}
     self._thread: threading.Thread | None = None
     self._running = False
     self._stats = dict(phys_steps=0, ctrl_ticks=0, drops=0, phys_hz=0.0, ctrl_hz=0.0, t_wall=0.0)
+    # Substep phase. It MUST be an attribute, not a loop-local: with a local counter a
+    # caller stepping one substep at a time (tests, scripted runs) would hit
+    # "k % decimation == 0" on EVERY substep and run the control loop at 200 Hz instead of
+    # the trainer's 50 Hz. That cost 0.12 m/s of tracked walking speed before it was found.
+    self._step_i = 0
     self._hooks: list[Callable[[dict], None]] = []
 
     self.reset("knees_bent")
@@ -279,6 +300,9 @@ class SimCore:
     self.d.qvel[:] = 0.0
     self.d.qfrc_applied[:] = 0.0
     self.target = np.array([self.d.qpos[i] for i in self.a_q])
+    self.last_action = np.zeros(len(self.act_names))
+    self.q_hist.clear()
+    self._step_i = 0
     self._apply_base_mode(snap=True)
     self._apply_ground()
     mujoco.mj_forward(self.m, self.d)
@@ -358,6 +382,144 @@ class SimCore:
     self.set_target({f"{side}_crank_A_joint": a, f"{side}_crank_B_joint": b})
     return {"crank_A": a, "crank_B": b}
 
+  # ------------------------------------------------------------------ policy (P2)
+  def load_policy(self, onnx: str | None = None, pt: str | None = None,
+                  policy_contract: dict | None = None) -> dict:
+    """Load a policy and REFUSE it if it does not belong to this model.
+
+    The sha check is not paranoia: a v4 policy has already been loaded onto a v2 model on
+    this project. The default-pose check catches the subtler variant of the same mistake,
+    where the model is right but the PYG_* toggles that set the action offset were not.
+    """
+    from .policy import OnnxPolicy, TorchPolicy
+
+    if policy_contract is not None:
+      check_compatible(policy_contract, self.c)
+    if onnx:
+      pol = OnnxPolicy(onnx, policy_contract)
+    elif pt:
+      pol = TorchPolicy(pt, self.c.variant)
+    else:
+      raise ValueError("load_policy needs onnx= or pt=")
+    builder = ObsBuilder(self.c, policy_contract)
+    if pol.obs_dim not in (builder.obs_dim, -1) and pol.obs_dim > 0:
+      if pol.obs_dim != builder.obs_dim:
+        raise ValueError(
+          f"policy expects a {pol.obs_dim}-D observation, this model's contract builds "
+          f"{builder.obs_dim}"
+        )
+    if pol.action_dim > 0 and pol.action_dim != len(self.act_names):
+      raise ValueError(
+        f"policy outputs {pol.action_dim} actions, this model actuates {len(self.act_names)}"
+      )
+    self.policy = pol
+    self.policy_contract = policy_contract
+    self.obs_builder = builder
+    self.obs_mux = ObsSourceMux([t["name"] for t in builder.describe()])
+    self.clip_actions = (policy_contract or {}).get("clip_actions")
+    self.q_hist = deque(maxlen=max(builder.history_length, 1))
+    self.last_action = np.zeros(len(self.act_names))
+    return dict(
+      kind=pol.name,
+      path=getattr(pol, "path", None),
+      obs_dim=builder.obs_dim,
+      action_dim=len(self.act_names),
+      layout=builder.describe(),
+      name=(policy_contract or {}).get("name"),
+    )
+
+  def clear_policy(self) -> None:
+    self.policy = None
+    self.obs_builder = None
+    self.obs_mux = None
+    self.policy_contract = None
+    if self.mode.startswith("policy"):
+      self.mode = "manual"
+
+  def set_gains(self, source: str | None = None, overrides: dict | None = None) -> dict:
+    """Switch the PD source and/or override per joint.
+
+    ``train`` is the contract's own kp/kd - the gains the policy was optimised against.
+    ``real`` is the robot's configured gains, which are NOT the same numbers and are not
+    even in the same encoding on hardware (RS03/RS04 use 0-5000 vs 0-500 registers). A
+    response overlay between sim and robot is meaningless until this matches, which is why
+    the switch exists at all rather than a single hardcoded set.
+    """
+    if source is not None:
+      if source not in ("train", "real"):
+        raise ValueError("gains source must be 'train' or 'real'")
+      self.gains_source = source
+    if overrides is not None:
+      for n, g in overrides.items():
+        if n not in self.act_names:
+          raise KeyError(f"{n!r} is not an actuated joint")
+        self.gains_overrides.setdefault(n, {}).update(
+          {k: float(v) for k, v in g.items() if k in ("kp", "kd")}
+        )
+    self.kp = self._kp_train.copy()
+    self.kd = self._kd_train.copy()
+    if self.gains_source == "real":
+      real = (self.c.raw.get("real_gains") or {})
+      if not real:
+        raise RuntimeError(
+          "no real-robot gain table is configured. Put one in the model contract under "
+          "'real_gains' or send it through POST /gains overrides; the viewer will not "
+          "invent hardware gains."
+        )
+      for i, n in enumerate(self.act_names):
+        if n in real:
+          self.kp[i] = float(real[n].get("kp", self.kp[i]))
+          self.kd[i] = float(real[n].get("kd", self.kd[i]))
+    for i, n in enumerate(self.act_names):
+      o = self.gains_overrides.get(n) or {}
+      self.kp[i] = float(o.get("kp", self.kp[i]))
+      self.kd[i] = float(o.get("kd", self.kd[i]))
+    return self.gains_table()
+
+  def gains_table(self) -> dict:
+    return {
+      n: dict(
+        kp=float(self.kp[i]),
+        kd=float(self.kd[i]),
+        kp_train=float(self._kp_train[i]),
+        kd_train=float(self._kd_train[i]),
+        effort=float(self.eff[i]),
+        overridden=n in self.gains_overrides,
+      )
+      for i, n in enumerate(self.act_names)
+    }
+
+  def _policy_tick(self) -> None:
+    """One control tick of policy inference, at the trainer's own 50 Hz.
+
+    ``mj_forward`` first, and it is not optional: ``mj_step`` runs forward kinematics
+    BEFORE integration, so after a step ``sensordata`` (and xpos, site_xpos, cvel) lag
+    ``qpos`` by one substep.  mjlab calls ``sim.forward()`` immediately before it computes
+    the observation for exactly this reason (ManagerBasedRlEnv.step docstring).  Without it
+    the policy is fed a 5 ms stale gyro and gravity vector.  Measured effect on the walking
+    smoke: small (0.463 -> 0.460 m/s), so this is correctness, not the explanation for the
+    remaining viewer-vs-trainer speed gap - see docs/121.
+    """
+    mujoco.mj_forward(self.m, self.d)
+    q_all = self.d.qpos[self.all_q].copy()
+    self.q_hist.append(q_all)
+    obs = self.obs_builder.build(
+      self.q_hist,
+      self.d.qvel[self.all_d],
+      self.d.sensordata,
+      self.last_action,
+      self.cmd,
+    )
+    action = self.policy(obs)
+    raw, target = action_to_target(
+      action, self.default_q, self.action_scale, self.clip_lo, self.clip_hi, self.clip_actions
+    )
+    self.last_action = raw
+    self.last_obs = obs
+    if self.mode == "policy_sim":
+      self.target = target
+    self._policy_target = target
+
   # ------------------------------------------------------------------ inner loop
   def _tn_clamp(self, tau: np.ndarray, omega: np.ndarray) -> np.ndarray:
     for i in range(tau.shape[0]):
@@ -410,34 +572,52 @@ class SimCore:
     elif op == "reset":
       self.reset(cmd.get("keyframe", "knees_bent"))
     elif op == "mode":
-      self.mode = cmd["value"]
+      want = cmd["value"]
+      if want.startswith("policy") and self.policy is None:
+        raise RuntimeError("no policy loaded; POST /policy/load first")
+      if want not in ("idle", "manual", "policy_sim", "policy_shadow"):
+        raise NotImplementedError(f"mode {want!r} is not implemented yet")
+      if want.startswith("policy"):
+        self.last_action = np.zeros(len(self.act_names))
+        self.q_hist.clear()
+      self.mode = want
+    elif op == "cmd":
+      self.cmd = np.asarray(cmd["value"], dtype=float).reshape(3)
+    elif op == "gains":
+      self.set_gains(cmd.get("source"), cmd.get("overrides"))
+    elif op == "obs_source":
+      if self.obs_mux is None:
+        raise RuntimeError("no policy loaded; there are no observation terms to route")
+      self.obs_mux.set(cmd["sources"])
     else:
       raise ValueError(f"unknown command op {op!r}")
 
   def _loop(self) -> None:
     t0 = time.perf_counter()
-    step_i = 0
+    self._step_i = 0
     last_rate = t0
     ps0 = cs0 = 0
     while self._running:
       if self.realtime:
         now = time.perf_counter()
-        due = int((now - t0) / self.dt) - step_i
+        due = int((now - t0) / self.dt) - self._step_i
         if due <= 0:
           time.sleep(self.dt / 4)
           continue
         if due > self.max_catchup:
           self._stats["drops"] += due - self.max_catchup
-          step_i += due - self.max_catchup
+          self._step_i += due - self.max_catchup
           due = self.max_catchup
       else:
         due = self.decimation
       for _ in range(due):
-        if step_i % self.decimation == 0:
+        if self._step_i % self.decimation == 0:
           self._drain()
+          if self.policy is not None and self.mode.startswith("policy"):
+            self._policy_tick()
           self._stats["ctrl_ticks"] += 1
         self._substep()
-        step_i += 1
+        self._step_i += 1
         self._stats["phys_steps"] += 1
       self._publish()
       now = time.perf_counter()
@@ -486,7 +666,21 @@ class SimCore:
         phys_steps=int(self._stats["phys_steps"]),
       ),
       warnings=self._warnings(q_all),
+      gains_source=self.gains_source,
     )
+    if self.policy is not None:
+      snap["policy"] = dict(
+        kind=self.policy.name,
+        name=(self.policy_contract or {}).get("name"),
+        path=getattr(self.policy, "path", None),
+        cmd=[float(x) for x in self.cmd],
+        action=[float(x) for x in self.last_action],
+        target=[float(x) for x in getattr(self, "_policy_target", self.target)],
+        obs=[float(x) for x in self.last_obs] if self.last_obs is not None else None,
+        obs_sources=dict(self.obs_mux.sources) if self.obs_mux else {},
+        source_mask="".join(self.obs_mux.mask()) if self.obs_mux else "",
+        driving=self.mode == "policy_sim",
+      )
     if self.c.is_loop:
       snap["ankle_derived"] = {
         s: dict(
@@ -538,26 +732,28 @@ class SimCore:
 
   def _loop_until(self, done) -> None:
     t0 = time.perf_counter()
-    step_i = 0
+    self._step_i = 0
     while self._running and not done():
       if self.realtime:
         now = time.perf_counter()
-        due = int((now - t0) / self.dt) - step_i
+        due = int((now - t0) / self.dt) - self._step_i
         if due <= 0:
           time.sleep(self.dt / 4)
           continue
         if due > self.max_catchup:
           self._stats["drops"] += due - self.max_catchup
-          step_i += due - self.max_catchup
+          self._step_i += due - self.max_catchup
           due = self.max_catchup
       else:
         due = self.decimation
       for _ in range(due):
-        if step_i % self.decimation == 0:
+        if self._step_i % self.decimation == 0:
           self._drain()
+          if self.policy is not None and self.mode.startswith("policy"):
+            self._policy_tick()
           self._stats["ctrl_ticks"] += 1
         self._substep()
-        step_i += 1
+        self._step_i += 1
         self._stats["phys_steps"] += 1
       self._publish()
       el = time.perf_counter() - t0
@@ -566,9 +762,17 @@ class SimCore:
       self._stats["t_wall"] = el
 
   def step_n(self, n: int) -> None:
-    """Step ``n`` physics substeps as fast as possible (tests only, no pacing)."""
-    for k in range(n):
-      if k % self.decimation == 0:
+    """Step ``n`` physics substeps as fast as possible (tests, scripts; no wall pacing).
+
+    Uses the shared substep phase, so ``step_n(1)`` in a loop produces exactly the same
+    control cadence as ``step_n(1000)``.
+    """
+    for _ in range(n):
+      if self._step_i % self.decimation == 0:
         self._drain()
+        if self.policy is not None and self.mode.startswith("policy"):
+          self._policy_tick()
       self._substep()
+      self._step_i += 1
+      self._stats["phys_steps"] += 1
     self._publish()

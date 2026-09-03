@@ -15,6 +15,7 @@ import asyncio
 import json
 import os
 import time
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
@@ -22,6 +23,8 @@ from fastapi.responses import JSONResponse
 from . import __version__
 from .schema import (
   AnkleTargetIn,
+  CmdIn,
+  PolicyIO,
   BaseIn,
   BaseState,
   ContractOut,
@@ -38,10 +41,6 @@ from .schema import (
 )
 
 _NOT_YET = {
-  "/policy/load": "P2",
-  "/policy/cmd": "P2",
-  "/gains": "P2",
-  "/obs_source": "P4",
   "/script/run": "P4",
   "/record/start": "P3",
   "/record/stop": "P3",
@@ -155,6 +154,109 @@ def build_app(core, freshness: dict) -> FastAPI:
     core.submit({"op": "mode", "value": body.mode})
     return {"ok": True}
 
+  @app.post("/policy/load", summary="Load a baked policy (onnx=, or pt= for a direct .pt)")
+  def post_policy_load(body: PolicyLoadIn):
+    """Refuses a policy whose ``model_contract_sha`` is not this model's, and one whose
+    default pose differs by more than 1e-4 rad (the default pose IS the action offset)."""
+    from .policy import PolicyContractMismatch
+
+    pc = None
+    onnx = body.onnx
+    if body.name:
+      p = Path(core.c.path).parent / f"{body.name}.policy_contract.json"
+      if not p.exists():
+        raise HTTPException(404, f"no baked policy contract named {body.name!r} ({p})")
+      pc = json.loads(p.read_text())
+      onnx = onnx or pc["onnx"]
+    elif onnx:
+      p = Path(onnx).with_suffix("").with_suffix(".policy_contract.json")
+      cand = Path(str(onnx)[: -len(".onnx")] + ".policy_contract.json")
+      if cand.exists():
+        pc = json.loads(cand.read_text())
+    if pc is None and not body.allow_uncontracted:
+      raise HTTPException(
+        400,
+        "no policy contract found next to that file. A policy without a contract cannot be "
+        "checked against this model; pass allow_uncontracted=true only for a throwaway test.",
+      )
+    try:
+      info = core.load_policy(onnx=onnx, pt=body.pt, policy_contract=pc)
+    except PolicyContractMismatch as exc:
+      raise HTTPException(409, str(exc))
+    except (ValueError, KeyError, FileNotFoundError) as exc:
+      raise HTTPException(400, f"{type(exc).__name__}: {exc}")
+    return info
+
+  @app.get("/policy/list", summary="Baked policies available for this model variant")
+  def get_policy_list():
+    out = []
+    for p in sorted(Path(core.c.path).parent.glob("*.policy_contract.json")):
+      c = json.loads(p.read_text())
+      out.append(
+        dict(
+          name=c["name"],
+          variant=c["variant"],
+          checkpoint=c["checkpoint"],
+          obs_dim=c["obs_dim"],
+          compatible=c.get("model_contract_sha") == core.c.contract_sha,
+          model_contract_sha=c.get("model_contract_sha"),
+        )
+      )
+    return out
+
+  @app.post("/policy/unload", summary="Drop the loaded policy and fall back to manual")
+  def post_policy_unload():
+    core.clear_policy()
+    return {"ok": True}
+
+  @app.post("/policy/cmd", summary="Velocity command [vx, vy, wz] for the policy")
+  def post_policy_cmd(body: CmdIn):
+    core.submit({"op": "cmd", "value": [body.vx, body.vy, body.wz]})
+    return {"ok": True}
+
+  @app.get("/policy/io", response_model=PolicyIO, summary="Latest observation/action")
+  def get_policy_io():
+    s = core.snapshot()
+    p = s.get("policy")
+    if not p:
+      raise HTTPException(409, "no policy loaded")
+    seq["n"] += 1
+    return PolicyIO(
+      t_ns=time.monotonic_ns(),
+      seq=seq["n"],
+      src="policy",
+      contract_hash=core.c.contract_sha,
+      obs=p["obs"] or [],
+      obs_sources=p["obs_sources"],
+      action=p["action"],
+      target=p["target"],
+      cmd=p["cmd"],
+    )
+
+  @app.post("/obs_source", summary="Per observation TERM: sim or real")
+  def post_obs_source(body: ObsSourceIn):
+    if core.obs_mux is None:
+      raise HTTPException(409, "no policy loaded; there are no observation terms to route")
+    try:
+      core.obs_mux.set(body.sources)
+    except NotImplementedError as exc:
+      raise HTTPException(501, str(exc))
+    except (KeyError, ValueError) as exc:
+      raise HTTPException(400, str(exc))
+    return {"sources": core.obs_mux.sources, "mask": "".join(core.obs_mux.mask())}
+
+  @app.get("/gains", summary="Current PD gains, with the training values alongside")
+  def get_gains():
+    return {"source": core.gains_source, "gains": core.gains_table()}
+
+  @app.post("/gains", summary="Switch the PD source (train|real) and/or override per joint")
+  def post_gains(body: GainsIn):
+    try:
+      table = core.set_gains(body.source, body.overrides)
+    except (RuntimeError, KeyError, ValueError) as exc:
+      raise HTTPException(400, str(exc))
+    return {"source": core.gains_source, "gains": table}
+
   for path, phase in _NOT_YET.items():
     if path.startswith("/ws"):
       continue
@@ -179,7 +281,10 @@ def build_app(core, freshness: dict) -> FastAPI:
 
   @app.websocket("/ws/out")
   async def ws_out(ws: WebSocket):
-    """Stream ``JointState`` + ``Status``, coalesced to ``?hz=`` (default 30, max 100)."""
+    """Stream ``JointState`` / ``Status`` / ``PolicyIO``, coalesced to ``?hz=``.
+
+    ``types=`` selects which (default ``JointState,Status``); ``hz`` is 1-100, default 30.
+    Latest-only: a slow consumer sees fewer frames, never a backlog."""
     await ws.accept()
     hz = float(ws.query_params.get("hz", 30))
     hz = max(1.0, min(hz, 100.0))
@@ -190,6 +295,8 @@ def build_app(core, freshness: dict) -> FastAPI:
           await ws.send_text(_joint_state().model_dump_json())
         if "Status" in types:
           await ws.send_text(_status().model_dump_json())
+        if "PolicyIO" in types and core.snapshot().get("policy"):
+          await ws.send_text(get_policy_io().model_dump_json())
         await asyncio.sleep(1.0 / hz)
     except (WebSocketDisconnect, RuntimeError):
       return

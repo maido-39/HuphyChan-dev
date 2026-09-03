@@ -18,9 +18,11 @@ telemetry all speak.
 
 from __future__ import annotations
 
+import json
 import math
 import threading
 import time
+from pathlib import Path
 
 import numpy as np
 import viser
@@ -283,6 +285,149 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
 
         _mk_ankle(s, sp, sr)
 
+  # ------------------------------------------------------------------ Policy (P2)
+  pol_state: dict = {}
+  with gui.add_folder("Policy"):
+    baked_pol = sorted(
+      p.name[: -len(".policy_contract.json")]
+      for p in Path(CACHE_DIR).glob("*.policy_contract.json")
+    )
+    compat = []
+    for n in baked_pol:
+      try:
+        pcj = json.loads((Path(CACHE_DIR) / f"{n}.policy_contract.json").read_text())
+        if pcj.get("model_contract_sha") == c.contract_sha:
+          compat.append(n)
+      except Exception:
+        pass
+    gui.add_markdown(
+      f"{len(compat)} of {len(baked_pol)} baked policies match this model's contract "
+      f"`{c.contract_sha[:12]}`. A policy baked against another model is REFUSED: its "
+      "default pose is the action offset, so loading it would bias every joint target.\n\n"
+      "Bake one with `run.py bake policy --pt <run_dir>/model_N.pt --variant "
+      f"{c.variant}`."
+    )
+    pol_dd = gui.add_dropdown(
+      "policy", tuple(compat) or ("(none baked for this model)",),
+      initial_value=(compat[0] if compat else "(none baked for this model)"),
+    )
+    pol_load = gui.add_button("load policy")
+    pol_unload = gui.add_button("unload")
+    run_mode = gui.add_dropdown("mode", ("idle", "manual", "policy_sim"), initial_value="idle")
+    vx = gui.add_slider("vx [m/s]", min=-1.0, max=2.5, step=0.05, initial_value=0.0)
+    vy = gui.add_slider("vy [m/s]", min=-0.5, max=0.5, step=0.05, initial_value=0.0)
+    wz = gui.add_slider("wz [rad/s]", min=-1.5, max=1.5, step=0.05, initial_value=0.0)
+    pol_info = gui.add_markdown("no policy loaded")
+    with gui.add_folder("observation sources", expand_by_default=False):
+      src_md = gui.add_markdown(
+        "Per observation TERM, sim or real. `real` needs the P3 telemetry bridge and "
+        "answers 501 until then; the switch is here so the contract is visible."
+      )
+      src_dd: dict = {}
+
+    def _refresh_policy_panel():
+      core_ = state["core"]
+      if core_.policy is None:
+        pol_info.content = "no policy loaded"
+        return
+      pc = core_.policy_contract or {}
+      layout = core_.obs_builder.describe()
+      pol_info.content = (
+        f"**{pc.get('name', '(uncontracted)')}**  \n"
+        f"`{core_.policy.name}`  obs {core_.obs_builder.obs_dim}  act "
+        f"{len(core_.act_names)}  \n"
+        f"terms: " + ", ".join(f"{d['name']}({d['dim']})" for d in layout) + "  \n"
+        f"ckpt `{str(pc.get('checkpoint', '?')).split('/')[-1]}`  "
+        f"clip_actions {pc.get('clip_actions')}"
+      )
+      if not src_dd:
+        for d in layout:
+          h = gui.add_dropdown(d["name"], ("sim", "real"), initial_value="sim")
+          src_dd[d["name"]] = h
+
+          def _mk_src(nm, hh):
+            @hh.on_update
+            def _(_e):
+              try:
+                state["core"].obs_mux.set({nm: hh.value})
+              except NotImplementedError as exc:
+                hh.value = "sim"
+                src_md.content = f"**{exc}**"
+
+          _mk_src(d["name"], h)
+
+    @pol_load.on_click
+    def _(_evt):
+      core_ = state["core"]
+      name = pol_dd.value
+      f = Path(CACHE_DIR) / f"{name}.policy_contract.json"
+      if not f.exists():
+        pol_info.content = f"**no such baked policy: {name}**"
+        return
+      pc = json.loads(f.read_text())
+      try:
+        core_.load_policy(onnx=pc["onnx"], policy_contract=pc)
+      except Exception as exc:
+        pol_info.content = f"**REFUSED - {type(exc).__name__}: {exc}**"
+        return
+      _refresh_policy_panel()
+
+    @pol_unload.on_click
+    def _(_evt):
+      state["core"].clear_policy()
+      run_mode.value = "manual"
+      _refresh_policy_panel()
+
+    @run_mode.on_update
+    def _(_evt):
+      try:
+        state["core"]._apply_cmd({"op": "mode", "value": run_mode.value})
+      except Exception as exc:
+        pol_info.content = f"**{exc}**"
+        run_mode.value = state["core"].mode
+
+    def _push_cmd(_evt=None):
+      state["core"].submit({"op": "cmd", "value": [vx.value, vy.value, wz.value]})
+
+    for h in (vx, vy, wz):
+      h.on_update(_push_cmd)
+
+  state["refresh_policy"] = _refresh_policy_panel
+
+  # ------------------------------------------------------------------ Gains
+  with gui.add_folder("Gains", expand_by_default=False):
+    gui.add_markdown(
+      "`train` = the contract's kp/kd, the gains the policy was optimised against. "
+      "`real` needs a hardware gain table in the contract (`real_gains`); the viewer will "
+      "not invent one, because a sim-vs-robot response overlay is meaningless until the "
+      "gains match. Hardware also encodes them differently per motor family (RS03/RS04 "
+      "0-5000 vs 0-500 registers), which is why the table is per joint."
+    )
+    gsrc = gui.add_dropdown("source", ("train", "real"), initial_value="train")
+    gtxt = gui.add_markdown("")
+
+    def _gains_md():
+      t = state["core"].gains_table()
+      rows = ["| joint | kp | kd | kp train | kd train |", "|---|---|---|---|---|"]
+      for n, g in t.items():
+        rows.append(
+          f"| {n.replace('_joint', '')} | {g['kp']:.1f} | {g['kd']:.2f} | "
+          f"{g['kp_train']:.1f} | {g['kd_train']:.2f} |"
+        )
+      return "\n".join(rows)
+
+    gtxt.content = _gains_md()
+
+    @gsrc.on_update
+    def _(_evt):
+      try:
+        state["core"].set_gains(gsrc.value)
+      except Exception as exc:
+        gsrc.value = state["core"].gains_source
+        gtxt.content = f"**{exc}**\n\n" + _gains_md()
+        return
+      gtxt.content = _gains_md()
+
   # ------------------------------------------------------------------ Plots
   chan_names = []
   for n in c.action_joint_names:
@@ -387,9 +532,17 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
           f"imu up ({g[0]:+.3f}, {g[1]:+.3f}, {g[2]:+.3f})  gyro "
           f"({w[0]:+.2f}, {w[1]:+.2f}, {w[2]:+.2f}) rad/s",
         ]
+    p = s.get("policy")
+    if p:
+      lines += [
+        "",
+        f"policy `{p['name'] or p['kind']}` cmd ({p['cmd'][0]:+.2f}, {p['cmd'][1]:+.2f}, "
+        f"{p['cmd'][2]:+.2f})  driving {'YES' if p['driving'] else 'no'}  "
+        f"obs sources `{p['source_mask']}`",
+      ]
     from .api import rss_mb
 
-    lines += ["", f"RSS {rss_mb():.0f} MB"]
+    lines += ["", f"RSS {rss_mb():.0f} MB  gains `{s.get('gains_source', 'train')}`"]
     if s.get("warnings"):
       lines += ["", "**" + " / ".join(s["warnings"]) + "**"]
     status_md.content = "\n".join(lines)

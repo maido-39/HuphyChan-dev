@@ -100,7 +100,7 @@ class JointTarget(Header):
 
 
 class PolicyIO(Header):
-  """DEFINED, P2."""
+  """IMPLEMENTED.  What the policy saw and what it produced, this control tick."""
 
   type: Literal["PolicyIO"] = "PolicyIO"
   obs: list[float]
@@ -198,21 +198,40 @@ class ResetIn(BaseModel):
 
 
 class GainsIn(BaseModel):
-  """DEFINED, P2.  Switch the PD source or override per joint."""
+  """IMPLEMENTED.  Switch the PD source or override per joint.
+
+  ``train`` is the contract's kp/kd - the gains the policy was optimised against.  ``real``
+  needs a hardware gain table (contract ``real_gains``); the viewer refuses to invent one,
+  because a response overlay between sim and robot is meaningless unless the gains match.
+  """
 
   source: Literal["train", "real"] = "train"
   overrides: dict[str, dict[str, float]] = {}
 
 
 class ObsSourceIn(BaseModel):
-  """DEFINED, P4.  Per observation TERM, where its value comes from."""
+  """IMPLEMENTED for ``sim``; ``real`` answers 501 until the P3 telemetry bridge exists."""
 
   sources: dict[str, Src]
 
 
 class PolicyLoadIn(BaseModel):
-  """DEFINED, P2."""
+  """IMPLEMENTED.  Load by baked ``name`` (preferred), or by explicit ``onnx``/``pt`` path.
 
+  A policy is refused unless its contract's ``model_contract_sha`` equals the loaded model's
+  and its default pose matches to 1e-4 rad.  ``allow_uncontracted`` skips the check for a
+  throwaway file and is deliberately awkward to reach.
+  """
+
+  name: str | None = Field(default=None, description="baked policy name (see GET /policy/list)")
   onnx: str | None = None
-  pt: str | None = None
-  run_dir: str | None = None
+  pt: str | None = Field(default=None, description="direct .pt: builds an mjlab env, ~11 s, ~1.3 GB")
+  allow_uncontracted: bool = False
+
+
+class CmdIn(BaseModel):
+  """IMPLEMENTED.  Velocity command the policy tracks."""
+
+  vx: float = 0.0
+  vy: float = 0.0
+  wz: float = 0.0

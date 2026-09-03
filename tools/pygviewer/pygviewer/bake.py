@@ -130,11 +130,28 @@ def bake_one(variant: str, cache_dir: str, init_bent: bool = True) -> dict:
   # --- action order: the action term's OWN resolved list, not model order ------------
   term = env.action_manager._terms["joint_pos"]
   act_names = list(term._target_names)
-  scale = term.cfg.scale
-  action_scale = (
-    {n: float(scale) for n in act_names}
-    if isinstance(scale, (int, float))
-    else {k: float(v) for k, v in scale.items()}
+  # term.cfg.scale is keyed by REGEX (".*_hip_pitch_joint"), not by joint name. Use the
+  # term's own resolved _scale tensor so the contract is per-joint, in action order - a
+  # consumer must never have to re-run a regex to find a joint's action scale.
+  raw_scale = term._scale
+  if isinstance(raw_scale, (int, float)):
+    action_scale = {n: float(raw_scale) for n in act_names}
+  else:
+    sv = np.asarray(raw_scale.detach().cpu()).reshape(-1, len(act_names))[0]
+    action_scale = {n: float(sv[i]) for i, n in enumerate(act_names)}
+  action_scale_cfg = (
+    float(term.cfg.scale)
+    if isinstance(term.cfg.scale, (int, float))
+    else {k: float(v) for k, v in term.cfg.scale.items()}
+  )
+  off = term._offset
+  action_offset = (
+    {n: float(off) for n in act_names}
+    if isinstance(off, (int, float))
+    else {
+      n: float(np.asarray(off.detach().cpu()).reshape(-1, len(act_names))[0][i])
+      for i, n in enumerate(act_names)
+    }
   )
 
   # --- observation layout: the ACTOR group's own resolved terms, in order ------------
@@ -403,6 +420,8 @@ def bake_one(variant: str, cache_dir: str, init_bent: bool = True) -> dict:
     critic_obs_dim=int(om.group_obs_dim["critic"][0]) if "critic" in om.group_obs_dim else None,
     default_q={n: round(float(q), 8) for n, q in zip(names, default_q)},
     action_scale=action_scale,
+    action_scale_cfg=action_scale_cfg,
+    action_offset=action_offset,
     decimation=int(env.cfg.decimation),
     physics_dt=float(m.opt.timestep),
     step_dt=float(env.step_dt),
@@ -738,13 +757,36 @@ def main(argv: list[str] | None = None) -> int:
   mp.add_argument("--cache", default=CACHE_DIR)
   mp.add_argument("--no-init-bent", action="store_true", help="bake with the HOME keyframe")
   mp.add_argument("--in-process", action="store_true", help=argparse.SUPPRESS)
-  pp = sub.add_parser("policy", help="P2 - not implemented yet")
-  pp.add_argument("--pt")
+  pp = sub.add_parser("policy", help="export a trained .pt to ONNX + policy contract")
+  pp.add_argument("--pt", required=True, help="path to <run_dir>/model_N.pt")
+  pp.add_argument("--variant", choices=list(VARIANTS), required=True)
+  pp.add_argument("--cache", default=CACHE_DIR)
+  pp.add_argument("--name", default=None)
+  pp.add_argument("--no-init-bent", action="store_true")
+  pp.add_argument("--in-process", action="store_true", help=argparse.SUPPRESS)
   args = ap.parse_args(argv)
 
   if args.what == "policy":
-    print("bake policy is P2; see docs/121_pygviewer_design.md section 6.", file=sys.stderr)
-    return 2
+    if args.in_process:
+      from ._bake_policy import bake_policy
+
+      bake_policy(
+        args.pt, args.variant, args.cache, args.name, init_bent=not args.no_init_bent
+      )
+      return 0
+    cmd = [
+      sys.executable, str(Path(__file__).resolve().parents[1] / "run.py"), "bake", "policy",
+      "--pt", args.pt, "--variant", args.variant, "--cache", args.cache, "--in-process",
+    ]
+    if args.name:
+      cmd += ["--name", args.name]
+    if args.no_init_bent:
+      cmd.append("--no-init-bent")
+    envv = dict(os.environ, CUDA_VISIBLE_DEVICES="")
+    for k in list(envv):
+      if k.startswith("PYG_"):
+        envv.pop(k)
+    return subprocess.run(cmd, cwd=REPO, env=envv).returncode
 
   if args.all:
     todo = list(VARIANTS)

@@ -49,3 +49,52 @@ def test_snapshot_is_latest_only_and_does_not_accumulate():
     assert len(s2["q"]) == core.c.raw["n_dof"]
   finally:
     core.stop()
+
+
+def test_control_cadence_survives_single_substep_calls():
+  """``step_n(1)`` in a loop must still tick the controller at the decimation rate.
+
+  With a loop-local substep counter it did not: every call restarted the phase, so the
+  policy ran at 200 Hz instead of the trainer's 50 Hz.  Nothing looked broken - the robot
+  still stood and still walked - it just walked 0.12 m/s slower than the same checkpoint in
+  mjlab.  This pins the phase.
+  """
+  core = SimCore(load_contract(CACHE_DIR, "LegOnly-AB"), realtime=False)
+  try:
+    ticks = {"n": 0}
+    real_drain = core._drain
+
+    def counting_drain():
+      ticks["n"] += 1
+      real_drain()
+
+    core._drain = counting_drain
+    for _ in range(400):
+      core.step_n(1)
+    assert ticks["n"] == 400 // core.decimation, (
+      f"controller ticked {ticks['n']} times in 400 substeps; expected "
+      f"{400 // core.decimation} at decimation {core.decimation}"
+    )
+  finally:
+    core.stop()
+
+
+def test_step_n_batched_and_single_agree():
+  """The same number of substeps must be the same trajectory either way."""
+  import numpy as np
+
+  out = []
+  for chunk in (1, 40):
+    c = SimCore(load_contract(CACHE_DIR, "LegOnly-AB"), realtime=False)
+    try:
+      c.set_base(mode="fixed", pos=[0.0, 0.0, 0.95])
+      c.reset("knees_bent")
+      c.set_target({"L_knee_joint": c.c.default_q("L_knee_joint") + 0.3})
+      n = 0
+      while n < 400:
+        c.step_n(chunk)
+        n += chunk
+      out.append(c.d.qpos.copy())
+    finally:
+      c.stop()
+  assert np.allclose(out[0], out[1], atol=1e-12), "stepping granularity changed the result"
