@@ -118,6 +118,22 @@ else
   g="$g\n  - 실시간 브리핑 상태파일이 없습니다 -> tools/briefing/briefing.py 로 생성 (realtime-briefing 스킬)"
 fi
 
+# (7) WARN (not a block) — 학습 런 노트에 설정 명세 표(§1b-2 액추에이터/§1b-3 ROM/§1b-4 플래그)가 없음.
+#     사용자 지시 2026-09-03 "이건 모든 Docs에 다 넣으라고". 생성은 손이 아니라 도구로:
+#       python3 tools/notes/backfill_spec_tables.py --only <노트>
+#     경고로만 두는 이유: 신규 노트는 런처(run_v2_scratch.py / run_training.sh)가 자동으로
+#     채우므로, 여기서 막으면 아직 학습이 안 끝난 노트에 대해 헛되이 세션을 붙잡는다.
+w=""
+for n in docs/experiments/2026-*.md; do
+  [ -f "$n" ] || continue
+  grep -q "SPEC-TABLES:BEGIN" "$n" 2>/dev/null && continue
+  grep -q "1b-2" "$n" 2>/dev/null && continue
+  w="$w\n  - $(basename "$n"): §1b-2/§1b-3/§1b-4 설정 명세 표 없음"
+done
+if [ -n "$w" ]; then
+  printf "NOTE-AUDIT WARN — 학습 런 노트에 설정 명세 표(§1b-2 액추에이터·§1b-3 ROM·§1b-4 플래그)가 빠졌습니다 (블록 아님):%b\n  고치기: python3 tools/notes/backfill_spec_tables.py --only <노트명>\n" "$w" >&2
+fi
+
 if [ -n "$g" ]; then
   printf "★★ NOTE-AUDIT BLOCK — 미기록 실험/분석이 있습니다. 종료 전 노트화하세요 (feedback-training-report-rule / feedback-research-recording-rule):%b\n(진짜 끝내려면: 노트를 만들거나, config-test면 무시 가능 — 단 반복 누락은 사용자가 싫어함)\n" "$g" >&2
   exit 2

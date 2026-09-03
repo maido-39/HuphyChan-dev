@@ -32,3 +32,9 @@
 ## 6. gen2_rough_p1 (2026-07-13_02-45-30) — 투기 launch 후 의도적 kill
 - **의도**: gen2 P2 완주 직후 GPU 유휴 방지용 험지 Gen-2 P1 투기 warm-start.
 - **kill 사유(iter ~3.4k)**: gen2 P2 최종 게이트에서 stand_still_penalty **creep-게이밍 확정**(고속 57%/56%) → 결함 보상을 상속한 험지 학습은 낭비. Gen-2.1(상대임계) 완성 후 험지 재개. 학습 실패 아님.
+
+<!-- SPEC-TABLES:BEGIN (analysis/run_spec_tables.py) -->
+
+**§1b-2 / §1b-3 / §1b-4 (설정 명세 표)** — 이 노트는 폐기된 6개 런 정리이라 단일 런의 config가 없다. 리워드 가중치·모터 게인·토크 한계·ROM/액션 창·`PYG_*` 플래그는 **각 런 노트의 §1b~§1b-4**에 있다(모두 그 런의 `params/env.yaml`에서 기계 생성).
+
+<!-- SPEC-TABLES:END -->

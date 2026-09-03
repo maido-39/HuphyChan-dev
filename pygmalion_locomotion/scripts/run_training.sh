@@ -62,3 +62,20 @@ PCK=$(printf '%s' "$EXTRA" | grep -oE 'logs/rsl_rl/[^ ]+/model_[0-9]+\.pt' | hea
 [ -n "$PCK" ] && PARENT="--parent_run $(dirname "$PCK")"
 python scripts/make_run_report.py --run "$D" --log "$LOG" $PARENT $MARG >> "$LOG" 2>&1
 echo "[run_training] report exit=$?  ALL DONE -> $D"
+
+# (5) SPEC TABLES: §1b (reward weights + per-joint Kp/Kd) + §1b-2 (actuator dynamics/limits)
+#     + §1b-3 (ROM / action window) + §1b-4 (PYG_* stack flags), generated from THIS run's
+#     params/env.yaml -- never retyped. User rule 2026-09-03: every training-run note carries
+#     them. Idempotent (SPEC-TABLES markers are replaced), and never fatal.
+NOTE="$(cd "$(dirname "$0")/../.." && pwd)/docs/experiments/$(basename "$D").md"
+SPECTOOL="$(cd "$(dirname "$0")/../.." && pwd)/mujoco-sim/mjlab/analysis/run_spec_tables.py"
+if [ -f "$NOTE" ] && [ -f "$SPECTOOL" ]; then
+  echo "[run_training] (5/5) SPEC TABLES -> $NOTE"
+  SPEC_1B=""
+  grep -q '| reward | weight |' "$NOTE" || SPEC_1B="--with-1b"
+  CUDA_VISIBLE_DEVICES="" python3 "$SPECTOOL" "$(cd "$(dirname "$0")/.." && pwd)/$D" \
+    --insert "$NOTE" --force $SPEC_1B >> "$LOG" 2>&1
+  echo "[run_training] spec tables exit=$?"
+else
+  echo "[run_training] (5/5) SPEC TABLES skipped (note or tool missing: $NOTE)"
+fi

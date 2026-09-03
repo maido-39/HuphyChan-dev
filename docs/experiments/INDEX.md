@@ -105,3 +105,9 @@
 - [[2026-09-03_legonly_gait_kinematics]] — ★legonly_ab_v1 iter5600 보행 운동학 측정(순수 측정, 학습 미개입): 무릎 스윙 굴곡 8~10°(사람 60°)·왼무릎 사용ROM 0.2%·qtarget이 클립에 100% 붙음(정책 문제, PD 아님)·왼발 toe-off 부재(발피치 −0.1°)·**v30 모델 좌우 관절 부호 불일치로 L_knee 사용가능폭 0°** 발견
 
 - [[2026-09-03_legonly_ab_v2]] — LegOnly 본학습 재발사(v1 중단 후): 유일 변인=설정 side-aware 수정(L_knee 창 0°→108°), 프리플라이트 PASS 12/12, 09-03 13:21 P1 16384 env
+
+<!-- SPEC-TABLES:BEGIN (analysis/run_spec_tables.py) -->
+
+**§1b-2 / §1b-3 / §1b-4 (설정 명세 표)** — 이 노트는 학습 실험 대장(전체 목록)이라 단일 런의 config가 없다. 리워드 가중치·모터 게인·토크 한계·ROM/액션 창·`PYG_*` 플래그는 **각 런 노트의 §1b~§1b-4**에 있다(모두 그 런의 `params/env.yaml`에서 기계 생성).
+
+<!-- SPEC-TABLES:END -->

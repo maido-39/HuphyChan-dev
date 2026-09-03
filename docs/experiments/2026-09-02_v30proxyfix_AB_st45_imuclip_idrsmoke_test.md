@@ -75,6 +75,85 @@ bash analysis/run_v2_scratch.sh --smoke \
 | crank_A | RS03 | 22.3 | 1.41 | 60 |
 | crank_B | RS03 | 22.3 | 1.41 | 60 |
 
+<!-- SPEC-TABLES:BEGIN (analysis/run_spec_tables.py) -->
+
+**§1b-2. 액추에이터 동역학·한계** (이 런의 `params/env.yaml` 파싱 — `2026-09-02_03-35-53_v30proxyfix_AB_st45_imuclip_idrsmoke_test_p1`)
+
+| 관절 그룹 | 모터 | Kp [N·m/rad] | Kd [N·m·s/rad] | effort 한계 [N·m] | 무부하 속도 [rad/s] | 로터 관성 armature [kg·m²] | 쿨롱 마찰 [N·m] | 점성 [N·m·s/rad] | T-N 곡선 |
+|---|---|--:|--:|--:|--:|--:|--:|--:|---|
+| crank_A, crank_B | RS03 | 22.266 | 1.414 | 60 (stall 59.7) | 20.94 | 0.01527 | 0.285 | 0.0223 | 실측 37점 (`PYG_TN=1`) |
+| hip_yaw | RS03 | 150 | 6 | 60 (stall 59.7) | 20.94 | 0.01527 | 0.285 | 0.0223 | 실측 37점 (`PYG_TN=1`) |
+| hip_pitch | RS04 | 150 | 6 | 120 (stall 120.1) | 20.94 | 0.01633 | 0.269 | 0.0095 | 실측 22점 (`PYG_TN=1`) |
+| knee | RS04 | 220 | 6 | 120 (stall 120.1) | 20.94 | 0.01633 | 0.269 | 0.0095 | 실측 22점 (`PYG_TN=1`) |
+| ankle_pitch / ankle_roll | (수동, 크랭크가 구동) | — | — | — | — | — | — | — | 폐루프 `equality/connect` 등식구속 |
+
+토크는 `effort_limit`과 (있으면) 실측 T-N 곡선의 속도의존 상한 중 **작은 값**으로 클램프된다. armature/쿨롱/점성은 모터 실측값(`PYG_MOTOR_MEAS=1`)이면 실측, 아니면 카탈로그 추정치다.
+
+**§1b-3. ROM 한계·액션 창** (모델 XML range · soft 한계 = 중심±0.5·range×0.9 (mjlab `Entity` 규약) · 액션 clip = env.yaml `actions.joint_pos.clip` · 창 = clip 폭 · default = 액션 0 자세)
+
+**soft 한계와 액션 clip은 같은 공식이다** — `Entity.soft_joint_pos_limits`와 `pygmalion_constants.safe_target_clip()`이 둘 다 *중심 ± 0.5·range·factor*를 쓴다(각 경계에 factor를 곱하는 것이 아니다: 비대칭 관절에서 두 식이 갈린다 — knee `[0,120]`은 `[6,114]`이지 `[0,108]`이 아니다). 그래서 `PYG_SAFE_TARGET_CLIP=1`인 런에서는 두 열이 정확히 일치하고, 정책이 통과하는 클램프와 시뮬레이터가 강제하는 클램프가 하나의 계약이 된다.
+
+모델 출처: 런 디렉토리 `repro/` 스냅샷 (권위) — `prototype-tempmass-motormeasured-armfix_v30_proxyfix_loop.xml`
+
+| 관절 | XML range [°] | soft 한계 [°] | 액션 clip [°] | 사용가능 창 [°] | default [°] | 구동 |
+|---|---|---|---|--:|--:|---|
+| L/R_hip_pitch_joint | [-120, 25] | [-112.8, 17.7] | [-112.8, 17.8] | 130.5 | -10.03 | 액션 |
+| L/R_hip_roll_joint | [-85, 25] | [-79.5, 19.5] | [-79.5, 19.5] | 99 | 0 | 액션 |
+| L/R_hip_yaw_joint | [-45, 45] | [-40.5, 40.5] | [-40.5, 40.5] | 81 | 0 | 액션 |
+| L/R_knee_joint | [-120, 0] | [-114, -6] | [-114, -6] | 108 | -20.05 | 액션 |
+| L_crank_A_joint | [-68.8, 68.8] | [-61.9, 61.9] | [-61.9, 61.9] | 123.8 | -17.12 | 액션 |
+| L_crank_B_joint | [-68.8, 68.8] | [-61.9, 61.9] | [-61.9, 61.9] | 123.8 | -17.12 | 액션 |
+| L_ankle_pitch_joint | [-50, 30] | [-46, 26] | — (수동) | — | 20.6 | 수동 |
+| L_ankle_roll_joint | [-20, 20] | [-18, 18] | — (수동) | — | 0.15 | 수동 |
+| R_crank_A_joint | [-68.8, 68.8] | [-61.9, 61.9] | [-61.9, 61.9] | 123.8 | -17.14 | 액션 |
+| R_crank_B_joint | [-68.8, 68.8] | [-61.9, 61.9] | [-61.9, 61.9] | 123.8 | -17.14 | 액션 |
+| R_ankle_pitch_joint | [-50, 30] | [-46, 26] | — (수동) | — | 20.63 | 수동 |
+| R_ankle_roll_joint | [-20, 20] | [-18, 18] | — (수동) | — | 0.15 | 수동 |
+| waist_yaw_joint | [-45, 45] | [-40.5, 40.5] | — (수동) | — | 0 | 수동 |
+| L/R_shoulder_pitch_joint | [-90, 60] | [-82.5, 52.5] | — (수동) | — | 0 | 수동 |
+| L/R_shoulder_roll_joint | [-32, 30] | [-28.9, 26.9] | — (수동) | — | 0 | 수동 |
+
+액션 스케일 0.25 rad/단위, 오프셋 = default (`use_default_offset`). clip이 없는 구 설정에서는 정책 목표각을 시뮬레이터의 soft 한계가 사후에 잡는다 — 창은 soft 한계 폭으로 읽는다.
+
+**§1b-4. 이 런의 스택 플래그 (`PYG_*`)**
+
+출처: 런 디렉토리 `repro/launch_manifest.json` (권위)
+
+| 플래그 | 값 |
+|---|---|
+| `PYG_ANKLE_MODE` | AB |
+| `PYG_ARM_ABD_DEG` | 15 |
+| `PYG_CMD_VY_STAGES` | 1 |
+| `PYG_CRITIC_DR_OBS` | 1 |
+| `PYG_DR_END_ITER` | 100000001 |
+| `PYG_DR_START_ITER` | 100000000 |
+| `PYG_GATED_CURRICULUM` | 1 |
+| `PYG_GATE_ERR_RATIO` | 100.0 |
+| `PYG_GATE_FELL_MAX` | 1.0 |
+| `PYG_GATE_MAX_DWELL` | 60 |
+| `PYG_GATE_MIN_DWELL` | 20 |
+| `PYG_GATE_MIN_EPISODES` | 32 |
+| `PYG_GATE_WINDOW` | 20 |
+| `PYG_INIT_BENT` | 1 |
+| `PYG_INIT_MID` | 1 |
+| `PYG_KNEE_EXT` | 1 |
+| `PYG_KNEE_EXT_DEG` | 25 |
+| `PYG_KNEE_EXT_W` | 2.0 |
+| `PYG_MASS_DR_JSON` | `mass_dr_fastener50_prototype-tempmass.json` |
+| `PYG_MODEL_TAG` | prototype-tempmass-motormeasured-armfix_v30_proxyfix |
+| `PYG_MOTOR_MEAS` | 1 |
+| `PYG_SAFE_TARGET_CLIP` | 1 |
+| `PYG_SOFT_LANDING` | 1 |
+| `PYG_SOFT_LANDING_MODE` | half |
+| `PYG_STUDENT_TEACHER` | 1 |
+| `PYG_TN` | 1 |
+| `PYG_V2` | 1 |
+
+§1b의 리워드 가중치 표가 정본이다 — 플래그는 그 가중치가 어떻게 조립됐는지의 기록이다.
+
+**P2 (`2026-09-02_03-40-21_v30proxyfix_AB_st45_imuclip_idrsmoke_test_p2`)**: 액추에이터 게인·한계·액션 clip이 위 P1 표와 **동일** (env.yaml 대조). 달라지는 것은 도메인 랜덤화·push 등 학습 조건뿐이다.
+
+<!-- SPEC-TABLES:END -->
 
 ## §2 레드팀 게이트와 결과
 

@@ -71,3 +71,9 @@
 ![[regime_sweep_g2p5.png]]
 
 - signed 3평면×6관절 · 데이터만 ×1.15 · 한계선 실정격(env.yaml 파싱). 생성: batch_regime_notes.py
+
+<!-- SPEC-TABLES:BEGIN (analysis/run_spec_tables.py) -->
+
+**§1b-2 / §1b-3 / §1b-4 (설정 명세 표)** — 이 노트는 감속비 스윕 4런 종합이라 단일 런의 config가 없다. 리워드 가중치·모터 게인·토크 한계·ROM/액션 창·`PYG_*` 플래그는 **각 런 노트의 §1b~§1b-4**에 있다(모두 그 런의 `params/env.yaml`에서 기계 생성).
+
+<!-- SPEC-TABLES:END -->

@@ -176,3 +176,8 @@
 3. **rough Gen-2.1**: warm-start P1 진행 중(`2026-07-13_21-10-17_gen21_rough_p1`), 게이트 = 험지 정상상태 달성속도(65 §6c)
 4. gen21p2 잔여 확인: vx 1.5 단일블록(59%) 시드 교체 재측정 · 떨림 스택(ankle action_rate 분리/EMA)은 차기 번들
 5. **Era-9 cant30_p1** (2026-07-14 착수, `PYG_HIP_CANT30` 기하변형 fresh P1): 게이트 = gen21_bent_p1 대비 추종 유지 + yaw 부하 예측(docs/67 §3: P99 +9.6 N·m·ω RMS 0.88) 실측 대조 → 통과 시 P2(DR+push) 진행
+
+## 11. 문서 인프라 (런 아님)
+| 날짜 | 작업 | 산출 |
+|---|---|---|
+| 2026-09-03 | **분석/문서 작업 — 런 아님**: 전 학습 노트에 설정 명세 표(§1b~§1b-4) 소급 + 런처 자동 삽입 | [[122_spec_table_backfill]] · `analysis/run_spec_tables.py` · `tools/notes/backfill_spec_tables.py` |

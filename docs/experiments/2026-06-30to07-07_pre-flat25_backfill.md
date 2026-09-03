@@ -33,3 +33,9 @@
 
 ## 등록
 INDEX.md·registry 참조 추가. audit_notes.sh는 본 노트가 14 타임스탬프를 모두 포함하므로 해제됨.
+
+<!-- SPEC-TABLES:BEGIN (analysis/run_spec_tables.py) -->
+
+**§1b-2 / §1b-3 / §1b-4 (설정 명세 표)** — 이 노트는 14개 런 일괄 소급 노트이라 단일 런의 config가 없다. 리워드 가중치·모터 게인·토크 한계·ROM/액션 창·`PYG_*` 플래그는 **각 런 노트의 §1b~§1b-4**에 있다(모두 그 런의 `params/env.yaml`에서 기계 생성).
+
+<!-- SPEC-TABLES:END -->

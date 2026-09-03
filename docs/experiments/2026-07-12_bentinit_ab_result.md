@@ -91,3 +91,9 @@ bent의 학습지표 progress 0.896(>straight 0.80)이 실측 고속추종 우�
 - 데이터: `p2push_fc/fcp` · `bentp2_fc/fcp` (각 90750 steps). push-학습 flat 설계앵커 = **bent P2 (bentp2_fc)**: knee 109.3·hip_pitch 95.0·GRF 1.30BW — [[65_design_value_uncertainty]] §2 갱신 대상.
 
 관련: [[2026-07-11_bentinit_ab_plan]] · [[2026-07-10_flat25b_prog_p1]] · [[55_init_pose_straight_vs_bent]] · [[65_design_value_uncertainty]] · [[66_experiment_registry]]
+
+<!-- SPEC-TABLES:BEGIN (analysis/run_spec_tables.py) -->
+
+**§1b-2 / §1b-3 / §1b-4 (설정 명세 표)** — 이 노트는 bentinit A/B 2런 비교이라 단일 런의 config가 없다. 리워드 가중치·모터 게인·토크 한계·ROM/액션 창·`PYG_*` 플래그는 **각 런 노트의 §1b~§1b-4**에 있다(모두 그 런의 `params/env.yaml`에서 기계 생성).
+
+<!-- SPEC-TABLES:END -->

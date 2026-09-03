@@ -30,3 +30,9 @@
 
 ## 4. 관련
 [[55_init_pose_straight_vs_bent]] · [[init-pose-straight-vs-bent]] · [[62_policy_reward_design_review]] · [[65_design_value_uncertainty]] · [[feedback-qtarget-analysis-rule]] · 진행보상 계보 [[2026-07-10_flat25_p1]]
+
+<!-- SPEC-TABLES:BEGIN (analysis/run_spec_tables.py) -->
+
+**§1b-2 / §1b-3 / §1b-4 (설정 명세 표)** — 이 노트는 A/B 실행 계획(런 없음)이라 단일 런의 config가 없다. 리워드 가중치·모터 게인·토크 한계·ROM/액션 창·`PYG_*` 플래그는 **각 런 노트의 §1b~§1b-4**에 있다(모두 그 런의 `params/env.yaml`에서 기계 생성).
+
+<!-- SPEC-TABLES:END -->
