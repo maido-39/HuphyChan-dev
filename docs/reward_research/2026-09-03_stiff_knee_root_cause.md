@@ -115,3 +115,33 @@ range 유도 부호는 **−1** = 용접 경로 쪽이다. 즉 `v2u1`은 `v2s1`�
 (내전 한계)이 된다. 신설 프리플라이트 게이트가 이 경우 `offset-outside-window` **경고**를
 띄운다(FAIL은 아님 — 창 자체는 130.5° 열려 있으므로). **상체 런을 다시 돌리기 전에 결론이
 필요한 항목.**
+
+#### 09-04 해소 (사용자 보고: FullDoF/SemiFullDoF 뷰어에서 초기자세 양팔이 이상함)
+
+사용자가 pygviewer에서 FullDoF/SemiFullDoF 초기자세를 직접 보고 "양팔이 각각 바깥으로 15°
+벌어져야 하는데 이상하다"고 지적. 위 3c의 미해결 항목이 바로 그 원인이었음을 순정운동학
+(forward kinematics) 프로브로 **직접 확인**했다(주석을 믿지 않고 실측):
+
+- v30 FullDoF: `L_shoulder_roll_joint`/`R_shoulder_roll_joint` **축은 둘 다 동일**
+  (`[-1,0,0]`) — 이전 두 주석("R 축이 미러") 모두 틀렸음. 대신 **range 자체가 미러**
+  (L `[-15°,+130°]` / R `[-130°,+15°]`, 위에서 이미 확인한 그대로)다.
+- `get_spec()`(용접, 기존 `-abd` 공통 부호)로 측정: L 손끝 상대-y **+0.1014**(중심선
+  쪽으로, 내전) / R 손끝 상대-y **+0.1012**(바깥쪽, 외전) — **왼팔만 내전, 오른팔은
+  정상**. `_bent_joint_pos()`(기존 `+abd` 공통 부호)로 측정: L **-0.1012**(외전, 정상)
+  / R **-0.1014**(내전) — **오른팔만 내전, 왼팔은 정상** = 두 함수가 정확히 좌우 반전된
+  반대쌍의 버그였음이 수치로 확정됨(추측이 아니라 확인).
+- v3/v4(레거시, range 공유 `[-32°,+30°]`, 축은 진짜 미러 `L[1,0,0]`/`R[-1,0,0]`)에서는
+  `get_spec()`의 기존 `-abd` 공통 부호가 양팔 모두 정상 외전(L **-0.1012**/R **+0.1012**)
+  — 기존 학습된 모든 v3/v4 정책의 전제가 맞았다는 것도 같은 프로브로 재확인.
+
+**조치**: `pygmalion_constants.shoulder_roll_abduction_sign(name)` 신설 — 관절 자체의
+range에서 부호를 유도(`joint_travel_sign`과 같은 원리, 대칭 range일 때만 레거시 값 `-1.0`로
+폴백). `get_spec()`과 `_bent_joint_pos()` 둘 다 이 함수를 쓰도록 교체, 모순된 주석 삭제 후
+실측 근거로 재작성. v30: 양팔 모두 대칭 외전(L **-0.1012**/R **+0.1012**, 물리각
+L**+15.00°**/R**-15.00°**)으로 통일. v3/v4: `get_spec()` 결과 소수 5자리까지 완전
+동일(**Δ0**, `mujoco-sim/mjlab/tests/test_pygmalion_arm_abduction.py::test_legacy_v3_...`로
+고정) — 기존 v3/v4 정책 재현성 영향 없음. LegOnly 본학습(어깨 관절 없음)은 영향 0 그대로.
+FullDoF-AB/RP·SemiFullDoF-AB/RP 4변형 pygviewer 캐시 재bake 완료,
+`tools/pygviewer/tests/test_arm_abduction.py`(baked 모델 자체를 mj_forward해 양팔 외전
+확인, 재bake 전 FullDoF 2변형에서 실제로 FAIL하는 것까지 확인한 뒤 재bake)로 이중 검증.
+mjlab 커밋 `d8421b9`. **이 항목은 이제 해결됨 — 위 원본 기록은 삭제하지 않고 그대로 둔다.**

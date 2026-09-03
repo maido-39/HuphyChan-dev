@@ -173,3 +173,26 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
 * 뷰어 기본 base 모드를 `fixed`로 했다(`--base free`로 변경). P1에는 균형을 잡는 것이 없어
   free로 두면 약 2 s 만에 넘어져 첫 화면이 쓰러진 로봇이 된다.
 - 09-04 01:15 — **P0~P4 전부 완료(계획자 스팟체크)**: API 25 엔드포인트(/script/run·/policy/shadow_follow·/replay/* 포함) 노출 확인, compare 오버레이 png 3장 존재, P4 커밋 7건(c6d9a46…db25e5c) 확인, 뷰어 8094/8095 200. 실물 필요 단계(프로토콜 ②③⑥⑦)는 하드웨어 연결 후.
+
+- 09-04 03:35 — **어깨 외전(arm abduction) 부호 버그 수정, mjlab 상수 파일**(사용자가 FullDoF/SemiFullDoF 뷰어 초기자세를 직접 보고 발견 — 이번엔 pygviewer 코드가 아니라 `mujoco-sim/mjlab/.../pygmalion_constants.py`가 원인). 상세 근본원인·수치는
+  `docs/reward_research/2026-09-03_stiff_knee_root_cause.md` §3c "09-04 해소" 참조 — 요약:
+  `get_spec()`/`_bent_joint_pos()` 두 함수가 `shoulder_roll` 외전 부호를 서로 반대로
+  하드코딩해뒀고, v30 모델은 그 중 어느 쪽을 써도 한쪽 팔은 외전·다른쪽은 내전되는 상태였다.
+  신설 `shoulder_roll_abduction_sign()`(관절 range에서 부호 유도, 대칭 range면 레거시 −1
+  폴백)로 두 함수를 통일. v3/v4 레거시 결과는 소수 5자리까지 불변(Δ0) 확인. mjlab 커밋
+  `d8421b9`(별도 저장소 — `git diff --submodule=log`로 부모 저장소에 포인터 반영).
+  **pygviewer 쪽 물리 검증**: `tools/pygviewer/tests/test_arm_abduction.py` 신설 — baked
+  FullDoF-AB/RP·SemiFullDoF-AB/RP 4변형에 대해 mj_forward 후 양팔의 world-y 오프셋이 어깨
+  기준 바깥쪽(외전)인지 직접 확인. 재bake 전 FullDoF-AB/RP 2개에서 실제로 FAIL(왼팔이
+  중심선 쪽으로 접힘)하는 것을 먼저 확인한 뒤 4변형 재bake(+LegOnly-AB/RP도 소스해시
+  갱신 때문에 재bake, LegOnly-AB에 물린 정책 2개도 재bake) → pytest 214 passed(기존 210
+  + 신규 4). 뷰어(8094/8095) 재기동, contract_hash 갱신 확인.
+  **함정**: `mujoco-sim/mjlab`에서 `make format`(프로젝트 전체에 `ruff format`+
+  `ruff check --fix`)을 실행했더니 무관한 파일 260여 개가 스타일 변경으로 잡혔다 — 그 중
+  일부(`.gitignore`, `analysis/watchdog.sh`, `analysis/out/watchdog_runs.json`)는 진짜
+  기존 미커밋 작업(실행 중인 watchdog이 계속 쓰는 로그 포함)이라 **되돌리지 않고 그대로
+  둠**(git checkout 등 되돌리기 명령을 쓰지 않음 - 데이터 손실 위험 판단). 내가 의도한
+  `pygmalion_constants.py` 변경은 AST 비교(ast.dump 전/후 diff)로 "정확히 이 3군데 함수
+  변경 외에는 전부 서식뿐"임을 확인한 뒤 그 파일만, 그리고 신규 테스트 파일만 스테이징해
+  커밋 — 나머지 260여 개 파일은 작업트리에 커밋되지 않은 채로 남아 있음(사용자/다음 세션이
+  판단해 처리할 것).
