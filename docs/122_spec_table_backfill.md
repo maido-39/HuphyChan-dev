@@ -97,6 +97,8 @@
 3. **`pygmalion_locomotion/scripts/run_training.sh`** — 리포트 생성 뒤 **(5/5) SPEC TABLES** 단계 추가.
 4. **`.claude/skills/experiment-note/SKILL.md`** — §1 표에 §1b-2/3/4 필수 행 추가 + §1-1에
    "손으로 쓰지 않는다" 실행법·체크리스트, soft 한계 공식 명시.
+   ⚠ `.claude/`는 `.gitignore` 31행에서 제외되므로 이 변경은 **커밋에 포함되지 않는다**(디스크에만
+   존재). 다른 머신/클론에서는 스킬을 다시 적용해야 한다.
 5. **`pygmalion_locomotion/scripts/audit_notes.sh`** — (7) **경고**(블록 아님): 학습 런 노트에
    §1b-2가 없으면 stderr로 알리고 고치는 명령을 함께 출력. 블록하지 않는 이유는 신규 노트를
    런처가 자동으로 채우므로 학습 중인 노트에 대해 세션을 헛되이 붙잡지 않기 위해서다.
@@ -128,4 +130,12 @@ R_toe −45° vs L −50°**. 좌우 대칭을 가정한 그 시대 분석이 �
 
 ## 6. 상태
 
-**완료** (2026-09-03). 재점검: `python3 tools/notes/backfill_spec_tables.py --inventory`
+**완료** (2026-09-03).
+
+| 커밋 | 범위 |
+|---|---|
+| mjlab `72b9f4c4` | `analysis/run_spec_tables.py`(신규) · `analysis/run_v2_scratch.py`(P1/P2 종료 훅) |
+| parent `210b708` | 노트 111건 · `docs/122` · registry · 브리핑 · `tools/notes/backfill_spec_tables.py` · `run_training.sh` · `audit_notes.sh` · mjlab gitlink 범프 |
+
+재점검: `python3 tools/notes/backfill_spec_tables.py --inventory`
+(전 노트 재생성이 필요하면 `--force`; 새 런은 런처가 자동으로 넣으므로 손댈 필요 없다)
