@@ -873,8 +873,28 @@
   {
    "id": "n_legonly_v2_smoke",
    "type": "file",
-   "file": "experiments/2026-09-03_legonly_ab_v2_smoke.md",
+   "file": "experiments/2026-09-03_legonly_ab_sideaware_smoke.md",
    "x": 20020,
+   "y": 300,
+   "width": 440,
+   "height": 320,
+   "color": "6"
+  },
+  {
+   "id": "n_legonly_gaitkin",
+   "type": "file",
+   "file": "experiments/2026-09-03_legonly_gait_kinematics.md",
+   "x": 19540,
+   "y": 720,
+   "width": 440,
+   "height": 320,
+   "color": "3"
+  },
+  {
+   "id": "n_legonly_v2",
+   "type": "file",
+   "file": "experiments/2026-09-03_legonly_ab_v2.md",
+   "x": 20100,
    "y": 300,
    "width": 440,
    "height": 320,
@@ -1652,6 +1672,30 @@
    "fromNode": "n_legonly_v1",
    "toNode": "n_legonly_v2_smoke",
    "label": "v1 halted (L_knee action window 0 deg) -> config side-aware fix, verified by smoke"
+  },
+  {
+   "id": "e_v1_gaitkin",
+   "fromNode": "n_legonly_v1",
+   "toNode": "n_legonly_gaitkin",
+   "label": "kinematics @5600: L_knee window 0deg (config bug)"
+  },
+  {
+   "id": "e_gaitkin_v2",
+   "fromNode": "n_legonly_gaitkin",
+   "toNode": "n_legonly_v2",
+   "label": "conservative STOP -> side-aware config fix (single variable)"
+  },
+  {
+   "id": "e_v1_v2",
+   "fromNode": "n_legonly_v1",
+   "toNode": "n_legonly_v2",
+   "label": "same recipe/model/DR, config fix only"
+  },
+  {
+   "id": "e_smoke2_v2",
+   "fromNode": "n_legonly_v2_smoke",
+   "toNode": "n_legonly_v2",
+   "label": "smoke PASS (knee window open) -> 16384-env launch"
   }
  ]
 }
