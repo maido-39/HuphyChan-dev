@@ -2,7 +2,8 @@
 
 Shape on disk (one file):
   * line 1: a plain JSON header (NOT a wire message) -
-    ``{v, contract_hash, variant, base:{mode,height,ground,pivot_offset}, gains_source,
+    ``{v, contract_hash, variant, base:{mode,height,ground,pivot_offset,z_set,hook_offset,
+    string_follow_xy}, gains_source,
     env_toggles, bake_mjb_sha256, started_utc}``.  Everything a consumer needs to decide
     whether an overlay against another recording (or the live model) is even meaningful,
     without opening the model contract separately (R9/R11).
@@ -39,6 +40,9 @@ def header_from_core(core) -> dict[str, Any]:
       height=float(core.base_pos[2]),
       ground=core.ground,
       pivot_offset=[float(x) for x in core.pivot_offset],
+      z_set=float(core.string_z_set),
+      hook_offset=[float(x) for x in core.string_hook_offset],
+      string_follow_xy=bool(core.string_follow_xy),
     ),
     gains_source=core.gains_source,
     env_toggles=c.raw.get("env_toggles"),

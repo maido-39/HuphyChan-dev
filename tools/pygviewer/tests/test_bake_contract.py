@@ -18,6 +18,7 @@ REQUIRED = (
   "gains", "tn_curves", "dof_props", "decimation", "physics_dt", "step_dt", "sim_options",
   "spawn_base_z", "keyframes", "env_toggles", "safe_clip", "joint_contract", "xml_sha256",
   "constants_sha256", "mjlab_git", "bake_utc", "anchor_eq_ids", "floor_geom", "gravity",
+  "string_rig",
 )
 
 MIN_WINDOW_RAD = 0.2
@@ -152,6 +153,17 @@ def test_files_are_present_and_fresh(contract):
 def test_contract_sha_is_stable(contract):
   raw = json.loads(contract.path.read_text())
   assert raw["contract_sha"] == contract.contract_sha
+
+
+def test_string_rig_is_present_and_self_consistent(contract):
+  """base mode 'string' (safety tether): every variant must bake the tendon+sites it needs,
+  not just the AB/RP-specific ones - a passive biped falls the same way regardless of ankle."""
+  sr = contract.raw["string_rig"]
+  assert sr["tendon_id"] >= 0
+  assert sr["anchor_site_id"] >= 0
+  assert sr["hook_site_id"] >= 0
+  assert sr["anchor_site_id"] != sr["hook_site_id"]
+  assert sr["L0"] > 0
 
 
 def test_ab_carries_an_ankle_inverse(contract):

@@ -72,6 +72,22 @@ TASK = "Mjlab-Velocity-Flat-Pygmalion"
 EQ_SOLREF = (0.002, 1.0)
 EQ_SOLIMP = (0.9999, 0.99999, 1.0e-5, 0.5, 2.0)
 
+# Safety-tether ("string") mode: a 2-site spatial tendon between the mocap anchor and a site
+# on base_link, LIMITED to length [0, STRING_L0].  A MuJoCo tendon limit is a one-directional
+# (rope, not spring) constraint - slack below the limit, taut at it - which is exactly a real
+# overhead harness: it catches a falling base, it never holds one up that is standing fine.
+# STRING_L0 only sets how far above the commanded catch height (z_set, a SimCore runtime
+# state, not baked) the mocap anchor is parked; the number itself is arbitrary as long as it
+# is positive, since sim_core.py re-derives the anchor's world Z as z_set + STRING_L0 every
+# tick. Baked DISABLED (tendon_limited=False) - same "inert until a runtime mode switch turns
+# it on" pattern as base_weld/base_pivot above. solref_limit is deliberately 10x SOFTER than
+# EQ_SOLREF: a rigid catch on a 23 kg falling body is a jolt a real safety line does not give;
+# 0.02 s settling was verified analytically (tools/pygviewer/pygviewer/bake.py string rig
+# test, docs/121 section 9) to land within 2e-4 m of the commanded z_set with zero steady
+# state error, so there was no reason to go stiffer.
+STRING_L0 = 1.0
+STRING_SOLREF_LIMIT = (0.02, 1.0)
+
 
 def variant_env(variant: str, init_bent: bool = True) -> dict[str, str]:
   """PYG_* environment for one variant.  Raises on an unknown variant."""
@@ -287,7 +303,8 @@ def bake_one(variant: str, cache_dir: str, init_bent: bool = True) -> dict:
 
   # ----------------------------------------------------------------- spec surgery ----
   spec = env.scene.spec
-  base_body = next(b.name for b in spec.bodies if b.name.endswith("base_link"))
+  base_body_spec = next(b for b in spec.bodies if b.name.endswith("base_link"))
+  base_body = base_body_spec.name
   anchor = spec.worldbody.add_body(name="pyg_anchor", mocap=True, pos=[0.0, 0.0, 1.0])
   # site, not geom: a geom on the anchor body adds 4.2 g to body_mass.sum() and the bake
   # asserts the mass is unchanged.
@@ -302,6 +319,22 @@ def bake_one(variant: str, cache_dir: str, init_bent: bool = True) -> dict:
     eq.name1 = "pyg_anchor" if nm == "base_weld" else base_body
     eq.name2 = base_body if nm == "base_weld" else "pyg_anchor"
     eq.active = False
+  # "string" base mode (safety tether): a 2-site spatial tendon, anchor site on the SAME
+  # mocap body the weld/pivot use, hook site on base_link at the local origin (sim_core moves
+  # it at runtime via `site_pos`, exactly the way `base_pivot`'s pivot_offset is rewritten on
+  # the compiled model below - MjModel per-site position is not a compile-time-only field).
+  anchor.add_site(name="pyg_string_anchor", size=[0.01, 0, 0], rgba=[0.3, 0.9, 0.3, 0.0])
+  base_body_spec.add_site(
+    name="pyg_string_hook", pos=[0.0, 0.0, 0.0], size=[0.01, 0, 0], rgba=[0.3, 0.9, 0.3, 0.0]
+  )
+  string_tendon = spec.add_tendon(name="pyg_string")
+  string_tendon.limited = False  # inert at bake - sim_core turns this on only in mode "string"
+  string_tendon.range = [0.0, STRING_L0]
+  string_tendon.solref_limit = list(STRING_SOLREF_LIMIT)
+  string_tendon.width = 0.006
+  string_tendon.rgba = [0.5, 0.5, 0.5, 0.0]  # sim_core drives colour/alpha at runtime
+  string_tendon.wrap_site("pyg_string_anchor")
+  string_tendon.wrap_site("pyg_string_hook")
   m = spec.compile()
 
   # MjSpec leaves equality.data at a type-agnostic default ([0,1,0,0,1,...] - the
@@ -323,6 +356,18 @@ def bake_one(variant: str, cache_dir: str, init_bent: bool = True) -> dict:
     m.eq_solref[e] = EQ_SOLREF
     m.eq_solimp[e] = EQ_SOLIMP
     m.eq_active0[e] = 0
+
+  string_tid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_TENDON, "pyg_string")
+  string_anchor_sid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "pyg_string_anchor")
+  string_hook_sid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "pyg_string_hook")
+  # Written explicitly rather than trusted from the spec compile, same reasoning as eq_data
+  # above: this is the one row sim_core reads every tick, so a silent default here is a
+  # silent wrong catch height.
+  m.tendon_limited[string_tid] = 0
+  m.tendon_range[string_tid] = [0.0, STRING_L0]
+  m.tendon_solref_lim[string_tid] = STRING_SOLREF_LIMIT
+  m.tendon_width[string_tid] = 0.006
+  m.tendon_rgba[string_tid] = [0.5, 0.5, 0.5, 0.0]
 
   # mjlab applies SimulationCfg to the COMPILED model, not to the spec: the scene spec still
   # carries the XML's own <option> (timestep 0.002, default solver settings), so a
@@ -457,6 +502,16 @@ def bake_one(variant: str, cache_dir: str, init_bent: bool = True) -> dict:
       base_body_id=int(base_bid),
       solref=list(EQ_SOLREF),
       solimp=list(EQ_SOLIMP),
+    ),
+    string_rig=dict(
+      tendon="pyg_string",
+      tendon_id=int(string_tid),
+      anchor_site="pyg_string_anchor",
+      anchor_site_id=int(string_anchor_sid),
+      hook_site="pyg_string_hook",
+      hook_site_id=int(string_hook_sid),
+      L0=STRING_L0,
+      solref_limit=list(STRING_SOLREF_LIMIT),
     ),
     ankle_inverse=_ankle_inverse_meta(variant, transmission),
     loop_transmission=transmission,

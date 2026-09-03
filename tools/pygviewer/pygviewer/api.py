@@ -87,6 +87,7 @@ def build_app(core, freshness: dict) -> FastAPI:
       sim_time_s=s.get("t", 0.0),
       rates=Rates(**s.get("rates", {})),
       base=BaseState(**s.get("base", {})),
+      string=s.get("string"),
       contract_stale=bool(freshness.get("stale")),
       contract_checks=freshness.get("checks", {}),
       telemetry=dict(
@@ -150,7 +151,10 @@ def build_app(core, freshness: dict) -> FastAPI:
     core.submit({"op": "ankle", "side": body.side, "pitch": body.pitch, "roll": body.roll})
     return {"ok": True, "note": core.c.raw["ankle_inverse"]["caveat"]}
 
-  @app.post("/base", summary="Base anchor: mode free|fixed|pivot, pose, height, pivot point, ground")
+  @app.post(
+    "/base",
+    summary="Base anchor: mode free|fixed|pivot|string, pose, height, pivot/hook point, ground",
+  )
   def post_base(body: BaseIn):
     cmd = {"op": "base", **{k: v for k, v in body.model_dump().items() if v is not None}}
     core.submit(cmd)

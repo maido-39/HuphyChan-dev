@@ -124,7 +124,7 @@ class Rates(BaseModel):
 
 
 class BaseState(BaseModel):
-  mode: Literal["free", "fixed", "pivot"] = "free"
+  mode: Literal["free", "fixed", "pivot", "string"] = "free"
   pos: list[float] = [0.0, 0.0, 0.0]
   quat: list[float] = [1.0, 0.0, 0.0, 0.0]
   rpy: list[float] = [0.0, 0.0, 0.0]
@@ -144,6 +144,9 @@ class Status(Header):
   sim_time_s: float = 0.0
   rates: Rates = Rates()
   base: BaseState = BaseState()
+  string: dict[str, Any] | None = Field(
+    default=None, description="base mode 'string': z_set, length, ten_length, taut, tension_N"
+  )
   contract_stale: bool = False
   contract_checks: dict[str, Any] = {}
   telemetry: dict[str, Any] = Field(default={}, description="P3: rx rate, age, clock offset")
@@ -181,16 +184,27 @@ class BaseIn(BaseModel):
 
   ``mode``: ``free`` (both equalities off) / ``fixed`` (weld: pose fully constrained) /
   ``pivot`` (connect: the point ``pivot_offset`` in the BASE frame is held at ``pos``,
-  orientation free under gravity).  Gravity is never modified by any of these.
+  orientation free under gravity) / ``string`` (safety tether: a tendon LIMIT holds the base
+  no lower than ``z_set`` - slack above it, taut at it - horizontal motion is otherwise free,
+  same as a real overhead harness). Gravity is never modified by any of these.
   """
 
-  mode: Literal["free", "fixed", "pivot"] | None = None
+  mode: Literal["free", "fixed", "pivot", "string"] | None = None
   pos: list[float] | None = None
   quat: list[float] | None = None
   rpy: list[float] | None = None
   height: float | None = None
   pivot_offset: list[float] | None = None
   ground: bool | None = None
+  z_set: float | None = Field(default=None, description="string mode: catch height [m]")
+  hook_offset: list[float] | None = Field(
+    default=None, description="string mode: tether attachment point in the BASE frame [m]"
+  )
+  follow_xy: bool | None = Field(
+    default=None,
+    description="string mode: False (default) = anchor (x,y) fixed at mode-entry (can swing); "
+    "True = anchor tracks the base's (x,y) every tick (vertical rail, no swing)",
+  )
 
 
 class ModeIn(BaseModel):

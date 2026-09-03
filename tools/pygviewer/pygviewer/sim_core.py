@@ -38,7 +38,7 @@ from .contract import ModelContract
 from .policy import ObsBuilder, ObsSourceMux, action_to_target, check_compatible
 from .telemetry import RealState
 
-BASE_MODES = ("free", "fixed", "pivot")
+BASE_MODES = ("free", "fixed", "pivot", "string")
 REPLAY_MODES = ("real_replay", "file_replay")
 
 
@@ -215,6 +215,16 @@ class SimCore:
     self.eq_pivot = int(a["connect"])
     self.mocap_id = int(a["mocap_id"])
     self.base_bid = int(a["base_body_id"])
+
+    # "string" base mode (safety tether) - see bake.py's spec-surgery comment and the
+    # module docstring addendum below _apply_base_mode. `sr` is required from CONTRACT_VERSION
+    # 2 on; there is no fallback path because there is nothing sensible to fall back TO (a
+    # missing tendon means mode "string" cannot exist on this model at all).
+    sr = r["string_rig"]
+    self.string_tid = int(sr["tendon_id"])
+    self.string_anchor_sid = int(sr["anchor_site_id"])
+    self.string_hook_sid = int(sr["hook_site_id"])
+    self.string_L0 = float(sr["L0"])
     self.floor_gid = mujoco.mj_name2id(self.m, mujoco.mjtObj.mjOBJ_GEOM, r["floor_geom"])
     self._floor_con = (
       int(self.m.geom_contype[self.floor_gid]),
@@ -238,6 +248,15 @@ class SimCore:
     self.base_pos = np.array([0.0, 0.0, float(r["spawn_base_z"])])
     self.base_quat = np.array([1.0, 0.0, 0.0, 0.0])
     self.pivot_offset = np.zeros(3)
+    # string mode state: z_set is the height the tether catches the base at (world Z);
+    # hook_offset moves the base-side attachment point in the BASE frame, same convention as
+    # pivot_offset; follow_xy=False means the anchor's (x,y) is fixed at wherever it was when
+    # the mode was entered (a real string, so the base can swing under it); True makes the
+    # anchor track the base's own (x,y) every tick (an overhead rail - no swing).
+    self.string_z_set = float(r["spawn_base_z"])
+    self.string_hook_offset = np.zeros(3)
+    self.string_follow_xy = False
+    self.string_anchor_xy = np.zeros(2)
     self.ground = True
     self.mode = "idle"
 
@@ -391,6 +410,7 @@ class SimCore:
     # robot from whatever height the previous mode had parked it at.)
     self.base_pos = np.array([0.0, 0.0, float(kf["base_z"])])
     self.base_quat = np.array([1.0, 0.0, 0.0, 0.0])
+    self.string_anchor_xy = self.base_pos[:2].copy()
     self.d.qpos[self.free_adr : self.free_adr + 3] = self.base_pos
     self.d.qpos[self.free_adr + 3 : self.free_adr + 7] = self.base_quat
     self.d.qvel[:] = 0.0
@@ -409,18 +429,46 @@ class SimCore:
     self.m.geom_contype[self.floor_gid] = ct
     self.m.geom_conaffinity[self.floor_gid] = ca
 
+  def _refresh_anchor(self) -> None:
+    """Place the mocap anchor for whichever mode is active.  Called every substep (mode !=
+    free) so a ``/base`` command lands mid-substep at the latest, not one control tick late -
+    the same reasoning ``_substep``'s old inline write documented.
+
+    ``string`` is NOT ``self.base_pos`` driven at all: the anchor's world Z is always
+    ``z_set + string_L0`` (so the tendon's [0, L0] limit engages exactly at z_set) and its
+    (x, y) is either the position captured when the mode was entered (a real string - the
+    base can swing under it) or the base's own live (x, y) when ``string_follow_xy`` is set
+    (an overhead rail - the tether stays vertical, no swing).
+    """
+    if self.base_mode == "string":
+      xy = self.d.qpos[self.free_adr : self.free_adr + 2] if self.string_follow_xy else self.string_anchor_xy
+      self.d.mocap_pos[self.mocap_id] = [float(xy[0]), float(xy[1]), self.string_z_set + self.string_L0]
+      self.d.mocap_quat[self.mocap_id] = [1.0, 0.0, 0.0, 0.0]
+    elif self.base_mode != "free":
+      self.d.mocap_pos[self.mocap_id] = self.base_pos
+      self.d.mocap_quat[self.mocap_id] = self.base_quat
+
   def _apply_base_mode(self, snap: bool = False) -> None:
-    """Activate the right equality and, when asked, put the base exactly where it belongs.
+    """Activate the right equality/tendon and, when asked, put the base exactly where it
+    belongs.
 
     ``snap`` is used on a mode change: without it the constraint has to drag the base into
-    place, which is a violent kick for a 23 kg robot standing on a hard floor.
+    place, which is a violent kick for a 23 kg robot standing on a hard floor.  ``string`` is
+    deliberately grouped with ``free`` for the snap: a tether must never teleport the robot,
+    it only ever catches whatever fall is already in progress.
     """
-    self.d.mocap_pos[self.mocap_id] = self.base_pos
-    self.d.mocap_quat[self.mocap_id] = self.base_quat
+    self._refresh_anchor()
     self.m.eq_data[self.eq_pivot, 0:3] = self.pivot_offset
     self.d.eq_active[self.eq_weld] = 1 if self.base_mode == "fixed" else 0
     self.d.eq_active[self.eq_pivot] = 1 if self.base_mode == "pivot" else 0
-    if not snap or self.base_mode == "free":
+    is_string = self.base_mode == "string"
+    self.m.tendon_limited[self.string_tid] = 1 if is_string else 0
+    self.m.tendon_range[self.string_tid] = [0.0, self.string_L0]
+    self.m.site_pos[self.string_hook_sid] = self.string_hook_offset
+    if not is_string:
+      # invisible when the mode isn't active - see _publish for the live taut/slack colour.
+      self.m.tendon_rgba[self.string_tid] = [0.5, 0.5, 0.5, 0.0]
+    if not snap or self.base_mode in ("free", "string"):
       return
     if self.base_mode == "fixed":
       self.d.qpos[self.free_adr : self.free_adr + 3] = self.base_pos
@@ -442,6 +490,9 @@ class SimCore:
     height: float | None = None,
     pivot_offset=None,
     ground: bool | None = None,
+    z_set: float | None = None,
+    hook_offset=None,
+    follow_xy: bool | None = None,
   ) -> None:
     changed_mode = mode is not None and mode != self.base_mode
     if mode is not None:
@@ -459,9 +510,19 @@ class SimCore:
       self.base_quat = rpy_to_quat(*[float(v) for v in rpy])
     if pivot_offset is not None:
       self.pivot_offset = np.asarray(pivot_offset, dtype=float).copy()
+    if hook_offset is not None:
+      self.string_hook_offset = np.asarray(hook_offset, dtype=float).copy()
+    if follow_xy is not None:
+      self.string_follow_xy = bool(follow_xy)
+    if z_set is not None:
+      self.string_z_set = float(z_set)
     if ground is not None:
       self.ground = bool(ground)
       self._apply_ground()
+    if changed_mode and self.base_mode == "string":
+      # Re-anchor (x, y) at wherever the base is RIGHT NOW - entering the mode must never
+      # itself cause a swing, only whatever happens to the base afterwards.
+      self.string_anchor_xy = self.d.qpos[self.free_adr : self.free_adr + 2].copy()
     self._apply_base_mode(snap=changed_mode or pos is not None or quat is not None or rpy is not None or height is not None)
 
   def set_target(self, values: dict[str, float]) -> None:
@@ -703,10 +764,10 @@ class SimCore:
         self.d.qvel[self.a_d[i]] = 0.0
       mujoco.mj_forward(self.m, self.d)
     if self.base_mode != "free":
-      # keep the anchor exactly where the user put it (mocap bodies never integrate, but a
-      # /base command may have landed mid-substep)
-      self.d.mocap_pos[self.mocap_id] = self.base_pos
-      self.d.mocap_quat[self.mocap_id] = self.base_quat
+      # keep the anchor exactly where it belongs (mocap bodies never integrate, but a /base
+      # command may have landed mid-substep, and in "string" the anchor tracks string_z_set /
+      # the base's own (x, y) rather than a fixed commanded pose - see _refresh_anchor).
+      self._refresh_anchor()
 
   def _replay_source(self) -> dict[str, float | None] | None:
     if self.mode == "real_replay":
@@ -892,6 +953,7 @@ class SimCore:
         pivot_offset=[float(x) for x in self.pivot_offset],
         ground=self.ground,
       ),
+      string=self._string_status(),
       imu=sens,
       rates=dict(
         phys_hz=round(self._stats["phys_hz"], 1),
@@ -954,6 +1016,40 @@ class SimCore:
     if err:
       w.append(f"last command rejected: {err}")
     return w
+
+  def _string_tension_n(self) -> float:
+    """Newtons of tether tension THIS instant, read off the tendon-limit constraint row -
+
+    not a spring/damper number to compute ourselves, the actual Lagrange multiplier MuJoCo's
+    solver used this step.  Exactly 0.0 (not a small numerical residual) when the constraint
+    is inactive (slack): an inactive limit contributes no row to efc_* at all, it is not a
+    zeroed-out active one, so there is no need to threshold this at the call site (see
+    `_string_status.taut`, which does `> 0.0`).
+    """
+    for i in range(self.d.nefc):
+      if self.d.efc_id[i] == self.string_tid and self.d.efc_type[i] == mujoco.mjtConstraint.mjCNSTR_LIMIT_TENDON:
+        return float(self.d.efc_force[i])
+    return 0.0
+
+  # Tether taut/slack colours for mjviser's native tendon decor render (a MuJoCo tendon with
+  # width>0 is drawn as a capsule automatically - no custom 3D line code needed).
+  STRING_TAUT_RGBA = (0.90, 0.20, 0.20, 0.95)
+  STRING_SLACK_RGBA = (0.55, 0.55, 0.55, 0.35)
+
+  def _string_status(self) -> dict:
+    tension = self._string_tension_n()
+    taut = tension > 0.0
+    if self.base_mode == "string":
+      self.m.tendon_rgba[self.string_tid] = self.STRING_TAUT_RGBA if taut else self.STRING_SLACK_RGBA
+    return dict(
+      z_set=float(self.string_z_set),
+      length=float(self.string_L0),
+      hook_offset=[float(x) for x in self.string_hook_offset],
+      follow_xy=bool(self.string_follow_xy),
+      ten_length=round(float(self.d.ten_length[self.string_tid]), 6),
+      taut=bool(taut),
+      tension_N=round(tension, 3),
+    )
 
   def closure_mm(self) -> float:
     worst = 0.0

@@ -74,10 +74,20 @@ def main(argv: list[str] | None = None) -> int:
   ap.add_argument(
     "--base",
     default="fixed",
-    choices=("free", "fixed", "pivot"),
+    choices=("free", "fixed", "pivot", "string"),
     help="base mode at startup. 'fixed' by default: with nothing balancing it a passive "
     "biped topples in ~2 s, which is a poor first screen for a joint inspector. Switch to "
-    "'free' in the panel (or here) for real standing dynamics.",
+    "'free' in the panel (or here) for real standing dynamics; 'string' hangs a safety "
+    "tether that only engages below --string-z-set.",
+  )
+  ap.add_argument(
+    "--string-z-set", type=float, default=None,
+    help="--base string only: catch height [m]; default is this model's spawn_base_z",
+  )
+  ap.add_argument(
+    "--string-follow-xy", action="store_true",
+    help="--base string only: anchor tracks the base's (x,y) every tick (no swing) instead "
+    "of staying fixed at the (x,y) the mode was entered at",
   )
   ap.add_argument("--keyframe", default="knees_bent", choices=("home", "knees_bent"))
   ap.add_argument(
@@ -104,7 +114,12 @@ def main(argv: list[str] | None = None) -> int:
   core = SimCore(c, shadow_follow=args.shadow_follow)
   core.reset(args.keyframe)
   if args.base != "free":
-    core.set_base(mode=args.base)
+    base_kwargs = dict(mode=args.base)
+    if args.base == "string":
+      if args.string_z_set is not None:
+        base_kwargs["z_set"] = args.string_z_set
+      base_kwargs["follow_xy"] = args.string_follow_xy
+    core.set_base(**base_kwargs)
 
   if args.headless:
     t0 = time.perf_counter()

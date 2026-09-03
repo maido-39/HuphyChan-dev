@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-CONTRACT_VERSION = 1
+CONTRACT_VERSION = 2  # v2 (2026-09-04): adds `string_rig` (safety-tether base mode)
 
 
 def sha256_file(path: str | os.PathLike) -> str:

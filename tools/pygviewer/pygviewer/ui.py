@@ -140,11 +140,13 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
   with gui.add_folder("Base link"):
     gui.add_markdown(
       "`free` gravity only &middot; `fixed` welded to the anchor &middot; "
-      "`pivot` the offset point is held, rotation free.\n\n"
+      "`pivot` the offset point is held, rotation free &middot; `string` a safety tether: "
+      "slack above `Z_set`, taut (holds the base up) at or below it - horizontal motion is "
+      "always free, like a real overhead harness.\n\n"
       "**Gravity is never modified by any of these.**"
     )
     mode = gui.add_dropdown(
-      "mode", ("free", "fixed", "pivot"), initial_value=state.get("base", core.base_mode)
+      "mode", ("free", "fixed", "pivot", "string"), initial_value=state.get("base", core.base_mode)
     )
     px = gui.add_number("anchor x [m]", initial_value=0.0, step=0.005)
     py = gui.add_number("anchor y [m]", initial_value=0.0, step=0.005)
@@ -154,10 +156,19 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
     roll = gui.add_slider("roll [deg]", min=-90, max=90, step=0.5, initial_value=0.0)
     pitch = gui.add_slider("pitch [deg]", min=-90, max=90, step=0.5, initial_value=0.0)
     yaw = gui.add_slider("yaw [deg]", min=-180, max=180, step=0.5, initial_value=0.0)
-    ox = gui.add_number("pivot offset x [m]", initial_value=0.0, step=0.005)
-    oy = gui.add_number("pivot offset y [m]", initial_value=0.0, step=0.005)
-    oz = gui.add_number("pivot offset z [m]", initial_value=0.0, step=0.005)
+    gui.add_markdown("offset xyz below is shared by `pivot` (rotation centre) and `string` "
+                      "(tether attachment point) - both are \"a point in the BASE frame\".")
+    ox = gui.add_number("pivot/hook offset x [m]", initial_value=0.0, step=0.005)
+    oy = gui.add_number("pivot/hook offset y [m]", initial_value=0.0, step=0.005)
+    oz = gui.add_number("pivot/hook offset z [m]", initial_value=0.0, step=0.005)
     ground = gui.add_checkbox("ground contact", initial_value=True)
+    z_set = gui.add_slider(
+      "string Z_set [m]", min=0.3, max=1.2, step=0.005, initial_value=float(core.string_z_set)
+    )
+    follow_xy = gui.add_checkbox(
+      "string follow XY (no swing)", initial_value=core.string_follow_xy
+    )
+    string_md = gui.add_markdown("")
     kf = gui.add_button_group("reset to (also restores the base pose)",
                               ("home", "knees_bent"))
 
@@ -169,11 +180,14 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
         "pos": [px.value, py.value, height.value],
         "rpy": [math.radians(roll.value), math.radians(pitch.value), math.radians(yaw.value)],
         "pivot_offset": [ox.value, oy.value, oz.value],
+        "hook_offset": [ox.value, oy.value, oz.value],
         "ground": ground.value,
+        "z_set": z_set.value,
+        "follow_xy": follow_xy.value,
       }
     )
 
-  for h in (mode, px, py, height, roll, pitch, yaw, ox, oy, oz, ground):
+  for h in (mode, px, py, height, roll, pitch, yaw, ox, oy, oz, ground, z_set, follow_xy):
     h.on_update(push_base)
 
   @kf.on_click
@@ -673,6 +687,15 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
       f"rpy ({math.degrees(b['rpy'][0]):+.1f}, {math.degrees(b['rpy'][1]):+.1f}, "
       f"{math.degrees(b['rpy'][2]):+.1f}) deg  ground {'on' if b['ground'] else 'OFF'}",
     ]
+    st = s.get("string")
+    if st and b["mode"] == "string":
+      state_word = "**TAUT**" if st["taut"] else "slack"
+      string_md.content = (
+        f"z_set **{st['z_set']:.3f} m**  length {st['ten_length']:.3f}/{st['length']:.3f} m  "
+        f"{state_word}  tension **{st['tension_N']:.1f} N**"
+      )
+    elif st:
+      string_md.content = f"(not in `string` mode; last z_set {st['z_set']:.3f} m)"
     if "ankle_derived" in s:
       ad = " ".join(
         f"{k}: pitch {v['pitch']:+.3f} roll {v['roll']:+.3f}" for k, v in s["ankle_derived"].items()

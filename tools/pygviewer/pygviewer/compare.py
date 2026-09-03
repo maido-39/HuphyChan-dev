@@ -109,7 +109,7 @@ def condition_warnings(hdr_sim: dict, hdr_real: dict) -> list[str]:
   must never be silently presented as an apples-to-apples comparison."""
   warns = []
   bs, br = hdr_sim.get("base") or {}, hdr_real.get("base") or {}
-  for key in ("mode", "height", "ground", "pivot_offset"):
+  for key in ("mode", "height", "ground", "pivot_offset", "z_set"):
     if bs.get(key) != br.get(key):
       warns.append(f"base.{key}: sim={bs.get(key)!r} vs real={br.get(key)!r}")
   if hdr_sim.get("gains_source") != hdr_real.get("gains_source"):
