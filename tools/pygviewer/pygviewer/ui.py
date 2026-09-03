@@ -439,6 +439,34 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
         return
       gtxt.content = _gains_md()
 
+  # ------------------------------------------------------------------ Script player (P4)
+  with gui.add_folder("Script (same-target sequence)", expand_by_default=False):
+    gui.add_markdown(
+      "`{joint_names, rows:[[t_s, q...], ...]}` played in `manual` mode. The same file, "
+      "played through the robot's own bridge (not implemented here - the viewer never "
+      "transmits), gives a second recording `compare.py` can overlay against this one."
+    )
+    script_path = gui.add_text("script path", initial_value="")
+    script_run_btn = gui.add_button("run")
+    script_stop_btn = gui.add_button("stop")
+    script_status = gui.add_markdown("no script running")
+
+    @script_run_btn.on_click
+    def _(_evt):
+      try:
+        info = state["core"].run_script(script_path.value)
+        script_status.content = f"running `{info['run_id']}` - {info['duration_s']:.1f}s"
+      except Exception as exc:
+        script_status.content = f"**{type(exc).__name__}: {exc}**"
+
+    @script_stop_btn.on_click
+    def _(_evt):
+      try:
+        state["core"].stop_script()
+        script_status.content = "stopped"
+      except Exception as exc:
+        script_status.content = f"**{type(exc).__name__}: {exc}**"
+
   # ------------------------------------------------------------------ Telemetry (P3)
   with gui.add_folder("Telemetry"):
     jmap_path = Path(__file__).parent / "bridge" / "joint_map_huphy.json"

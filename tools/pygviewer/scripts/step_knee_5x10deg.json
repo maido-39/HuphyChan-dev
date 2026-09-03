@@ -1,0 +1,57 @@
+{
+ "joint_names": [
+  "L_knee_joint"
+ ],
+ "loop": false,
+ "description": "5 step changes of 10 deg on L_knee_joint, 1.0 s dwell each. Verification protocol step 5 (delay calibration): sharp edges make a cross-correlation clock-offset estimate unambiguous.",
+ "rows": [
+  [
+   0.0,
+   0.35
+  ],
+  [
+   0.999,
+   0.35
+  ],
+  [
+   1.0,
+   0.524533
+  ],
+  [
+   1.999,
+   0.524533
+  ],
+  [
+   2.0,
+   0.699066
+  ],
+  [
+   2.999,
+   0.699066
+  ],
+  [
+   3.0,
+   0.873599
+  ],
+  [
+   3.999,
+   0.873599
+  ],
+  [
+   4.0,
+   1.048132
+  ],
+  [
+   4.999,
+   1.048132
+  ],
+  [
+   5.0,
+   1.222665
+  ],
+  [
+   5.999,
+   1.222665
+  ]
+ ]
+}

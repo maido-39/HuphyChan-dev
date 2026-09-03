@@ -98,6 +98,7 @@ class Recorder:
       seq=seq,
       src="sim",
       contract_hash=contract_sha,
+      run_id=snap.get("script_run_id"),
       joint_names=names,
       q=[snap["q"][i] for i in idx],
       qd=[snap["qd"][i] for i in idx],

@@ -93,6 +93,7 @@ def build_app(core, freshness: dict) -> FastAPI:
         s.get("telemetry", {}),
         sign_sanity=s.get("sign_sanity", {}),
         **({"replay": s["replay"]} if "replay" in s else {}),
+        **({"script": s["script"]} if "script" in s else {}),
       ),
       warnings=s.get("warnings", []),
       rss_mb=round(rss_mb() or 0.0, 1),
@@ -108,6 +109,7 @@ def build_app(core, freshness: dict) -> FastAPI:
       seq=seq["n"],
       src="sim",
       contract_hash=core.c.contract_sha,
+      run_id=s.get("script_run_id"),
       joint_names=names,
       q=[s["q"][i] for i in idx],
       qd=[s["qd"][i] for i in idx],
@@ -263,6 +265,22 @@ def build_app(core, freshness: dict) -> FastAPI:
     except (KeyError, ValueError) as exc:
       raise HTTPException(400, str(exc))
     return {"sources": core.obs_mux.sources, "mask": "".join(core.obs_mux.mask())}
+
+  @app.post("/script/run", summary="Play a scripts/*.json target-q sequence in manual mode")
+  def post_script_run(body: ScriptRunIn):
+    try:
+      return core.run_script(body.path, body.run_id)
+    except FileNotFoundError as exc:
+      raise HTTPException(404, str(exc))
+    except (KeyError, ValueError, RuntimeError) as exc:
+      raise HTTPException(400, str(exc))
+
+  @app.post("/script/stop", summary="Stop the running target-q sequence")
+  def post_script_stop():
+    try:
+      return core.stop_script()
+    except RuntimeError as exc:
+      raise HTTPException(409, str(exc))
 
   @app.post("/policy/shadow_follow", summary="policy_shadow only: let the shadow action drive the LOCAL sim")
   def post_shadow_follow(body: ShadowFollowIn):

@@ -28,6 +28,7 @@ import math
 import threading
 import time
 from collections import deque
+from pathlib import Path
 from typing import Any, Callable
 
 import mujoco
@@ -269,6 +270,10 @@ class SimCore:
     self._replay_direct_now: list[int] = []
     self._replay_direct_vals_now: dict[int, float] = {}
 
+    # ---------------------------------------------------------------- script player (P4)
+    self.script = None
+    self.script_run_id: str | None = None
+
     self._cmds: deque = deque(maxlen=512)
     self._lock = threading.Lock()
     self._snap: dict[str, Any] = {}
@@ -313,6 +318,39 @@ class SimCore:
       raise RuntimeError("not recording")
     info = self.recorder.close()
     self.recorder = None
+    return info
+
+  # ------------------------------------------------------------------ script player (P4)
+  def run_script(self, path: str, run_id: str | None = None) -> dict:
+    """Load and start a target-q sequence, played in ``manual`` mode.  Refuses a script that
+    names a joint this variant does not actuate (the same "no guessing" rule as everywhere
+    else in this codebase); does NOT switch mode away from a replay/policy mode, because
+    driving a script on top of one of those would silently fight it."""
+    from .modes import TargetScript
+
+    if self.mode in REPLAY_MODES or (self.mode.startswith("policy")):
+      raise RuntimeError(
+        f"cannot run a script while mode={self.mode!r}; POST /mode manual first"
+      )
+    script = TargetScript(path)
+    unknown = [n for n in script.joint_names if n not in self.act_names]
+    if unknown:
+      raise KeyError(f"script names joints this variant does not actuate: {unknown}")
+    self.script = script
+    self.script_run_id = run_id or f"script_{Path(path).stem}_{time.strftime('%Y%m%d_%H%M%S')}"
+    self.script.start(self.d.time)
+    self.mode = "manual"
+    return dict(
+      path=str(script.path), run_id=self.script_run_id, joint_names=script.joint_names,
+      duration_s=script.duration_s, loop=script.loop,
+    )
+
+  def stop_script(self) -> dict:
+    if self.script is None:
+      raise RuntimeError("no script running")
+    info = dict(path=str(self.script.path), run_id=self.script_run_id)
+    self.script = None
+    self.script_run_id = None
     return info
 
   def load_replay(self, path: str) -> dict:
@@ -728,6 +766,10 @@ class SimCore:
       self.obs_mux.set(cmd["sources"])
     elif op == "shadow_follow":
       self.shadow_follow = bool(cmd["value"])
+    elif op == "script_run":
+      self.run_script(cmd["path"], cmd.get("run_id"))
+    elif op == "script_stop":
+      self.stop_script()
     elif op == "replay_seek":
       if self.replayer is None:
         raise RuntimeError("no recording loaded")
@@ -749,6 +791,18 @@ class SimCore:
       self._update_replay_targets()
     elif getattr(self, "_replay_direct_now", None):
       self._replay_direct_now = []  # left a replay mode: stop snapping, resume ordinary PD
+    if self.mode == "manual" and self.script is not None:
+      vals = self.script.at(self.d.time)
+      if vals is not None:
+        self.set_target(vals)
+      if self.script.is_finished(self.d.time):
+        self.script = None
+        self.script_run_id = None
+    elif self.mode != "manual" and self.script is not None:
+      # left manual mode some other way (e.g. an operator hit idle mid-script): the script
+      # does not keep driving targets a different mode owns.
+      self.script = None
+      self.script_run_id = None
     # Sign sanity (P3, design doc R1): whenever real telemetry is flowing, cross-check its
     # sign against sim's, regardless of run mode - this is what makes real_replay itself
     # self-verifying (sim is slaved to real for direct joints, so a red flag there means the
@@ -835,6 +889,9 @@ class SimCore:
     )
     if self.replayer is not None:
       snap["replay"] = self.replayer.progress()
+    snap["script_run_id"] = self.script_run_id
+    if self.script is not None:
+      snap["script"] = self.script.progress(d.time)
     if self.policy is not None:
       snap["policy"] = dict(
         kind=self.policy.name,

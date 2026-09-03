@@ -42,6 +42,11 @@ class Header(BaseModel):
   src: Src = "sim"
   frame: str = Field(default="model_v30", description="model generation the values belong to")
   contract_hash: str | None = None
+  run_id: str | None = Field(
+    default=None,
+    description="P4: set while a POST /script/run target sequence is playing, so compare.py "
+    "can align a sim recording against a robot recording of the same script",
+  )
 
 
 class JointState(Header):
