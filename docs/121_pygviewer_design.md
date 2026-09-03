@@ -17,7 +17,7 @@
 | 7 | 선택 관절 플롯 | viser `add_uplot` 링버퍼 10 s@50 Hz, ≤8채널 | P1 |
 | 8 | 텔레메트리 송수신 | 스키마 v1(JSON, sim 관절명·rad/SI·t_ns·seq·contract_hash), `WS /ws/out`·`/ws/in`, REST, OpenAPI+API.md; 뷰어→실물 명령은 **문서만** | P3 |
 | 9 | 원격 모터값 주입(실물 뷰어) | HUPHY UDP(9870 포맷) 어댑터 + 명시적 12행 매핑표(브리지가 부호·영점·순서·deg→rad 담당), 더미 송신기, jsonl.gz 기록/재생, real_replay 모드 | P3 |
-| + | 비교 모드 전부 | 동일 목표 시퀀스 응답비교(`compare.py`), 정책 섀도우(obs 항목별 sim/real 소스 mux, 전송 금지 하드코딩), 오프라인 재생 | P4 |
+| + | 비교 모드 전부 | 동일 목표 시퀀스 응답비교(`compare.py`), 정책 섀도우(obs 항목별 sim/real 소스 mux, 전송 금지 하드코딩), 오프라인 재생 | P4 ✅ |
 
 ## 1. 사용자 결정 (09-03, 4차 질문으로 확정 — 재질문 금지)
 base 고정 = 스탠드/접지 둘 다 · 회전중심 = 사용자 지정 오프셋 · 통신 양방향 설계·수신만 구현·API 문서 철저 · 비교모드 전부 ·
@@ -55,7 +55,7 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
 | P1 | 관절 UI/API, base 3모드, 지면, 폐루프 settle, 플롯 | `test_basefix`(fixed 드리프트<1e-6, pivot 위치<1e-4) · `test_loop_settle`(vs loop_ankle_verify.json, closure<0.01 mm) · `test_bake_contract` · `test_sim_rate` | ✅ 22:05 (98 tests / 11.7 s, 전부 통과) |
 | P2 | ONNX/.pt 정책, obs 빌더, 게인 소스 | `test_policy_parity`(<1e-4) · `test_obs_order` · 워킹 스모크(drift 러너와 vx 오차≤0.05) | ✅ 09-03 22:40 |
 | P3 | 스키마·WS/REST·HUPHY UDP 어댑터·더미·레코더 | `test_schema` · 더미 sine→real_replay · WS 50 Hz · 10 s 기록 RSS 불증 | ✅ 09-04 (161 tests, WS 49.4 msg/s, RSS +0.3 MB/10s) |
-| P4 | 스크립트 플레이어·compare·obs mux·섀도우 | 지연 주입 더미 오버레이 png · 더미 IMU가 액션 변화 | ⏳ |
+| P4 | 스크립트 플레이어·compare·obs mux·섀도우 | 지연 주입 더미 오버레이 png · 더미 IMU가 액션 변화 | ✅ 09-04 (offset 32.0ms vs 30ms 주입, Δaction 평균 0.270 rad, pytest 198) |
 | 등록 | dashboard PORTS·start_all·README·launch.json·브리핑 | — | ✅ 22:20 (8094/8095) |
 
 ## 7. 재사용 소스
@@ -94,6 +94,9 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
 - 09-04 — **P4 항목4 완료 (Gains diff 표, R7)**. `RealState`가 `JointState.gains`(스키마엔 P0/P1부터 있었으나 아무도 안 읽던 필드)를 저장; `SimCore.gains_table()`이 관절별 모터 기종(`joint_family`: RS03/RS04, 계약에 이미 구워져 있던 값 노출만 추가)·수신된 real kp/kd·5% 초과 시 플래그되는 real/sim 비율을 추가. UI Gains 폴더는 real 데이터가 있을 때만 확장 표를 렌더(없으면 기존 sim전용 표 유지)하고 플래그를 빨간 글씨로 표시, 매 readout tick마다 갱신(이전엔 패널 생성/소스전환 시에만 갱신 — 텔레메트리는 라이브로 들어오므로 정정). `tests/test_gains_diff.py` 3건(텔레메트리 전 real열 없음, 의도적 kp 불일치 플래그+kd 비플래그, 5%이내 비플래그). **pytest 191 passed**(항목3의 188에서 +3). 커밋 `1bd76bb`.
 
 - 09-04 — **P4 항목5 완료 (`protocol.py`, 8단계 검증)**. §5의 자동화 가능 4단계(①정지영점·④속도sanity·⑤지연보정·⑧기록왕복)를 실행 가능하게 구현, 나머지 4단계(②③⑥⑦)는 절차·판정기준 텍스트만 출력하고 `MANUAL`로 표기(가짜 PASS 금지). 구현 중 `compare.estimate_clock_offset_ms`의 실버그 2건을 발견·수정: (a) 원시 레벨 상호상관은 사인파(항목3 검증)엔 맞지만 계단신호(스텝 트레이스)엔 틀림 — 평탄구간이 거의 모든 lag에서 자기자신과 상관되어 실제 에지 타이밍을 묻어버림(30ms 주입에 0ms 반환) → R5 문구("명령 에지 상호상관")를 문자 그대로 구현해 **그래디언트**로 교체(계단→뾰족한 스파이크, 사인→위상이동 코사인, 둘 다 깨끗한 피크). (b) 세그먼트별 지터 추정에서 무제한 'full' 탐색이 약한 에지를 가진 세그먼트에서 엉뚱한 먼 lag의 부엽에 걸림(5ms 주입에 한 세그먼트가 -965ms 반환) → ±300ms 탐색창 제한(전송지연은 물리적으로 초 단위가 될 수 없다는 타당한 사전지식) + 에지가 아예 없는(순수 dwell) 세그먼트는 전체창 에지에너지의 20% 미만이면 제외. `tests/test_protocol.py` 6건(단계순서·자동4단계 통과·수동4단계 미가장PASS·엄격예산으로 단계1 의도적FAIL·CLI). **실측(LegOnly-AB)**: 자동 4단계 전부 PASS — 정지영점 worst|dq|=0.0050rad/|dg|=0.0100, 속도sanity RMS=0.0002rad/s, 지연보정 주입30ms→추정 **정확히 30.0ms**·지터 0.0ms(dt=0.005s 양자화 하한, 15ms 예산 이내), 기록왕복 바이트동일. **pytest 197 passed**(항목4의 191에서 +6). 커밋 `4e97c11`.
+
+- 09-04 — **P4 항목6 완료 (실측 검증 수치)**. 라이브 2-프로세스 방식(스크립트를 실제 소켓으로 별도 SimCore에 더미송신)을 두 차례 시도했으나 셸/서브프로세스 기동 타이밍 스큐가 수백ms~수초 단위로 30ms 신호를 압도(같은 머신의 CLOCK_MONOTONIC은 프로세스간 공유되어 절대시간 가정 자체는 타당 — 문제는 순수 기동 타이밍 정밀도이지 알고리즘이 아님, 기록만 하고 채택 안 함). 대신 `record.Recorder`/`schema.JointState` 실제 코드 + `bridge/dummy_tx.py`의 실제 `ScriptSource`+지연/지터 모델을 직접 사용(재구현 아님)해 sim 기록·real 기록을 생성 → `compare.py` 실행: **`step_knee_5x10deg.json`**(급경사 에지)로 주입 30ms/5ms지터 → 추정 **offset=32.0ms**(지터std 1.41ms, 주입 지터 이내) — `docs/img/compare_p4item6_step_dummy30ms_L_knee.png`. `sine_hips_knees_1hz_20deg.json`은 스크립트 자체 원본샘플이 50Hz(20ms) 격자라 30ms지연 분해능이 낮아 offset~8ms만 나옴(오버레이 시각화용으로만 유지, ms정밀 주장은 스텝스크립트 결과에 근거) — `docs/img/compare_p4item6_dummy30ms_{L,R}_{hip_pitch,knee}.png` 4장. `compare.py`에 `--offset-dt`(기본 5ms, 기존 10ms 기본값은 30ms 신호 분해에 조악) 추가 + 범례 경고 가드. **정책 섀도우 IMU tilt**: 10° 기울임 더미 IMU를 `base_ang_vel`/`projected_gravity`에 real로 라우팅 → 동일 sim상태·명령에서 baseline 대비 **평균|Δaction|=0.270 rad(raw action), 최대 0.912 rad** — 명백히 유의미(회귀테스트로 0.02rad 초과 고정, `test_policy_shadow.py` +1건). `protocol.py` 자동 4단계 여전히 PASS(항목5와 동일). **pytest 198 passed**(항목5의 197에서 +1). **RSS**: headless 5s **147 MB**, 라이브 운영 뷰어 프로세스 **226 MB** — 둘 다 300MB 예산 이내. 커밋 `22088f1`.
+- 09-04 — **§6 표 갱신**: P4 행을 ✅로 표시(위 항목1~6 완료), 요구매핑표 §0 '+' 행도 완료로 갱신.
 
 ### P0/P1 결과 (2026-09-03, 코더)
 
