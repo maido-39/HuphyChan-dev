@@ -76,6 +76,7 @@ R_knee axis −Y [−120,0]) + 런 env.yaml(`.*_knee_joint: −0.35`, 단일 cli
 | `dof_pos_limits` (w −1.0) | 모델의 `soft_joint_pos_limits` 사용 | **이미 안전**(관절별) | 없음. 단 버그 상태에서 L_knee가 소프트 하한 밖 6°에 상시 눌려 **상시 페널티 −0.105/step**을 내고 있었다 |
 | `joint_pos_rel` 관측(actor·critic) | $q - q_{default}$ | **default가 유일한 부호원** | 1번 픽스로 해결 |
 | bent 키프레임 크랭크·로드 각 | v3 기하 해를 그대로 대입 | **버그(신규 발견)** | `_reexpress_loop_pose()` 추가 — 축이 뒤집힌 힌지의 각도만 부호 반전. v30 closure **37.3 mm → 0.001 mm**, v3/v4는 0.001 mm 불변 |
+| ↑ 정정 | — | **미수정으로 판명** | ★정정(09-04 00:20, 본 세션 직접 측정): `_reexpress_loop_pose()`는 **코드에 존재하지 않는다**(리포 전체 grep 0건; 커밋 546a7ed5 diff에도 없음). legonly_ab_v2가 쓰는 env로 reset 직후 폐루프 closure를 사이트 기준으로 재측정하니 **L rod A 37.27 mm / R rod B 36.35 mm**(나머지 두 로드 0.001 mm) — 즉 bent 키프레임의 크랭크 각 재표현은 **미적용**이고 리셋마다 루프가 찢어졌다가 크랭크 PD가 0.25 s 내 닫는다(0.04 mm@50 step). 학습 자체는 v1·이전 스모크와 같은 리셋 과도로 진행 중(치명 아님, 단일변인 유지). **다음 런 전 수정 항목**: L_crank_A/R_crank_B 키프레임 각을 축 미러에 맞춰 부호 반전 후 reset closure < 1 mm 검증(docs/106 F). |
 | action clip (`PYG_SAFE_TARGET_CLIP`) | 손으로 적은 정규식 표 | **버그(본건)** | `safe_target_clip()` 관절별 유도 |
 | `_bent_joint_pos` hip_pitch/knee default | 단일 정규식 | **버그(본건)** | `signed_pose()` 크기+range유도 부호 |
 | cant30/cant20 키프레임 `L_hip_yaw −0.165 / R +0.165` | 명시적 좌우 반대값 | **정상** | 없음. hip_yaw는 좌우 축·range 동일(대칭)이라 이건 규약 아티팩트가 아니라 **진짜 좌우 비대칭**(발끝 벌어짐 보정) |

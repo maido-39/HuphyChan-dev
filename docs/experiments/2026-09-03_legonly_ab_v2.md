@@ -10,7 +10,7 @@
 | 로봇 | v1과 동일: `LegOnly_prototype-tempmass-motormeasured-armfix_v30_proxyfix_loop.xml` (23.630 kg, AB 폐루프) — **XML 무변경** |
 | 질량 DR | v1과 동일: `mass_dr_legonly_fastener50_prototype-tempmass.json` |
 | 스택 | v1과 동일(v2s1 상속): INIT_MID·KNEE_EXT 2.0@25°·SOFT_LANDING_MODE=half + vy 스테이지 + 게이트 커리큘럼 + critic DR 82ch + P2 entropy 어닐링 |
-| **변인 (vs v1)** | ① default pose·action clip을 관절 range에서 부호 자동유도(`signed_pose`/`safe_target_clip`) — L_knee 창 0°→108°, R_hip_pitch 43°→130.5° ② bent 키프레임 폐루프 각 재표현(`_reexpress_loop_pose`) — 리셋 closure 37.27→0.001 mm ③ 프리플라이트 게이트 신설(`analysis/preflight_action_window.py`, 발사 전 자동) |
+| **변인 (vs v1)** | ① default pose·action clip을 관절 range에서 부호 자동유도(`signed_pose`/`safe_target_clip`) — L_knee 창 0°→108°, R_hip_pitch 43°→130.5° ② ~~bent 키프레임 폐루프 각 재표현(`_reexpress_loop_pose`) — 리셋 closure 37.27→0.001 mm~~ **정정(09-04): 이 항목은 실제로 적용되지 않았음** — reset 직후 closure L rod A 37.27 / R rod B 36.35 mm 실측(§2c 09-04 00:20 판정 참조). 따라서 v1 대비 실제 변인은 ①③뿐 ③ 프리플라이트 게이트 신설(`analysis/preflight_action_window.py`, 발사 전 자동) |
 | 수정 검증 | 구모델 v3/v4 byte-identical(Δdefault 0.0, Δclip 4.7 µrad 단위환산 왕복, `--legacy-equivalence` 상시 회귀체크) · 스모크 399 iter 완주(낙상 0, 크래시 0) · L_knee qtarget 진폭 0→27~33° |
 | env | 16384 (v1과 동일) |
 | 계보 | 커밋: mjlab `546a7ed5`(픽스+게이트)·`81ea1255`(선행 launch 작업 분리), parent `b3bfd81` |
@@ -205,6 +205,8 @@ base z **0.903 m**(std 0), base vx −0.001±0.000 m/s — 완전 정지.
 | 09-03 19:48 | 4101 | 102.1 (50avg 101.0) | 1000 | 0.266 | 0.0562 | -2.19 | -0.0008 / 1.7e-04 | 0.000 / 0.083 | 0.977 / 0.778 | 0.00 / 2.5 | 2.52 | P1 phase-end: review before P2 |
 | 09-03 21:08 | 4758 | 102.5 (50avg 102.2) | 1000 | 0.264 | 0.0567 | -2.29 | 0.0001 / 2.6e-04 | 0.000 / 0.083 | 0.928 / 0.764 | 0.07 / 2.5 | 2.65 | **계속** — 게이트 7(21:20, P2 첫 스냅샷): 전이 dip 없음(v1은 4531에서 69/50avg 35.7로 급락) — FULL RESUME 후 reward 102.5 유지, ep_len 1000, 낙상 0, err_xy 0.928(개선), DR 램프 0.07 진행. ⚠watch 지속: thermal 2.17→2.49→2.65 상승(v1 P2 초 2.23) — DR 램프 중 추세 감시, 3.0 초과 시 §7 모터활용 조기 측정 |
 | 09-03 22:08 | 5275 | 104.6 (50avg 103.5) | 1000 | 0.262 | 0.0594 | -2.51 | -0.0010 / 1.1e-04 | 0.000 / 0.083 | 0.935 / 0.754 | 0.12 / 2.5 | 2.68 | **계속** — 게이트 8(22:27): DR 램프 0.12에서 reward 104.6(↑), ep_len 포화, 낙상 0, err_xy 0.935 안정, thermal 2.68(2.65→2.68 정체 — 경고 해제 안 함, 3.0 감시 유지). 22:27 iter 5424/18099, dr 0.133 |
+| 09-03 23:08 | 5796 | 104.8 (50avg 104.8) | 1000 | 0.252 | 0.0631 | -3.05 | 0.0003 / 1.7e-04 | 0.000 / 0.125 | 0.923 / 0.708 | 0.17 / 2.5 | 2.72 | (자동 스냅샷, 판정은 게이트 리뷰에서) |
+| 09-04 00:08 | 6312 | 105.0 (50avg 104.9) | 1000 | 0.253 | 0.0612 | -3.01 | -0.0013 / 1.7e-04 | 0.000 / 0.083 | 0.928 / 0.728 | 0.22 / 2.5 | 2.80 | **계속** — 게이트 9·10(00:20, 23:08·00:08 행): DR 0.17→0.22 램프 중 reward 104.8→105.0, ep_len 포화, 낙상 0, err_xy 0.92~0.93 안정. ⚠thermal 2.72→2.80 완만 상승(3.0 감시선). ★부수 확인: 리셋 직후 폐루프 찢김 37.27/36.35 mm(재표현 미적용, 위 변인 ② 정정) — 리셋 과도 0.25 s, 중단 사유 아님 |
 
 ## §R 참조
 [[2026-09-03_legonly_ab_v1]] · [[2026-09-03_legonly_ab_sideaware_smoke]] ·
