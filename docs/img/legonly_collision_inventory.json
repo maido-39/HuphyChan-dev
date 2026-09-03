@@ -1,0 +1,327 @@
+{
+  "n_geom": 58,
+  "n_contact_enabled": 15,
+  "bodies_without_collision": [
+    "world",
+    "L_crank_A",
+    "L_rod_A",
+    "L_crank_B",
+    "L_rod_B",
+    "L_ankle_pitch_link",
+    "R_crank_A",
+    "R_rod_A",
+    "R_crank_B",
+    "R_rod_B",
+    "R_ankle_pitch_link"
+  ],
+  "foot_box_union_mm": {
+    "length": 260.0,
+    "width": 100.0,
+    "height": 58.0
+  },
+  "foot_visual_bbox_mm": {
+    "length": 260.0000126852846,
+    "width": 115.0000128987343,
+    "height": 57.77214380649578
+  },
+  "lateral_overhang_max_mm": 7.500010342488532,
+  "lateral_overhang_sole_face_mm": 7.500010342488532,
+  "lr_foot_pair_excluded": false,
+  "collision_geoms": [
+    {
+      "idx": 5,
+      "body": "base_link",
+      "name": "base_pelvis_collision",
+      "type": "capsule",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.071434,
+        0.005,
+        0.0
+      ],
+      "pos": [
+        -0.0007,
+        0.0003,
+        0.0074
+      ]
+    },
+    {
+      "idx": 9,
+      "body": "L_hip_pitch_link",
+      "name": "L_hip_pitch_link_collision",
+      "type": "capsule",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0614,
+        0.005,
+        0.0
+      ],
+      "pos": [
+        -0.0006,
+        0.0053,
+        -0.0018
+      ]
+    },
+    {
+      "idx": 13,
+      "body": "L_hip_roll_link",
+      "name": "L_hip_roll_link_collision",
+      "type": "capsule",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0514137,
+        0.0496,
+        0.0
+      ],
+      "pos": [
+        0.0039,
+        -0.0121,
+        -0.0614
+      ]
+    },
+    {
+      "idx": 17,
+      "body": "L_thigh_link",
+      "name": "L_thigh_link_collision",
+      "type": "capsule",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0659,
+        0.0741,
+        0.0
+      ],
+      "pos": [
+        -0.0111,
+        0.0005,
+        -0.29
+      ]
+    },
+    {
+      "idx": 22,
+      "body": "L_shin_link",
+      "name": "L_shin_link_collision",
+      "type": "capsule",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0572,
+        0.2179,
+        0.0
+      ],
+      "pos": [
+        -0.0171,
+        -0.0014,
+        -0.2294
+      ]
+    },
+    {
+      "idx": 29,
+      "body": "L_foot_link",
+      "name": "L_foot1_collision",
+      "type": "box",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0433,
+        0.05,
+        0.029
+      ],
+      "pos": [
+        -0.0367,
+        0.0,
+        -0.014
+      ]
+    },
+    {
+      "idx": 30,
+      "body": "L_foot_link",
+      "name": "L_foot2_collision",
+      "type": "box",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0433,
+        0.05,
+        0.029
+      ],
+      "pos": [
+        0.05,
+        0.0,
+        -0.014
+      ]
+    },
+    {
+      "idx": 31,
+      "body": "L_foot_link",
+      "name": "L_foot3_collision",
+      "type": "box",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0433,
+        0.05,
+        0.029
+      ],
+      "pos": [
+        0.1367,
+        0.0,
+        -0.014
+      ]
+    },
+    {
+      "idx": 35,
+      "body": "R_hip_pitch_link",
+      "name": "R_hip_pitch_link_collision",
+      "type": "capsule",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0614,
+        0.005,
+        0.0
+      ],
+      "pos": [
+        -0.0006,
+        -0.0053,
+        -0.0018
+      ]
+    },
+    {
+      "idx": 39,
+      "body": "R_hip_roll_link",
+      "name": "R_hip_roll_link_collision",
+      "type": "capsule",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0508203,
+        0.0496,
+        0.0
+      ],
+      "pos": [
+        0.0039,
+        0.0121,
+        -0.0614
+      ]
+    },
+    {
+      "idx": 43,
+      "body": "R_thigh_link",
+      "name": "R_thigh_link_collision",
+      "type": "capsule",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0659,
+        0.0741,
+        0.0
+      ],
+      "pos": [
+        -0.0111,
+        -0.0005,
+        -0.29
+      ]
+    },
+    {
+      "idx": 48,
+      "body": "R_shin_link",
+      "name": "R_shin_link_collision",
+      "type": "capsule",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0572,
+        0.2179,
+        0.0
+      ],
+      "pos": [
+        -0.0171,
+        0.0014,
+        -0.2294
+      ]
+    },
+    {
+      "idx": 55,
+      "body": "R_foot_link",
+      "name": "R_foot1_collision",
+      "type": "box",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0433,
+        0.05,
+        0.029
+      ],
+      "pos": [
+        -0.0367,
+        0.0,
+        -0.014
+      ]
+    },
+    {
+      "idx": 56,
+      "body": "R_foot_link",
+      "name": "R_foot2_collision",
+      "type": "box",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0433,
+        0.05,
+        0.029
+      ],
+      "pos": [
+        0.05,
+        0.0,
+        -0.014
+      ]
+    },
+    {
+      "idx": 57,
+      "body": "R_foot_link",
+      "name": "R_foot3_collision",
+      "type": "box",
+      "group": 3,
+      "contype": 1,
+      "conaffinity": 1,
+      "size": [
+        0.0433,
+        0.05,
+        0.029
+      ],
+      "pos": [
+        0.1367,
+        0.0,
+        -0.014
+      ]
+    }
+  ],
+  "ankle_coverage_mm": {
+    "shin_capsule_bottom_below_ankle": 14.500000000000068,
+    "foot_box_top_above_ankle": 15.000000000000002,
+    "overlap": 29.50000000000008
+  },
+  "xml": "/home/syaro/MikuchanRemote/Human-Pygmalion/mujoco-sim/mjlab/src/mjlab/asset_zoo/robots/pygmalion/xmls/LegOnly_prototype-tempmass-motormeasured-armfix_v30_proxyfix_loop.xml",
+  "adduction_threshold_deg": {
+    "visual": 4.414809666963265,
+    "box": 4.916145063445583
+  }
+}
