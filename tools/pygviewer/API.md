@@ -26,9 +26,11 @@ Every streamed object:
 
 `src` &isin; `sim | real | policy | replay | dummy`.  `t_ns` is the **sender's monotonic
 clock**, not wall time; the receiver estimates the offset (protocol step 5) rather than
-assuming the two hosts are synchronised.
+assuming the two hosts are synchronised.  Every message also carries an optional `run_id`
+(P4, `null` unless a `POST /script/run` sequence is playing) - the same script file played on
+sim and, separately, on the robot produces two recordings `compare.py` can align by this tag.
 
-## Implemented now (P0/P1/P2/P3)
+## Implemented now (P0/P1/P2/P3/P4)
 
 | method | path | body | returns |
 |---|---|---|---|
@@ -40,15 +42,18 @@ assuming the two hosts are synchronised.
 | POST | `/ankle` | `{"side": "L", "pitch": -0.30, "roll": 0.10}` | AB only: foot-space command, inverted to a crank pair. 409 on an RP variant |
 | POST | `/base` | `{"mode": "fixed", "pos": [0,0,1.05], "rpy": [0,0.1,0], "pivot_offset": [0,0,0.06], "ground": true}` | any subset; omitted fields keep their value |
 | POST | `/reset` | `{"keyframe": "knees_bent"}` | restores joints **and** base pose |
-| POST | `/mode` | `{"mode": "manual"}` | `idle`/`manual`/`policy_sim`/`real_replay` now (`policy_sim` 409 without a loaded policy, `file_replay` 409 without a loaded recording); `policy_shadow` answers 501 (P4: needs the per-term obs mux) |
+| POST | `/mode` | `{"mode": "manual"}` | `idle`/`manual`/`policy_sim`/`policy_shadow`/`real_replay`/`file_replay`, all six implemented (`policy_sim`/`policy_shadow` 409 without a loaded policy, `file_replay` 409 without a loaded recording) |
 | POST | `/policy/load` | `{"name": "<baked>"}` or `{"onnx": "...", "pt": null}` | loads a baked ONNX (default) or a direct `.pt` (slow, mjlab env build); 409 if `policy_contract.model_contract_sha` &ne; the loaded model's, or the default pose differs by > 1e-4 rad |
 | GET | `/policy/list` | - | baked policies next to this model's cache entry, each flagged `compatible` against the live contract sha |
 | POST | `/policy/unload` | - | drops the policy, falls back to `manual` |
 | POST | `/policy/cmd` | `{"vx": 0.6, "vy": 0.0, "wz": 0.0}` | velocity command consumed by `policy_sim` / `policy_shadow` |
 | GET | `/policy/io` | - | `PolicyIO`: latest built observation, action, target and cmd; 409 if no policy loaded |
-| GET/POST | `/obs_source` | `{"sources": {"projected_gravity": "sim"}}` | per observation TERM, `sim` (works) or `real` (501 - needs the P4 per-term obs mux); 409 if no policy loaded |
-| GET | `/gains` | - | `{source: train\|real, gains: {joint: {kp, kd, kp_train, kd_train, effort, overridden}}}` |
+| GET/POST | `/obs_source` | `{"sources": {"projected_gravity": "sim"}}` | per observation TERM, `sim` or `real` (P4: read by `policy_shadow` only - `policy_sim` ignores this); 409 if no policy loaded |
+| POST | **`/policy/shadow_follow`** | `{"enabled": true}` | (P4) `policy_shadow` only: lets the shadow action step the LOCAL sim - never a robot, there is no code path that could |
+| GET | `/gains` | - | `{source: train\|real, gains: {joint: {kp, kd, kp_train, kd_train, effort, overridden, motor, real_kp?, real_kd?, real_ratio_kp?, real_ratio_kd?, real_flag_kp?, real_flag_kd?}}}` - the `real_*`/`motor` fields (P4/R7) appear once any `JointState` telemetry has carried a `gains` field; a ratio off by more than 5% sets its `real_flag_*` |
 | POST | `/gains` | `{"source": "real"}` or `{"overrides": {...}}` | switches PD source; `real` is rejected (400) unless the contract carries a `real_gains` table - the viewer never invents hardware numbers |
+| POST | **`/script/run`** | `{"path": "scripts/step_knee_5x10deg.json", "run_id": "..."}` | (P4) plays a `{joint_names, rows:[[t_s,q...]], loop}` file in `manual` mode; tags every subsequent `JointState.run_id`; 404 on a missing file, 400 on an un-actuated joint name or while a policy/replay mode is active |
+| POST | **`/script/stop`** | - | (P4) stops the running script; 409 if none is running |
 | POST | **`/record/start`** | `{"path": null}` | starts streaming `JointState` to a `jsonl.gz` (auto path if omitted); 409 if already recording |
 | POST | **`/record/stop`** | - | closes the recording, returns `{path, n_lines, errors}`; 409 if not recording |
 | POST | **`/replay/load`** | `{"path": "<recording>.jsonl.gz"}` | loads a recording for `mode=file_replay`; 400 on a missing file or a `contract_hash` mismatch (R11) |
@@ -56,7 +61,7 @@ assuming the two hosts are synchronised.
 | POST | **`/replay/speed`** | `{"speed": 2.0}` | playback speed multiplier |
 | GET | `/schema/deferred` | - | JSON schemas of the request models whose endpoints are still 501 |
 | WS | `/ws/out?hz=50&types=JointState,Status,PolicyIO` | - | latest-only stream, coalesced at `hz` (1-100, default 30). A slow consumer gets fewer frames; nothing is queued. **Measured live: 49.4 msg/s at `hz=50`** |
-| WS | **`/ws/in`** | one `JointState` or `ImuState` object per text frame | ingests into `RealState` (unknown joint names -> `{"error": ...}`, connection stays open); acks `{"ok": true, "seq": ...}` per frame |
+| WS | **`/ws/in`** | one `JointState`, `ImuState` or `PolicyIO` object per text frame | ingests into `RealState` (unknown joint names -> `{"error": ...}`, connection stays open); acks `{"ok": true, "seq": ...}` per frame. `PolicyIO` (P4) is a real host's OWN self-reported obs/action/cmd - the only source for the shadow obs mux's `actions`/`command` terms |
 | UDP | **`:9871`** (`bridge/huphy_udp.py`, run separately - see below) | HUPHY line format | adapter -> canonical `JointState`/`ImuState`, fed into the same `RealState` a `/ws/in` client would reach |
 
 Example:
@@ -84,11 +89,11 @@ mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/run.py bridge dummy --pattern
 
 ## Defined, not implemented (the endpoint answers **501** with its phase)
 
+Every phase (P0-P4) is now implemented; the one row below is not a phase to reach, it is a
+permanent, by-decision non-implementation.
+
 | path | phase | body model | notes |
 |---|---|---|---|
-| `POST /obs_source` with a `real` value | P4 | `ObsSourceIn{sources: {term: src}}` | the switch and staleness-guard plumbing (`ObsSourceMux`) exist now; per-term real sourcing needs `policy_shadow`'s obs mux |
-| `POST /mode {"mode": "policy_shadow"}` | P4 | `ModeIn` | shadow mode (obs mux, action displayed/plotted only, transmit hard-disabled) |
-| `POST /script/run` | P4 | `{path, run_id}` | `{joint_names, rows: [[t_s, q...]]}` played in `manual`; the robot replays the same file |
 | `JointTarget` (viewer -> robot) | never (by decision) | - | see the model section below |
 
 ## Message models
@@ -195,3 +200,26 @@ listening port - this is what exercises the adapter's unit/sign/name conversion 
 rather than only in a unit test. `--latency-ms`/`--jitter-ms`/`--drop-ratio` inject network
 imperfections on the sending side. `--target udp` requires an AB (loop) variant - HUPHY's
 hardware has no RP analogue.
+
+## Offline tools (P4, implemented) - not HTTP, run standalone
+
+Neither of these needs a live viewer process; both act on `.jsonl.gz` recordings or a baked
+model contract directly. Usage examples are in `README.md`'s "Comparison mode (P4)" section.
+
+**`pygviewer.compare`** (`compare.py`) - `--sim <rec>.jsonl.gz --real <rec>.jsonl.gz [--joints
+...] [--offset-joint ...] [--offset-field q|target|tau_est] [--offset-dt 0.005] [--i-know]`.
+Refuses two recordings with different `contract_hash` unless `--i-know` (R11); prints a
+warning (does not refuse) when the two headers' base mode/height/ground/`gains_source` differ
+(R9); estimates the clock offset between the two streams by cross-correlating the GRADIENT of
+the chosen field on a common absolute-time grid (R5 - correlating raw levels works for a sine
+but not a step trajectory, whose flat plateaus swamp the real edge timing; see docs/121
+section 9 for the two-bug writeup), with a jitter estimate from re-estimating over
+sub-windows; writes one PNG per joint (target/q/tau_est, English labels) to `docs/img/`.
+
+**`pygviewer.protocol`** (`protocol.py`) - `--variant LegOnly-AB`. Runs the 8-step
+verification protocol (docs/121 section 5) end to end: steps 1 (static zero), 4 (velocity
+sanity), 5 (latency calibration) and 8 (record round-trip) execute against synthetic data
+built the same way `bridge/dummy_tx.py` would produce it and PASS/FAIL on the design doc's own
+budgets; steps 2 (sign sweep), 3 (ankle FK cross-check), 6 (same-target overlay) and 7 (IMU
+tilt) need the real robot or a human and are printed as a procedure, tagged `MANUAL` - never
+claimed as passing. Exit code is non-zero only if an AUTOMATED step failed.

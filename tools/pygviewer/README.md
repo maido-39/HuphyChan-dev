@@ -7,10 +7,11 @@ the same number read in training - not merely similar.
 
 Status: **P0 (bake + sim loop + scene + /status), P1 (manual joint control, base fixing,
 ground toggle, plots), P2 (ONNX/`.pt` policy, obs builder, PD gain source, velocity
-command, per-term obs-source switch) and P3 (wire schema, `/ws/in`, HUPHY UDP bridge, dummy
-transmitter, record/replay, `real_replay`/`file_replay` drive, Telemetry panel) are
-implemented.**  P4 comparison/shadow mode is a skeleton with the interface fixed - see
-`docs/121_pygviewer_design.md` section 6.
+command, per-term obs-source switch), P3 (wire schema, `/ws/in`, HUPHY UDP bridge, dummy
+transmitter, record/replay, `real_replay`/`file_replay` drive, Telemetry panel) and P4
+(`policy_shadow` per-term obs mux, the same-target-sequence script player, `compare.py`
+offline overlay, the gains diff table, `protocol.py`) are all implemented.** See
+`docs/121_pygviewer_design.md` section 6 for the phase-by-phase verification numbers.
 
 ---
 
@@ -230,6 +231,87 @@ both sides. A joint disagreeing more than 50% of the time in that window is flag
 `Status.telemetry.sign_sanity` and the UI - this runs continuously, in every mode, not only
 `real_replay`, so it doubles as a live check of the bridge's own sign convention.
 
+## Comparison mode (P4)
+
+Four scenarios covering the pieces added in P4 - `policy_shadow` (per-term obs source mux),
+the script player, `compare.py`, and `protocol.py`. All four assume a running viewer
+(`run.py --variant LegOnly-AB --port 8094 --api-port 8095`) unless noted.
+
+**1. Run a target-q script and record it.**
+
+```bash
+curl -s -X POST :8095/record/start -d '{"path": "/tmp/sim_run.jsonl.gz"}'
+curl -s -X POST :8095/script/run -d '{"path": "tools/pygviewer/scripts/step_knee_5x10deg.json"}'
+sleep 6.5   # the script's own duration + a little margin
+curl -s -X POST :8095/record/stop
+```
+
+**2. Compare two recordings offline.**
+
+```bash
+mujoco-sim/mjlab/.venv/bin/python3 -m pygviewer.compare \
+    --sim /tmp/sim_run.jsonl.gz --real /tmp/real_run.jsonl.gz \
+    --joints L_knee_joint --offset-dt 0.005
+# -> R9 condition-difference warnings, an R5 clock-offset estimate (ms, +jitter), one PNG
+#    per joint under docs/img/, and an R11 refusal if the two contract_hash values differ
+#    (pass --i-know to override deliberately).
+```
+
+**3. `policy_shadow` with a dummy real IMU (no hardware, no transmit path).**
+
+```bash
+curl -s -X POST :8095/policy/load -d '{"name": "<baked-policy-name>"}'
+curl -s -X POST :8095/mode -d '{"mode": "policy_shadow"}'
+curl -s -X POST :8095/obs_source -d '{"sources": {"base_ang_vel": "real", "projected_gravity": "real"}}'
+mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/run.py bridge dummy \
+    --variant LegOnly-AB --pattern sine --imu --target ws --seconds 5
+curl -s :8095/policy/io | jq '.obs_sources'   # requested vs a live /status shows the EFFECTIVE
+                                               # mask + any staleness fallback in shadow_warnings
+# add --shadow-follow on the viewer's own command line (or POST /policy/shadow_follow
+# {"enabled": true}) to let the shadow action step the LOCAL sim - it never reaches a robot.
+```
+
+**4. Run the automated half of the 8-step verification protocol.**
+
+```bash
+mujoco-sim/mjlab/.venv/bin/python3 -m pygviewer.protocol --variant LegOnly-AB
+# steps 1/4/5/8 run against synthetic data and PASS/FAIL; steps 2/3/6/7 print the exact
+# hardware procedure and pass criterion, tagged MANUAL - never faked.
+```
+
+`policy_shadow` details (`policy.py` `ObsBuilder.build_shadow`, `sim_core.py` `_policy_tick`):
+each of the 5 obs terms (`base_ang_vel`, `projected_gravity`, `motor_pos_history`, `actions`,
+`command`) is independently `sim` or `real`. `real` for the two IMU-backed terms comes from
+`RealState.imu` (age-gated on `ImuState`'s own receipt time); `real` for the q-history term
+comes from a SEPARATE rolling buffer (`SimCore.real_q_hist`) built from `RealState`'s joint
+snapshot every control tick - never interleaved with the sim q-history within one term's
+window; `real` for `actions`/`command` comes from a `PolicyIO` message received over `/ws/in`
+(a real host's own self-reported obs/action/cmd - the only wire concept of "what the robot
+was actually commanded"). Any term that asks for `real` but has nothing fresh (older than
+`max_age_s`, default 0.1 s) falls back to `sim` for that tick only and is reported in
+`shadow_warnings`/`obs_sources_effective` - never silently used stale. The action this
+produces is display/plot/record only unless `--shadow-follow` is set, and even then it only
+ever steps THIS process's own sim - there is no code path anywhere in this codebase that
+sends it to a robot (`modes.SHADOW_MAY_TRANSMIT = False`; enforced structurally, not by
+convention - see `tests/test_policy_shadow.py::test_shadow_action_has_no_transmit_path`).
+
+**Script player** (`modes.TargetScript`, `SimCore.run_script`/`stop_script`): a
+`scripts/*.json` file (`{joint_names, rows: [[t_s, q...], ...], loop}`) is linearly
+interpolated by elapsed sim time and played through `manual` mode via `POST /script/run
+{path, run_id}` / `POST /script/stop`. Refuses to start over a policy/replay mode or a joint
+this variant does not actuate. Two samples ship in `tools/pygviewer/scripts/`:
+`sine_hips_knees_1hz_20deg.json` (1 Hz, 20 deg on both hip_pitch and both knee joints, 3 s) and
+`step_knee_5x10deg.json` (5 steps of 10 deg on `L_knee_joint`, 1 s dwell each - built for
+protocol step 5's sharp edges). Every subsequent `JointState` (and a recording made while it
+plays) carries the script's `run_id` in its `Header`, so `compare.py` can later match a sim
+run against a robot run of the SAME file.
+
+**Gains diff table (R7)**: `GET /gains` / the UI's Gains folder show the contract's `train`
+kp/kd for every joint plus its motor family (`RS03`/`RS04`, from the contract's
+`joint_family`); once any `JointState` telemetry carries a `gains` field, the received real
+kp/kd and a ratio appear alongside, with anything off by more than 5% flagged in red - a
+response overlay is not worth trusting until this matches.
+
 ## Tests
 
 ```bash
@@ -237,7 +319,7 @@ cd tools/pygviewer && CUDA_VISIBLE_DEVICES="" \
     ../../mujoco-sim/mjlab/.venv/bin/python3 -m pytest
 ```
 
-161 tests, CPU only:
+198 tests, CPU only:
 
 | file | what it pins |
 |---|---|
@@ -247,10 +329,15 @@ cd tools/pygviewer && CUDA_VISIBLE_DEVICES="" \
 | `test_sim_rate.py` | >= 195 Hz physics wall-clock with 0 drops and < 600 MB RSS, AB and RP; snapshot/queue do not accumulate |
 | `test_policy_parity.py` | ONNX vs the exported `.pt` agree within 1e-4 on 32 held-out observations; obs/action dims match the contract; a foreign-model or shifted-default-pose contract is REFUSED |
 | `test_obs_order.py` | `ObsBuilder` reproduces the env's own 40-step obs trace term-by-term (order, joint subset, history backfill), for every baked policy |
-| `test_api_policy.py` | the FastAPI layer actually exposes what P2/P3 implement (not a stale allow-list): `/mode` accepts `policy_sim` only once a policy is loaded, accepts `real_replay` and forces the base `fixed`, 409s `file_replay` without a loaded recording, 501s `policy_shadow` (P4); `/policy/load` 409s a foreign contract and 404s an unknown name; `/policy/cmd` + `/policy/io` round-trip; `/obs_source` 501s `real`; `/gains` 400s `real` with no hardware table |
+| `test_api_policy.py` | the FastAPI layer actually exposes what P2-P4 implement (not a stale allow-list): `/mode` accepts `policy_sim`/`policy_shadow` only once a policy is loaded, accepts `real_replay` and forces the base `fixed`, 409s `file_replay` without a loaded recording; `/policy/load` 409s a foreign contract and 404s an unknown name; `/policy/cmd` + `/policy/io` round-trip; `/obs_source` accepts `real` (P4); `/gains` 400s `real` with no hardware table |
 | `test_schema.py` | `JointState`/`ImuState`/`Status`/`JointTarget`/`PolicyIO` round-trip through `to_jsonl`/`from_jsonl`; required header fields (`t_ns`) and required `PolicyIO` fields raise without them; `from_jsonl` rejects invalid JSON, an empty line and an unknown `type`; `validate_joint_names` flags exactly the unrecognised names |
 | `test_bridge_huphy.py` | the joint map has exactly 12 motor rows and starts `side_mapping_verified: false`; an unlisted `(limb, motor)` raises (hard failure, not a guess); the exact synthetic case from the task brief (+30 deg both knees -> sim `L_knee +0.5236`/`R_knee -0.5236` rad, contract `travel_sign` +1/-1, 1e-6); velocity/torque get the same sign treatment; the -1 sentinel nulls a field and warns on 3-in-a-row; `ankle_derived` stays separate from the canonical `q`; diag/CAN fields are ignored, not hard failures; an IMU packet prefers `grav_*` over reconstructing a quaternion (and does NOT treat `grav_z=-1.0`, a real upright reading, as HUPHY's "missing" sentinel - that only applies to `age`/`sensor_dt`) |
-| `test_record.py` | record -> replay is byte-for-byte identical, including the header; a foreign `contract_hash` is refused; a 10 s recording does not grow RSS (measured: 0.3 MB on the live process); `real_replay` snaps direct-drive joints to 1e-6 and routes a crank's received value into its PD target exactly; with no telemetry received at all, `real_replay` is numerically identical to staying in `manual` (differential test, 1e-9 - the actual regression this file caught); a left-leg command does not move a right-leg joint (differential, base fixed => no physical coupling path) |
+| `test_record.py` | record -> replay is byte-for-byte identical, including the header (also exercised standalone as protocol step 8); a foreign `contract_hash` is refused; a 10 s recording does not grow RSS (measured: 0.3 MB on the live process); `real_replay` snaps direct-drive joints to 1e-6 and routes a crank's received value into its PD target exactly; with no telemetry received at all, `real_replay` is numerically identical to staying in `manual` (differential test, 1e-9 - the actual regression this file caught); a left-leg command does not move a right-leg joint (differential, base fixed => no physical coupling path) |
+| `test_policy_shadow.py` (P4) | the per-term obs mux: defaults to all-sim; falls back to sim (with a `shadow_warnings` entry) when `real` is requested but missing or older than `max_age_s`; a fresh real IMU correctly overwrites `base_ang_vel`/`projected_gravity` in the built observation; a `PolicyIO` message correctly feeds `actions`/`command`; `shadow_follow=False` never moves `self.target`, `True` does and only locally; a 10 deg dummy IMU tilt changes the policy's raw action by mean 0.270 rad (regression floor 0.02 rad); no transmit path exists structurally |
+| `test_script_player.py` (P4) | `TargetScript` interpolation/looping/end-clamping; the two sample scripts only name actuated joints; `run_script` switches to `manual`, tags `run_id`, refuses over a policy/replay mode or an unknown joint, and clears its own state on natural completion; the two REST endpoints |
+| `test_compare.py` (P4) | R11 contract-hash refusal and `--i-know` override; R9 condition-difference warning; the clock-offset estimator recovers a synthetic 30 ms injected delay to within 15 ms; PNG output; an unknown `--joints` entry is skipped, not fatal |
+| `test_gains_diff.py` (P4/R7) | no `real_*` columns before any telemetry; a deliberately mismatched kp is flagged (kd is not); gains within 5% are not flagged |
+| `test_protocol.py` (P4) | the 8-step runner returns all steps in order; the 4 automated steps (1/4/5/8) PASS; the 4 manual steps (2/3/6/7) never claim PASS; a deliberately tightened budget fails step 1 on demand; the CLI |
 
 Evidence figure (no OpenGL on this host, so it is matplotlib):
 `mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/make_verification_figure.py` ->
@@ -259,8 +346,9 @@ Evidence figure (no OpenGL on this host, so it is matplotlib):
 ## Verification protocol before trusting a sim/real overlay
 
 Running the tests proves the *simulator* side.  Before any overlay of simulated and measured
-data is worth reading, all eight of these must pass (docs/121 section 5; P2-P4 own most of
-them):
+data is worth reading, all eight of these must pass (docs/121 section 5).  `protocol.py`
+(P4) runs steps 1/4/5/8 automatically against synthetic data; steps 2/3/6/7 need the real
+robot or a human and are never faked - `protocol.py` prints their procedure instead:
 
 1. **Zero pose.**  Both sides at the default keyframe: `|dq| < 0.02 rad` per joint and
    `|dg| < 0.05` on the gravity vector.
@@ -318,8 +406,16 @@ tools/pygviewer/
       huphy_udp.py           HUPHY UDP -> canonical JointState/ImuState (P3)
       joint_map_huphy.json   explicit 12-row limb/motor -> sim-joint table (P3)
       dummy_tx.py            sine/script/jsonl -> /ws/in and/or HUPHY-format UDP (P3)
-    modes.py                 mode constants + P4 skeletons (ModeMachine, TargetScript);
-                             real_replay/file_replay themselves live in sim_core.py
+    modes.py                 mode reference table + TargetScript (P4, the script player);
+                             real_replay/file_replay/policy_shadow themselves live in
+                             sim_core.py, dispatched on the plain string SimCore.mode
+    compare.py               (P4) offline sim<->real overlay: R5 clock-offset estimate,
+                             R9 condition warnings, R11 contract-hash refusal, PNGs to
+                             docs/img/
+    protocol.py              (P4) the 8-step verification protocol, runnable: steps
+                             1/4/5/8 automated against synthetic data, 2/3/6/7 print the
+                             hardware procedure and are tagged MANUAL
+  scripts/                   (P4) sample POST /script/run target-q sequences
   tests/
 ```
 
