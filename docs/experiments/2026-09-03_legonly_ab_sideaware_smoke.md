@@ -1,4 +1,4 @@
-# LegOnly AB 미러축 버그픽스 검증 스모크 `legonly_ab_v2_smoke` (2026-09-03)
+# LegOnly AB 미러축 버그픽스 검증 스모크 `legonly_ab_sideaware_smoke` (2026-09-03)
 
 > **한 줄 판정:** v30 모델의 좌우 미러 축과 mjlab 단일 정규식 설정이 충돌해 왼쪽 무릎의
 > 사용 가능 창이 0°였던 버그([[../reward_research/2026-09-03_stiff_knee_root_cause]])를
@@ -25,10 +25,10 @@
 ```bash
 cd mujoco-sim/mjlab
 nohup .venv/bin/python3 analysis/run_v2_scratch.py --smoke \
-  --run legonly_ab_v2_smoke --ankle AB --logger tensorboard \
+  --run legonly_ab_sideaware_smoke --ankle AB --logger tensorboard \
   --env PYG_MODEL_TAG=LegOnly_prototype-tempmass-motormeasured-armfix_v30_proxyfix \
   --env PYG_MASS_DR_JSON=<repo>/tools/robot_model/fusion_snapshots/v30_inspection/mass_dr_legonly_fastener50_prototype-tempmass.json \
-  > analysis/out/legonly_ab_v2_smoke.out 2>&1 &
+  > analysis/out/legonly_ab_sideaware_smoke.out 2>&1 &
 ```
 
 - 스모크 규격은 런처 기본값 그대로: `num_envs=1024`, P1 cap 400 iter, P2 = ramp 120 + digest 80
@@ -36,7 +36,7 @@ nohup .venv/bin/python3 analysis/run_v2_scratch.py --smoke \
   err_ratio 100`), `settle_hold 3`.
 - 직전 스모크와 다른 점은 **두 가지뿐**: (1) 이번 픽스가 들어간 설정 코드, (2) 질량 DR JSON을
   본런과 같은 fastener50 권위본으로 교체(직전 스모크는 구 round4 서브셋).
-- 권위 원장: `analysis/out/v2_scratch_legonly_ab_v2_smoke.json`.
+- 권위 원장: `analysis/out/v2_scratch_legonly_ab_sideaware_smoke.json`.
 
 ### §1b 이번 런에서 바뀐 것 (버그픽스, 리워드 변경 0건)
 
@@ -139,7 +139,7 @@ clip의 2.67e−04° (= 4.7 µrad)는 **도→라디안 왕복 오차**다: 이�
 `analysis/gait_kinematics_probe.py`를 P2 체크포인트(`model_399.pt`)에 돌려 **명령 대역이 실제로
 열렸는지**만 확인했다. 노미널 로봇(DR 이벤트 7종 제거), 17 s 기록 중 앞 2 s 과도구간 제외 =
 15 s 분석, 50 Hz, num_envs=1, CPU. 원자료
-`analysis/out/legonly_ab_v2_smoke_399_vx{0.6,1.2}.npz`.
+`analysis/out/legonly_ab_sideaware_smoke_399_vx{0.6,1.2}.npz`.
 
 | 무릎 | 조건 | qtarget 진폭 | qtarget p5..p95 [°] | 클립 경계 고착률 | q 사용 ROM | \|τ\| RMS [N·m] |
 |---|---|---|---|---|---|---|
@@ -161,7 +161,7 @@ clip의 2.67e−04° (= 4.7 µrad)는 **도→라디안 왕복 오차**다: 이�
 
 ### §3b 영상
 
-![[accum_legonly_ab_v2_smoke_p2.mp4]]
+![[accum_legonly_ab_sideaware_smoke_p2.mp4]]
 
 학습경과 accumulate 영상(런처 자동 생성, 2클립). **실시간 검증**: 1,000 스텝 × 50 Hz = 20.0 s
 시뮬레이션, 파일 604 frames / 30 fps = **20.13 s** (`ffprobe`) → fps = rate/downsample =
@@ -181,7 +181,7 @@ clip의 2.67e−04° (= 4.7 µrad)는 **도→라디안 왕복 오차**다: 이�
 
 ## §2c 학습 중 리뷰 (게이트마다 스냅샷, docs/27 체크리스트)
 
-![progress](mujoco/assets/legonly_ab_v2_smoke_p1_progress.png)
+![progress](mujoco/assets/legonly_ab_sideaware_smoke_p1_progress.png)
 
 | 시각 | iter | reward | ep_len | noise σ | value loss | entropy | surrogate / LR | fell / low_base | err_vel xy / yaw | dr_factor / vx_max | thermal | 판정(docs/27) |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|

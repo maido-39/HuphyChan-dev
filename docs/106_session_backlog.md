@@ -61,6 +61,8 @@
 
 - review_loop.sh가 옛 런(ankleAB_c3) 하드코딩 → v2s1 스냅샷 누락(gate_watch는 정상). 다음 손볼 때 인자화.
 - 와치독 resume는 `--agent.seed` 미전달(기본 42) — 시드 실험 시 함정.
+- (09-03) **와치독 wedge 모드 발견**: 08-26~09-03 프로세스 부재(cron이 pgrep에 걸린 유령 때문에 스킵 추정) + 09-03 10:35~13:26 프로세스는 살아있으나 `status.py` 자식 대기(do_wait)로 루프 정지 — cron은 "프로세스 존재"만 보므로 못 살림. 제안: crontab 라인에 `watchdog.log` mtime>10 min이면 kill+재기동 조건 추가(사용자 승인 필요한 crontab 변경이라 미적용). 인수 시 `analysis/out/watchdog.log` 최신성 확인 필수.
+- (09-03) **런 토큰 충돌**: 런처 기록 프리플라이트(`*<run>*.md` 정확히 1개)와 review_loop(`ls *RUN* | sort | tail -1`)가 둘 다 부분문자열 매칭 — 스모크 런/노트 이름에 본런 토큰을 넣으면 발사 거부 또는 스냅샷 오귀속. 규칙: 스모크는 `<family>_<variant>_smoke`처럼 본런 이름을 포함하지 않게(`legonly_ab_v2_smoke`→`legonly_ab_sideaware_smoke`로 개명 처리).
 - AB 하중률 교차엔진 ×3.88 미해결 = MuJoCo solref 컴플라이언스 PhysX 이식불가(수용된 한계).
 
 ## G. red-team 검증 갭 (조사 [[research_raw/2026-08-28_redteam_load_study]], 하중값 방어)
