@@ -62,6 +62,90 @@ base z **0.903 m**(std 0), base vx −0.001±0.000 m/s — 완전 정지.
 토크(|τ| 평균, N·m): hip_pitch 4.6/4.6 · hip_roll 4.1/10.3 · knee 0.7/0.4 · crank ≤0.8. 원자료
 `analysis/out/legonly_ab_v2_vel0_vx0.npz`. 게이트마다 재측정해 hip_yaw 비틀림 해소 여부 추적.
 
+
+## 1b. 이 run의 Reward & Gains (config에서 파싱 — 재현용)
+
+**Reward 항목** (weight·왜·어떻게):
+
+| reward | weight | 왜 | 어떻게 |
+|---|--:|---|---|
+| foot_clearance | **-2** | 스윙발 지면 이격(발끌림 방지) | 목표 높이 오차×발 수평속도 |
+| stance_knee_extension | **-2** | 입각 중 과도한 crouch 억제 | 접촉 중 \|knee\|>25 deg 초과량^2 |
+| track_angular_velocity | **+2** | 명령 회전속도 추종 | exp(-err²/std²) |
+| track_linear_velocity | **+2** | 명령 전진/측방 속도 추종 | exp(-err²/std²) |
+| air_time | **+1** | 체공시간 보상(질질끌기 억제) | 0.05~0.5 s 체공 발 수; \|command\|>0.5에서 활성 |
+| dof_pos_limits | **-1** | 관절범위 한계 벌점 | 한계초과 L1 |
+| pose | **+1** | 기본 관절자세 정규화(기괴자세 억제) | default-pose L2 |
+| self_collisions | **-1** | 자기충돌 벌점 | -접촉수 |
+| stand_still_penalty | **-1** | 이동 명령을 무시하고 서는 stall 방지 | 명령 대비 진행률<30%이면 flat cost |
+| track_lin_vel_progress | **+1** | 고속 명령에서 정지하는 local optimum 방지 | 명령방향 실제속도 투영값, 명령크기에서 cap |
+| upright | **+1** | 몸통 직립 유지(넘어짐 방지) | exp 자세 |
+| foot_impact_velocity | **-0.5** | 착지 직전 발 하강속도 감소 | 지면 근처 공중 발의 downward velocity^2 |
+| knee_overspeed | **-0.5** | 실측 RS04 무부하 속도를 넘는 보행 억제 | relu(\|knee velocity\|-19.9)^2 |
+| foot_swing_height | -0.25 | 스윙발 높이 성형 | 스윙 중 목표 높이 오차 |
+| action_rate_l2 | -0.1 | 액션 급변 벌점 | -\|Δa\|² |
+| foot_slip | -0.1 | 접지발 미끄러짐 벌점 | -\|v_contact\| |
+| body_ang_vel | -0.05 | 몸통 각속도 벌점(흔들림 억제) | -\|ω\|² |
+| angular_momentum | -0.02 | 전신 각운동량 벌점(회전 낭비 억제) | -\|L\|² |
+| thermal_effort | -0.02 | ★열분배: Σ(τ/rated)² 정규화(관절 균등화) | -Σ(τ/rated)² |
+| contact_force_cap | -0.01 | ★충격 cap: 발 GRF 역치초과분 벌점(사뿐착지) | -min(max(F-600,0),800) |
+| soft_landing | -1e-05 | 착지 첫접촉 충격 벌점(약) | -첫접촉 GRF |
+| torque_limit | -0 | commanded 토크 한계초과 벌점 | off(0) |
+
+**관절별 Kp/Kd** (position-PD, effort=관절측 peak):
+
+| 관절 | 모터 | Kp(stiffness) | Kd(damping) | effort [N·m] |
+|---|---|--:|--:|--:|
+| hip_pitch | RS04 | 150 | 6 | 120 |
+| hip_roll | RS04 | 150 | 6 | 120 |
+| hip_yaw | RS03 | 150 | 6 | 60 |
+| knee | RS04 | 220 | 6 | 120 |
+| crank_A | RS03 | 22.3 | 1.41 | 60 |
+| crank_B | RS03 | 22.3 | 1.41 | 60 |
+
+
+
+**§1b-2. 액추에이터 동역학·한계 (런 env.yaml 파싱, 2026-09-03 사용자 요청)**
+
+| 관절 그룹 | 모터 | Kp [N·m/rad] | Kd [N·m·s/rad] | effort 한계 [N·m] | 무부하 속도 [rad/s] | 로터 관성 armature [kg·m²] | 쿨롱 마찰 [N·m] | 점성 [N·m·s/rad] | T-N 곡선 |
+|---|---|--:|--:|--:|--:|--:|--:|--:|---|
+| hip_pitch, hip_roll | RS04 | 150 | 6 | 120 (stall 120.1) | 20.94 | 0.01633 | 0.269 | 0.0095 | 실측 22점 (`PYG_TN=1`) |
+| knee | RS04 | 220 | 6 | 120 (stall 120.1) | 20.94 | 0.01633 | 0.269 | 0.0095 | 실측 22점 |
+| hip_yaw | RS03 | 150 | 6 | 60 (stall 59.7) | 20.94 | 0.01527 | 0.285 | 0.0223 | 실측 37점 |
+| crank_A, crank_B (발목 2-RSU 구동) | RS03 | 22.3 | 1.41 | 60 (stall 59.7) | 20.94 | 0.01527 | 0.285 | 0.0223 | 실측 37점 |
+| ankle_pitch / ankle_roll | (수동, 크랭크로 구동) | — | — | — | — | — | — | — | 폐루프 등식구속 |
+
+크랭크 Kp/Kd(22.3/1.41)는 loop_ankle_verify 물리 앵커값(발목 관절측 등가강성 기준)이며 자유 노브가
+아니다. 토크는 `effort_limit`과 실측 T-N 곡선(속도 의존 상한) 중 작은 값으로 클램프된다
+(`PYG_MOTOR_MEAS=1`: J/b/쿨롱 실측). Kp/Kd 실물 이식 시 RS03/RS04 인코딩 범위 차이(docs/118 §2-A) 주의.
+
+**§1b-3. ROM 한계·액션 창** (모델 XML range × soft factor 0.9 = 리워드 `dof_pos_limits` 기준; 액션 clip =
+`PYG_SAFE_TARGET_CLIP` 관절별 유도; 창 = clip ∩ range; default = 액션 0 자세; 프리플라이트 PASS 12/12)
+
+| 관절 | XML range [°] | soft 한계(×0.9) [°] | 액션 clip [°] | 사용가능 창 [°] | default [°] |
+|---|---|---|---|--:|--:|
+| L_hip_pitch | [−120, +25] | [−108, +22.5] | [−112.75, +17.75] | 130.5 | −10.03 |
+| R_hip_pitch | [−25, +120] | [−22.5, +108] | [−17.75, +112.75] | 130.5 | +10.03 |
+| L_hip_roll | [−25, +85] | [−22.5, +76.5] | [−19.5, +79.5] | 99.0 | 0 |
+| R_hip_roll | [−85, +25] | [−76.5, +22.5] | [−79.5, +19.5] | 99.0 | 0 |
+| L/R_hip_yaw | [−45, +45] | [−40.5, +40.5] | [−40.5, +40.5] | 81.0 | 0 |
+| L_knee | [0, +120] | [0, +108] | [+6, +114] | 108.0 | +20.05 |
+| R_knee | [−120, 0] | [−108, 0] | [−114, −6] | 108.0 | −20.05 |
+| L/R_crank_A, _B | [−68.75, +68.75] | [−61.9, +61.9] | [−61.88, +61.88] | 123.8 | −17.1 |
+| L/R_ankle_pitch (수동) | [−50, +30] | [−45, +27] | — | — | +20.6 (크랭크 유도) |
+| L/R_ankle_roll (수동) | [−20, +20] | [−18, +18] | — | — | +0.15 |
+
+액션 스케일 0.25 rad/단위(전 관절), 오프셋 = default(`use_default_offset`). 좌우 부호가 반대인 것은
+v30 모델의 미러축 때문이며 물리 의미는 대칭(굴곡 +20°)이다 — 이 표의 부호 그대로 실물 배포 어댑터에
+쓰면 안 되고 docs/116의 부호맵을 거쳐야 한다.
+
+**§1b-4. 이 런의 리워드 스택 플래그** (env.yaml 가중치는 위 §1b 표가 정본): `PYG_INIT_MID=1`·`PYG_INIT_BENT=1`
+(bent 키프레임, §1d) · `PYG_KNEE_EXT=1` w−2.0 @25°(stance_knee_extension) · `PYG_SOFT_LANDING=1
+MODE=half`(foot_impact_velocity ×0.5 → −0.5) · `PYG_CMD_VY_STAGES=1` · `PYG_GATED_CURRICULUM=1`
+(dwell 800~3000, err ratio 1.1, fell ≤0.005, 최소 64 ep) · `PYG_CRITIC_DR_OBS=1`(critic 82D) ·
+`PYG_STUDENT_TEACHER=1`(actor 45D) · P1은 DR off(`PYG_DR_START_ITER=1e8`), P2에서 질량 DR
+(`mass_dr_legonly_fastener50_prototype-tempmass.json`)+push 램프.
+
 ## §2 이하 — 완주 후 측정으로 채운다 (fc/fcp + 200Hz 프로브 + §7 모터활용)
 
 ## §2c 학습 중 리뷰 (게이트마다 스냅샷, docs/27 체크리스트)
@@ -74,6 +158,7 @@ base z **0.903 m**(std 0), base vx −0.001±0.000 m/s — 완전 정지.
 | 09-03 17:26 | 2593 | 102.9 (50avg 102.6) | 1000 | 0.233 | 0.0468 | -4.13 | -0.0010 / 1.7e-04 | 0.000 / 0.042 | 0.977 / 0.670 | 0.00 / 2.0 | 1.94 | (자동 스냅샷, 판정은 게이트 리뷰에서) |
 | 09-03 18:26 | 3228 | 102.1 (50avg 102.7) | 1000 | 0.243 | 0.0562 | -3.47 | -0.0020 / 1.2e-04 | 0.000 / 0.125 | 1.017 / 0.700 | 0.00 / 2.5 | 2.17 | **계속** — 게이트 2~5 일괄 판정(18:36, 15:26~18:26 4행; 세션 wakeup 중단으로 판정 지연): vx_max 0.8→2.5 램프 완료(1321→3228)에 따라 reward 111→102·err_xy 0.46→1.02는 명령 난도 상승의 정상 추세(v1 동일 단계 3765: err_xy 1.327·σ 0.315 대비 v2 1.017·0.243 우세), 낙상 0.000 유지, ep_len 포화, thermal 2.17(v1 2.22). 최종 stage(2.5) dwell 106 iter → 게이트 최소 dwell 800 기준 P1 졸업 ETA 19:40~20:30. 감시자(리뷰루프 1·와치독 1·로그 18:35) 정상 |
 | 09-03 19:27 | 3867 | 99.3 (50avg 100.4) | 986 | 0.265 | 0.0617 | -2.16 | 0.0004 / 7.7e-05 | 0.000 / 0.167 | 0.957 / 0.765 | 0.00 / 2.5 | 2.49 | **계속** — 게이트 6(19:38): 최종 stage(2.5) dwell 754/800, 낙상 0, err_xy 0.957(개선 추세), 런처 게이트 err 0.247 vs base 0.234(비 1.06 < 1.1 기준) → 졸업 조건 근접, 안정 스트릭(0/10) 채우면 P2 자동전이. ⚠watch: thermal 2.49(v1 동일 단계 2.22)·ep_len 986(low_base 0.167) — 중단 사유 아님, P2 전이 후 추이 확인. 감시자 정상(리뷰루프 1·와치독 1·로그 19:37) |
+| 09-03 19:48 | 4101 | 102.1 (50avg 101.0) | 1000 | 0.266 | 0.0562 | -2.19 | -0.0008 / 1.7e-04 | 0.000 / 0.083 | 0.977 / 0.778 | 0.00 / 2.5 | 2.52 | P1 phase-end: review before P2 |
 
 ## §R 참조
 [[2026-09-03_legonly_ab_v1]] · [[2026-09-03_legonly_ab_sideaware_smoke]] ·
