@@ -3,13 +3,15 @@
 P0/P1 implements: ``GET /status``, ``GET /contract``, ``GET /snapshot``, ``POST /target``,
 ``POST /ankle``, ``POST /base``, ``POST /mode``, ``POST /reset`` and ``WS /ws/out``.
 P2 adds: ``POST /policy/load``, ``GET /policy/list``, ``POST /policy/unload``,
-``POST /policy/cmd``, ``GET /policy/io``, ``POST /obs_source`` (per-term switch; ``real``
-answers 501 until P4's obs mux exists), ``GET|POST /gains`` and ``POST /mode`` with
-``policy_sim``. P3 adds: ``WS /ws/in`` (JointState/ImuState ingest into ``core.real``),
-``POST /record/{start,stop}``, ``POST /replay/{load,seek,speed}`` and ``POST /mode`` with
-``real_replay``/``file_replay``. ``POST /mode`` with ``policy_shadow`` and
-``POST /obs_source`` with a ``real`` value are the only things still 501 (P4 - the per-term
-obs mux), so a client author can see the whole contract today and code against it.
+``POST /policy/cmd``, ``GET /policy/io``, ``POST /obs_source`` (per-term switch),
+``GET|POST /gains`` and ``POST /mode`` with ``policy_sim``. P3 adds: ``WS /ws/in``
+(JointState/ImuState ingest into ``core.real``), ``POST /record/{start,stop}``,
+``POST /replay/{load,seek,speed}`` and ``POST /mode`` with ``real_replay``/``file_replay``.
+P4 adds: ``POST /mode`` with ``policy_shadow`` (per-term sim/real obs mux, action never
+transmitted - see ``policy.ObsBuilder.build_shadow``), ``POST /obs_source`` accepting
+``real`` for real, ``POST /policy/shadow_follow``, ``POST /script/{run,stop}`` and
+``WS /ws/in`` also accepting ``PolicyIO`` (a real host's own obs/action/cmd, the only source
+for the shadow mux's last_action/cmd terms).
 
 The WebSocket is **latest-only**: it samples the current snapshot at the requested rate and
 never queues.  A slow consumer sees a lower frame rate, it does not make the process grow.
@@ -42,15 +44,15 @@ from .schema import (
   PolicyLoadIn,
   Rates,
   ResetIn,
+  ScriptRunIn,
+  ShadowFollowIn,
   Status,
   TargetIn,
   WIRE_VERSION,
   validate_joint_names,
 )
 
-_NOT_YET = {
-  "/script/run": "P4",
-}
+_NOT_YET: dict[str, str] = {}
 
 
 def rss_mb() -> float | None:
@@ -163,12 +165,9 @@ def build_app(core, freshness: dict) -> FastAPI:
   )
   def post_mode(body: ModeIn):
     """``policy_sim``/``policy_shadow`` need a policy loaded first (``POST /policy/load``);
-    ``file_replay`` needs a recording loaded first (``POST /replay/load``); ``policy_shadow``
-    is P4 (the obs-source mux only accepts ``real`` once shadow mixing is implemented).
-    Checked here synchronously so the caller gets an immediate 409/501 rather than a silent
-    failure on the sim thread, which only ever sees commands through the async queue."""
-    if body.mode == "policy_shadow":
-      raise HTTPException(501, "policy_shadow (per-term obs mux) is P4 - see API.md")
+    ``file_replay`` needs a recording loaded first (``POST /replay/load``). Checked here
+    synchronously so the caller gets an immediate 409 rather than a silent failure on the
+    sim thread, which only ever sees commands through the async queue."""
     if body.mode.startswith("policy") and core.policy is None:
       raise HTTPException(409, f"mode {body.mode!r} needs a policy loaded first (POST /policy/load)")
     if body.mode == "file_replay" and core.replayer is None:
@@ -261,11 +260,16 @@ def build_app(core, freshness: dict) -> FastAPI:
       raise HTTPException(409, "no policy loaded; there are no observation terms to route")
     try:
       core.obs_mux.set(body.sources)
-    except NotImplementedError as exc:
-      raise HTTPException(501, str(exc))
     except (KeyError, ValueError) as exc:
       raise HTTPException(400, str(exc))
     return {"sources": core.obs_mux.sources, "mask": "".join(core.obs_mux.mask())}
+
+  @app.post("/policy/shadow_follow", summary="policy_shadow only: let the shadow action drive the LOCAL sim")
+  def post_shadow_follow(body: ShadowFollowIn):
+    """Affects nothing but this process's own sim step - the shadow action is never sent
+    anywhere real (design doc R10; there is no code path in this codebase that could)."""
+    core.submit({"op": "shadow_follow", "value": body.enabled})
+    return {"ok": True}
 
   @app.post("/record/start", summary="Start streaming JointState to a jsonl.gz recording")
   def post_record_start(body: dict | None = None):
@@ -364,7 +368,10 @@ def build_app(core, freshness: dict) -> FastAPI:
 
   @app.websocket("/ws/in")
   async def ws_in(ws: WebSocket):
-    """Receive JointState/ImuState (schema.py wire format), one JSON object per text frame.
+    """Receive JointState/ImuState/PolicyIO (schema.py wire format), one JSON object per
+    text frame. ``PolicyIO`` (P4) is a real host's OWN obs/action/cmd - the only source the
+    shadow obs mux has for its last_action/generated_commands terms, since there is no other
+    wire concept of "what velocity was the robot actually commanded".
 
     Every accepted message gets ``{"ok": true, "seq": ...}`` back; a bad one gets
     ``{"error": "..."}`` and the connection stays open - one malformed frame from a dummy
@@ -389,9 +396,11 @@ def build_app(core, freshness: dict) -> FastAPI:
             core.real.ingest_joint_state(msg)
           elif typ == "ImuState":
             core.real.ingest_imu_state(ImuState.model_validate(obj))
+          elif typ == "PolicyIO":
+            core.real.ingest_policy_io(PolicyIO.model_validate(obj))
           else:
             await ws.send_text(
-              json.dumps({"error": f"/ws/in accepts JointState/ImuState, not {typ!r}"})
+              json.dumps({"error": f"/ws/in accepts JointState/ImuState/PolicyIO, not {typ!r}"})
             )
             continue
           await ws.send_text(json.dumps({"ok": True, "seq": obj.get("seq")}))

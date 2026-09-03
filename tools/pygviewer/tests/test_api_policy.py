@@ -83,10 +83,21 @@ def test_mode_rejects_file_replay_without_a_loaded_recording(client):
   assert r.status_code == 409, r.text
 
 
-def test_mode_rejects_policy_shadow_as_p4(client):
+def test_mode_rejects_policy_shadow_without_a_loaded_policy(client):
   client, _ = client
   r = client.post("/mode", json={"mode": "policy_shadow"})
-  assert r.status_code == 501, r.text
+  assert r.status_code == 409, r.text
+
+
+def test_mode_accepts_policy_shadow_once_a_policy_is_loaded(client):
+  """P4: policy_shadow is now a real mode, not a 501 stub (test_mode_rejects_policy_shadow_as_p4
+  above was the P3-era contract; superseded now that build_shadow exists)."""
+  _load_policy(client)
+  c, core = client
+  r = c.post("/mode", json={"mode": "policy_shadow"})
+  assert r.status_code == 200, r.text
+  core.step_n(core.decimation)
+  assert core.mode == "policy_shadow"
 
 
 def test_policy_load_refuses_a_foreign_contract(tmp_path, client):
@@ -121,16 +132,19 @@ def test_policy_cmd_and_io_after_load(client):
   assert len(body["obs_sources"]) == len(body["obs"]) == 0 or len(body["obs_sources"]) > 0
 
 
-def test_obs_source_real_is_501_until_p3(client):
+def test_obs_source_real_is_accepted_p4(client):
+  """P4: per-term 'real' sourcing is implemented (test_obs_source_real_is_501_until_p3 above
+  was the P3-era stub contract). Setting it does not require any real data to be flowing -
+  the staleness fallback in build_shadow handles that; see test_policy_shadow.py for the
+  end-to-end mux behaviour."""
   _load_policy(client)
   c, core = client
   r = c.get("/policy/io")
   term = list(r.json()["obs_sources"].keys())[0] if r.status_code == 200 else None
-  # obs_sources on a fresh policy_io before any control tick may be empty; fall back to
-  # asking the obs builder directly through the mux the load just constructed.
   term = term or list(core.obs_mux.sources.keys())[0]
   r = c.post("/obs_source", json={"sources": {term: "real"}})
-  assert r.status_code == 501, r.text
+  assert r.status_code == 200, r.text
+  assert r.json()["sources"][term] == "real"
 
 
 def test_gains_get_and_switch_to_real_without_a_table_is_rejected(client):

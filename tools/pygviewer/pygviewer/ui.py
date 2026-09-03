@@ -313,17 +313,28 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
     )
     pol_load = gui.add_button("load policy")
     pol_unload = gui.add_button("unload")
-    run_mode = gui.add_dropdown("mode", ("idle", "manual", "policy_sim"), initial_value="idle")
+    run_mode = gui.add_dropdown(
+      "mode", ("idle", "manual", "policy_sim", "policy_shadow"), initial_value="idle"
+    )
     vx = gui.add_slider("vx [m/s]", min=-1.0, max=2.5, step=0.05, initial_value=0.0)
     vy = gui.add_slider("vy [m/s]", min=-0.5, max=0.5, step=0.05, initial_value=0.0)
     wz = gui.add_slider("wz [rad/s]", min=-1.5, max=1.5, step=0.05, initial_value=0.0)
+    shadow_follow_cb = gui.add_checkbox(
+      "shadow_follow (policy_shadow only, local sim)", initial_value=core.shadow_follow
+    )
     pol_info = gui.add_markdown("no policy loaded")
+    mask_md = gui.add_markdown("")  # always-visible per-term source strip (design item 1)
     with gui.add_folder("observation sources", expand_by_default=False):
       src_md = gui.add_markdown(
-        "Per observation TERM, sim or real. `real` needs the P3 telemetry bridge and "
-        "answers 501 until then; the switch is here so the contract is visible."
+        "Per observation TERM, sim or real. `real` is only ever READ during `policy_shadow` "
+        "(`policy_sim` always uses sim); a stale/missing real value falls back to sim for "
+        "that tick and shows up in the strip above and in `shadow_warnings`."
       )
       src_dd: dict = {}
+
+    @shadow_follow_cb.on_update
+    def _(_evt):
+      state["core"].submit({"op": "shadow_follow", "value": shadow_follow_cb.value})
 
     def _refresh_policy_panel():
       core_ = state["core"]
@@ -350,7 +361,7 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
             def _(_e):
               try:
                 state["core"].obs_mux.set({nm: hh.value})
-              except NotImplementedError as exc:
+              except (KeyError, ValueError) as exc:
                 hh.value = "sim"
                 src_md.content = f"**{exc}**"
 
@@ -636,6 +647,24 @@ def _mount(server: viser.ViserServer, state: dict) -> None:
         f"{p['cmd'][2]:+.2f})  driving {'YES' if p['driving'] else 'no'}  "
         f"obs sources `{p['source_mask']}`",
       ]
+      # Always-visible 5-cell source strip (design item 1): green=sim, orange=real, and a
+      # cell shown red when the operator ASKED for real but a stale/missing value forced a
+      # sim fallback THIS tick - the one state that must never be silently invisible.
+      req = p.get("obs_sources", {})
+      eff = p.get("obs_sources_effective", {}) or req
+      cells = []
+      for name in req:
+        r, e = req.get(name, "sim"), eff.get(name, "sim")
+        if r == "real" and e == "sim":
+          color, label = "#e45756", f"{name}: R->S (stale)"
+        elif e == "real":
+          color, label = "#f58518", f"{name}: real"
+        else:
+          color, label = "#54a24b", f"{name}: sim"
+        cells.append(f'<span style="background:{color};color:white;padding:1px 6px;'
+                     f'border-radius:3px;margin-right:3px;font-size:11px">{label}</span>')
+      warns = p.get("shadow_warnings") or []
+      mask_md.content = "".join(cells) + ("\n\n**" + "; ".join(warns) + "**" if warns else "")
     from .api import rss_mb
 
     lines += ["", f"RSS {rss_mb():.0f} MB  gains `{s.get('gains_source', 'train')}`"]

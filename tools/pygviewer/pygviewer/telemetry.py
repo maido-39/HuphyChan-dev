@@ -28,7 +28,7 @@ import time
 from collections import deque
 from typing import Any
 
-from .schema import ImuState, JointState
+from .schema import ImuState, JointState, PolicyIO
 
 MAX_AGE_WARN_S = 0.5
 CLOCK_WINDOW = 200
@@ -56,6 +56,12 @@ class RealState:
     self.ankle_derived: dict[str, dict[str, float]] = {}
     self.imu: dict[str, Any] | None = None
     self.imu_age_ref: float | None = None
+    # P4: a real host's own PolicyIO report (obs/action/target/cmd it computed for ITSELF).
+    # This is the only principled source for the "last_action" and "cmd" shadow-mux terms -
+    # there is no wire concept of "the robot's commanded velocity" otherwise. Receive-only,
+    # same as everything else in this module; nothing here ever originates a PolicyIO.
+    self.policy_io: dict[str, Any] | None = None
+    self.policy_io_ref: float | None = None
 
     self.rx_count = 0
     self.seq_gaps = 0
@@ -129,6 +135,31 @@ class RealState:
       )
       self.imu_age_ref = now
 
+  def ingest_policy_io(self, msg: PolicyIO) -> None:
+    """P4: a real host's self-reported obs/action/target/cmd, for the shadow-mux terms that
+    have no other real-world analogue (last_action, generated_commands)."""
+    now = time.monotonic()
+    with self._lock:
+      self.rx_count += 1
+      self._last_rx_mono = now
+      self._rx_times.append(now)
+      if msg.contract_hash and msg.contract_hash != self.contract_sha:
+        self.contract_mismatches += 1
+      self.policy_io = dict(action=list(msg.action), target=list(msg.target), cmd=list(msg.cmd))
+      self.policy_io_ref = now
+
+  def policy_io_age_s(self) -> float | None:
+    with self._lock:
+      if self.policy_io_ref is None:
+        return None
+      return time.monotonic() - self.policy_io_ref
+
+  def imu_age_s(self) -> float | None:
+    with self._lock:
+      if self.imu_age_ref is None:
+        return None
+      return time.monotonic() - self.imu_age_ref
+
   def note_bridge_error(self, msg: str) -> None:
     """A bridge (HUPHY UDP adapter, etc.) hit a hard failure - e.g. a (limb, motor) pair not
     in its explicit joint map.  Counted and surfaced in Status, never silently absorbed."""
@@ -195,6 +226,7 @@ class RealState:
         range_violations={n: c for n, c in self.range_violations.items() if c},
         warnings=list(self.warnings),
         have_imu=self.imu is not None,
+        have_policy_io=self.policy_io is not None,
         bridge_errors=self.bridge_errors,
         bridge_last_error=self.bridge_last_error,
       )

@@ -189,7 +189,8 @@ class BaseIn(BaseModel):
 
 
 class ModeIn(BaseModel):
-  """IMPLEMENTED for ``idle``/``manual``.  The rest are P2-P4 and are refused with 501."""
+  """IMPLEMENTED, all six.  ``policy_sim``/``policy_shadow`` need a policy loaded first (409
+  otherwise); ``file_replay`` needs a recording loaded first (409 otherwise)."""
 
   mode: Literal["idle", "manual", "policy_sim", "policy_shadow", "real_replay", "file_replay"]
 
@@ -211,7 +212,10 @@ class GainsIn(BaseModel):
 
 
 class ObsSourceIn(BaseModel):
-  """IMPLEMENTED for ``sim``; ``real`` answers 501 until the P3 telemetry bridge exists."""
+  """IMPLEMENTED.  Per-term request; ``real`` is only ever READ from during ``policy_shadow``
+  (``policy_sim`` ignores this and always uses sim). A term that asks for ``real`` but has no
+  fresh data falls back to sim for that tick and is reported in ``policy.obs_sources_effective``
+  / ``shadow_warnings``, never silently used stale (design item 1)."""
 
   sources: dict[str, Src]
 
@@ -236,6 +240,27 @@ class CmdIn(BaseModel):
   vx: float = 0.0
   vy: float = 0.0
   wz: float = 0.0
+
+
+class ShadowFollowIn(BaseModel):
+  """IMPLEMENTED (P4).  ``policy_shadow`` only: does the shadow-computed action actually
+  step the LOCAL sim forward, or does the policy only observe+display while sim keeps
+  running under manual/idle. Never touches anything outside this process."""
+
+  enabled: bool = False
+
+
+class ScriptRunIn(BaseModel):
+  """IMPLEMENTED (P4).  Play a ``scripts/*.json`` target-q sequence in ``manual`` mode.
+
+  ``run_id`` is written into ``core.snapshot()['script']`` and, if a recording is active,
+  becomes part of what ``compare.py`` can later use to align two files that both played the
+  same script (one in sim, one - by convention, not by this API - driven through the same
+  file on the robot's own bridge).
+  """
+
+  path: str
+  run_id: str | None = None
 
 
 # ----------------------------------------------------------------- P3 wire helpers

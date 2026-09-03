@@ -14,7 +14,9 @@ attach to yet: the P4 script player.
 ``manual``       UI/API joint targets (P1, ``SimCore.set_target``).
 ``policy_sim``   the loaded policy drives, all observations from the simulator.       P2
 ``policy_shadow``observations per-term from sim or from the received real stream, with a
-                 staleness guard; the action is displayed and plotted ONLY.           P4
+                 staleness guard (``policy.ObsBuilder.build_shadow``); the action is
+                 displayed/plotted/recorded ONLY unless ``--shadow-follow`` is set, in which
+                 case it also steps the LOCAL sim - never a real robot.               P4
 ``real_replay``  received q drives the sim joints kinematically, base FORCED fixed on
                  entry.  Direct-drive joints (everything but an AB crank) are snapped
                  exactly, per control tick, when data was received that tick - with no
@@ -33,7 +35,7 @@ by the same file.                                                               
 from __future__ import annotations
 
 MODES = ("idle", "manual", "policy_sim", "policy_shadow", "real_replay", "file_replay")
-IMPLEMENTED = ("idle", "manual", "policy_sim", "real_replay", "file_replay")
+IMPLEMENTED = MODES
 
 # A shadow-mode action must never leave this process. This is a constant, not a setting,
 # so that turning it on requires a code change and a review.

@@ -160,12 +160,19 @@ class SimCore:
     mjb: str | None = None,
     realtime: bool = True,
     max_catchup: int = 8,
+    shadow_follow: bool = False,
   ):
     self.c = contract
     self.m = mujoco.MjModel.from_binary_path(str(mjb or contract.mjb_path))
     self.d = mujoco.MjData(self.m)
     self.realtime = realtime
     self.max_catchup = max_catchup
+    # P4: in policy_shadow, does sim actually STEP using the shadow-computed action (for
+    # visualising what the policy would do), or does it keep whatever normal drive it has
+    # (manual/idle) while the policy only observes? Either way the action never leaves this
+    # process - this flag only ever touches `self.target` on the LOCAL sim, never a
+    # transmit path (there is none - design doc R10, modes.py SHADOW_MAY_TRANSMIT).
+    self.shadow_follow = bool(shadow_follow)
 
     r = contract.raw
     self.dt = float(self.m.opt.timestep)
@@ -243,7 +250,13 @@ class SimCore:
     self.cmd = np.zeros(3)
     self.last_action = np.zeros(len(self.act_names))
     self.q_hist: deque = deque(maxlen=4)
+    # P4: a SEPARATE, purely-real rolling buffer for the "real" side of the shadow obs mux -
+    # never interleaved with `q_hist` (sim frames) within one term's window. Filled every
+    # control tick a policy is loaded, regardless of run mode, so it is warmed up by the time
+    # an operator switches a term to "real".
+    self.real_q_hist: deque = deque(maxlen=4)
     self.last_obs: np.ndarray | None = None
+    self._shadow_warnings: list[str] = []
     self.gains_source = "train"
     self.gains_overrides: dict[str, dict] = {}
     self._kp_train, self._kd_train = self.kp.copy(), self.kd.copy()
@@ -347,6 +360,7 @@ class SimCore:
     self.target = np.array([self.d.qpos[i] for i in self.a_q])
     self.last_action = np.zeros(len(self.act_names))
     self.q_hist.clear()
+    self.real_q_hist.clear()
     self._step_i = 0
     self._apply_base_mode(snap=True)
     self._apply_ground()
@@ -463,6 +477,7 @@ class SimCore:
     self.obs_mux = ObsSourceMux([t["name"] for t in builder.describe()])
     self.clip_actions = (policy_contract or {}).get("clip_actions")
     self.q_hist = deque(maxlen=max(builder.history_length, 1))
+    self.real_q_hist = deque(maxlen=max(builder.history_length, 1))
     self.last_action = np.zeros(len(self.act_names))
     return dict(
       kind=pol.name,
@@ -548,20 +563,45 @@ class SimCore:
     mujoco.mj_forward(self.m, self.d)
     q_all = self.d.qpos[self.all_q].copy()
     self.q_hist.append(q_all)
-    obs = self.obs_builder.build(
-      self.q_hist,
-      self.d.qvel[self.all_d],
-      self.d.sensordata,
-      self.last_action,
-      self.cmd,
-    )
+    # Maintained every tick a policy is loaded, regardless of mode, so the real-history
+    # buffer is already warm whenever an operator flips a term's obs source to "real".
+    self.real_q_hist.append({n: v["q"] for n, v in self.real.snapshot_joints().items()})
+    if self.mode == "policy_shadow":
+      obs, effective, warnings = self.obs_builder.build_shadow(
+        self.obs_mux,
+        dict(
+          q_history=self.q_hist,
+          qd=self.d.qvel[self.all_d],
+          sensordata=self.d.sensordata,
+          last_action=self.last_action,
+          cmd=self.cmd,
+        ),
+        self.real,
+        self.real_q_hist,
+      )
+      self.obs_mux.effective = effective
+      self._shadow_warnings = warnings
+    else:
+      obs = self.obs_builder.build(
+        self.q_hist,
+        self.d.qvel[self.all_d],
+        self.d.sensordata,
+        self.last_action,
+        self.cmd,
+      )
+      if self.obs_mux is not None:
+        self.obs_mux.effective = dict(self.obs_mux.sources)
+        self._shadow_warnings = []
     action = self.policy(obs)
     raw, target = action_to_target(
       action, self.default_q, self.action_scale, self.clip_lo, self.clip_hi, self.clip_actions
     )
     self.last_action = raw
     self.last_obs = obs
-    if self.mode == "policy_sim":
+    # `policy_sim` always drives; `policy_shadow` only drives when the operator opted in via
+    # --shadow-follow (this affects ONLY this local sim - see the constructor docstring, and
+    # modes.py SHADOW_MAY_TRANSMIT for why there is no code path to a real robot here at all).
+    if self.mode == "policy_sim" or (self.mode == "policy_shadow" and self.shadow_follow):
       self.target = target
     self._policy_target = target
 
@@ -686,6 +726,8 @@ class SimCore:
       if self.obs_mux is None:
         raise RuntimeError("no policy loaded; there are no observation terms to route")
       self.obs_mux.set(cmd["sources"])
+    elif op == "shadow_follow":
+      self.shadow_follow = bool(cmd["value"])
     elif op == "replay_seek":
       if self.replayer is None:
         raise RuntimeError("no recording loaded")
@@ -803,8 +845,12 @@ class SimCore:
         target=[float(x) for x in getattr(self, "_policy_target", self.target)],
         obs=[float(x) for x in self.last_obs] if self.last_obs is not None else None,
         obs_sources=dict(self.obs_mux.sources) if self.obs_mux else {},
+        obs_sources_effective=dict(self.obs_mux.effective) if self.obs_mux else {},
         source_mask="".join(self.obs_mux.mask()) if self.obs_mux else "",
-        driving=self.mode == "policy_sim",
+        source_mask_effective="".join(self.obs_mux.effective_mask()) if self.obs_mux else "",
+        shadow_warnings=list(self._shadow_warnings),
+        shadow_follow=self.shadow_follow,
+        driving=self.mode == "policy_sim" or (self.mode == "policy_shadow" and self.shadow_follow),
       )
     if self.c.is_loop:
       snap["ankle_derived"] = {

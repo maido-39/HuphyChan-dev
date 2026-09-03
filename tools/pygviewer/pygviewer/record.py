@@ -30,7 +30,7 @@ RECORD_DIR = "/home/syaro/pyg_fea/pygviewer/records"
 
 def header_from_core(core) -> dict[str, Any]:
   c = core.c
-  return dict(
+  hdr = dict(
     v=1,
     contract_hash=c.contract_sha,
     variant=c.variant,
@@ -44,7 +44,16 @@ def header_from_core(core) -> dict[str, Any]:
     env_toggles=c.raw.get("env_toggles"),
     bake_mjb_sha256=c.raw.get("mjb_sha256"),
     started_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    mode=core.mode,
   )
+  # P4: a policy_shadow recording is meaningless to read back without knowing, per term,
+  # whether it was actually sim or real that tick - put the REQUESTED mask in the header
+  # (the per-message effective source, when it differs, belongs on PolicyIO messages, not
+  # duplicated here) so a consumer knows this recording mixed sources before it even opens it.
+  if core.mode == "policy_shadow" and getattr(core, "obs_mux", None) is not None:
+    hdr["obs_sources"] = dict(core.obs_mux.sources)
+    hdr["obs_mask"] = "".join(core.obs_mux.mask())
+  return hdr
 
 
 class Recorder:

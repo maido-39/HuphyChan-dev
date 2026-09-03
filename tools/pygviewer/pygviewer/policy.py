@@ -54,6 +54,7 @@ class ObsBuilder:
       jn = t.get("joint_names")
       entry = dict(name=t["name"], func=func, history=int(t.get("history_length") or 0))
       if jn:
+        entry["joint_names"] = list(jn)
         entry["idx"] = np.array([self.joint_names.index(n) for n in jn])
         entry["default"] = np.array([raw["default_q"][n] for n in jn])
       sn = t.get("sensor_name") or (t.get("params", {}) or {}).get("sensor_name")
@@ -87,6 +88,31 @@ class ObsBuilder:
       off += n
     return out
 
+  def _sim_term(self, e: dict, q_history, qd, sensordata, last_action, cmd) -> np.ndarray:
+    """The sim-only value for one obs term - the body of the old ``build()``, factored out
+    so ``build_shadow`` can fall back to exactly this per term rather than re-deriving it."""
+    f = e["func"]
+    if f == "builtin_sensor":
+      a, n = e["sensor"]
+      return np.asarray(sensordata[a : a + n], dtype=np.float64)
+    if f == "projected_gravity_from_sensor":
+      a, n = e["sensor"]
+      return -np.asarray(sensordata[a : a + n], dtype=np.float64)
+    if f == "joint_pos_rel":
+      h = max(e["history"], 1)
+      frames = list(q_history)[-h:]
+      while len(frames) < h:  # backfill, exactly like the env's CircularBuffer does
+        frames.insert(0, frames[0])
+      parts = [np.asarray(fr, dtype=np.float64)[e["idx"]] - e["default"] for fr in frames]
+      return np.concatenate(parts)
+    if f == "joint_vel_rel":
+      return np.asarray(qd, dtype=np.float64)[e["idx"]]
+    if f == "last_action":
+      return np.asarray(last_action, dtype=np.float64)
+    if f == "generated_commands":
+      return np.asarray(cmd, dtype=np.float64).reshape(3)
+    raise NotImplementedError(f)
+
   def build(
     self,
     q_history: "deque[np.ndarray] | list[np.ndarray]",
@@ -96,34 +122,111 @@ class ObsBuilder:
     cmd,
   ) -> np.ndarray:
     """``q_history`` is chronological, oldest first, each entry the FULL joint vector."""
-    parts = []
-    for e in self._plan:
-      f = e["func"]
-      if f == "builtin_sensor":
-        a, n = e["sensor"]
-        parts.append(np.asarray(sensordata[a : a + n], dtype=np.float64))
-      elif f == "projected_gravity_from_sensor":
-        a, n = e["sensor"]
-        parts.append(-np.asarray(sensordata[a : a + n], dtype=np.float64))
-      elif f == "joint_pos_rel":
-        h = max(e["history"], 1)
-        frames = list(q_history)[-h:]
-        while len(frames) < h:  # backfill, exactly like the env's CircularBuffer does
-          frames.insert(0, frames[0])
-        for fr in frames:
-          parts.append(np.asarray(fr, dtype=np.float64)[e["idx"]] - e["default"])
-      elif f == "joint_vel_rel":
-        parts.append(np.asarray(qd, dtype=np.float64)[e["idx"]])
-      elif f == "last_action":
-        parts.append(np.asarray(last_action, dtype=np.float64))
-      elif f == "generated_commands":
-        parts.append(np.asarray(cmd, dtype=np.float64).reshape(3))
-      else:
-        raise NotImplementedError(f)
+    parts = [self._sim_term(e, q_history, qd, sensordata, last_action, cmd) for e in self._plan]
     obs = np.concatenate(parts)
     if obs.shape[0] != self.obs_dim:
       raise ValueError(f"built {obs.shape[0]}-D observation, contract wants {self.obs_dim}")
     return obs.astype(np.float32)
+
+  def build_shadow(
+    self,
+    mux: "ObsSourceMux",
+    sim: dict,
+    real,
+    real_q_history: "deque[dict[str, float]] | list[dict[str, float]]",
+  ) -> tuple[np.ndarray, dict[str, str], list[str]]:
+    """Per-TERM sim/real mux for ``policy_shadow`` (design doc R10 - the action this produces
+    is for display/plot/record only; nothing here, or anywhere in this module, sends it
+    anywhere real).
+
+    ``sim`` is ``dict(q_history=, qd=, sensordata=, last_action=, cmd=)`` - the same inputs
+    ``build()`` takes, kept as a dict because not every term needs every one of them.
+    ``real`` is a ``telemetry.RealState``. ``real_q_history`` is a SEPARATE, purely-real
+    rolling buffer of ``{joint_name: q}`` dicts (never interleaved with ``sim["q_history"]``'s
+    sim frames within one term's window - R3/design item 1's "single-sourced per source").
+
+    A term whose mux says ``real`` but whose real data is missing or older than
+    ``mux.max_age_s`` falls back to sim for THAT TERM ONLY and is recorded in the returned
+    warnings list - it is never silently fed a stale number.
+    """
+    parts: list[np.ndarray] = []
+    effective: dict[str, str] = {}
+    warnings: list[str] = []
+    for e in self._plan:
+      name = e["name"]
+      want = mux.sources.get(name, "sim")
+      val = None
+      if want == "real":
+        val = self._real_term(e, real, real_q_history, mux.max_age_s)
+        if val is None:
+          warnings.append(f"{name}: real requested but stale/missing (>{mux.max_age_s}s) - fell back to sim")
+      if val is None:
+        val = self._sim_term(
+          e, sim["q_history"], sim["qd"], sim["sensordata"], sim["last_action"], sim["cmd"]
+        )
+        effective[name] = "sim"
+      else:
+        effective[name] = "real"
+      parts.append(val)
+    obs = np.concatenate(parts)
+    if obs.shape[0] != self.obs_dim:
+      raise ValueError(f"built {obs.shape[0]}-D observation, contract wants {self.obs_dim}")
+    return obs.astype(np.float32), effective, warnings
+
+  def _real_term(self, e: dict, real, real_q_history, max_age_s: float) -> np.ndarray | None:
+    """The real-sourced value for one term, or ``None`` if it is missing/stale (caller falls
+    back to sim). Each branch checks its OWN freshness clock - gyro/gravity share the IMU
+    stamp, q-history shares the joint-telemetry stamp, last_action/cmd share the PolicyIO
+    stamp - because these are genuinely different wire messages that can arrive at different
+    rates from a real host."""
+    f = e["func"]
+    if f == "builtin_sensor":
+      imu = real.imu
+      age = real.imu_age_s()
+      if imu is None or age is None or age > max_age_s:
+        return None
+      v = imu.get("gyro_rad_s")
+      if v is None:
+        return None
+      n = e["sensor"][1]
+      return np.asarray(v[:n], dtype=np.float64)
+    if f == "projected_gravity_from_sensor":
+      imu = real.imu
+      age = real.imu_age_s()
+      if imu is None or age is None or age > max_age_s:
+        return None
+      v = imu.get("gravity_b")
+      return None if v is None else np.asarray(v, dtype=np.float64)
+    if f == "joint_pos_rel":
+      age = real.age_s()
+      if age is None or age > max_age_s:
+        return None
+      names = e["joint_names"]
+      h = max(e["history"], 1)
+      frames = list(real_q_history)[-h:]
+      if not frames or any(fr.get(n) is None for fr in frames for n in names):
+        return None
+      while len(frames) < h:
+        frames.insert(0, frames[0])
+      parts = [np.array([fr[n] for n in names], dtype=np.float64) - e["default"] for fr in frames]
+      return np.concatenate(parts)
+    if f == "last_action":
+      age = real.policy_io_age_s()
+      pio = real.policy_io
+      if pio is None or age is None or age > max_age_s:
+        return None
+      act = pio.get("action")
+      if act is None or len(act) != len(self.mc.raw["action_joint_names"]):
+        return None
+      return np.asarray(act, dtype=np.float64)
+    if f == "generated_commands":
+      age = real.policy_io_age_s()
+      pio = real.policy_io
+      if pio is None or age is None or age > max_age_s:
+        return None
+      c = pio.get("cmd")
+      return None if c is None else np.asarray(c, dtype=np.float64).reshape(3)
+    return None  # joint_vel_rel and anything future: no real source defined yet
 
 
 # --------------------------------------------------------------------------- policies
@@ -194,21 +297,23 @@ class TorchPolicy:
 
 # --------------------------------------------------------------------------- mux
 class ObsSourceMux:
-  """Per observation TERM, where its value comes from.
+  """Per observation TERM, where its value SHOULD come from.
 
-  P2 wires ``sim`` for every term and exposes the switch; ``real`` becomes selectable when
-  the P3 telemetry bridge exists, at which point this also owns the staleness guard (a real
-  term older than its budget falls back to sim and raises a warning rather than feeding the
-  policy a stale number).
+  ``sources`` is the request (what the operator asked for); ``effective`` (set by
+  ``SimCore`` after each ``build_shadow`` call) is what was ACTUALLY used that tick - the two
+  differ exactly when a term asked for ``real`` but the real data was missing or older than
+  ``max_age_s`` (design item 1's staleness guard: never silently feed the policy a stale
+  number, always fall back to sim and say so).  ``policy_sim`` mode ignores this entirely
+  (every term is sim); only ``policy_shadow`` reads it, through ``ObsBuilder.build_shadow``.
   """
 
   SOURCES = ("sim", "real")
 
-  def __init__(self, term_names: list[str], max_age_s: float = 0.2):
+  def __init__(self, term_names: list[str], max_age_s: float = 0.1):
     self.sources = {n: "sim" for n in term_names}
+    self.effective: dict[str, str] = {n: "sim" for n in term_names}
+    self.warnings: list[str] = []
     self.max_age_s = max_age_s
-    self.real_values: dict[str, np.ndarray] = {}
-    self.real_stamp: dict[str, float] = {}
 
   def set(self, mapping: dict[str, str]) -> None:
     for k, v in mapping.items():
@@ -216,15 +321,16 @@ class ObsSourceMux:
         raise KeyError(f"unknown observation term {k!r}; have {list(self.sources)}")
       if v not in self.SOURCES:
         raise ValueError(f"source must be one of {self.SOURCES}, got {v!r}")
-      if v == "real":
-        raise NotImplementedError(
-          "per-term 'real' sourcing needs the P3 telemetry bridge; the switch is here so "
-          "the API and UI are complete, but there is no real stream to read yet"
-        )
       self.sources[k] = v
 
   def mask(self) -> list[str]:
+    """Requested mask ('R'/'S' per term, in term order)."""
     return [("R" if s == "real" else "S") for s in self.sources.values()]
+
+  def effective_mask(self) -> list[str]:
+    """Actually-used mask - identical to ``mask()`` outside policy_shadow, since only
+    ``build_shadow`` ever sets ``effective`` to anything but the request."""
+    return [("R" if s == "real" else "S") for s in self.effective.values()]
 
 
 # --------------------------------------------------------------------------- glue

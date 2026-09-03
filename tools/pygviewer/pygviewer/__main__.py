@@ -80,6 +80,11 @@ def main(argv: list[str] | None = None) -> int:
     "'free' in the panel (or here) for real standing dynamics.",
   )
   ap.add_argument("--keyframe", default="knees_bent", choices=("home", "knees_bent"))
+  ap.add_argument(
+    "--shadow-follow", action="store_true",
+    help="policy_shadow: let the shadow action step the LOCAL sim (never a real robot). "
+    "Off by default: policy_shadow only observes+displays.",
+  )
   args = ap.parse_args(argv)
 
   os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")  # the GPU belongs to the trainer
@@ -96,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
       return 3
     print("WARNING: " + msg, file=sys.stderr)
 
-  core = SimCore(c)
+  core = SimCore(c, shadow_follow=args.shadow_follow)
   core.reset(args.keyframe)
   if args.base != "free":
     core.set_base(mode=args.base)
