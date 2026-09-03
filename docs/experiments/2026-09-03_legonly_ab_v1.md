@@ -1,0 +1,69 @@
+# legonly_ab_v1 — LegOnly(12-DOF, 상체 없음) 본학습 (2026-09-03~) 〔진행 중 — 뼈대〕
+
+> *한 줄*: 상체를 완전히 제거한 12-DOF 다리전용 모델의 첫 본학습. v2s1(2026-08-28 완주,
+> `flat-2.5max` 확정 landing recipe + v4 스택 + vy stages + gated curriculum + critic DR 82ch)
+> 레시피를 그대로 상속하고 로봇 모델만 LegOnly로 교체한다. 오케스트레이션은
+> [[2026-09-03_legonly_ab_smoke_test]]에서 사전 검증(인프라 PASS) 완료.
+
+| | |
+|---|---|
+| 로봇 | `LegOnly_prototype-tempmass-motormeasured-armfix_v30_proxyfix_loop.xml` (23.630 kg, nbody=22, njnt=25, AB 폐루프 발목, waist-yaw 액추에이터 질량만 유지·DOF 없음) |
+| 질량 DR | `mass_dr_legonly_fastener50_prototype-tempmass.json` (body 귀속 수정 + docs/114 §5 나사 50% 완전성 방법론 합본의 leg-only 서브셋 — 스모크가 쓴 구버전 대비 갱신, docs/117 §2) |
+| 스택 | v2s1과 동일: 착지 레시피(INIT_MID·KNEE_EXT 2.0@25°·SOFT_LANDING_MODE=half) + vy 스테이지 + 게이트 커리큘럼 + critic DR 관측(82ch) + P2 entropy 어닐링(0.01→0.002) |
+| env | 16384 (v2s1과 동일 풀스케일) |
+| 로거 | wandb — launch 전 `wandb.Api()` 연결 확인 + launch 직후 실제 sync 확인:
+[nm2hk12i](https://wandb.ai/dongyub39-snu/pygmalion/runs/nm2hk12i) (P1, project `pygmalion`, entity `dongyub39-snu`) |
+| 계보 | 레시피 [[103_v2_training_plan]] §4a · 로봇 모델 [[117_model_finalization_and_oneleg_training_plan]] §0/§5 · 오케스트레이션 사전검증 [[2026-09-03_legonly_ab_smoke_test]] |
+
+## §1a 실행 명령
+
+```bash
+bash analysis/run_v2_scratch.sh \
+  --run legonly_ab_v1 --ankle AB --vy-stages \
+  --env PYG_MODEL_TAG=LegOnly_prototype-tempmass-motormeasured-armfix_v30_proxyfix \
+  --env PYG_MASS_DR_JSON=/home/syaro/MikuchanRemote/Human-Pygmalion/tools/robot_model/fusion_snapshots/v30_inspection/mass_dr_legonly_fastener50_prototype-tempmass.json
+```
+
+정확한 인자·P1/P2 환경 변수·승급 기록은 `analysis/out/v2_scratch_legonly_ab_v1.json`이 권위
+원장이다. `gate_watch.sh`로 게이트/하트비트 백그라운드 감시(docs 하드룰).
+
+## §1b LegOnly 특유 리스크 (스모크에서 확인됨, 재확인 불필요)
+
+- `PYG_MASS_DR_JSON`을 leg-only 서브셋으로 명시하지 않으면 P2에서 존재하지 않는
+  torso/shoulder_pitch_link/arm 바디명 참조로 크래시 예상 — 이번 실행은 위 명령대로 서브셋을
+  명시했으므로 안전. (스모크가 쓴 서브셋은 나사50% 미반영 구버전이었고, 이번 본학습은 §2에서
+  확정한 fastener50 합본 서브셋을 쓴다 — 유일한 차이.)
+- Critic 82D, Actor 45D/12-DOF는 스모크에서 실측 확인됨(v2s1과 동일 폭).
+
+## §2 이하 — 완주 후 측정으로 채운다
+
+측정은 v2s1과 동일하게 fc/fcp(15s dwell, 학습박스 전체 커버) + 200Hz 프로브 + §7 모터활용.
+LegOnly는 상체 질량이 없어 GRF/토크 절대값이 v2s1과 직접 비교 불가(체중 23.6 vs 31.3 kg) —
+비교는 BW/rated 비 등 정규화된 지표로.
+
+## §R 참조
+[[103_v2_training_plan]] · [[117_model_finalization_and_oneleg_training_plan]] ·
+[[2026-09-03_legonly_ab_smoke_test]] · [[110_prototype_tempmass_student_teacher_report]]
+
+## §2c 학습 중 리뷰 (게이트마다 스냅샷, docs/27 체크리스트)
+
+![progress](mujoco/assets/legonly_ab_v1_p1_progress.png)
+
+| 시각 | iter | reward | ep_len | noise σ | value loss | entropy | surrogate / LR | fell / low_base | err_vel xy / yaw | dr_factor / vx_max | thermal | 판정(docs/27) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 09-03 03:47 | 707 | 64.5 (50avg 64.8) | 983 | 0.317 | 0.0437 | -0.77 | 0.0012 / 1.1e-04 | 0.000 / 0.458 | 1.123 / 0.659 | 0.00 / 0.8 | 1.18 | (자동 스냅샷, 판정은 게이트 리뷰에서) |
+| 09-03 04:47 | 1413 | 58.1 (50avg 59.6) | 937 | 0.338 | 0.0536 | -0.10 | 0.0003 / 1.7e-04 | 0.000 / 1.750 | 1.496 / 0.575 | 0.00 / 1.2 | 1.33 | (자동 스냅샷, 판정은 게이트 리뷰에서) |
+| 09-03 05:47 | 2185 | 90.7 (50avg 90.5) | 991 | 0.286 | 0.0334 | -1.94 | -0.0013 / 7.6e-05 | 0.000 / 0.667 | 0.992 / 0.671 | 0.00 / 1.6 | 2.08 | (자동 스냅샷, 판정은 게이트 리뷰에서) |
+| 09-03 06:47 | 2975 | 90.3 (50avg 90.5) | 981 | 0.304 | 0.0487 | -1.30 | -0.0014 / 7.6e-05 | 0.000 / 0.333 | 1.120 / 0.683 | 0.00 / 2.0 | 2.19 | (자동 스냅샷, 판정은 게이트 리뷰에서) |
+| 09-03 07:47 | 3765 | 91.1 (50avg 89.8) | 1000 | 0.315 | 0.0438 | -0.89 | -0.0013 / 1.1e-04 | 0.000 / 0.083 | 1.327 / 0.723 | 0.00 / 2.5 | 2.22 | (자동 스냅샷, 판정은 게이트 리뷰에서) |
+| 09-03 08:44 | 4508 | 90.3 (50avg 90.6) | 985 | 0.321 | 0.0441 | -0.72 | -0.0011 / 7.6e-05 | 0.000 / 0.250 | 1.194 / 0.710 | 0.00 / 2.5 | 2.19 | P1 phase-end: review before P2 |
+| 09-03 08:47 | 4531 | 69.0 (50avg 35.7) | 762 | 0.323 | 0.0453 | -0.60 | 0.0010 / 7.6e-05 | 0.000 / 0.333 | 0.802 / 0.551 | 0.00 / 2.5 | 2.27 | (자동 스냅샷, 판정은 게이트 리뷰에서) |
+| 09-03 09:47 | 5058 | 91.6 (50avg 91.5) | 1000 | 0.319 | 0.0434 | -0.86 | -0.0011 / 1.1e-04 | 0.000 / 0.250 | 1.218 / 0.719 | 0.06 / 2.5 | 2.23 | (자동 스냅샷, 판정은 게이트 리뷰에서) |
+| 09-03 10:47 | 5579 | 92.3 (50avg 93.2) | 994 | 0.311 | 0.0468 | -1.13 | 0.0001 / 7.6e-05 | 0.000 / 0.167 | 1.203 / 0.720 | 0.11 / 2.5 | 2.29 | (자동 스냅샷, 판정은 게이트 리뷰에서) |
+
+**게이트 판정 (09-03 11:00, iter ~5.6k, 세션 복귀 후 첫 리뷰)**: **계속(진행)**. P1→P2 전이
+dip(4531: reward 69/50avg 35.7, ep_len 762)은 resume 직후 1시간 내 완전 회복(5058: 91.6/1000).
+낙상 0.000 유지, ep_len 포화(≈1000), noise σ 0.31 안정, DR 램프 정상 진행(0.00→0.11), vx_max 2.5
+도달. 보수적 중단 사유(docs/27) 없음. ⚠질적 플래그: 사용자 라이브 관찰(09-02 23:49) stiff-knee /
+AB 미활용 / toe-off 부재 — 별도 운동학 정량화(2026-09-03_legonly_gait_kinematics) + 리워드
+연구노트 진행 중. 리워드 개입은 연구노트 확정 후 결정(현 런은 계속 학습).
