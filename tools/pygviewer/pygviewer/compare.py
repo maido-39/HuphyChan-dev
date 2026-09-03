@@ -124,7 +124,7 @@ def condition_warnings(hdr_sim: dict, hdr_real: dict) -> list[str]:
 # --------------------------------------------------------------------------- R5
 def estimate_clock_offset_ms(
   rows_sim: list[dict], rows_real: list[dict], joint: str, field: str = "q",
-  dt: float = 0.01, n_segments: int = 4,
+  dt: float = 0.01, n_segments: int = 4, max_lag_s: float = 0.3,
 ) -> dict[str, Any]:
   """Cross-correlate ``field`` of ``joint`` between the two streams on a common time grid.
 
@@ -151,6 +151,17 @@ def estimate_clock_offset_ms(
   grid = np.arange(t0, t1, dt)
   gs = np.interp(grid, ts, vs)
   gr = np.interp(grid, tr, vr)
+  # Correlate EDGES (the gradient), not raw levels - design doc R5's "command edge cross-
+  # correlation". A held level (a step signal's long flat plateaus, or the mean of a slowly
+  # varying one) correlates with itself at every lag almost equally, which drowns out the
+  # timing information; the derivative turns a step into a sharp, well-localised spike and a
+  # sine into a phase-shifted cosine, both of which cross-correlate to a clean, unambiguous
+  # peak at the true lag. Caught by protocol.py step 5 (a genuine step trajectory): the raw-
+  # level version returned 0 ms against a 30 ms injected delay.
+  gs_edge = np.gradient(gs, dt)
+  gr_edge = np.gradient(gr, dt)
+
+  max_lag_n = max(1, int(round(max_lag_s / dt)))
 
   def _offset_ms(g_ref: np.ndarray, g_test: np.ndarray) -> float:
     a = g_ref - g_ref.mean()
@@ -158,17 +169,35 @@ def estimate_clock_offset_ms(
     if np.allclose(a, 0) or np.allclose(b, 0):
       return float("nan")
     corr = np.correlate(b, a, mode="full")
-    lag = np.argmax(corr) - (len(a) - 1)  # b lags a by `lag` samples when positive
+    zero_k = len(a) - 1  # index of corr[] whose lag is 0
+    # Restrict the search to +-max_lag_s: an unbounded 'full' search on a short/edge-sparse
+    # segment can lock onto a totally unrelated distant peak (protocol.py step 5 with the
+    # unbounded version once returned -965 ms for one segment of a signal with 5 ms of
+    # injected jitter, because that segment's edge was weak relative to sidelobes far away).
+    # A real transmission delay this tool is meant to catch is on the order of tens of ms,
+    # never seconds, so bounding the search is a physically reasonable prior, not a fudge.
+    lo, hi = max(0, zero_k - max_lag_n), min(len(corr), zero_k + max_lag_n + 1)
+    lag = (lo + np.argmax(corr[lo:hi])) - zero_k  # b lags a by `lag` samples when positive
     return lag * dt * 1e3
 
-  overall = _offset_ms(gs, gr)
+  overall = _offset_ms(gs_edge, gr_edge)
   seg_len = len(grid) // n_segments
   per_segment = []
-  if seg_len >= 10:
+  # A segment with no edge in it (e.g. a flat dwell between two steps of a staircase) has
+  # near-zero gradient energy and its cross-correlation peak is noise, not a timing estimate
+  # - including it would let one uninformative segment dominate the jitter std with a huge,
+  # meaningless outlier (caught by protocol.py step 5: an un-gated version of this reported
+  # 430 ms of "jitter" against a signal with 5 ms of injected jitter). Only segments with at
+  # least 20% of the WHOLE window's edge energy are counted.
+  global_edge_rms = float(np.sqrt(np.mean(gs_edge**2))) if len(gs_edge) else 0.0
+  if seg_len >= 10 and global_edge_rms > 0:
     for k in range(n_segments):
       sl = slice(k * seg_len, (k + 1) * seg_len)
+      seg_rms = float(np.sqrt(np.mean(gs_edge[sl] ** 2)))
+      if seg_rms < 0.2 * global_edge_rms:
+        continue
       try:
-        v = _offset_ms(gs[sl], gr[sl])
+        v = _offset_ms(gs_edge[sl], gr_edge[sl])
         if np.isfinite(v):
           per_segment.append(v)
       except Exception:
