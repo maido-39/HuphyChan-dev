@@ -65,6 +65,7 @@
 - (09-03, pygviewer bake에서 발견) **v30 리셋 키프레임 발바닥이 지면 아래 38.6 mm**: `_v2_standing_z()`가 pygmalion_v2 validation 파일의 `standing_base_z`(0.868)를 읽는데 v30은 발이 평면에 닿는 base z가 0.906 → 매 리셋 첫 ~20 step 동안 솔버가 발을 밀어냄(초기 접촉 스파이크·리셋 통계 오염 가능). legonly_ab_v2는 그대로 진행(단일변인 유지); **다음 런 전** v30 모델에서 standing_base_z 산출로 수정 + 리셋 첫 0.1 s GRF 확인.
 - (09-04) **리셋 폐루프 찢김 미수정**: bent 키프레임 크랭크 각이 v30 미러축(L_crank_A −Y, R_crank_B 축 반전)에 재표현되지 않아 reset 직후 L rod A 37.27 / R rod B 36.35 mm 찢김 → 크랭크 PD가 0.25 s 내 닫음(리셋 과도). 09-03 픽스 보고의 "`_reexpress_loop_pose` 0.001 mm"는 코드에 없음(허위 보고 정정). **다음 런 전** 키프레임 크랭크 각 부호 반전 + reset closure<1 mm 테스트 추가. 발바닥 38.6 mm 매몰 수정과 함께 처리.
 - (09-03, 동상) **RP 변형 ankle_pitch 액션 창 한쪽 5.4°**(default +0.360 vs clip 상한 +0.454) — v1 무릎 0° 창과 같은 계열(경미). RP 런 재개 전 default/clip 재검토.
+- (09-04 03:35) **mjlab 워크트리 미커밋 실변경 23파일**(gap 세션 산출: env_cfgs.py·rewards.py·curriculums.py·entity.py·sim.py·analysis/* 등 — 진행 중인 legonly_ab_v2가 이 상태의 코드로 학습 중, `repro/` 스냅샷에 보존됨). 코더의 `make format`이 260파일을 재포맷한 것은 AST 동일 240파일만 되돌림(안전 패치 `/home/syaro/pyg_fea/handoff/mjlab_format_fallout_20260904_0332.patch`). **런 완주 후 23파일 리뷰·커밋 필요**(방치 시 다음 세션이 의도치 않게 되돌릴 위험).
 - (09-03) **런 토큰 충돌**: 런처 기록 프리플라이트(`*<run>*.md` 정확히 1개)와 review_loop(`ls *RUN* | sort | tail -1`)가 둘 다 부분문자열 매칭 — 스모크 런/노트 이름에 본런 토큰을 넣으면 발사 거부 또는 스냅샷 오귀속. 규칙: 스모크는 `<family>_<variant>_smoke`처럼 본런 이름을 포함하지 않게(`legonly_ab_v2_smoke`→`legonly_ab_sideaware_smoke`로 개명 처리).
 - AB 하중률 교차엔진 ×3.88 미해결 = MuJoCo solref 컴플라이언스 PhysX 이식불가(수용된 한계).
 
