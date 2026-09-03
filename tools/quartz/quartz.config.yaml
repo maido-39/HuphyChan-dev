@@ -1,0 +1,219 @@
+# Quartz v5 site configuration for the Human-Pygmalion `docs/` folder.
+#
+# NOTE ON FORMAT: upstream Quartz moved from `quartz.config.ts` (v4) to this
+# YAML file in v5. This is the v5 format. It is copied into the image at
+# /app/quartz/quartz.config.yaml, which is where Quartz looks for it
+# (config-loader.ts resolves `$(cwd)/quartz.config.yaml`).
+#
+# Deltas from quartz.config.default.yaml are marked with `# CHANGED:`.
+configuration:
+  # CHANGED: site title shown in the sidebar / browser tab.
+  pageTitle: Human-Pygmalion docs
+  pageTitleSuffix: ""
+  enableSPA: true
+  enablePopovers: true
+  # CHANGED: default is `plausible`, which beacons every page view to an
+  # external analytics host. This is a LAN-internal research wiki -> off.
+  analytics: null
+  # CHANGED: most notes are Korean.
+  locale: ko-KR
+  # CHANGED: LAN address of this host. Only affects absolute URLs in the
+  # RSS feed / sitemap; page-to-page links are relative. Update if the host IP
+  # changes (see tools/quartz/README.md).
+  baseUrl: 192.168.20.177:8300
+  ignorePatterns:
+    # CHANGED: docs/ holds 189 mp4 files totalling 3.3 GB (89% of the folder)
+    # on an NFS mount. Copying those into the build output on every rebuild is
+    # the single most expensive thing in the build, so they are excluded here
+    # and served straight from the read-only source mount by serve.mjs instead.
+    # Net effect: the `![[...mp4]]` embeds still play; nothing is duplicated.
+    - "**/*.mp4"
+    # CHANGED: bookkeeping files that are not content.
+    - ".briefing_state.json"
+    - "**/.audit_skip"
+    - "**/*.bak"
+    - "private/**"
+    - ".obsidian"
+  theme:
+    # CHANGED: `googleFonts` makes every page load pull webfonts from
+    # fonts.googleapis.com. LAN clients may have no internet route, and the
+    # Korean text renders fine in the system stack -> serve locally.
+    fontOrigin: local
+    cdnCaching: true
+    typography:
+      header: Schibsted Grotesk
+      body: Source Sans Pro
+      code: IBM Plex Mono
+    colors:
+      lightMode:
+        light: "#faf8f8"
+        lightgray: "#e5e5e5"
+        gray: "#b8b8b8"
+        darkgray: "#4e4e4e"
+        dark: "#2b2b2b"
+        secondary: "#284b63"
+        tertiary: "#84a59d"
+        highlight: rgba(143, 159, 169, 0.15)
+        textHighlight: "#fff23688"
+      darkMode:
+        light: "#161618"
+        lightgray: "#393639"
+        gray: "#646464"
+        darkgray: "#d4d4d4"
+        dark: "#ebebec"
+        secondary: "#7b97aa"
+        tertiary: "#84a59d"
+        highlight: rgba(143, 159, 169, 0.15)
+        textHighlight: "#b3aa0288"
+plugins:
+  # CHANGED: ADDED -- this is not in quartz.config.default.yaml, and without it
+  # every page renders with the title "제목 없음" / "Untitled". note-properties is
+  # the transformer that parses frontmatter and populates the page title (the
+  # v5 successor to v4's Plugin.FrontMatter). Only 1 of 143 top-level notes here
+  # has frontmatter at all, so it is really the title fallback we need.
+  # No `layout:` entry and hidePropertiesView -- we want the transformer, not
+  # Obsidian's visible properties panel on top of every note.
+  - source: "@quartz-community/note-properties"
+    enabled: true
+    options:
+      hidePropertiesView: true
+    order: 5
+  - source: "@quartz-community/created-modified-date"
+    enabled: true
+    options:
+      defaultDateType: modified
+      # CHANGED: dropped "git" from the priority list. The content mount is
+      # docs/ alone -- there is no .git in it -- so every one of the 428 notes
+      # would spawn a `git log` that finds nothing, over NFS, on every build.
+      priority:
+        - frontmatter
+        - filesystem
+    order: 10
+  - source: "@quartz-community/syntax-highlighting"
+    enabled: true
+    options:
+      theme:
+        light: github-light
+        dark: github-dark
+      keepBackground: false
+    order: 20
+  # Obsidian wikilinks `[[note]]`, embeds `![[img.png]]`, callouts, comments.
+  - source: "@quartz-community/obsidian-flavored-markdown"
+    enabled: true
+    options:
+      enableInHtmlEmbed: false
+      enableCheckbox: true
+    order: 30
+  - source: "@quartz-community/github-flavored-markdown"
+    enabled: true
+    order: 40
+  - source: "@quartz-community/table-of-contents"
+    enabled: true
+    order: 50
+    layout:
+      position: right
+      priority: 30
+  - source: "@quartz-community/crawl-links"
+    enabled: true
+    options:
+      # `shortest` is Obsidian's vault-wide resolution: a bare `[[66_registry]]`
+      # or `![[plot.png]]` is matched against every file in the vault, not just
+      # the current folder. 510 of the 512 image embeds in docs/ are bare, so
+      # this setting is what makes them resolve at all.
+      markdownLinkResolution: shortest
+    order: 60
+  - source: "@quartz-community/description"
+    enabled: true
+    order: 70
+  # Notes use $...$ / $$...$$ MathJax per the project's Obsidian math rule.
+  - source: "@quartz-community/latex"
+    enabled: true
+    options:
+      renderEngine: katex
+    order: 80
+  - source: "@quartz-community/quartz-fonts"
+    enabled: true
+  - source: "@quartz-community/remove-draft"
+    enabled: true
+  - source: "@quartz-community/alias-redirects"
+    enabled: true
+  - source: "@quartz-community/content-index"
+    enabled: true
+    options:
+      enableSiteMap: true
+      enableRSS: true
+  - source: "@quartz-community/favicon"
+    enabled: true
+  # CHANGED: disabled. og-image renders a social-preview PNG per page via
+  # satori; 428 pages of that dominates build time and nothing on a LAN wiki
+  # consumes OpenGraph cards.
+  - source: "@quartz-community/og-image"
+    enabled: false
+  # CHANGED: disabled. CNAME emission is for GitHub Pages custom domains.
+  - source: "@quartz-community/cname"
+    enabled: false
+  # Renders docs/*.canvas (experiment_map.canvas etc.) as browsable pages.
+  - source: "@quartz-community/canvas-page"
+    enabled: true
+  - source: "@quartz-community/content-page"
+    enabled: true
+  - source: "@quartz-community/folder-page"
+    enabled: true
+  - source: "@quartz-community/tag-page"
+    enabled: true
+  - source: "@quartz-community/explorer"
+    enabled: true
+    layout:
+      position: left
+      priority: 50
+  - source: "@quartz-community/graph"
+    enabled: true
+    layout:
+      position: right
+      priority: 10
+  - source: "@quartz-community/search"
+    enabled: true
+    layout:
+      position: left
+      priority: 20
+      group: toolbar
+      groupOptions:
+        grow: true
+  - source: "@quartz-community/backlinks"
+    enabled: true
+    layout:
+      position: right
+      priority: 50
+  - source: "@quartz-community/article-title"
+    enabled: true
+    layout:
+      position: beforeBody
+      priority: 10
+  - source: "@quartz-community/content-meta"
+    enabled: true
+    layout:
+      position: beforeBody
+      priority: 20
+  - source: "@quartz-community/page-title"
+    enabled: true
+    layout:
+      position: left
+      priority: 10
+  - source: "@quartz-community/darkmode"
+    enabled: true
+    layout:
+      position: left
+      priority: 30
+      group: toolbar
+  - source: "@quartz-community/reader-mode"
+    enabled: true
+    layout:
+      position: left
+      priority: 35
+      group: toolbar
+  - source: "@quartz-community/breadcrumbs"
+    enabled: true
+    layout:
+      position: beforeBody
+      priority: 5
+      condition: not-index
