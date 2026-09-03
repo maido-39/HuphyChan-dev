@@ -28,7 +28,7 @@ Every streamed object:
 clock**, not wall time; the receiver estimates the offset (protocol step 5) rather than
 assuming the two hosts are synchronised.
 
-## Implemented now (P0/P1)
+## Implemented now (P0/P1/P2)
 
 | method | path | body | returns |
 |---|---|---|---|
@@ -40,9 +40,17 @@ assuming the two hosts are synchronised.
 | POST | `/ankle` | `{"side": "L", "pitch": -0.30, "roll": 0.10}` | AB only: foot-space command, inverted to a crank pair. 409 on an RP variant |
 | POST | `/base` | `{"mode": "fixed", "pos": [0,0,1.05], "rpy": [0,0.1,0], "pivot_offset": [0,0,0.06], "ground": true}` | any subset; omitted fields keep their value |
 | POST | `/reset` | `{"keyframe": "knees_bent"}` | restores joints **and** base pose |
-| POST | `/mode` | `{"mode": "manual"}` | `idle`/`manual` now; the others answer 501 with their phase |
+| POST | `/mode` | `{"mode": "manual"}` | `idle`/`manual`/`policy_sim`/`policy_shadow` now (the latter two 409 if no policy is loaded); `real_replay`/`file_replay` answer 501 (P3/P4) |
+| POST | `/policy/load` | `{"name": "<baked>"}` or `{"onnx": "...", "pt": null}` | loads a baked ONNX (default) or a direct `.pt` (slow, mjlab env build); 409 if `policy_contract.model_contract_sha` &ne; the loaded model's, or the default pose differs by > 1e-4 rad |
+| GET | `/policy/list` | - | baked policies next to this model's cache entry, each flagged `compatible` against the live contract sha |
+| POST | `/policy/unload` | - | drops the policy, falls back to `manual` |
+| POST | `/policy/cmd` | `{"vx": 0.6, "vy": 0.0, "wz": 0.0}` | velocity command consumed by `policy_sim` / `policy_shadow` |
+| GET | `/policy/io` | - | `PolicyIO`: latest built observation, action, target and cmd; 409 if no policy loaded |
+| GET/POST | `/obs_source` | `{"sources": {"projected_gravity": "sim"}}` | per observation TERM, `sim` (works) or `real` (501 - needs the P3 bridge); 409 if no policy loaded |
+| GET | `/gains` | - | `{source: train\|real, gains: {joint: {kp, kd, kp_train, kd_train, effort, overridden}}}` |
+| POST | `/gains` | `{"source": "real"}` or `{"overrides": {...}}` | switches PD source; `real` is rejected (400) unless the contract carries a `real_gains` table - the viewer never invents hardware numbers |
 | GET | `/schema/deferred` | - | JSON schemas of the request models whose endpoints are still 501 |
-| WS | `/ws/out?hz=50&types=JointState,Status` | - | latest-only stream, coalesced at `hz` (1-100, default 30). A slow consumer gets fewer frames; nothing is queued |
+| WS | `/ws/out?hz=50&types=JointState,Status,PolicyIO` | - | latest-only stream, coalesced at `hz` (1-100, default 30). A slow consumer gets fewer frames; nothing is queued |
 
 Example:
 
@@ -59,10 +67,7 @@ websocat 'ws://192.168.20.177:8095/ws/out?hz=50&types=JointState'
 
 | path | phase | body model | notes |
 |---|---|---|---|
-| `POST /policy/load` | P2 | `PolicyLoadIn{onnx?, pt?, run_dir?}` | must REFUSE a policy whose `policy_contract.model_contract_sha` differs from the loaded model's |
-| `POST /policy/cmd` | P2 | `{vx, vy, wz}` | velocity command for `policy_sim` / `policy_shadow` |
-| `POST /gains` | P2 | `GainsIn{source: train\|real, overrides}` | the response-comparison overlay is meaningless until the two sides' PD gains match |
-| `POST /obs_source` | P4 | `ObsSourceIn{sources: {term: src}}` | per observation TERM, sim or real, with a staleness guard |
+| `POST /obs_source` with a `real` value | P3 | `ObsSourceIn{sources: {term: src}}` | the switch and staleness-guard plumbing (`ObsSourceMux`) exist now; there is no real stream to route from until the telemetry bridge lands |
 | `POST /script/run` | P4 | `{path, run_id}` | `{joint_names, rows: [[t_s, q...]]}` played in `manual`; the robot replays the same file |
 | `POST /record/start`, `/record/stop` | P3 | - | streaming `jsonl.gz`, header carries contract hash, base mode, gains and toggles |
 | `WS /ws/in` | P3 | `JointState` / `ImuState` | telemetry ingest |
@@ -101,9 +106,10 @@ future deployment runtime has an exact contract; `modes.py` carries
 `SHADOW_MAY_TRANSMIT = False` as a constant rather than a setting, so enabling it takes a
 code change and a review.
 
-### `PolicyIO` (P2)
+### `PolicyIO` (implemented)
 
-`{obs[], obs_sources{term: src}, action[], target[], cmd[vx, vy, wz]}`.
+`{obs[], obs_sources{term: src}, action[], target[], cmd[vx, vy, wz]}`.  `GET /policy/io`
+returns one shot; `WS /ws/out?types=PolicyIO` streams it while a policy is loaded.
 
 ### `Status` (implemented)
 

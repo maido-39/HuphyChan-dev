@@ -53,7 +53,7 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
 |---|---|---|---|
 | P0 | bake 6변형, SimCore, viser 씬, `/status` | 6 mjb+json; headless 5 s ≥195 Hz 물리·RSS<600 MB; `curl :8095/status` | ✅ 21:55 (199.8 Hz·drops 0·RSS 147 MB) |
 | P1 | 관절 UI/API, base 3모드, 지면, 폐루프 settle, 플롯 | `test_basefix`(fixed 드리프트<1e-6, pivot 위치<1e-4) · `test_loop_settle`(vs loop_ankle_verify.json, closure<0.01 mm) · `test_bake_contract` · `test_sim_rate` | ✅ 22:05 (98 tests / 11.7 s, 전부 통과) |
-| P2 | ONNX/.pt 정책, obs 빌더, 게인 소스 | `test_policy_parity`(<1e-4) · `test_obs_order` · 워킹 스모크(drift 러너와 vx 오차≤0.05) | ⏳ |
+| P2 | ONNX/.pt 정책, obs 빌더, 게인 소스 | `test_policy_parity`(<1e-4) · `test_obs_order` · 워킹 스모크(drift 러너와 vx 오차≤0.05) | ✅ 09-03 22:40 |
 | P3 | 스키마·WS/REST·HUPHY UDP 어댑터·더미·레코더 | `test_schema` · 더미 sine→real_replay · WS 50 Hz · 10 s 기록 RSS 불증 | ⏳ |
 | P4 | 스크립트 플레이어·compare·obs mux·섀도우 | 지연 주입 더미 오버레이 png · 더미 IMU가 액션 변화 | ⏳ |
 | 등록 | dashboard PORTS·start_all·README·launch.json·브리핑 | — | ✅ 22:20 (8094/8095) |
@@ -69,6 +69,14 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
 ## 9. 진행 로그 (코더가 phase 완료마다 추가 — 시각·결과 숫자·커밋·문제)
 - 09-03 21:15 — 계획 승인, P0/P1 구현 착수(코더). 이 문서 생성.
 - 09-03 22:20 — **P0+P1 완료**. 6변형 bake, SimCore 200/50 Hz, viser 패널, FastAPI, pytest 98개 통과. 커밋 `70eb5aa`(본체·3,710줄) + `c6aef14`(`-m tools.pygviewer` 진입점). 가동 중: viser `http://192.168.20.177:8094`, API `http://192.168.20.177:8095/docs`, 로그 `tools/pygviewer/logs/pygviewer.log`. 상세는 아래.
+- 09-03 22:45 — **P2 완료** (인계받은 코더). 커밋 `e05db7f`(WIP, 이전 코더가 API 과부하로 4회 끊긴 뒤 보존) 확인 결과, 실제로는 §6 P2 완료기준 대부분이 이미 구현돼 있었다: `policy.py`(ObsBuilder/OnnxPolicy/TorchPolicy/ObsSourceMux/action_to_target/check_compatible), `api.py`의 `/policy/load` `/policy/list` `/policy/unload` `/policy/cmd` `/policy/io` `/obs_source` `/gains`, `sim_core.py`의 `_policy_tick`(50 Hz 컨트롤 틱에 정책 추론), `ui.py`의 Policy/Gains 폴더(vx/vy/wz 슬라이더·run mode·obs-source 드롭다운·소스 마스크 문자열 readout). 인계 노트가 "Policy·Gains 폴더 구현 중"이라 적어둔 지점보다 실제 진행이 앞서 있었다.
+  - **찾은 실버그**: `POST /mode`가 P1 시절 동기 사전검사(`mode not in ("idle","manual")`)를 그대로 두고 있어 `policy_sim`을 501로 거부했다 — `sim_core._apply_cmd`는 이미 받아주는데도. UI 패널은 `core._apply_cmd`를 직접 호출해 API를 건너뛰므로 패널 테스트로는 안 보였고, 재기동한 뷰어에 curl로 엔드포인트를 하나씩 찔러보다 발견. `api.py`를 고쳐 `real_replay`/`file_replay`만 501(P3/P4), `policy_sim`/`policy_shadow`는 정책 미로드시 409로 정정. 회귀 테스트 `tests/test_api_policy.py`(8케이스, FastAPI TestClient) 추가. pytest 전체 **130 passed**(기존 122 + 신규 8), ~13 s. 커밋 `5912895`.
+  - **스모크(`smoke_walk.py`, model_700 ONNX, mjlab env 불필요)**: 정지(cmd=0, 15 s) `fell=False`, base_z **0.9040 m**(mjlab gait-probe 기준 0.9026, Δ**+0.0014 m**, 기준 0.02 이내), L_knee **+0.0924 rad**(기준 +0.1015, Δ**-0.0091 rad = -0.52°**), R_knee **-0.1061 rad**(기준 -0.1027, Δ**-0.0034 rad = -0.19°**) — 둘 다 ±2° 기대치 이내. 보행(cmd vx=0.6 m/s, 15 s) `fell=False`, vx(base-frame, t≥4s) **0.545 m/s**, 오차 **0.055 m/s**(기준 ≤0.1), 15 s에 7.25 m 이동. `closure worst 37.27 mm`는 새 버그가 아니라 §9 항목4(bent 키프레임 발바닥 침투, 38.6 mm)와 같은 계열의 기존 기록값 — 리셋 직후부터 고정, 재확인만 함.
+  - **API 종단검증**(재기동한 라이브 프로세스, curl): `/policy/list`(2개 model_700/model_5200 모두 compatible=true) → `/policy/load`(name=model_700, obs_dim 45, action_dim 12, layout 5항: base_ang_vel/projected_gravity/motor_pos_history/actions/command) → `/mode policy_sim`(수정 후 200 OK, base free+ground on 상태로 실제 주행 확인) → `/policy/cmd` → `/policy/io`(obs_sources 5항 전부 sim) → `/obs_source real`(501, P3 안내문) → `/gains`(GET: train 소스 kp/kd + kp_train/kd_train 대조표; POST source=real: real_gains 테이블 없어 400) → `/policy/unload` → `/mode idle` 순으로 전부 기대대로 응답.
+  - **뷰어 재기동**: 기존 PID 3270444(21:49 기동, e05db7f 이전 API 코드를 메모리에 물고 있던 프로세스 — curl로 `/policy/load`가 구버전 501을 반환해 발견)를 kill, `setsid nohup ... run.py --variant LegOnly-AB --port 8094 --api-port 8095`로 재기동. `curl :8095/status` 200, contract_hash 갱신 확인, `/docs`(OpenAPI) 200.
+  - **문서 갱신**: `tools/pygviewer/API.md`(정책/게인 엔드포인트를 "구현됨" 표로 이동, `/mode` 행 정정), `tools/pygviewer/README.md`(상태 줄 P2 포함, 신규 "Policy (P2)" 절, Tests 표에 `test_policy_parity.py`/`test_obs_order.py`/`test_api_policy.py` 3행 추가, layout 표의 `policy.py` 설명 갱신).
+  - **`.pt` 직접 로드 수동 1회 확인**(지시대로 자동화하지 않고 curl 1회): `POST /policy/load {"pt": ".../model_700.pt", "allow_uncontracted": true}` → `kind: torch`, 로드 10.9 s, RSS 225 MB → **1327.3 MB**(문서화된 ~11 s/~1.3 GB와 일치). `mode policy_sim` + `cmd vx=0.4`로 3 s 구동 후 base 안 넘어짐(로드 직후 free+ground에서 정상 기립) 확인, 곧바로 unload해 메모리 반환. 이 확인 도중 재기동 타이밍 실수로 옛 `/mode` 버그를 한 번 더 재현했다가(재기동 전 api.py만 고치고 프로세스를 안 띄워서) 재기동 후 재확인 — 최종 결과는 위 API 종단검증과 동일하게 전부 통과.
+  - **미해결**: `test_policy_parity.py`/`test_obs_order.py`는 인계 시점에 이미 있었고 이번 세션에서 새로 작성하지 않음(둘 다 통과 확인만); `ankle_pitch` RP 5.4° 창 관측(§9 추가 관측)은 여전히 관찰만 된 상태; `closure worst 37.27mm`(스모크 로그)가 기존 38.6mm 침투 기록과 정확히 같은 수치인지는 추가로 재확인하지 않음(계열은 같다고 판단).
 
 ### P0/P1 결과 (2026-09-03, 코더)
 

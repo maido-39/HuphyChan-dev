@@ -5,9 +5,11 @@ it as a 3D scene with a control panel (viser, **:8094**) plus a REST/WebSocket A
 (FastAPI, **:8095**, OpenAPI at `/docs`).  Built so that a number read here is comparable to
 the same number read in training - not merely similar.
 
-Status: **P0 (bake + sim loop + scene + /status) and P1 (manual joint control, base fixing,
-ground toggle, plots) are implemented.**  P2 policy, P3 telemetry, P4 comparison are
-skeletons with the interfaces fixed - see `docs/121_pygviewer_design.md` section 6.
+Status: **P0 (bake + sim loop + scene + /status), P1 (manual joint control, base fixing,
+ground toggle, plots) and P2 (ONNX/`.pt` policy, obs builder, PD gain source, velocity
+command, per-term obs-source switch) are implemented.**  P3 telemetry bridge and P4
+comparison/shadow mode are skeletons with the interfaces fixed - see
+`docs/121_pygviewer_design.md` section 6.
 
 ---
 
@@ -119,6 +121,48 @@ the same on both legs.  Note that a range-only mirror test is not enough: `ankle
 the same symmetric range on both legs and *opposite axes*, so the contract flags
 `range_mirrored` and `axis_mirrored` separately.
 
+## Policy (P2)
+
+Two ways to drive the sim from a trained checkpoint. Both express the action exactly the way
+`mjlab`'s `JointPositionAction` does: `target = clip(raw_action * action_scale + default_q,
+safe_clip_lo, safe_clip_hi)`, with `raw_action` first clamped to +-`clip_actions`.
+
+```bash
+# 1. bake a .pt into ONNX + a policy_contract.json + a parity/obs-order fixture
+CUDA_VISIBLE_DEVICES="" mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/run.py \
+    bake policy --pt <run_dir>/model_5200.pt --variant LegOnly-AB
+
+# 2. load it into a running viewer and drive it (or use the "Policy" GUI folder)
+curl -s -X POST :8095/policy/load -H 'content-type: application/json' \
+     -d '{"name": "LegOnly-AB__<run>__model_5200"}'
+curl -s -X POST :8095/mode -H 'content-type: application/json' -d '{"mode": "policy_sim"}'
+curl -s -X POST :8095/policy/cmd -H 'content-type: application/json' \
+     -d '{"vx": 0.6, "vy": 0.0, "wz": 0.0}'
+curl -s :8095/policy/io | jq '.action, .target, .cmd'
+```
+
+`ObsBuilder` reads the observation layout (term order, joint subsets, history length) from
+the policy's own baked contract - nothing about "45-D" or "gyro first" is hardcoded, so a
+future obs config baked with different toggles (e.g. `PYG_STUDENT_TEACHER`) just works.
+`check_compatible()` REFUSES to load a policy whose `model_contract_sha` does not match the
+live model, or whose default pose differs by more than 1e-4 rad (the default pose is the
+action offset, so a mismatch silently biases every target) - a v4-policy-on-v2-model mistake
+has already happened once on this project, this makes it a hard error instead.
+
+`POST /obs_source` routes each observation TERM independently between `sim` (works today) and
+`real` (501 until the P3 telemetry bridge exists; the switch, the mask string and the
+staleness budget in `ObsSourceMux` are already wired so the P3 handoff is "supply real
+values", not "invent the plumbing"). `GET/POST /gains` switches between `train` (the
+contract's own kp/kd, what the policy was optimised against) and `real` (rejected with 400
+unless the contract carries a `real_gains` table - the viewer will not invent hardware
+numbers, because a response overlay is meaningless until both sides' gains match).
+
+`smoke_walk.py` is the acceptance check outside pytest (mjlab env import, ~40 s, so it is run
+by hand, not on every test invocation): stand at `cmd=0` and compare base height / knee angle
+against `mujoco-sim/mjlab/analysis/out/legonly_ab_v2_vel0_vx0.npz` (produced by
+`analysis/gait_kinematics_probe.py` from the *same checkpoint*, tolerance 0.02), then walk at
+`cmd_vx` and check it does not fall and tracks within ~0.1 m/s.
+
 ## Tests
 
 ```bash
@@ -126,7 +170,7 @@ cd tools/pygviewer && CUDA_VISIBLE_DEVICES="" \
     ../../mujoco-sim/mjlab/.venv/bin/python3 -m pytest
 ```
 
-98 tests, ~12 s, CPU only:
+130 tests, ~13 s, CPU only:
 
 | file | what it pins |
 |---|---|
@@ -134,6 +178,9 @@ cd tools/pygviewer && CUDA_VISIBLE_DEVICES="" \
 | `test_basefix.py` | fixed drift < 1e-6 m per 2 s and pose error < 1e-5 m; pivot point < 1e-4 m with the orientation actually free; ground carries the robot when on and it free-falls when off; keyframe sole penetration; gravity untouched |
 | `test_loop_settle.py` | AB loop closure < 0.01 mm at rest and at six foot-space commands; each command lands within 0.05 rad; transmission magnitude within 5 % of `loop_ankle_verify.json`; the two cranks of one leg have opposite axes; RP drives its ankle directly |
 | `test_sim_rate.py` | >= 195 Hz physics wall-clock with 0 drops and < 600 MB RSS, AB and RP; snapshot/queue do not accumulate |
+| `test_policy_parity.py` | ONNX vs the exported `.pt` agree within 1e-4 on 32 held-out observations; obs/action dims match the contract; a foreign-model or shifted-default-pose contract is REFUSED |
+| `test_obs_order.py` | `ObsBuilder` reproduces the env's own 40-step obs trace term-by-term (order, joint subset, history backfill), for every baked policy |
+| `test_api_policy.py` | the FastAPI layer actually exposes what P2 implements (not a stale P1 allow-list): `/mode` accepts `policy_sim` only once a policy is loaded and rejects replay modes as 501; `/policy/load` 409s a foreign contract and 404s an unknown name; `/policy/cmd` + `/policy/io` round-trip; `/obs_source` 501s `real`; `/gains` 400s `real` with no hardware table |
 
 Evidence figure (no OpenGL on this host, so it is matplotlib):
 `mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/make_verification_figure.py` ->
@@ -190,6 +237,14 @@ tools/pygviewer/
     ui.py                    viser panel
     api.py                   FastAPI REST + WS
     schema.py                wire schema v1 (pydantic), including the deferred models
-    policy.py modes.py record.py bridge/   P2-P4 skeletons with the interfaces fixed
+    policy.py                ObsBuilder, OnnxPolicy (default), TorchPolicy (.pt via mjlab,
+                             ~11s/~1.3GB, lazy import), ObsSourceMux, action_to_target,
+                             check_compatible (contract-sha + default-pose gate)
+    _bake_policy.py          `.pt` -> ONNX export + parity/obs-order fixtures (bake-time only)
+    modes.py record.py bridge/   P3/P4 skeletons with the interfaces fixed
   tests/
 ```
+
+`bake.py` and `_bake_policy.py` are the only modules that import mjlab/torch at module load
+time (bake-time subprocesses). `policy.py` imports them lazily, inside `TorchPolicy.__init__`
+only, so `OnnxPolicy` and everything else in the viewer process stays fast to import.
