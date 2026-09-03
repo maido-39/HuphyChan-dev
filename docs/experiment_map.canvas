@@ -839,6 +839,36 @@
    "width": 420,
    "height": 260,
    "color": "4"
+  },
+  {
+   "id": "n_v30_st45_smoke",
+   "type": "file",
+   "file": "experiments/2026-09-02_v30proxyfix_AB_st45_imuclip_idrsmoke_test.md",
+   "x": 18580,
+   "y": 300,
+   "width": 440,
+   "height": 320,
+   "color": "6"
+  },
+  {
+   "id": "n_legonly_smoke",
+   "type": "file",
+   "file": "experiments/2026-09-03_legonly_ab_smoke_test.md",
+   "x": 19060,
+   "y": 300,
+   "width": 440,
+   "height": 320,
+   "color": "6"
+  },
+  {
+   "id": "n_legonly_v1",
+   "type": "file",
+   "file": "experiments/2026-09-03_legonly_ab_v1.md",
+   "x": 19540,
+   "y": 300,
+   "width": 440,
+   "height": 320,
+   "color": "6"
   }
  ],
  "edges": [
@@ -1580,6 +1610,32 @@
    "toNode": "n_ankleaudit",
    "toSide": "left",
    "label": "발목 사용 감사"
+  },
+  {
+   "id": "e_n_v2s1_n_v30_st45_smoke",
+   "fromNode": "n_v2s1",
+   "fromSide": "right",
+   "toNode": "n_v30_st45_smoke",
+   "toSide": "left",
+   "label": "v30 질량·45D 센서·clip·DR 재검증"
+  },
+  {
+   "id": "e_v2s1_legonly_smoke",
+   "fromNode": "n_v2s1",
+   "toNode": "n_legonly_smoke",
+   "label": "recipe inherited, robot model swapped -> LegOnly 12-DOF"
+  },
+  {
+   "id": "e_smoke_v1",
+   "fromNode": "n_legonly_smoke",
+   "toNode": "n_legonly_v1",
+   "label": "smoke PASS -> real 16384-env launch"
+  },
+  {
+   "id": "e_v2s1_legonly_v1_direct",
+   "fromNode": "n_v2s1",
+   "toNode": "n_legonly_v1",
+   "label": "recipe inherited"
   }
  ]
 }

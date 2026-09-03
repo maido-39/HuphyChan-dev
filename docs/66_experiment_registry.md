@@ -114,6 +114,7 @@
 
 | 런 | 변인 (vs 직전) | 정량 | 판정 |
 |---|---|---|---|
+| **v30proxyfix_AB_st45_imuclip_idrsmoke_test** [[2026-09-02_v30proxyfix_AB_st45_imuclip_idrsmoke_test]] | 최신 35.707 kg proxyfix 모델 + 45D Student + IMU-frame gravity + 90% ROM target clamp + P2 관성 DR 램프의 1024-env 인프라 재시험 | P1 stage 4 settle@154, checkpoint 200, fell 0.000; P2 `dr_factor` 0.0375@203→**1.000@324**, checkpoint 399 | ✅ 인프라 PASS. 보행성능 판정용 아님; 본 학습 전 wiring/기록 자동화 확인 |
 | ~~ankleAB_c1 / ankleRP_c1~~ (`20-45-09/27`, ✗ iter 172 중단) | 팔이 영점(매달림)으로 weld → hip_roll 링크와 14 mm 관통 | — | ✗ 상체 팔 15° 외전 고정 후 c2로 재시작 |
 | (config-test) ankleAB_softtest / softtest2 [[2026-08-24_ankleAB_softtest]] [[2026-08-24_ankleAB_softtest2]] (02:00 / 02:43, c2r 3100+800 iter, 1024 env) | soft-landing 항 형태: 선형 w −2 vs 제곱 w −1 | 접지속도 1.24 → **2.42**(선형, 해킹) / **0.98**(제곱) m/s; 피크 1.50 → 1.66 / 1.31 BW | 선형 기각·제곱 채택 → c3 |
 | **ankleAB_c3 / ankleRP_c3** "flat-2.5max gen21-bundle+**soft-landing** curriculum-dr+push ankle-AB / -RP (2026-08-24)" (`03-22-35` / `03-22-58`, ✅**완주 32,000** 2026-08-25 23:06, 39 h 45 m) [[2026-08-24_ankleAB_c3]] [[2026-08-24_ankleRP_c3]] | c2 + `PYG_SOFT_LANDING`(제곱 접지속도 w −1·h 0.10, GRF 캡 420/560) — 두 arm 동일, **유일 변인 = 발목 기구학** | **낙상 0.000 양쪽**(vx 2.5·DR 만배 12k iter 소화). fc 전체박스 121명령×15 s: 추종 순수vx **AB 0.89 / RP 0.90**, vy 0.68 / 0.75. **모터 여유(2026-08-26 정정, 모터축 사상): AB 0.51–0.53 / RP 0.44–0.55, 포화 ≤0.03 % — 사실상 동률** (앞선 'RP 0.80·3.3 %'는 발목축을 모터곡선에 대조한 오류). 발목축 수요 p99 59–65 N·m → **RS03 직결 불가, 2-RSU 증폭 필요**. 에너지 CoT RP 0.277 < AB 0.314(−12 %), 충격 무승부, 보폭 AB 273 vs RP 175 mm. ★두 arm 모두 **명령 0.25 m/s 무시**(리워드 산술상 정지가 최적) | ✅ 차이는 하드웨어가 아니라 **행동공간**. RP = 에너지 −12 %·학습 1.7배, AB = 인간형 파형·넓은 보폭. 완주 측정 종료: fc/fcp 121명령×15 s, 평가기 576 ep/arm **성공률 100 %**, 전진 추종 2.4 m/s에서도 0.17 m/s. 비교노트 [[2026-08-26_ankleAB_vs_RP_comparison]] (성능 무승부·에너지 RP −12 %·배포 AB 우세·모터여유 동률). 완주 산출물: accumulate·시연 영상 각 2편(실시간 25 fps 검증), wrench 3D 포락, §7b **액추에이터 의존성 — T-N 클램프 off에도 두 정책 정상**(오차 +0.01~0.03), ★버그 수정 `PYG_MOTOR_MEAS=0`이 RP 발목 반사관성을 0으로 만들던 것([[99_troubleshooting]]). 다음 세대 [[103_v2_training_plan]] + 번들 근거 [[2026-08-26_human_landing_bundle]] |
@@ -137,6 +138,19 @@
 
 | (분석) 영상 계보 감사 — 아카이브 최적화 클립 = 폐기된 §7e 패턴서치 [[71_ankle_2rsu_optimization_setup]] §18 (2026-08-24) | 08-11 클립 종료 기하 vs 최종 v9h2 대조(프레임 판독 + 4에이전트 감사, 적대적 반증 4건 기각) | 7개 중 5개 불일치(RP_h 20 vs 10 = 2배·A_r 70 vs 65), 마진 16.3% vs +3.41%; 최종 DE 실비용 NP80×161세대=12,880평가 | 신규 자산 `ankle_opt_de_v9h2_convergence.mp4`(23 s)로 대체, 아카이브 8번 ⚠superseded 표기 |
 | (분석) 논문 투고 타당성 + 사전연구 41편 [[91_paper_feasibility_icra2027]] (2026-08-24) | 레드팀 3렌즈(신규성/검증/엄밀성) + 4갈래 문헌조사 + 투고처 마감 확인 | 3인 전원 2/5 · ICRA 2026 종료 확인 · ICRA 2027(9/15) 제출 불가 · 치명결함 5건(실측 0건·구형 모델 하중·정책분산 2.6×·FEA 판정 불일치·포지셔닝) | RA-L(11–12월)→IROS 2027 재타겟, 선행조건 E1 freeze 재측정 + E2 발목 벤치 |
+
+## 8d. Era-11 · LegOnly(상체 완전 제거, 12-DOF) — 비대칭 Student-Teacher pilot (2026-09-03~)
+> 모델이 다시 바뀐 시대: `tools/robot_model/build_robot.py`가 이번 세션(docs/117)에서 확정한
+> `FullDoF`/`SemiFullDoF`/`LegOnly` 3변형 중 LegOnly만 사용. Waist-yaw **액추에이터 질량은
+> 유지**하되 그 위 상체 전부(바디·관절) 제거, waist-yaw DOF 없음 — 12관절(hip×3+knee+crank×2,
+> 좌우) 액션공간. 레시피는 v2s1(2026-08-28 완주, `flat-2.5max` 확정 landing recipe + v4 질량 +
+> vy stages + gated curriculum + critic DR 82ch)을 그대로 상속하고 로봇 모델만 교체한다.
+> [[117_model_finalization_and_oneleg_training_plan]] §5.
+
+| 런 | 변인 (vs 직전) | 정량 | 판정 |
+|---|---|---|---|
+| **legonly_ab_v1** [[2026-09-03_legonly_ab_v1]] | v2s1 풀스택 레시피 그대로, 16384 env 본학습. 모델만 LegOnly로 교체(23.630 kg, 12-DOF), DR은 fastener50 합본 leg-only 서브셋(스모크가 쓴 구버전 대체) | P1 게이트 졸업 ~4500 iter(낙상 0.000), P2 전이 dip 1h 내 회복(69→91.6), iter 5.6k reward 92.3·ep_len 994·DR 램프 0.11·vx_max 2.5 — 게이트 판정 "계속"(노트 §2c) | 🔄 P2 학습중 5.6k/18.5k. ⚠wandb entity `dongyub39-snu`는 404(잘못된 슬러그 추정, docs/118 §2-G) — 대시보드 링크 재확인 필요. ⚠질적 플래그: stiff-knee/AB 미활용/toe-off 부재(사용자 09-02 관찰) → 운동학 정량화+리워드 연구 진행 중 |
+| **legonly_ab_smoke_test** [[2026-09-03_legonly_ab_smoke_test]] | v2s1 풀스택 레시피 + `PYG_MODEL_TAG=LegOnly_...v30_proxyfix`(1024 env 스모크) + 신규 leg-only 서브셋 질량 DR(`mass_dr_legonly_prototype-tempmass.json`, round4 corrected-body DR에서 torso/shoulder/arm 항목 제외 — 그 바디들이 LegOnly엔 물리적으로 없어 원본 DR JSON을 그대로 쓰면 P2에서 바디명 해석 실패 예상) | P1 top-stage settle iter 154(fell 0.000)→종료 200. P2 checkpoint full-resume, DR 0→1.0 램프(iter 200→324), iter 399 종료. Critic 82D 확인, 크래시 0건 | ✅ **완주 — 인프라 PASS**(보행 성능 판정 대상 아님). 예측했던 바디명 landmine(§변인) 실제 회피 성공 확인. 본학습은 `mass_dr_legonly_fastener50_prototype-tempmass.json`(나사50%+body귀속 합본)로 진행 |
 
 ## 9. 측정 캠페인 (2026-07-11, fc/fcp 표준) — 데이터 대응표
 | 태그 | 정책 | 상태 |
