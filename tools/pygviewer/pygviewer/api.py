@@ -2,8 +2,12 @@
 
 P0/P1 implements: ``GET /status``, ``GET /contract``, ``GET /snapshot``, ``POST /target``,
 ``POST /ankle``, ``POST /base``, ``POST /mode``, ``POST /reset`` and ``WS /ws/out``.
-Everything else in ``schema.py`` is documented but answers 501 with the phase that owns it,
-so a client author can see the whole contract today and code against it.
+P2 adds: ``POST /policy/load``, ``GET /policy/list``, ``POST /policy/unload``,
+``POST /policy/cmd``, ``GET /policy/io``, ``POST /obs_source`` (per-term switch; ``real``
+answers 501 until the P3 bridge exists), ``GET|POST /gains`` and ``POST /mode`` with
+``policy_sim``/``policy_shadow``. Everything else in ``schema.py`` is documented but answers
+501 with the phase that owns it, so a client author can see the whole contract today and
+code against it.
 
 The WebSocket is **latest-only**: it samples the current snapshot at the requested rate and
 never queues.  A slow consumer sees a lower frame rate, it does not make the process grow.
@@ -147,10 +151,18 @@ def build_app(core, freshness: dict) -> FastAPI:
     core.submit({"op": "reset", "keyframe": body.keyframe})
     return {"ok": True}
 
-  @app.post("/mode", summary="Run mode; idle|manual now, the rest are later phases")
+  @app.post(
+    "/mode",
+    summary="Run mode: idle|manual|policy_sim|policy_shadow now; replay modes are P3/P4",
+  )
   def post_mode(body: ModeIn):
-    if body.mode not in ("idle", "manual"):
-      raise HTTPException(501, f"mode {body.mode!r} is not implemented in P1 (see API.md)")
+    """``policy_sim``/``policy_shadow`` need a policy loaded first (``POST /policy/load``) -
+    checked here synchronously so the caller gets an immediate 409 rather than a silent
+    failure on the sim thread, which only ever sees commands through the async queue."""
+    if body.mode in ("real_replay", "file_replay"):
+      raise HTTPException(501, f"mode {body.mode!r} needs the P3/P4 telemetry bridge (see API.md)")
+    if body.mode.startswith("policy") and core.policy is None:
+      raise HTTPException(409, f"mode {body.mode!r} needs a policy loaded first (POST /policy/load)")
     core.submit({"op": "mode", "value": body.mode})
     return {"ok": True}
 
