@@ -1,8 +1,8 @@
 {
  "now": {
-  "title": "하체 본학습 완주(18,099회, 점수 114.45, 넘어짐 0) — 측정은 다음 작업. 뷰어 개선 세션은 마감하며 작업 브랜치를 main으로 병합",
+  "title": "벤치 모터 2대가 동시에 멈춘 원인을 규명 — 전압 보호였고, 로봇 프로그램이 그 고장 코드를 거꾸로 읽고 있어 '정체불명 값'으로 보였음. 제조사 설명서와 공식 코드로 확인해 수정하고, 개발자에게 넘길 발견 목록을 문서로 정리",
   "detail": "",
-  "since": "2026-09-04 22:46"
+  "since": "2026-09-05 01:05"
  },
  "items": {
   "v4model": {
@@ -1298,6 +1298,16 @@
    "now_": "docs/123 §11b에 원인·수정·테스트 기록; 커밋 대기(Viewer-Prototype 브랜치)",
    "section": "done",
    "changed": "2026-09-04 22:48"
+  },
+  "sync-clip-fix": {
+   "id": "sync-clip-fix",
+   "created": "2026-09-04 23:58",
+   "title": "Sync-gate arm bug: clipped joints were permanently unarmable",
+   "why": "commit f512ee3 on Viewer-Prototype",
+   "finding": "451/451 pygviewer tests pass; hardware re-verification is the coordinator's next step, not done this session",
+   "now_": "Fixed: drift check now compares real-vs-real only; a non-blocking clip_warnings report shows the exact travel (deg) arming a clipped joint will cause. Also fixed: a disconnected motor reporting a fake 0.0 position no longer gets synced (excluded via the existing ack/miss/motor_age_ms health check).",
+   "section": "pygviewer",
+   "changed": "2026-09-04 23:58"
   }
  },
  "order": [
@@ -1413,7 +1423,8 @@
   "scenario-mockup-b-iteration",
   "biped-bridge-rewrite",
   "legonly-ab-v2-done",
-  "idle-refresh-fix"
+  "idle-refresh-fix",
+  "sync-clip-fix"
  ],
- "updated": "2026-09-04 22:48"
+ "updated": "2026-09-05 01:05"
 }
