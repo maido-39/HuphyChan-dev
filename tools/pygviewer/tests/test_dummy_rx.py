@@ -1,0 +1,244 @@
+"""docs/123 plan A item 4: ``bridge/dummy_rx.py`` end to end over REAL UDP sockets (loopback,
+ephemeral ports) - no ``huphy`` needed. ``tx_client.py`` is the sender (also real code, not a
+stub), so this exercises the actual wire format both ends will use with a real robot.
+
+Timing note: the physics/telemetry loop runs at 100 Hz by default; these tests poll with a
+generous timeout rather than sleeping a fixed guess, so they are not flaky on a loaded CI box
+but still fail fast when the behaviour is actually wrong.
+"""
+
+import json
+import math
+import socket
+import time
+
+import pytest
+
+from pygviewer import CACHE_DIR
+from pygviewer.bridge.dummy_rx import DummyRx
+from pygviewer.bridge.tx_client import TxClient
+from pygviewer.bridge.tx_map import JointTargetMapper, sim_rad_to_cal_deg
+from pygviewer.contract import load_contract
+
+VARIANT = "LegOnly-AB"
+ARM_TOKEN = "bench-test-token"
+
+
+def _contract():
+  try:
+    return load_contract(CACHE_DIR, VARIANT)
+  except FileNotFoundError:
+    pytest.skip(f"no baked contract for {VARIANT}")
+
+
+def _free_port() -> int:
+  s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+  s.bind(("127.0.0.1", 0))
+  port = s.getsockname()[1]
+  s.close()
+  return port
+
+
+def _default_deg(c, sim_joint: str) -> float:
+  """The same conversion dummy_rx itself uses for its outgoing telemetry - the contract's
+  default_q (rad) for ``sim_joint`` re-expressed in HUPHY cal-deg, so a test's "did it return
+  to default" check compares against the REAL default (LegOnly-AB uses a bent-knee/bent-hip
+  keyframe, not a straight/zero pose - discovered while debugging this file, see docs/123
+  section 5) rather than an assumed 0."""
+  mapper = JointTargetMapper(c)
+  _limb, _motor, row = mapper.motor_row(sim_joint)
+  ts = mapper.travel_sign[sim_joint]
+  return sim_rad_to_cal_deg(c.default_q(sim_joint), row["sign"], row["offset_rad"], ts)
+
+
+def _wait_until(cond, timeout=3.0, interval=0.02):
+  deadline = time.monotonic() + timeout
+  last = None
+  while time.monotonic() < deadline:
+    last = cond()
+    if last:
+      return last
+    time.sleep(interval)
+  raise AssertionError(f"condition not met within {timeout}s (last={last!r})")
+
+
+class TelemetryCatcher:
+  """Raw UDP listener standing in for a real HUPHY UDP consumer, so a test can inspect exactly
+  what dummy_rx put on the wire without depending on huphy_udp.py (that integration is its own
+  test file, test_bridge_roundtrip.py)."""
+
+  def __init__(self, port: int):
+    self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    self.sock.bind(("127.0.0.1", port))
+    self.sock.settimeout(0.05)
+
+  def latest(self, key_prefix: str) -> dict | None:
+    """Drains up to ``_MAX_DRAIN`` currently-queued packets and returns the last one
+    containing ``key_prefix``.  Capped, not "until a timeout" - dummy_rx's physics thread
+    streams telemetry continuously at 100 Hz for as long as it runs, so an uncapped
+    "read until the socket goes quiet" loop never sees the socket go quiet and livelocks."""
+    out = None
+    for _ in range(self._MAX_DRAIN):
+      try:
+        data, _ = self.sock.recvfrom(4096)
+      except socket.timeout:
+        break
+      obj = json.loads(data.decode("utf-8"))
+      if any(k.startswith(key_prefix) for k in obj):
+        out = obj
+    return out
+
+  _MAX_DRAIN = 64
+
+  def close(self):
+    self.sock.close()
+
+
+@pytest.fixture
+def rig():
+  c = _contract()
+  listen_port = _free_port()
+  tele_port = _free_port()
+  rx = DummyRx(
+    contract=c, listen_host="127.0.0.1", listen_port=listen_port,
+    telemetry_host="127.0.0.1", telemetry_port=tele_port, arm_token=ARM_TOKEN,
+    deadman_s=0.15, return_s=0.3, hz=100.0,
+  )
+  catcher = TelemetryCatcher(tele_port)
+  client = TxClient(
+    "127.0.0.1", listen_port, joint_names=list(c.action_joint_names),
+    arm_token=ARM_TOKEN, origin="manual", contract=c, hz=50.0,
+  )
+  rx.start()
+  try:
+    yield c, rx, client, catcher
+  finally:
+    client.stop()
+    rx.stop()
+    catcher.close()
+
+
+def test_live_target_moves_the_motor_toward_it(rig):
+  c, rx, client, catcher = rig
+  client.arm()
+  client.set_target({"L_knee_joint": 0.4})
+  # keep feeding fresh packets faster than the 0.15s deadman for a bit, so it stays "live"
+  for _ in range(30):
+    client.tick()
+    time.sleep(0.02)
+
+  def _moved():
+    pkt = catcher.latest("left/knee/")
+    if pkt is None:
+      return None
+    return pkt if pkt.get("left/knee/pos", 0.0) > 5.0 else None  # some visible motion toward +
+
+  pkt = _wait_until(_moved, timeout=3.0)
+  assert pkt["left/knee/pos"] > 5.0
+
+
+def test_deadman_then_return_to_default(rig):
+  c, rx, client, catcher = rig
+  default_deg = _default_deg(c, "L_knee_joint")  # LegOnly-AB's default is a bent-knee pose,
+  # NOT 0 - discovered while writing this test (docs/123 section 5); comparing against a
+  # hand-picked 0 here would silently pass for the wrong reason (or fail for the wrong one).
+  client.arm()
+  client.set_target({"L_knee_joint": 0.5})
+  for _ in range(20):
+    client.tick()
+    time.sleep(0.02)
+
+  # stop sending; the deadman (0.15s) then the return-to-default (0.3s) should land the
+  # physics model back within a few degrees of `default_deg`, well before the 2s timeout.
+  def _back_near_default():
+    pkt = catcher.latest("left/knee/")
+    if pkt is None:
+      return None
+    return pkt if abs(pkt.get("left/knee/pos", 1e9) - default_deg) < 2.0 else None
+
+  pkt = _wait_until(_back_near_default, timeout=2.0)
+  assert abs(pkt["left/knee/pos"] - default_deg) < 2.0
+  assert rx.last_phase in ("returning", "default", "hold")
+
+
+def test_disabled_joint_never_moves(rig):
+  c, rx, client, catcher = rig
+  # rebuild rx with an enable filter that excludes hip_pitch
+  rx.stop()
+  rx2 = DummyRx(
+    contract=c, listen_host="127.0.0.1", listen_port=rx.listen_port,
+    telemetry_host="127.0.0.1", telemetry_port=rx.telemetry_port, arm_token=ARM_TOKEN,
+    deadman_s=0.15, return_s=0.3, hz=100.0, enable={"L_knee_joint"},
+  )
+  rx2.start()
+  try:
+    client.arm()
+    client.set_target({"L_knee_joint": 0.4, "L_hip_pitch_joint": 0.4})
+    for _ in range(30):
+      client.tick()
+      time.sleep(0.02)
+
+    def _knee_moved():
+      pkt = catcher.latest("left/knee/")
+      return pkt if pkt and pkt.get("left/knee/pos", 0.0) > 5.0 else None
+
+    _wait_until(_knee_moved, timeout=3.0)
+    hip_pkt = catcher.latest("left/hip_pitch/")
+    assert hip_pkt is not None
+    hip_default_deg = _default_deg(c, "L_hip_pitch_joint")
+    # never commanded (not in --enable) - stayed at its own default, not driven toward the
+    # 0.4 rad the message asked for.
+    assert abs(hip_pkt["left/hip_pitch/pos"] - hip_default_deg) < 1.0
+  finally:
+    rx2.stop()
+
+
+def test_wrong_arm_token_is_rejected_and_does_not_move_the_motor(rig):
+  c, rx, client, catcher = rig
+  bad_client = TxClient(
+    "127.0.0.1", rx.listen_port, joint_names=["L_knee_joint"],
+    arm_token="wrong-token", origin="manual", hz=50.0,
+  )
+  bad_client.arm()
+  bad_client.set_target({"L_knee_joint": 0.9})
+  try:
+    for _ in range(10):
+      bad_client.tick()
+      time.sleep(0.02)
+    time.sleep(0.2)
+    assert rx.latest.stats.rejected_arm_token >= 1
+    knee_default_deg = _default_deg(c, "L_knee_joint")
+    pkt = catcher.latest("left/knee/")
+    assert pkt is None or abs(pkt.get("left/knee/pos", knee_default_deg) - knee_default_deg) < 1.0
+  finally:
+    bad_client.stop()
+
+
+def test_unknown_joint_name_is_rejected_not_crashed_on():
+  c = _contract()
+  listen_port = _free_port()
+  tele_port = _free_port()
+  rx = DummyRx(
+    contract=c, listen_host="127.0.0.1", listen_port=listen_port,
+    telemetry_host="127.0.0.1", telemetry_port=tele_port, arm_token=ARM_TOKEN,
+  )
+  rx.start()
+  sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+  try:
+    from pygviewer.schema import to_jsonl
+
+    # hand-build past TxClient's own joint validation to prove the RECEIVER rejects it too
+    from pygviewer.schema import JointTarget
+
+    bad = JointTarget(
+      t_ns=1, seq=1, joint_names=["totally_made_up_joint"], q_target=[0.1],
+      arm_token=ARM_TOKEN, origin="manual",
+    )
+    sock.sendto(to_jsonl(bad).strip().encode(), ("127.0.0.1", listen_port))
+    time.sleep(0.3)
+    assert rx.latest.stats.parse_errors >= 1
+    assert rx.latest.stats.accepted == 0
+  finally:
+    sock.close()
+    rx.stop()
