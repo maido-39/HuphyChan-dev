@@ -228,11 +228,25 @@ class ContractOut(BaseModel):
 # ----------------------------------------------------------------- request bodies
 class TargetIn(BaseModel):
   """IMPLEMENTED.  Joint targets in rad, by canonical name.  Values outside the contract's
-  ``safe_clip`` are CLAMPED (not rejected) and the clamped value is echoed back."""
+  ``safe_clip`` are CLAMPED (not rejected) and the response echoes both the requested and
+  the applied (post-clamp) value - see ``POST /target`` in ``api.py``.  NaN/inf is a
+  different case: not "out of range" but not a valid target either (ROM clip task,
+  2026-09-04) - rejected here at parse time, the same rule ``JointTarget._finite_only``
+  already applies on the transmit wire type, so a NaN slipping through as a float never
+  reaches ``set_target``'s PD math."""
 
   values: dict[str, float] = Field(
     description="{joint_name: q_target_rad}", examples=[{"L_knee_joint": 0.35}]
   )
+
+  @field_validator("values")
+  @classmethod
+  def _finite_only(cls, v: dict[str, float]) -> dict[str, float]:
+    bad = [n for n, x in v.items() if not math.isfinite(x)]
+    if bad:
+      raise ValueError(f"non-finite value (NaN/inf) for joint(s) {bad} - a target must "
+                        "always be finite (omit a joint to leave it alone, never NaN/inf)")
+    return v
 
 
 class AnkleTargetIn(BaseModel):
@@ -241,6 +255,13 @@ class AnkleTargetIn(BaseModel):
   side: Literal["L", "R"]
   pitch: float = Field(description="ankle pitch [rad]")
   roll: float = Field(description="ankle roll [rad]")
+
+  @field_validator("pitch", "roll")
+  @classmethod
+  def _finite_only(cls, v: float) -> float:
+    if not math.isfinite(v):
+      raise ValueError("non-finite value (NaN/inf) - pitch/roll must always be finite")
+    return v
 
 
 class BaseIn(BaseModel):

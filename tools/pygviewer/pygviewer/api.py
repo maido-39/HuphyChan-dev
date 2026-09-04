@@ -26,6 +26,7 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -104,6 +105,22 @@ def build_app(core, freshness: dict) -> FastAPI:
   )
   seq = {"n": 0}
   side_mapping_verified = _read_side_mapping_verified()
+
+  @app.exception_handler(RequestValidationError)
+  async def _on_validation_error(_request, exc: RequestValidationError):
+    """FastAPI's default 422 handler echoes ``ctx["input"]``/``ctx["error"]`` from
+    pydantic's error dicts verbatim - for a rejected NaN/inf ``POST /target`` those are a
+    non-JSON-serializable ``float`` and a raw ``ValueError`` object respectively
+    (Starlette's ``JSONResponse`` enforces strict RFC JSON, ``allow_nan=False``, and neither
+    survives its encoder), which without this turns a clean 422 rejection into an opaque 500
+    (ROM clip task, 2026-09-04 - caught by ``tests/test_rom_clip.py`` sending a real NaN
+    through the actual HTTP layer, not just unit-testing the validator in isolation). Only
+    the plain-string ``loc``/``msg``/``type`` fields are echoed back - never the raw
+    offending value or exception object, so this handler can never itself fail to
+    serialize regardless of what triggered the error."""
+    detail = [{"loc": list(e.get("loc", [])), "msg": e.get("msg", ""), "type": e.get("type", "")}
+              for e in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": detail})
 
   def _sim_imu(s: dict) -> dict | None:
     """UI v2: the sim's own {gyro_rad_s, gravity_b}, from the same sensors ObsBuilder reads
@@ -184,18 +201,41 @@ def build_app(core, freshness: dict) -> FastAPI:
 
   @app.post("/target", summary="Set joint position targets (rad); values are clamped to safe_clip")
   def post_target(body: TargetIn):
+    """``set_target``'s clip (``np.clip`` against the contract's ``safe_clip``) is a pure,
+    deterministic function of the request - computed here synchronously, not read back off
+    the sim thread, so the response is honest about what will actually be applied even
+    though ``core.submit`` only queues the command for the next control tick (ROM clip task,
+    2026-09-04: the old response echoed the clip RANGE only, never the applied value, so a
+    caller could not tell a clamp had even happened)."""
     unknown = [n for n in body.values if n not in core.act_names]
     if unknown:
       raise HTTPException(400, f"not actuated joints of {core.c.variant}: {unknown}")
+    clip_range = {n: list(core.c.clip(n)) for n in body.values}
+    applied = {n: min(max(v, clip_range[n][0]), clip_range[n][1]) for n, v in body.values.items()}
     core.submit({"op": "target", "values": body.values})
-    return {"ok": True, "clamped_to": {n: list(core.c.clip(n)) for n in body.values}}
+    return {"ok": True, "requested": body.values, "applied": applied, "clip_range": clip_range}
 
   @app.post("/ankle", summary="AB only: command the ankle in foot space (pitch/roll -> cranks)")
   def post_ankle(body: AnkleTargetIn):
+    """Mirrors ``/target``'s requested/applied honesty (ROM clip task, 2026-09-04): the
+    foot-space request is converted to raw crank angles by ``ankle_inverse`` (unclamped,
+    same as ``set_ankle``), then the SAME synchronous clip ``set_ankle``'s ``set_target``
+    call will apply is computed here so the response never has to wait on the sim thread."""
     if core.ankle_inverse is None:
       raise HTTPException(409, f"{core.c.variant} drives the ankle directly; use /target")
+    a, b = core.ankle_inverse(body.side, body.pitch, body.roll)
+    names = (f"{body.side}_crank_A_joint", f"{body.side}_crank_B_joint")
+    clip_range = {n: list(core.c.clip(n)) for n in names}
+    requested = dict(zip(names, (a, b)))
+    applied = {n: min(max(v, clip_range[n][0]), clip_range[n][1]) for n, v in requested.items()}
     core.submit({"op": "ankle", "side": body.side, "pitch": body.pitch, "roll": body.roll})
-    return {"ok": True, "note": core.c.raw["ankle_inverse"]["caveat"]}
+    return {
+      "ok": True,
+      "requested": requested,
+      "applied": applied,
+      "clip_range": clip_range,
+      "note": core.c.raw["ankle_inverse"]["caveat"],
+    }
 
   @app.post(
     "/base",
