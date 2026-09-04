@@ -229,3 +229,46 @@ before_any_slew_begins`) 추가, 기존 return-interpolation 테스트는 `hold_
   - **VM 동기화 완료**: 커밋된 변경분 11개 파일을 tar로 `syaro@10.8.0.14:/home/syaro/Human-Pygmalion/HUPHY`에 복사(askpass, 비밀번호 비열람) → `git status --short`로 로컬 diff와 파일 목록 일치 확인 → `.venv-huphy/bin/python -c "from huphy.robots.single import SingleJoint"` 성공 + `huphy-bringup --config config/robot_bench.yaml --limb bench --help` 성공. **모터 구동 명령은 실행하지 않음**(사용자 몫).
   - 남은 이슈: 버그리포트 4건은 관리자 판단 대기(라이브러리 미수정 유지). `huphy-run`(정책 재생)은 `build_robot`으로 갈아끼웠지만 실질적으로 leg 전용 그대로임(bench는 학습된 정책이 없어 `ankle_output` 불일치로 즉시 에러 — 의도된 동작, §7의 undervoltage 의심과 별개).
 
+
+## 9. `/ws/in` 키프얼라이브 타임아웃 버그 수정 (2026-09-04, 배선 코더)
+
+**버그 리포트**(실물 연동 세션, §7/§8 벤치 작업 중 발견): `/ws/in`으로 50Hz `JointState`를 흘리면
+~60초 후 `ConnectionClosedError: sent 1011 (internal error) keepalive ping timeout`으로 클라이언트가
+끊김(재연결 전까지 뷰어 telemetry age 무한 증가·stale). 원인 후보로 지목된 것: `/ws/in` 핸들러의
+동기 처리(`core.real.ingest_joint_state` 락 등)가 이벤트 루프를 막아 ping을 못 펌핑한다는 가설.
+
+**실측 근본원인 (가설과 다름, 재현·반증 둘 다 확인)**: `/ws/in`으로 보내는 쪽(`bridge/huphy_udp_
+forward.py`, `bridge/dummy_tx.py` 둘 다)이 `ws.send()`만 하고 `ws.recv()`를 **한 번도 호출하지
+않았음**. `/ws/in`은 받은 프레임마다 `{"ok": true, "seq": ...}`를 되돌려주는데, `websockets`
+라이브러리는 안 읽힌 수신 메시지를 내부 큐에 쌓다가(`max_queue`, 50Hz면 1초 이내 가득 참) 꽉 차면
+**리더가 소켓에서 더 이상 아무것도 안 읽는다** — 여기엔 클라이언트 자신이 보낸 keepalive PING에
+대한 서버의 PONG도 포함됨. 그래서 클라이언트가 자기 PING에 대한 PONG을 못 받아 스스로 끊는다
+(서버가 멈춘 것처럼 보이지만 실제로는 클라이언트의 안 읽은 큐가 원인).
+
+검증: 가짜 로컬 재현 스크립트로 (a) 보내기만 하는 클라이언트 → `ping_interval=ping_timeout=2s`에서
+~14s, **실제 기본값(20s/20s)에서 ~40s**(리포트의 "~60s"와 같은 계열, 정확히 같은 에러 문자열)에
+동일 에러로 끊김 확인. (b) 응답을 계속 읽어 버리는(drain) 클라이언트는 같은 설정으로 180초+ 무중단
+확인. (c) 실제로 살아있는 대시보드 프로세스(포트 8095, 실제 SimCore 물리스레드 동시 실행 중)에
+`dummy_rx.py`(100Hz 텔레메트리) → 수정한 `huphy_udp_forward.py` → `/ws/in` 전체 왕복을 **2분간**
+돌려 무중단 확인(`rx_count 39980, rx_hz 201.9, age_s 0.009, seq_gaps 0`) — 서버 측 동기 처리
+가설은 이 실측으로 배제됨(물리스레드가 실제로 도는 채로 200Hz 이상 처리해도 문제 없음).
+
+**조치**:
+1. `bridge/huphy_udp_forward.py`: 연결 수명 동안 서버 응답을 계속 읽어 버리는(discard, 단
+   `{"error":...}`만 로그) 백그라운드 태스크 추가(`_drain_replies`) — 이게 진짜 수정. 추가로
+   연결이 실제로 끊겼을 때(진짜 네트워크/서버 문제)를 위한 지수백오프 재연결 루프(1s→최대 30s)도
+   추가(리포트의 조치 3) — 이제 `fwd_supervisor.sh`(respawn 루프)는 이 특정 실패 모드엔 더 이상
+   필요 없음(계속 켜둬도 무해).
+2. `bridge/dummy_tx.py`: 같은 버그·같은 수정(뷰어 자체 검증 도구가 60초 넘게 도는 실측을 한 번도
+   못 했던 이유 — 기본 `--seconds 10`이라 우연히 안 걸렸을 뿐).
+3. `api.py`의 `/ws/in` 독스트링에 "클라이언트는 반드시 응답을 읽어야 한다"를 명시(다음 클라이언트
+   작성자가 같은 실수를 반복하지 않도록).
+4. 서버 측 ping_interval/timeout 여유 설정(리포트 조치 2)은 **적용하지 않음** — 근본원인이 서버가
+   아니라 안 읽는 클라이언트로 확인됐고, 서버 타이밍을 늘리는 건 증상만 가리는 처방이라 채택 안 함
+   (근거를 여기 남겨 조용히 무시한 게 아님을 명시).
+
+**신규 테스트**: `tests/test_ws_in_keepalive.py` — 실제 uvicorn 인스턴스(에페메럴 포트) + 실제
+`websockets` 클라이언트로 (a) drain하는 클라이언트가 가속된 ping 설정에서도 끊기지 않음, (b) 이
+테스트 하네스가 실제로 버그에 민감한지 확인하는 음성대조(안 읽는 클라이언트는 반드시 끊겨야 함,
+`"1011"`/`"keepalive"` 문자열 포함)을 확인. FastAPI `TestClient`의 웹소켓은 인메모리 시뮬레이션이라
+이 버그를 절대 못 잡음 — 실제 uvicorn+실제 asyncio 클라이언트가 필수였음. 전체 스위트 345 passed.

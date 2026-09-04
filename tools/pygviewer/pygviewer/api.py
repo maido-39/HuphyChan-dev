@@ -584,7 +584,22 @@ def build_app(core, freshness: dict) -> FastAPI:
 
     Every accepted message gets ``{"ok": true, "seq": ...}`` back; a bad one gets
     ``{"error": "..."}`` and the connection stays open - one malformed frame from a dummy
-    transmitter or a real host must not tear down the whole telemetry session (R3/R5)."""
+    transmitter or a real host must not tear down the whole telemetry session (R3/R5).
+
+    **A client MUST read these replies, even if it does not care about them** (2026-09-04
+    bug, found forwarding real telemetry - see ``bridge/huphy_udp_forward.py``'s module
+    docstring for the full story and measured numbers). A send-only websocket CLIENT that
+    never calls ``recv()``/iterates the connection lets its OWN receive queue fill with these
+    acks; once full, most websocket libraries (including the ``websockets`` package this
+    repo's own clients use) stop reading the socket AT ALL - including the PONG replies to
+    the client's own keepalive PINGs - and the client silently times itself out and
+    disconnects with ``ConnectionClosedError: sent 1011 (internal error) keepalive ping
+    timeout`` after roughly a minute at default ping settings. This looks exactly like a
+    server hang from the outside; it is not one (confirmed: this handler kept accepting and
+    acking a 50 Hz stream for 180+s straight against a client that actually drained its
+    queue, with a real background physics thread running concurrently). Both first-party
+    clients (``bridge/huphy_udp_forward.py``, ``bridge/dummy_tx.py``) run a background task
+    that drains every reply - copy that pattern in any new client, do not just ``send()``."""
     await ws.accept()
     try:
       while True:

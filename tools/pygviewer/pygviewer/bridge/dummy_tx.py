@@ -23,11 +23,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import gzip
 import json
 import math
 import random
 import socket
+import sys
 import time
 
 from .. import CACHE_DIR, VARIANTS
@@ -137,6 +139,30 @@ def huphy_packet_for_limb(limb: str, side: str, q: dict[str, float], jmap: Joint
 
 
 # --------------------------------------------------------------------------- delivery
+async def _drain_ws_replies(ws) -> None:
+  """Read (and discard) whatever ``/ws/in`` acks back per accepted frame.
+
+  Bug fixed 2026-09-04 (found via ``bridge/huphy_udp_forward.py``'s own identical mistake,
+  same root cause here since this file never called ``ws.recv()`` either): a websocket
+  client that only ever sends eventually stalls its own reader once the unread-message queue
+  fills (default ``max_queue``, reached well under a second at 50 Hz), which then ALSO stops
+  it from seeing PONG replies to its own keepalive pings, and the client self-disconnects
+  with ``ConnectionClosedError: sent 1011 keepalive ping timeout`` after ~40-60s - this
+  transmitter's default ``--seconds 10`` run is short enough to never have hit it, but a
+  longer soak run (or ``--seconds`` raised for an endurance test) would have. Runs as a
+  background task for the connection's lifetime; ``ws.__aiter__`` ends cleanly on close."""
+  try:
+    async for raw in ws:
+      try:
+        obj = json.loads(raw)
+      except (json.JSONDecodeError, TypeError):
+        continue
+      if isinstance(obj, dict) and obj.get("error"):
+        print(f"dummy_tx: server reported: {obj['error']}", file=sys.stderr, flush=True)
+  except Exception:  # connection closing/closed while draining is expected, not an error here
+    pass
+
+
 async def _delayed_send(coro_factory, latency_s: float, jitter_s: float, drop_ratio: float):
   if drop_ratio > 0 and random.random() < drop_ratio:
     return
@@ -172,11 +198,13 @@ async def run(args) -> None:
     raise SystemExit("--target udp needs an AB (loop) variant - HUPHY's hardware has no RP analogue")
 
   ws = None
+  ws_drain_task = None
   udp_sock = None
   if "ws" in args.target:
     import websockets
 
     ws = await websockets.connect(args.ws_url)
+    ws_drain_task = asyncio.create_task(_drain_ws_replies(ws))
   if "udp" in args.target:
     udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -219,6 +247,10 @@ async def run(args) -> None:
   finally:
     if ws is not None:
       await ws.close()
+    if ws_drain_task is not None:
+      ws_drain_task.cancel()
+      with contextlib.suppress(asyncio.CancelledError):
+        await ws_drain_task
     if udp_sock is not None:
       udp_sock.close()
   print(f"dummy_tx: done, {seq} ticks sent")
