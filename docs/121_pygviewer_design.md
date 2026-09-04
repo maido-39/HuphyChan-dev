@@ -301,6 +301,17 @@ Space를 누르는 동안만(텍스트 입력 포커스 시 제외) `/tx/heartbe
 test_dashboard.py에서 SimCore 인스턴스를 많이 만들면 전체 스위트 RSS 상한을 넘긴다는 걸 배워서
 반영). 미검증: 실제 브라우저(키 입력 체감, 레이아웃)는 이번에도 확인 못함.
 
+**[후속 완료, 2026-09-04 배선 세션]** 위 스텁이 실제 `bridge/tx_client.py`에 배선됨. 엔드포인트가
+`{arm(host,port 포함), motor, send}` → `{config, enable, arm, disarm, heartbeat, status}`로
+재설계(송신은 이제 `SimCore._on_control_tick`이 매 제어틱 자동 수행, 대시보드는 `/tx/send`를 더
+이상 호출하지 않음), 대시보드 TX 섹션도 새 계약으로 전면 재배선(kp_max/kd_max/ttl_ms 입력,
+"configure" 1단계 추가, 상태 배지가 armed/sending 구분 표시, seq·rate_hz·rejected_count·
+arm_token 표시). 데드맨은 `DEADMAN_TIMEOUT_S=0.3s` 초과 시 disarm이 아니라 "hold"(새 패킷만
+중단)로 재확인. 상세·실측 왕복 수치(dummy_rx 실제 UDP, ±2도 수렴, 하트비트 중단 0.3s 내 정지,
+policy_sim 자동 disarm, enable 밖 관절 미송신)는 docs/123 §6. pytest 스텁 전용 13건 폐기 →
+`test_tx_wiring.py` 18건으로 교체, 전체 스위트 343 passed. Joints 탭의 TX 체크박스도 "미래
+작업 자리표시자"에서 Telemetry 탭 TX 설정의 읽기전용 미러로 의미가 바뀜.
+
 ### "L/R 관절이 같이 움직인다" 버그 조사 (2026-09-04, 대시보드 작업 중 병행 지시)
 
 사용자가 이전 세션에 겪은 현상. 실제 재현·조치는 커밋 `a9a4a14`(상세 원인·수치는 그 커밋 메시지와

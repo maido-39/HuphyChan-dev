@@ -153,6 +153,20 @@ class TxClient:
     self.sent_count = 0
     self.warnings: deque[str] = deque(maxlen=50)
 
+  # ------------------------------------------------------------------------------ read-only
+  @property
+  def last_sent(self) -> dict[str, float]:
+    """The clamped (safe_clip + slew) position of the LAST message actually built by
+    :meth:`tick` - for a caller (``pygviewer/tx.py``'s wrapper, in this codebase) that wants
+    to display "what was actually sent" without keeping its own copy of every message."""
+    return dict(self._prev_sent)
+
+  @property
+  def last_seq(self) -> int | None:
+    """``seq`` of the last message :meth:`tick` actually sent, or ``None`` if nothing has
+    been sent yet on this client."""
+    return self._seq - 1 if self._seq > 0 else None
+
   # ------------------------------------------------------------------------------ lifecycle
   def start(self) -> None:
     if self._sock is None:

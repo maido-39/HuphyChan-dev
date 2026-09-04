@@ -58,8 +58,7 @@ const S = {
   latestReal: { t: null, q: {}, qd: {}, tau: {}, target: {} },
   latestTxSent: {},      // {joint_name: rad} - from polling /tx/status().last_sent_target
   ring: [],             // [{t, q:{}, target:{}, tau:{}, qd:{}, realQ:{}, realTau:{}, realQd:{}, realAgeS, sentTarget:{}}]
-  txStatus: null,        // GET /tx/status, polled
-  txEnabled: false,      // stage-1 "activate" toggle - purely client-side, arms nothing itself
+  txStatus: null,        // GET /tx/status, polled - server-side truth for enabled/armed/sending
   txDeadmanTimer: null,
   leftTab: "model",
   rightTab: "control",
@@ -553,13 +552,13 @@ function renderJointsPanel(sub, force) {
         <input type="range" class="slider" step="0.001">
         <input type="number" class="num" step="0.001">
         <span class="phys mono" title="physical angle (mirrored joints only)"></span>
-        <input type="checkbox" class="tx-cb" disabled title="TX to hardware - placeholder, see docs/123">
+        <input type="checkbox" class="tx-cb" disabled title="read-only mirror of the Telemetry tab's TX enable list - toggle it there">
       </div>`;
     }).join("");
     sub.innerHTML = `
       <div class="small" style="margin:4px 0">Slider range = contract safe_clip. "phys" on a
-        mirrored joint is travel_sign&times;q, so both legs read alike. TX checkboxes are a
-        placeholder for future hardware transmit (docs/123) - disabled here.</div>
+        mirrored joint is travel_sign&times;q, so both legs read alike. TX checkboxes mirror
+        the Telemetry tab's TX enable list (read-only here - configure it there).</div>
       ${rows}
       <button id="btn-joints-home" style="width:100%;margin-top:6px">targets -&gt; default pose</button>
       ${renderAnkleFootSpaceHtml(c)}
@@ -606,6 +605,8 @@ function renderJointsPanel(sub, force) {
     const jc = c.joint_contract[n] || {};
     if (jc.mirrored && cur !== undefined) phys.textContent = displayVal(jc.travel_sign * cur).toFixed(1);
     else phys.textContent = cur !== undefined ? displayVal(cur).toFixed(1) : "";
+    const txCb = row.querySelector(".tx-cb");
+    if (txCb) txCb.checked = !!(S.txStatus && (S.txStatus.enable || []).includes(n));
   });
 }
 
@@ -1157,15 +1158,20 @@ window.addEventListener("resize", () => {
   window.__resizeT = setTimeout(buildPlotGrid, 200);
 });
 
-/* ================================================================== TX (viewer->hardware) STUB
- * docs/121 section 10 TX item / docs/123. Backed by pygviewer/tx.py's TxState - a real safety
- * state machine (arm/disarm/heartbeat/per-motor-enable) that transmits NOTHING anywhere yet
- * (no bridge/tx_client.py exists in this tree - checked before writing this). "Enable TX
- * controls" below is a stage-1, CLIENT-ONLY toggle (arms nothing by itself); "ARM" is the
- * real POST /tx/arm call, refused (409) unless the sim is in `manual` mode - never while a
- * policy is driving. Once armed, holding the dead-man key (Space, only when not typing in a
- * text field) sends a heartbeat + the current joint targets ~20/s; releasing it stops
- * immediately, client-side - the server's own DEADMAN_TIMEOUT_S=0.3s is the backstop. */
+/* ================================================================== TX (viewer->hardware)
+ * docs/121 section 10 TX item / docs/123, WIRED 2026-09-04 to a real bridge.tx_client.TxClient
+ * via pygviewer/tx.py's TxState - once armed this puts real 50 Hz UDP JointTarget packets on
+ * the wire. Sends ONLY the current SimCore target (this Joints tab's sliders, or a running
+ * script) - never a policy action (blocked both in the sim mode gate and in TxClient itself).
+ *
+ * Three-stage safety, mirroring the server exactly:
+ *   1. POST /tx/config  - host/port/enable list/kp_max/kd_max/ttl_ms. Refused while armed.
+ *   2. POST /tx/enable  - turns the TX subsystem on (needs a prior config).
+ *   3. POST /tx/arm     - refused (409) unless enabled AND sim mode is 'manual'.
+ * PLUS a keyboard dead-man, independent of all three: holding Space (not while typing in a
+ * text field) calls POST /tx/heartbeat every ~100ms; releasing it does NOT disarm - the
+ * server just stops sending new packets ("hold", not "stop") and the robot's OWN age-based
+ * dead-man (bridge.remote_target, 0.2s) takes over from there, same as unplugging a cable. */
 function renderTxSectionHtml() {
   const c = S.contract;
   const motorRows = c.action_joint_names.map((n) => `
@@ -1173,42 +1179,61 @@ function renderTxSectionHtml() {
       <input type="checkbox" class="tx-motor-cb" data-n="${n}"> ${n.replace("_joint", "")}
     </label>`).join("");
   return `
-    <h3>TX (hardware transmit) - STUB, docs/123</h3>
-    <div class="small" style="margin-bottom:4px">No bridge is connected yet - arming and
-      sending only exercise the safety state machine (arm/dead-man/per-motor-enable) and are
-      recorded for display, nothing reaches a robot. Only allowed while mode is
-      <b>manual</b> (Joints tab, or a running script) - never while a policy drives.</div>
-    <div class="row tight"><label>host</label><input id="tx-host" value="127.0.0.1" style="width:110px">
-      <label>port</label><input id="tx-port" type="number" value="9872" style="width:70px"></div>
-    <div class="row tight"><label>1. activate TX panel</label><input type="checkbox" id="tx-enable"></div>
-    <div class="row tight"><button id="btn-tx-arm" style="flex:1">2. ARM</button>
-      <button id="btn-tx-disarm" style="flex:1">disarm</button></div>
-    <div class="row tight"><span id="tx-badge" class="pill">DISARMED</span>
-      <span class="small" id="tx-heartbeat-age"></span></div>
-    <div class="small" style="margin:4px 0">Hold <b>Space</b> to send (keyboard dead-man) -
-      only works while armed and the panel is active. kp cap <span id="tx-kpcap">-</span>,
-      kd cap <span id="tx-kdcap">-</span> (docs/123 section 3 bench limits, display only).</div>
+    <h3>TX (hardware transmit)</h3>
+    <div class="small" style="margin-bottom:4px">Sends ONLY the current manual/script target -
+      never a policy action. Only allowed while mode is <b>manual</b> (Joints tab, or a
+      running script) - never while a policy drives.</div>
+    <div class="row tight"><label>host</label><input id="tx-host" value="127.0.0.1" style="width:96px">
+      <label>port</label><input id="tx-port" type="number" value="9872" style="width:60px"></div>
+    <div class="row tight"><label>kp max</label><input id="tx-kpmax" type="number" value="5" step="0.1" style="width:50px">
+      <label>kd max</label><input id="tx-kdmax" type="number" value="0.5" step="0.05" style="width:50px">
+      <label>ttl ms</label><input id="tx-ttlms" type="number" value="250" step="10" style="width:50px"></div>
     <div>${motorRows}</div>
+    <div class="row tight"><button id="btn-tx-config" style="flex:1">1. configure (host/port/enable/gains)</button></div>
+    <div class="row tight"><label>2. activate TX panel</label><input type="checkbox" id="tx-enable"></div>
+    <div class="row tight"><button id="btn-tx-arm" style="flex:1">3. ARM</button>
+      <button id="btn-tx-disarm" style="flex:1">disarm</button></div>
+    <div class="row tight"><span id="tx-badge" class="pill">-</span>
+      <span class="small" id="tx-heartbeat-age"></span></div>
+    <div class="small" style="margin:4px 0">Hold <b>Space</b> to send (keyboard dead-man,
+      ~100ms) - releasing it HOLDS the last target (does not disarm); the robot's own
+      dead-man then takes over. seq <span id="tx-seq" class="mono">-</span> &middot;
+      rate <span id="tx-rate" class="mono">-</span> Hz &middot;
+      rejected <span id="tx-rejected" class="mono">0</span></div>
+    <div class="small">arm_token (copy into the receiver's <span class="mono">--arm-token</span>):
+      <span id="tx-token" class="mono">-</span></div>
   `;
 }
 
-function currentManualTargets() {
-  // whatever the Joints tab is currently commanding (S.joints.target, sim's own echo) -
-  // sending the SAME values TX would push keeps "what you see" and "what you'd send" in sync.
-  if (!S.joints) return {};
-  return zipNamed2(S.joints.joint_names, S.joints.target);
+function collectTxEnableList() {
+  return Array.from(document.querySelectorAll(".tx-motor-cb"))
+    .filter((cb) => cb.checked)
+    .map((cb) => cb.dataset.n);
+}
+
+async function pushTxConfig() {
+  const body = {
+    host: el("tx-host").value,
+    port: parseInt(el("tx-port").value, 10) || 0,
+    enable: collectTxEnableList(),
+    kp_max: parseFloat(el("tx-kpmax").value) || 5.0,
+    kd_max: parseFloat(el("tx-kdmax").value) || 0.5,
+    ttl_ms: parseInt(el("tx-ttlms").value, 10) || 250,
+  };
+  const r = await apiOk("POST", "/tx/config", body);
+  if (r) { S.txStatus = r; toast(`TX configured: ${body.enable.length} joint(s) enabled`); }
+  return r;
 }
 
 function txDeadmanTick() {
   if (!S.txStatus || !S.txStatus.armed) return;
   apiOk("POST", "/tx/heartbeat");
-  apiOk("POST", "/tx/send", { values: currentManualTargets() });
 }
 
 function startTxDeadman() {
   if (S.txDeadmanTimer) return;
   txDeadmanTick();
-  S.txDeadmanTimer = setInterval(txDeadmanTick, 50); // ~20 Hz, well inside the 0.3s timeout
+  S.txDeadmanTimer = setInterval(txDeadmanTick, 100); // ~100ms cadence, spec'd dead-man rate
 }
 
 function stopTxDeadman() {
@@ -1221,14 +1246,19 @@ function isTypingTarget(ev) {
 }
 
 function wireTxSection() {
-  el("tx-enable").addEventListener("change", (ev) => {
-    S.txEnabled = ev.target.checked;
-    if (!S.txEnabled) stopTxDeadman();
+  el("btn-tx-config").onclick = () => {
+    if (S.txStatus && S.txStatus.armed) { toast("disarm before reconfiguring"); return; }
+    pushTxConfig();
+  };
+  el("tx-enable").addEventListener("change", async (ev) => {
+    const on = ev.target.checked;
+    const r = await apiOk("POST", "/tx/enable", { on });
+    if (r) S.txStatus = r;
+    else ev.target.checked = !on; // request refused (no config yet) - revert the checkbox
   });
   el("btn-tx-arm").onclick = async () => {
-    const host = el("tx-host").value, port = parseInt(el("tx-port").value, 10) || 0;
-    const r = await apiOk("POST", "/tx/arm", { host, port });
-    if (r) { S.txStatus = r; toast("TX armed (stub - nothing transmits yet)"); }
+    const r = await apiOk("POST", "/tx/arm");
+    if (r) { S.txStatus = r; toast("TX armed - hold Space to send"); }
   };
   el("btn-tx-disarm").onclick = async () => {
     stopTxDeadman();
@@ -1236,7 +1266,10 @@ function wireTxSection() {
     if (r) S.txStatus = r;
   };
   document.querySelectorAll(".tx-motor-cb").forEach((cb) => {
-    cb.addEventListener("change", () => apiOk("POST", "/tx/motor", { joint_name: cb.dataset.n, enabled: cb.checked }));
+    cb.addEventListener("change", () => {
+      if (S.txStatus && S.txStatus.armed) { toast("disarm before changing enabled motors"); cb.checked = !cb.checked; return; }
+      if (S.txStatus) pushTxConfig(); // config already exists - re-push with the new list
+    });
   });
   // keyboard dead-man - document-level so it works regardless of which element has focus,
   // but never hijacks Space while the operator is typing into a text field.
@@ -1244,7 +1277,7 @@ function wireTxSection() {
     window.__txKeyWired = true;
     document.addEventListener("keydown", (ev) => {
       if (ev.code !== "Space" || ev.repeat || isTypingTarget(ev)) return;
-      if (!S.txEnabled || !S.txStatus || !S.txStatus.armed) return;
+      if (!S.txStatus || !S.txStatus.armed) return;
       ev.preventDefault();
       startTxDeadman();
     });
@@ -1262,23 +1295,26 @@ function renderTxStatusLive() {
   const tx = S.txStatus;
   const st = S.status;
   const modeOk = st && st.mode === "manual";
-  el("btn-tx-arm").disabled = !modeOk || (tx && tx.armed);
+  el("btn-tx-arm").disabled = !modeOk || !tx || !tx.enabled || tx.armed;
   el("btn-tx-arm").title = modeOk ? "" : `blocked: mode is ${st ? st.mode : "?"}, TX only allowed in 'manual'`;
   if (!tx) { badge.textContent = "-"; badge.className = "pill"; return; }
-  if (tx.active) { badge.textContent = "ACTIVE (sending)"; badge.className = "pill ok"; }
+  if (tx.sending) { badge.textContent = "SENDING"; badge.className = "pill ok"; }
   else if (tx.armed) { badge.textContent = "ARMED (hold Space)"; badge.className = "pill warn"; }
   else { badge.textContent = "DISARMED" + (tx.disarm_reason ? ` (${tx.disarm_reason})` : ""); badge.className = "pill"; }
   const ageEl = el("tx-heartbeat-age");
-  if (ageEl) ageEl.textContent = tx.heartbeat_age_s !== null && tx.heartbeat_age_s !== undefined ? `heartbeat ${fmt(tx.heartbeat_age_s, 2)}s ago` : "";
-  const kpEl = el("tx-kpcap"), kdEl = el("tx-kdcap");
-  if (kpEl) kpEl.textContent = fmt(tx.kp_cap, 1);
-  if (kdEl) kdEl.textContent = fmt(tx.kd_cap, 1);
+  if (ageEl) ageEl.textContent = tx.deadman_age_s !== null && tx.deadman_age_s !== undefined ? `heartbeat ${fmt(tx.deadman_age_s, 2)}s ago` : "";
+  const seqEl = el("tx-seq"), rateEl = el("tx-rate"), rejEl = el("tx-rejected"), tokEl = el("tx-token");
+  if (seqEl) seqEl.textContent = tx.last_seq === null || tx.last_seq === undefined ? "-" : tx.last_seq;
+  if (rateEl) rateEl.textContent = fmt(tx.rate_hz, 1);
+  if (rejEl) rejEl.textContent = tx.rejected_count ?? 0;
+  if (tokEl) tokEl.textContent = tx.arm_token || "-";
+  if (document.activeElement !== el("tx-enable")) el("tx-enable").checked = !!tx.enabled;
   document.querySelectorAll(".tx-motor-cb").forEach((cb) => {
-    if (document.activeElement !== cb) cb.checked = tx.enabled_motors.includes(cb.dataset.n);
+    if (document.activeElement !== cb) cb.checked = (tx.enable || []).includes(cb.dataset.n);
   });
   // structural safety net mirrored in the UI: mode left 'manual' while armed -> the server
   // already auto-disarmed (SimCore._on_control_tick -> TxState.check_mode_gate); stop the
-  // local dead-man loop too so it does not keep calling a now-refused /tx/send.
+  // local dead-man loop too so it does not keep calling a now-pointless /tx/heartbeat.
   if (!modeOk) stopTxDeadman();
 }
 

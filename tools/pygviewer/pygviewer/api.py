@@ -51,8 +51,8 @@ from .schema import (
   ShadowFollowIn,
   Status,
   TargetIn,
-  TxArmIn,
-  TxMotorIn,
+  TxConfigIn,
+  TxEnableIn,
   WIRE_VERSION,
   validate_joint_names,
 )
@@ -390,23 +390,45 @@ def build_app(core, freshness: dict) -> FastAPI:
       raise HTTPException(400, str(exc))
     return {"source": core.gains_source, "gains": table}
 
-  @app.post("/tx/arm", summary="UI v2 TX STUB: arm hardware transmit - manual mode only")
-  def post_tx_arm(body: TxArmIn):
-    """Refuses (409) unless the sim is in ``manual`` mode (design item 2: policy output must
-    never be transmittable). STUB - see ``pygviewer/tx.py`` module docstring: no
-    ``bridge/tx_client.py`` exists yet, so a successful arm records intent only."""
+  @app.post("/tx/config", summary="UI v2 TX: (re)configure the TxClient - host/port/enable/kp_max/kd_max/ttl_ms")
+  def post_tx_config(body: TxConfigIn):
+    """Refused (409) while armed - ``POST /tx/disarm`` first, so the wire format (which
+    joints this client will ever send) never changes mid-stream."""
+    unknown = [n for n in body.enable if n not in core.act_names]
+    if unknown:
+      raise HTTPException(400, f"not actuated joints of {core.c.variant}: {unknown}")
     try:
-      core.tx.arm(core.mode, body.host, body.port)
+      core.tx.configure(
+        body.host, body.port, body.enable, kp_max=body.kp_max, kd_max=body.kd_max, ttl_ms=body.ttl_ms
+      )
     except TxNotAllowed as exc:
       raise HTTPException(409, str(exc))
     return core.tx.status()
 
-  @app.post("/tx/disarm", summary="UI v2 TX STUB: disarm")
+  @app.post("/tx/enable", summary="UI v2 TX stage 1: turn the TX panel on/off (needs POST /tx/config first)")
+  def post_tx_enable(body: TxEnableIn):
+    try:
+      core.tx.set_enabled(body.on)
+    except TxNotAllowed as exc:
+      raise HTTPException(409, str(exc))
+    return core.tx.status()
+
+  @app.post("/tx/arm", summary="UI v2 TX stage 2: arm hardware transmit - manual mode only")
+  def post_tx_arm():
+    """Refuses (409) unless stage 1 is enabled AND the sim is in ``manual`` mode (design item
+    2: policy output must never be transmittable)."""
+    try:
+      core.tx.arm(core.mode)
+    except TxNotAllowed as exc:
+      raise HTTPException(409, str(exc))
+    return core.tx.status()
+
+  @app.post("/tx/disarm", summary="UI v2 TX: disarm")
   def post_tx_disarm():
     core.tx.disarm(reason="operator")
     return core.tx.status()
 
-  @app.post("/tx/heartbeat", summary="UI v2 TX STUB: keyboard dead-man keep-alive")
+  @app.post("/tx/heartbeat", summary="UI v2 TX: keyboard dead-man keep-alive (Space, held, ~100ms cadence)")
   def post_tx_heartbeat():
     try:
       core.tx.heartbeat()
@@ -414,25 +436,7 @@ def build_app(core, freshness: dict) -> FastAPI:
       raise HTTPException(409, str(exc))
     return {"ok": True}
 
-  @app.post("/tx/motor", summary="UI v2 TX STUB: per-motor enable/disable")
-  def post_tx_motor(body: TxMotorIn):
-    if body.joint_name not in core.act_names:
-      raise HTTPException(400, f"not actuated joints of {core.c.variant}: {body.joint_name}")
-    core.tx.set_motor(body.joint_name, body.enabled)
-    return core.tx.status()
-
-  @app.post("/tx/send", summary="UI v2 TX STUB: send joint targets (only while armed+active)")
-  def post_tx_send(body: TargetIn):
-    unknown = [n for n in body.values if n not in core.act_names]
-    if unknown:
-      raise HTTPException(400, f"not actuated joints of {core.c.variant}: {unknown}")
-    try:
-      sent = core.tx.send(body.values)
-    except TxNotAllowed as exc:
-      raise HTTPException(409, str(exc))
-    return {"sent": sent, **core.tx.status()}
-
-  @app.get("/tx/status", summary="UI v2 TX STUB: armed/active/enabled-motors/last-sent")
+  @app.get("/tx/status", summary="UI v2 TX: armed/sending/enable/last_seq/rate/deadman_age/rejected_count")
   def get_tx_status():
     return core.tx.status()
 

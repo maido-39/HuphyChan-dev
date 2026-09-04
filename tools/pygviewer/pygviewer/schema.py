@@ -18,8 +18,9 @@ Implementation status is stated per model below.  P0/P1 implement ``Status``, ``
 ``TargetIn``, ``BaseIn``, ``ModeIn`` and the ``JointState`` that ``WS /ws/out`` emits.
 ``ImuState``, ``PolicyIO``, ``GainsIn`` and ``ObsSourceIn`` are DEFINED and documented here
 but their endpoints are P2/P3 - see ``api.py`` and ``API.md``. ``JointTarget`` is IMPLEMENTED
-as a wire type and on the ``bridge/`` transmit side (docs/123 "plan A", 2026-09-04) - see its
-own docstring below; ``api.py``/``modes.py`` transmit wiring is separate work, still pending.
+as a wire type, on the ``bridge/`` transmit side (docs/123 "plan A", 2026-09-04), and wired
+into ``api.py``/``pygviewer/tx.py`` (``POST /tx/config,enable,arm,disarm,heartbeat`` +
+``GET /tx/status``, 2026-09-04) - see ``JointTarget``'s own docstring below and ``tx.py``'s.
 """
 
 from __future__ import annotations
@@ -323,19 +324,25 @@ class PolicyLoadIn(BaseModel):
   allow_uncontracted: bool = False
 
 
-class TxArmIn(BaseModel):
-  """UI v2 TX STUB (docs/121 section 10 / docs/123).  Arm is refused (409) unless the sim
-  mode is exactly ``manual`` - policy output must never be transmittable."""
+class TxConfigIn(BaseModel):
+  """UI v2 TX (docs/121 section 10 / docs/123).  (Re)configures the underlying
+  ``bridge.tx_client.TxClient``: ``enable`` becomes that client's own ``joint_names`` - a
+  hard allow-list, not a per-tick filter on top of a client that could send anything.
+  Refused (409) while armed; ``POST /tx/disarm`` first."""
 
-  host: str = Field(description="intended bridge host - not connected to anything yet, stub")
-  port: int = Field(description="intended bridge port - not connected to anything yet, stub")
+  host: str
+  port: int
+  enable: list[str] = Field(default=[], description="sim joint names this client may ever send")
+  kp_max: float | None = Field(default=None, description="default 5.0 (docs/123 section 3 bench cap)")
+  kd_max: float | None = Field(default=None, description="default 0.5 (docs/123 section 3 bench cap)")
+  ttl_ms: int | None = Field(default=None, description="default 250ms (bridge.tx_client.DEFAULT_TTL_MS)")
 
 
-class TxMotorIn(BaseModel):
-  """UI v2 TX STUB.  Per-motor opt-in; a motor not explicitly enabled is never sent."""
+class TxEnableIn(BaseModel):
+  """UI v2 TX stage 1: turn the TX panel itself on/off. Requires ``POST /tx/config`` first;
+  turning it off also disarms (stage 2)."""
 
-  joint_name: str
-  enabled: bool
+  on: bool
 
 
 class PresetSaveIn(BaseModel):

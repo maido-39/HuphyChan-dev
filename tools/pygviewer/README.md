@@ -75,18 +75,51 @@ control rate, a 250 ms poll of `/snapshot` (plus `/gains`/`/presets`/`/policy/li
 their tab is open) for slower state - no new wire types, `JointState.src` and `PolicyIO`'s
 existing fields already carry what the dashboard needs.
 
-**TX (hardware transmit) - STUB.** The Telemetry/Record tab also has a TX section: host:port,
-a two-stage arm (an "activate" checkbox, then a real `POST /tx/arm` - refused whenever the
-sim mode is not `manual`, since **policy output must never be transmittable**), a keyboard
-dead-man (hold Space to send, release to stop), and one enable checkbox per motor. This is
-built against `pygviewer/tx.py`'s `TxState`, a real safety state machine that **transmits
-nothing anywhere** - `bridge/tx_client.py` (the actual 50 Hz UDP sender, built per
-`docs/123_pygviewer_tx_design.md` section 4/5) has now landed with its own arm/mode-gate/
-safe_clip+slew/gain-clamp logic and tests, but `TxState`/the UI have not been wired to call
-it yet - that wiring, plus the matching robot-side pieces (`bridge/huphy_remote_motion.py`,
-`bridge/dummy_rx.py`, `bridge/remote_target.py`, `bridge/tx_map.py`, `deploy/
-README_robot_host.md`), are docs/123 section 5. See `GET /tx/status`'s own `note` field,
-always present, for the current stub boundary.
+**TX (hardware transmit) - WIRED, docs/123 section 6 (2026-09-04).** The Telemetry/Record tab's
+TX section drives a real `bridge.tx_client.TxClient` end to end: `POST /tx/config` (host, port,
+per-motor `enable` list, kp_max/kd_max/ttl_ms) builds it; `POST /tx/enable` turns the panel on
+(stage 1); `POST /tx/arm` arms it (stage 2, refused with a 409 + reason whenever the sim mode
+is not `manual` - **policy output must never be transmittable**, enforced both at arm time and
+every control tick by `SimCore._on_control_tick` -> `TxState.check_mode_gate`). Only the
+CURRENT manual/script target (`SimCore.target`) is ever sent - a policy's action lives in a
+different attribute entirely and is never read by the TX code path. On top of arm/disarm sits
+a THIRD, independent keyboard dead-man: holding **Space** (not while typing in a text field)
+calls `POST /tx/heartbeat` every ~100ms; letting go does **not** disarm - the dashboard just
+stops sending new packets ("hold", not "stop"), and the robot's own age-based dead-man
+(`bridge.remote_target`, 0.2s) takes it from there, exactly as if the cable had been unplugged.
+`GET /tx/status` reports `armed`/`sending`/`last_seq`/`rate_hz`/`deadman_age_s`/
+`rejected_count`/`arm_token` (a per-process shared secret to copy verbatim into the receiver's
+own `--arm-token`) live, and the plot strip's "sent target" series is the client's actual
+clamped, slewed values (`TxClient.last_sent`), not a display echo of the slider.
+
+**Bench experiment procedure** (one motor, loopback or a real receiver on the LAN):
+
+```bash
+# 1. terminal A - a receiver. Loopback/no hardware: the physics-modelled dummy receiver.
+#    (For real hardware, use bridge/huphy_remote_motion.py instead - see deploy/README_robot_host.md.)
+cd tools/pygviewer
+../../mujoco-sim/mjlab/.venv/bin/python3 -m pygviewer.bridge.dummy_rx \
+    --variant LegOnly-AB --listen 0.0.0.0:9872 --telemetry 127.0.0.1:9870 \
+    --arm-token <copy from GET /tx/status's "arm_token"> --enable L_knee_joint
+
+# 2. terminal B - the viewer itself, as usual (see "Quick start" above).
+
+# 3. in the dashboard (:8095, Telemetry/Record tab, TX section):
+#    a. set host=127.0.0.1 port=9872, tick the L_knee_joint enable box, click "1. configure"
+#    b. tick "2. activate TX panel"
+#    c. click "3. ARM" (only enabled while mode=manual - Joints tab or a running script)
+#    d. move the L_knee_joint slider (Joints tab), then hold Space over the page - the badge
+#       reads "SENDING" while held, "ARMED (hold Space)" the instant it is released (still
+#       armed - not disarmed)
+# 4. verify: terminal A's own telemetry (or a HUPHY-format UDP reader on :9870) shows
+#    left/knee/pos tracking left/knee/tgt within the wire's own rounding (~0.01 deg); release
+#    Space and confirm the receiver's own log crosses hold -> returning -> default over
+#    hold_s + return_s (3s + 2s by default) after 0.2s of silence.
+```
+
+`tests/test_tx_wiring.py` automates the same sequence over real loopback UDP against
+`bridge.dummy_rx.DummyRx` (no dashboard/browser needed) - see its own docstring for what each
+tier covers, and the numbers below for what it actually measured.
 
 Verified live by hand (no Chrome extension reachable on this host - tried it, confirmed
 unavailable): `curl` for the page/static assets/preset round trip/policy-load sequence, a
@@ -500,8 +533,8 @@ tools/pygviewer/
     telemetry.py             RealState: latest-only receive buffer, rx rate/age/seq-gaps/
                              clock-offset, wrap/range flags, sign sanity (P3)
     record.py                Recorder (streaming jsonl.gz) / Replayer (seek, speed) (P3)
-    tx.py                    (UI v2 TX STUB) TxState: arm/disarm/heartbeat/per-motor-enable/
-                             send - transmits nothing, see its own module docstring
+    tx.py                    (UI v2 TX, wired 2026-09-04) TxState: config/enable/arm/disarm/
+                             heartbeat/on_control_tick, driving a real bridge.tx_client.TxClient
     bridge/
       huphy_udp.py           HUPHY UDP -> canonical JointState/ImuState (P3)
       joint_map_huphy.json   explicit 12-row limb/motor -> sim-joint table (P3)
@@ -509,7 +542,8 @@ tools/pygviewer/
       tx_map.py              sim-rad -> HUPHY cal-deg (inverse of huphy_udp.py), no huphy
                              import - docs/123 plan A item 2
       remote_target.py       LatestOnly (seq/arm_token/contract_hash gate) + DeadmanFilter
-                             (0.2s deadman -> hold -> 3s linear return), shared by dummy_rx.py
+                             (0.2s deadman -> flat hold_s -> linear return_s slew to default,
+                             3 independent knobs, resolved 2026-09-04), shared by dummy_rx.py
                              and huphy_remote_motion.py - docs/123 plan A item 3
       dummy_rx.py            huphy-free local round-trip target: UDP:9872 in -> 1st-order PD
                              motor model -> HUPHY-format UDP:9870 out - docs/123 item 4
@@ -517,7 +551,7 @@ tools/pygviewer/
                              run_real() - --dry-run needs neither huphy nor CAN - item 3
       tx_client.py           viewer-side JointTarget sender: arm/mode-gate (blocks
                              policy_sim/policy_shadow)/safe_clip+slew/kp-kd-clamp - item 5.
-                             NOT yet wired to tx.py's TxState/the UI (see "TX" section above)
+                             Driven by tx.py's TxState from SimCore._on_control_tick (2026-09-04)
     modes.py                 mode reference table + TargetScript (P4, the script player);
                              real_replay/file_replay/policy_shadow themselves live in
                              sim_core.py, dispatched on the plain string SimCore.mode

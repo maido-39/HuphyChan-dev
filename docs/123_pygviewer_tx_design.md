@@ -134,8 +134,74 @@
 ### HUPHY 인터페이스 갭 (버그가 아니라 "이렇게 생겼음" 기록 — 코드 수정 없음)
 - **`Leg.build_commands`는 발목을 pitch/roll(IK)로만 받고, 모터 레벨(a1/a2 = ankle_a/ankle_b)을 직접 받는 경로가 없다.** 우리 sim의 canonical 표현은 크랭크 각(모터와 1:1)이라, `huphy_remote_motion.py`는 크랭크 목표를 `AnkleKinematics.solve_fk`로 pitch/roll로 바꾼 뒤 `build_commands`에 넘기고, 그 안에서 다시 `solve_ik`로 a1/a2를 복원한다 — FK(뉴턴 반복)→IK(닫힌해) 왕복이 매 틱 발생. 실측(벤치)에서 이 왕복의 수치오차가 실사용에 문제되는지는 미확인(로컬에 CAN이 없어 실행 자체를 못 해봄). **제안**: `Leg`에 "모터 레벨 목표(ankle_a_deg, ankle_b_deg)를 가드까지 통과시키는" 저수준 경로가 있으면 원격/재생 브리지처럼 pitch/roll 의미가 필요 없는 호출자에게 더 정확하고 간단함.
 - **게인은 `LimbConfig`(생성자 시점에 고정)에서만 읽고, `action` 딕셔너리로는 못 준다.** 메시지별 kp/kd를 실제로 반영하려면 매 틱 `leg.config`를 `dataclasses.replace`로 재구성해야 했음(`bringup.build_leg`가 생성 시점에 쓰는 것과 같은 패턴을 틱 단위로 확장) — 동작은 하지만 `Leg`가 원래 "설정은 시작할 때 한 번 읽고 안 바뀐다"고 명시한 불변식(설정 파일 docstring)을 어기는 사용법이라 조심스럽다. **제안**: `build_commands(action, gains_override=None)`처럼 틱 단위 게인 오버라이드를 1급으로 지원하면 이런 우회가 필요 없어짐.
-- **§3의 "0.2s 데드맨 → hold → 3s 후 default로 슬루 복귀" 문구는 두 가지로 읽힌다**: (a) 0.2s간 고정 유지 후 (별도 속도로) 슬루 시작, (b) 0.2s에 데드맨이 걸리고 그 순간부터 3s에 걸쳐 선형 보간. CLI에 타이밍 노브가 `--default-return-s` 하나뿐이라 (b)로 구현(`remote_target.py` 모듈 독스트링에 근거 명시). 사용자가 (a)를 의도했다면 `--hold-s`류 별도 플래그가 필요.
+- **[해결됨, 09-04 배선 작업 §6]** §3의 "0.2s 데드맨 → hold → 3s 후 default로 슬루 복귀" 문구의 두 가지 해석(아래는 원래 기록) 중 사용자가 (a)로 확정 — `remote_target.py`에 `--hold-s`(기본 3.0s, 평평하게 고정)와 `--return-s`(기본 2.0s, 그 이후 선형 슬루)를 분리한 3-노브 설계로 재구현했다. 원래 기록: (a) 0.2s간 고정 유지 후 (별도 속도로) 슬루 시작, (b) 0.2s에 데드맨이 걸리고 그 순간부터 3s에 걸쳐 선형 보간 — CLI에 타이밍 노브가 `--default-return-s` 하나뿐이라 당시 (b)로 구현했었음.
 - **로컬 검증 한계**: `huphy_remote_motion.py`의 `run_real()`/`RemoteMotion`(huphy 임포트가 실제로 일어나는 유일한 경로)은 이 개발 머신에 huphy 미설치·CAN 미연결이라 **한 번도 실행되지 않았다** — 순수 헬퍼(관절명 변환·게인 계획·CLI 파싱)와 `--dry-run` 경로만 검증됨. 배포 README §9의 벤치 1모터 단계가 이 파일에 대한 첫 실제 실행이 된다.
 
 ### 브리핑
 `docs/000.Real-time Brefing.md`에 `add pygviewer-tx`→`done` 기록(수치·용어 동일하게 반영, 손편집 아님).
+
+## 6. 대시보드 배선 완료 (안 A 마무리, 2026-09-04, 코더)
+
+**범위**: §5의 `bridge/tx_client.py`(송신 라이브러리)와 대시보드/`api.py`/`tx.py`(당시 STUB)를
+실제로 연결. `pygviewer/tx.py`를 스텁에서 실배선으로 전면 재작성, `api.py`의 `/tx/*` 엔드포인트를
+`{config, enable, arm, disarm, heartbeat, status}`로 재설계(기존 `{arm(host,port 포함),
+motor, send}`은 폐기 — 송신은 이제 `SimCore._on_control_tick`이 매 제어틱(50Hz, 이 모델의 제어틱
+자체가 50Hz라 `TxClient`의 명목 송신율과 1:1)마다 자동으로 하고, 대시보드는 더 이상 `/tx/send`를
+호출하지 않음), `pygviewer/static/dashboard.{html,js}`의 TX 섹션을 새 엔드포인트에 배선.
+
+### 데드맨 의미 확정 (§5 마지막 항목 해결)
+사용자 확정: "0.2s 경과 → 현재 목표 hold, hold가 3s 지속되면 default로 ~2s 슬루 복귀" (해석 a).
+`bridge/remote_target.py`의 `DeadmanFilter`에 `hold_s`(기본 3.0s, 완전히 평평하게 고정 — 이 구간
+동안은 값이 전혀 안 바뀜)와 `return_s`(기본 2.0s, 그 이후 선형 슬루)를 분리된 파라미터로 추가
+(`deadman_s`/`hold_s`/`return_s` 3-노브, CLI `--deadman-s`/`--hold-s`/`--return-s` —
+`--default-return-s`는 폐기). `dummy_rx.py`·`huphy_remote_motion.py`(dry-run·real 둘 다) 갱신.
+`tests/test_remote_target.py`에 flat-hold 전용 테스트(`test_hold_phase_is_flat_for_hold_s_
+before_any_slew_begins`) 추가, 기존 return-interpolation 테스트는 `hold_s=0`으로 예전 단일단계
+동작을 그대로 재현(하위호환 케이스로 유지).
+
+**키보드 데드맨(대시보드 Space)은 이것과 별개의 세 번째 게이트**: `TxState.DEADMAN_TIMEOUT_S=0.3s`
+초과 시 서버가 **disarm하지 않고** 새 패킷 송신만 멈춘다("hold", "stop" 아님) — 로봇 측
+`DeadmanFilter`(위 0.2s/hold_s/return_s)가 스트림이 끊긴 것을 보고 자기 몫을 처리한다. 이 구분을
+`pygviewer/tx.py`의 `sending()`(armed AND heartbeat fresh)과 `armed`를 별도 필드로 유지해 구현.
+
+### 검증 수치 (`tests/test_tx_wiring.py`, 실제 loopback UDP, mock 없음)
+- `bridge.dummy_rx.DummyRx`를 실제로 기동해 `POST /tx/config`→`/tx/enable`→`/tx/arm`→
+  `POST /target`→하트비트 유지 상태에서 1.5초 구동 → dummy_rx 텔레메트리(HUPHY UDP 포맷, :9870
+  상당)의 `left/knee/pos`가 목표(cal-deg 변환값)의 **2도 이내**로 수렴(`test_live_enable_arm_
+  heartbeat_target_tracks_over_real_udp`) — 실제 회로 왕복(뷰어 SimCore 제어틱 → TxState →
+  TxClient UDP 송신 → DummyRx PD 모터모델 → HUPHY 포맷 텔레메트리)이 처음부터 끝까지 동작함을 확인.
+- 하트비트 중단 시 0.3s(`DEADMAN_TIMEOUT_S`) + 0.2s 마진 내에 `GET /tx/status`가
+  `armed=true, sending=false`로 전환하고 이후 추가로 0.3초 더 구동해도 `last_seq`가 더 이상
+  증가하지 않음을 확인(`test_live_heartbeat_stop_halts_sending_within_deadman_timeout`) — "hold،
+  disarm 아님"이 실측으로 성립.
+- `core.mode="policy_sim"`으로 전환 후 **1 제어틱 이내** `armed=false`+사유 문자열에 `"policy_sim"`
+  포함, 이후 `/tx/arm` 재시도는 409(`test_live_policy_sim_mode_refuses_arm_and_auto_disarms`).
+- `enable=["L_knee_joint"]`만 설정한 상태에서 `L_hip_pitch_joint`도 함께 커맨드했지만 dummy_rx
+  텔레메트리상 hip_pitch는 자기 default(±1도 이내)에 머물러 있어 **한 번도 전송되지 않았음**을
+  확인(`test_live_joint_outside_enable_list_is_never_transmitted`) — `enable`이 `TxClient.
+  joint_names`(생성 시점 고정 집합)로 그대로 들어가 "필터"가 아니라 "허용목록"으로 작동.
+- pytest: 이번 배선 작업으로 스텁 전용이었던 `test_dashboard_tx.py`(13건, 새 API 계약과 불일치해
+  폐기)를 `tests/test_tx_wiring.py`(18건: 순수 TxState 유닛 11 + API/제어틱 연동 3 + 실제 UDP
+  왕복 4)로 교체, 데드맨 재설계로 `test_remote_target.py`에 순검증 2건 추가/보강. 전체 스위트
+  **343 passed**(`tools/pygviewer` 전체, mjlab venv, ~30-40s) — 09-04 §5 기록의 333에서
+  net +10 (스텁 13건 폐기 + 신규 23건).
+- Policy 패널 UX 수정(같은 세션, 사용자 09-04 12:55 지적)의 백엔드 계약 테스트
+  `tests/test_policy_ui_contract.py`(3건, `/policy/load`의 400/404/409 모두 `detail`이 표시
+  가능한 비어있지 않은 문자열임을 확인) 포함.
+
+### 남은 이슈 (밝혀두는 것, 조용히 흡수하지 않음)
+- **실제 브라우저 렌더링은 이번에도 미검증** — 이 호스트에서 크롬 익스텐션 연결 불가(docs/121
+  §10에 이미 기록된 동일 제약). CSS 레이아웃/키 입력 체감은 코드 리뷰로만 확인.
+  Space 키다운 리스너의 100ms 하트비트 간격, "SENDING"/"ARMED (hold Space)" 배지 전환은 코드
+  경로상으로는 맞지만 실제 키보드 입력으로 눈으로 본 적은 없음.
+- **실물 HUPHY 경로는 여전히 미실행** — `huphy_remote_motion.py`의 `run_real()`은 이 개발
+  머신에 huphy/CAN이 없어 이번 세션에서도 실행되지 않음(§5와 동일한 한계). 배선 대상은
+  `dummy_rx.py`(물리 모델 왕복)까지 실측했고, 이는 유효한 안전장치 검증이지만 실제 모터 응답
+  검증은 아님.
+- `tx.py`의 `arm_token`은 프로세스 시작 시 무작위 생성(`secrets.token_hex(8)`)되어
+  `GET /tx/status`로 노출 — 수신측(`dummy_rx.py`/`huphy_remote_motion.py`)의 `--arm-token`에
+  운영자가 수동으로 복사해 맞춰야 한다(자동 배포/공유 메커니즘 없음, 벤치 규모에선 허용 가능한
+  수동 단계로 판단했으나 자동화하면 더 안전).
+
+### 브리핑 (재작성)
+`docs/000.Real-time Brefing.md`에 `add pygviewer-tx-ui`→`done` 기록(위 수치 그대로, 손편집 아님).

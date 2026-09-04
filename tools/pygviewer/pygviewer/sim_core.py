@@ -294,8 +294,8 @@ class SimCore:
     self.script = None
     self.script_run_id: str | None = None
 
-    # ---------------------------------------------------------------- TX stub (UI v2, 09-04)
-    self.tx = TxState(self.act_names)
+    # ---------------------------------------------------------------- TX (UI v2, 09-04)
+    self.tx = TxState(self.act_names, contract)
 
     self._cmds: deque = deque(maxlen=512)
     self._lock = threading.Lock()
@@ -877,10 +877,20 @@ class SimCore:
     """Everything that happens once per control tick (50 Hz), regardless of which of the
     three loop drivers (realtime loop, headless loop, ``step_n``) called it."""
     self._drain()
-    # UI v2 TX stub (docs/121 section 10 / docs/123): structural enforcement that armed TX
+    # UI v2 TX (docs/121 section 10 / docs/123): structural enforcement that armed TX
     # auto-disarms the instant the mode is not "manual" - checked here every control tick,
     # not only by the API layer that requested the mode change.
     self.tx.check_mode_gate(self.mode)
+    if self.tx.enabled:
+      # The ONLY thing ever handed to the TX wrapper is the current manual/script target -
+      # never a policy action, which is a different attribute entirely (self.last_action /
+      # self._policy_target) and is simply never read here (docs/123 section 4).
+      self.tx.on_control_tick(
+        self.mode,
+        {n: float(self.target[i]) for i, n in enumerate(self.act_names)},
+        {n: float(self.kp[i]) for i, n in enumerate(self.act_names)},
+        {n: float(self.kd[i]) for i, n in enumerate(self.act_names)},
+      )
     if self.policy is not None and self.mode.startswith("policy"):
       self._policy_tick()
     if self.mode in REPLAY_MODES:
