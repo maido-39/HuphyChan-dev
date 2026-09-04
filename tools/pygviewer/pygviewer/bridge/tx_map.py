@@ -118,6 +118,16 @@ class JointTargetMapper:
   def known_sim_joints(self) -> set[str]:
     return set(self._by_sim_joint)
 
+  def motor_row(self, sim_joint: str) -> tuple[str, str, dict]:
+    """``(limb, motor_name, joint_map_row)`` for one sim joint name.  Public accessor used by
+    ``dummy_rx.py`` to build OUTGOING telemetry (pos/vel/tau) with the same table and the same
+    ``travel_sign`` this class uses for targets - the wire's pos/vel/tau fields live in the
+    same cal-deg space as a command, so the conversion function is identical either way."""
+    row = self._by_sim_joint.get(sim_joint)
+    if row is None:
+      raise UnknownSimJointError(f"{sim_joint!r} not in {self.jmap.path}'s motors table")
+    return row
+
   def to_motor_targets(
     self, joint_names: list[str], q_target: list[float]
   ) -> dict[str, dict[str, float]]:
