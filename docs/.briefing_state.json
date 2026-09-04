@@ -1283,7 +1283,8 @@
    "now_": "docs/121 §12, docs/123 §11에 biped 이행 기록; API.md/README.md/deploy 가이드 갱신; 커밋 대기",
    "section": "done",
    "changed": "2026-09-04 22:27",
-   "finding": "pygviewer 테스트 스위트 전체 그린(exit 0), --dry-run으로 --limb left/bench가 모두 left_leg로, 없는 이름은 사용가능 목록을 담은 에러로 확인(하드웨어 검증은 하지 않음, 사용자 직접 확인 예정)"
+   "finding": "pygviewer 테스트 스위트 전체 그린(exit 0), --dry-run으로 --limb left/bench가 모두 left_leg로, 없는 이름은 사용가능 목록을 담은 에러로 확인(하드웨어 검증은 하지 않음, 사용자 직접 확인 예정)",
+   "collapsed": true
   },
   "legonly-ab-v2-done": {
    "id": "legonly-ab-v2-done",
@@ -1292,7 +1293,8 @@
    "section": "done",
    "changed": "2026-09-04 22:46",
    "finding": "18,099회 전 구간 완료. 최종 점수 114.45로 학습 내내 최고치를 갱신하며 마감했고 넘어짐은 0.0000. 34번의 중간 점검에서 모두 '계속' 판정으로 조기 중단 사유가 한 번도 없었음",
-   "needs": "★측정이 아직 안 됐습니다 — 모터 사용률(RMS/p95/peak)과 무릎 스윙 각도(사람 55~65도 대비) 재측정이 다음 작업입니다. 이번 학습의 핵심 가설(좌우 축이 반대인 것을 반영한 수정이 무릎 스윙을 되살렸는가)이 이 측정으로만 검증됩니다"
+   "needs": "★측정이 아직 안 됐습니다 — 모터 사용률(RMS/p95/peak)과 무릎 스윙 각도(사람 55~65도 대비) 재측정이 다음 작업입니다. 이번 학습의 핵심 가설(좌우 축이 반대인 것을 반영한 수정이 무릎 스윙을 되살렸는가)이 이 측정으로만 검증됩니다",
+   "collapsed": true
   },
   "idle-refresh-fix": {
    "id": "idle-refresh-fix",
@@ -1391,6 +1393,26 @@
     "docs/img/dashboard_console_covering_control_before.png",
     "docs/img/dashboard_resizable_panes_after.png"
    ]
+  },
+  "bench-temp-decode": {
+   "id": "bench-temp-decode",
+   "created": "2026-09-05 04:10",
+   "title": "모터 온도 표시가 100배 틀렸던 원인을 찾아 고침 (3309.8도 → 34.0도)",
+   "why": "50도에서 힘을 끊는 안전장치가 온도를 믿을 수 있어야 동작함. 33도짜리 모터가 3309.8도로 보고되어 안전장치가 무의미했고, 진단을 두 번 헤맴",
+   "finding": "온도 칸 16비트 중 위쪽 4비트는 온도가 아니었음. 같은 모터·같은 순간에 한 경로는 0x814A(3309.8도), 다른 경로는 0x014A(33.0도)를 냈고, 관측된 세 값(0x814A·0x214A·0x014A) 모두 아래 12비트가 0x14A=33.0도로 같음. 아래 12비트만 온도로 읽도록 고치니 두 모터가 36.0도·34.0도로 방 온도와 맞음",
+   "number": "무릎 모터: 3309.8도 → 34.0도 / 엉덩이 회전 모터: 36.0도 / 화면 이상값 기록 308만 건 → 0건",
+   "section": "done",
+   "changed": "2026-09-05 04:10"
+  },
+  "bench-restart-deadlock": {
+   "id": "bench-restart-deadlock",
+   "created": "2026-09-05 04:10",
+   "title": "다시 켤 때마다 모터가 죽어 있던 원인을 찾아 고침",
+   "why": "어제부터 '화면은 정상인데 모터는 안 움직임'이 반복됐고, 매번 손으로 되살려야 했음",
+   "finding": "프로그램이 모터의 현재 각도를 먼저 물어본 뒤에 모터 전원을 넣는 순서였음. 전원이 꺼진 모터는 그 질문에 답하지 않으므로 각도를 영영 모르고, 각도를 모르면 명령을 보내지 않는 안전규칙 때문에 아무것도 보내지 않아 영원히 멈춤. 이전까지는 프로그램이 강제 종료되어 모터 전원이 켜진 채 남아 있었던 덕에 우연히 동작했고, 정상 종료하자 바로 재현됨. 순서를 뒤집어(전원 먼저, 질문 나중) 해결",
+   "number": "고치기 전: 6개 중 0개 응답, 통신선로 송신 0건 / 고친 뒤: 2개 중 2개 응답, 초당 200건 송수신, 응답 지연 0.26 ms",
+   "section": "done",
+   "changed": "2026-09-05 04:10"
   }
  },
  "order": [
@@ -1514,7 +1536,9 @@
   "fault-visible-on-screen",
   "self-lock-no-state",
   "bench-speed-measured",
-  "resizable-panes"
+  "resizable-panes",
+  "bench-temp-decode",
+  "bench-restart-deadlock"
  ],
- "updated": "2026-09-05 04:09"
+ "updated": "2026-09-05 04:10"
 }

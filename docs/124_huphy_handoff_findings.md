@@ -24,7 +24,8 @@
 | 갈래 | 항목 | 위치 | 심각도 |
 |---|---|---|---|
 | **크리티컬** | **속도 제한 장치가 없음 (실기 안전 직결)** | `robots/leg.py:490`, 모터 `0x7017/0x7018` 미설정 | **로봇 전체 동시 정지** |
-| **크리티컬** | **온도 칸의 맨 위 비트를 온도로 계산 (33도 -> 3309.8도)** | `codec/mit.py:124` | 과열을 놓치거나 헛차단 |
+| **크리티컬** | **온도 칸의 위쪽 4비트를 온도로 계산 (33도 -> 3309.8도)** | `codec/mit.py:124` | 과열을 놓치거나 헛차단 |
+| **크리티컬** | **모터 전원을 켜기 전에 각도를 물어 재시작마다 멈춤** | `control/loop.py:363` | 정상 종료 후 재시작하면 항상 죽음 |
 | 크리티컬 | 고장값을 반대 순서로 읽음 | `codec/mit.py::decode_fault` | 진단이 통째로 틀림 |
 | 버그 | 고장이 나도 아무 데도 안 실림 | `telemetry/snapshot.py` | 멈춘 걸 아무도 모름 |
 | 버그 | 화면 출력이 파일로 갈 때 안 보임 | `scripts/*` 전반 | 진단 지연 |
@@ -92,7 +93,7 @@
 
 ---
 
-## 0b. 크리티컬 — 온도 자리의 맨 위 비트를 온도로 계산합니다
+## 0b. 크리티컬 — 온도 자리의 위쪽 4비트를 온도로 계산합니다
 
 ### 쉬운 말로
 
@@ -149,6 +150,82 @@ temp_u = ((data[6] << 8) | data[7]) & 0x7FFF   # 맨 위 비트는 온도가 아
 다만 **그 비트가 무엇을 뜻하는지는 확인되지 않았습니다.** 벤더에 문의하거나, 비트가 켜지는 상황을
 기록해 두면 좋겠습니다(저희 관측으로는 RS04에서 자주, RS03에서는 안 켜졌습니다). 단순히 버리기보다
 **따로 꺼내 기록**하는 편이 나을 수 있습니다.
+
+---
+
+## 0c. 크리티컬 — 모터 전원을 켜기 전에 각도를 물어봅니다 (재시작할 때마다 멈춤)
+
+### 쉬운 말로
+
+`ControlLoop` 은 **모터 전원을 loop 안에서** 켭니다(`_enter()` -> `robot.enable()`). 그런데 각도를
+모르는 모터에는 명령을 보내지 않는 안전 규칙(0.5절 `NO_STATE`)이 있고, MIT 방식에는 **명령을 보내야만
+각도가 돌아오는** 구조라서, loop 이 시작되기 전에 각도를 한 번 받아두어야 합니다.
+
+문제는 **전원이 꺼진 모터는 명령 프레임에 아예 응답하지 않는다**는 점입니다. 그래서 "각도를 먼저
+물어보고 그 다음 전원" 순서면 영원히 답을 못 받고, 아무 명령도 나가지 않는 상태로 굳습니다.
+
+### 증상 (실측, 2026-09-05)
+
+정상 종료(`_exit()` 가 토크를 끊음) 직후 다시 켜면:
+
+```
+[remote_motion] seeded measured positions on left_leg: 0/6 motors answered
+통신선로 송신 3초간 +0 건        <- 100 Hz 로 돈다면서 한 건도 안 나감
+stats: ... idle_refresh=19027    <- 루프는 멀쩡히 돌고 있음
+```
+
+같은 순간 별도 도구로 물어보면 두 모터 모두 **정상 응답**합니다(사설 프로토콜 "누구세요" 조회는
+전원 상태와 무관하게 답함):
+
+```
+MIT RX  id 3  data 037ea08118000168
+MIT RX  id 4  data 0492487fb7fe0154
+```
+
+이 문제가 **지금까지 숨어 있던 이유**: 그동안은 프로그램을 강제로 죽여서 모터 전원이 켜진 채
+남아 있었습니다. 처음으로 **정상 종료**를 하자 바로 재현됐습니다. 실기에서는 정상 종료가 기본이므로
+**항상** 이 상태가 됩니다.
+
+### 위치
+
+`src/huphy/control/loop.py:363-372`
+
+```python
+def _enter(self) -> None:
+    if not self.robot.is_connected:
+        self.robot.connect()
+    ...
+    else:
+        self.robot.enable()      # <- loop.run() 안, 즉 사용자 코드보다 나중
+```
+
+### 수정안
+
+`ControlLoop` 이 `_enter()` 에서 `enable()` 바로 뒤에 `refresh_states()` 를 한 번 부르면 사용자
+코드가 이 순서를 알 필요가 없어집니다.
+
+```python
+    else:
+        self.robot.enable()
+        # 토크를 켠 직후 상태를 한 번 받아둠. CONTROL 모드에서는 명령의 응답으로만
+        # 상태가 오는데, 상태가 없으면 guards 가 명령을 막아 서로 물림.
+        for part in getattr(self.robot, "parts", [self.robot]):
+            bus = getattr(part, "bus", None)
+            if bus is not None and hasattr(bus, "refresh_states"):
+                bus.refresh_states()
+```
+
+우리 쪽은 그때까지 `biped.enable()` 을 직접 부른 뒤 씨딩하는 것으로 우회했습니다
+(`bridge/huphy_remote_motion.py`).
+
+### 고친 뒤 (실측)
+
+```
+[remote_motion] torque enabled before seeding
+[remote_motion] seeded measured positions on left_leg: 2/6 motors answered (no answer: [1, 2, 5, 6])
+통신선로 3초간  송신 +600  수신 +600    (모터 2개 x 100 Hz, 응답률 100%)
+화면: 두 관절 모두 '정상', 응답 지연 0.26 ms, 놓친 응답 0
+```
 
 ---
 

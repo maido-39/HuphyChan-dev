@@ -684,6 +684,24 @@ def run_real(args) -> int:
   # `refresh_states()` is HUPHY's own way out: it sends an all-gains-zero PASSIVE frame, which
   # applies no torque but does make the motor answer with its state. One call before the loop
   # is enough to break the deadlock; after that each command's own reply keeps the table fresh.
+  #
+  # ...but ONLY once torque is on (2026-09-05, second bench incident). A motor whose driver is
+  # off does not answer a MIT command frame at all - it still answers the private "who are you"
+  # query, which is why a probe found both motors happily on the bus while this seeding got
+  # 0/6. `ControlLoop._enter()` (huphy control/loop.py:363-372) is what calls `robot.enable()`,
+  # and that runs INSIDE `loop.run()` - i.e. AFTER this block. So the ordering only worked by
+  # luck: it survived while the previous process had been killed hard (leaving torque latched
+  # on), and broke the first time a run shut down cleanly, because `_exit()` disables torque on
+  # the way out. Then the NO_STATE deadlock above is permanent and the viewer shows every joint
+  # dead at 0.0 deg with the loop reporting a perfectly healthy 100 Hz.
+  #
+  # Enabling here is safe and not a duplicate-with-side-effects: `enable()` only powers the
+  # driver, it applies no target (nothing moves until a command carries one), and `_enter()`
+  # calling it a second time a few milliseconds later is idempotent.
+  biped.enable()
+  print("[remote_motion] torque enabled before seeding (motors ignore command frames while off)",
+        flush=True)
+
   for part in biped.parts:
     bus_obj = getattr(part, "bus", None)
     if bus_obj is None or not hasattr(bus_obj, "refresh_states"):
