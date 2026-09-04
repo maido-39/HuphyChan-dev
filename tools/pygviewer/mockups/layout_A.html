@@ -1,0 +1,37 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>pygviewer 레이아웃 A — viser 단일창 + 탭 패널</title>
+<style>
+body{margin:0;font:14px/1.4 system-ui,sans-serif;background:#1e1e1e;color:#ddd}
+.wrap{display:grid;grid-template-columns:1fr 380px;grid-template-rows:48px 1fr;height:100vh}
+.top{grid-column:1/3;background:#111;display:flex;align-items:center;gap:16px;padding:0 16px;border-bottom:1px solid #333}
+.scene{background:#2a2f36;display:flex;align-items:center;justify-content:center;color:#8aa;font-size:22px;position:relative}
+.panel{background:#181818;border-left:1px solid #333;display:flex;flex-direction:column}
+.tabs{display:flex;border-bottom:1px solid #333}
+.tabs div{flex:1;text-align:center;padding:10px 4px;font-size:12px;border-right:1px solid #333;color:#999}
+.tabs div.on{background:#262626;color:#fff;font-weight:600}
+.body{padding:12px;overflow:auto;flex:1}
+.row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed #333}
+.pill{background:#333;border-radius:10px;padding:2px 8px;font-size:11px}
+.seg{display:inline-flex;border:1px solid #555;border-radius:6px;overflow:hidden}.seg span{padding:2px 8px;font-size:11px}.seg .on{background:#4a7;color:#000}
+.plot{background:#222;border:1px solid #444;height:70px;margin:6px 0;display:flex;align-items:center;justify-content:center;color:#666;font-size:11px}
+.note{position:absolute;left:16px;top:16px;background:#0008;padding:8px 12px;border-radius:6px;font-size:12px;max-width:420px}
+.badge{color:#fc6}
+</style></head><body>
+<div class="wrap">
+ <div class="top"><b>pygviewer</b><span class="pill">LegOnly-AB · sha 73e810a0</span><span class="pill">mode: policy_sim</span><span class="pill">base: string z=0.85 (slack)</span><span class="pill badge">side mapping UNVERIFIED</span><span style="margin-left:auto">200 Hz · 50 Hz · RSS 220 MB</span></div>
+ <div class="scene">3D 씬 (viser)
+  <div class="note"><b>안 A — viser 단일 창, 오른쪽 패널을 탭으로 재편</b><br>스크롤 대신 탭 5개. 패널 폭 large. 플롯은 패널 안(폭 380px)이라 작음 → 12관절 동시 보기 한계(작은 스파크라인 12개 + 선택 1개 확대).<br>구현비용 최소(viser API만), 왼쪽 패널·큰 플롯은 불가.</div></div>
+ <div class="panel">
+  <div class="tabs"><div class="on">Setup</div><div>Control</div><div>Gains</div><div>Telemetry</div><div>Plots</div></div>
+  <div class="body">
+   <div class="row"><b>Model</b><span>LegOnly-AB ▾</span></div>
+   <div class="row"><span>Base</span><span class="seg"><span>free</span><span>fixed</span><span>pivot</span><span class="on">string</span></span></div>
+   <div class="row"><span>Z set</span><span>0.85 m ─●──</span></div>
+   <div class="row"><span>Hook offset xyz</span><span>0 / 0 / 0</span></div>
+   <div class="row"><span>Ground</span><span>☑</span></div>
+   <div class="row"><span>Keyframe</span><span>home · knees_bent</span></div>
+   <hr style="border:0;border-top:1px solid #333;margin:14px 0">
+   <div style="color:#888;font-size:12px">Control 탭(미리보기): <span class="seg"><span class="on">Joints</span><span>Policy</span></span> 둘 중 하나만 노출 · 단위 <span class="seg"><span class="on">deg</span><span>rad</span></span></div>
+   <div class="plot">Plots 탭: 12 스파크라인(60px) + 선택 1개 확대(200px)</div>
+  </div>
+ </div>
+</div></body></html>

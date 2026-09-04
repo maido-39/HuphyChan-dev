@@ -1,0 +1,40 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>pygviewer 레이아웃 B — 대시보드 페이지(좌 탭 · 중앙 3D · 좌하 큰 플롯 · 우 제어)</title>
+<style>
+body{margin:0;font:14px/1.4 system-ui,sans-serif;background:#1e1e1e;color:#ddd}
+.wrap{display:grid;grid-template-columns:260px 1fr 360px;grid-template-rows:44px 1fr 300px;height:100vh;gap:1px;background:#333}
+.top{grid-column:1/4;background:#111;display:flex;align-items:center;gap:14px;padding:0 14px}
+.left{grid-row:2/3;background:#181818;display:flex;flex-direction:column}
+.scene{grid-column:2/3;grid-row:2/3;background:#2a2f36;display:flex;align-items:center;justify-content:center;color:#8aa;font-size:22px;position:relative}
+.right{grid-column:3/4;grid-row:2/4;background:#181818;display:flex;flex-direction:column}
+.plots{grid-column:1/3;grid-row:3/4;background:#141414;padding:8px;display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(2,1fr);gap:6px}
+.plots div{background:#222;border:1px solid #444;display:flex;align-items:flex-end;justify-content:center;color:#777;font-size:11px;padding:4px}
+.tabs{display:flex;flex-direction:column}
+.tabs div{padding:10px 14px;border-bottom:1px solid #333;color:#999}
+.tabs div.on{background:#262626;color:#fff;font-weight:600}
+.body{padding:12px;overflow:auto;flex:1}
+.row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed #333;font-size:13px}
+.pill{background:#333;border-radius:10px;padding:2px 8px;font-size:11px}
+.seg{display:inline-flex;border:1px solid #555;border-radius:6px;overflow:hidden}.seg span{padding:2px 8px;font-size:11px}.seg .on{background:#4a7;color:#000}
+.note{position:absolute;left:16px;top:16px;background:#0008;padding:8px 12px;border-radius:6px;font-size:12px;max-width:520px}
+.obs{display:grid;grid-template-columns:repeat(12,1fr);gap:2px;margin:6px 0}.obs i{display:block;height:28px;background:linear-gradient(to top,#4a7 60%,#222 60%)}
+.badge{color:#fc6}
+</style></head><body>
+<div class="wrap">
+ <div class="top"><b>pygviewer</b><span class="pill">LegOnly-AB</span><span class="pill">mode: policy_sim</span><span class="pill">string z=0.85 · slack 0 N</span><span class="pill badge">side mapping UNVERIFIED</span><span style="margin-left:auto">200 Hz · 50 Hz · rx 49/s · offset 32 ms</span></div>
+ <div class="left"><div class="tabs"><div class="on">Model</div><div>Base link</div><div>Telemetry / Record</div><div>Script</div><div>Status</div></div>
+  <div class="body"><div class="row"><span>Variant</span><span>LegOnly-AB ▾</span></div><div class="row"><span>contract</span><span>73e810a0</span></div><div class="row"><span>Ground</span><span>☑</span></div><div class="row"><span>Keyframe</span><span>home ▾</span></div></div></div>
+ <div class="scene">3D 씬 (viser, iframe · 자체 패널 숨김)
+  <div class="note"><b>안 B — 자체 대시보드 페이지(FastAPI가 서빙), viser는 중앙 iframe</b><br>왼쪽 세로 탭: Model / Base / Telemetry / Script / Status. 오른쪽: <b>Joints ⇄ Policy 상호배타 토글</b> + Gains 편집 + Obs raw 시각화. 좌하단: <b>12관절 플롯 그리드(6×2, 각 ~250×140px)</b>, 클릭 시 확대. 데이터는 기존 WS /ws/out 50 Hz. 구현비용 중(HTML/JS 1페이지 + uPlot), 레이아웃 자유도 최대, 브라우저 1창.</div></div>
+ <div class="right">
+  <div style="display:flex;border-bottom:1px solid #333"><div style="flex:1;text-align:center;padding:10px;background:#262626;font-weight:600">Control</div><div style="flex:1;text-align:center;padding:10px;color:#999">Gains</div><div style="flex:1;text-align:center;padding:10px;color:#999">Obs</div></div>
+  <div class="body">
+   <div class="row"><span class="seg"><span>Joints</span><span class="on">Policy</span></span><span>단위 <span class="seg"><span class="on">deg</span><span>rad</span></span></span></div>
+   <div class="row"><span>policy</span><span>legonly_ab_v2 m5200.onnx ▾ [load]</span></div>
+   <div class="row"><span>state</span><span>running · cmd vx 0.0 vy 0.0 wz 0.0</span></div>
+   <div class="row"><span>obs sources</span><span>gyro <b>real</b> · grav sim · q sim · act sim · cmd sim</span></div>
+   <div style="font-size:12px;color:#999;margin-top:8px">Raw observation (45) — 항목별 막대, 실시간</div>
+   <div class="obs"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+   <div style="font-size:12px;color:#999">Gains 탭: 관절별 Kp/Kd 편집 + preset(train / real / custom.json) 불러오기·저장</div>
+  </div></div>
+ <div class="plots"><div>L_hip_pitch</div><div>L_hip_roll</div><div>L_hip_yaw</div><div>L_knee</div><div>L_crank_A</div><div>L_crank_B</div><div>R_hip_pitch</div><div>R_hip_roll</div><div>R_hip_yaw</div><div>R_knee</div><div>R_crank_A</div><div>R_crank_B</div></div>
+</div></body></html>

@@ -1,0 +1,28 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>pygviewer 레이아웃 C — 2창(viser 컴팩트 + 플롯/관측 전용 창)</title>
+<style>
+body{margin:0;font:14px/1.4 system-ui,sans-serif;background:#1e1e1e;color:#ddd}
+.two{display:grid;grid-template-columns:1fr 1fr;height:100vh;gap:8px;background:#000;padding:8px;box-sizing:border-box}
+.win{background:#1e1e1e;border:1px solid #444;border-radius:6px;display:grid;grid-template-rows:36px 1fr;overflow:hidden}
+.title{background:#111;padding:8px 12px;font-size:12px;color:#aaa}
+.w1{display:grid;grid-template-columns:1fr 320px}
+.scene{background:#2a2f36;display:flex;align-items:center;justify-content:center;color:#8aa;font-size:20px;position:relative}
+.panel{background:#181818;border-left:1px solid #333}
+.tabs{display:flex;border-bottom:1px solid #333}.tabs div{flex:1;text-align:center;padding:8px 2px;font-size:11px;color:#999;border-right:1px solid #333}.tabs div.on{background:#262626;color:#fff;font-weight:600}
+.body{padding:10px;font-size:12px}
+.row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #333}
+.seg{display:inline-flex;border:1px solid #555;border-radius:6px;overflow:hidden}.seg span{padding:2px 8px;font-size:11px}.seg .on{background:#4a7;color:#000}
+.w2{display:grid;grid-template-rows:1fr 120px;gap:6px;padding:6px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(4,1fr);gap:6px}
+.grid div,.obs div{background:#222;border:1px solid #444;display:flex;align-items:flex-end;justify-content:center;color:#777;font-size:11px;padding:4px}
+.obs{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.note{position:absolute;left:12px;top:12px;background:#0008;padding:8px 12px;border-radius:6px;font-size:12px;max-width:380px}
+</style></head><body>
+<div class="two">
+ <div class="win"><div class="title">창 1 — viser :8094 (3D + 컴팩트 탭 패널)</div>
+  <div class="w1"><div class="scene">3D 씬<div class="note"><b>안 C — 두 창</b><br>창1: viser 그대로(탭으로 스크롤 제거, Joints⇄Policy 토글, deg/rad, Gains 편집). 창2: 별도 페이지 :8095/plots — <b>12관절 큰 플롯(3×4)</b> + Obs raw 45개 막대 + 텔레메트리 상태. 듀얼 모니터/창 분할에 최적, 구현비용 중(플롯 페이지만 신규), 한 화면에 다 보려면 창 두 개 관리 필요.</div></div>
+   <div class="panel"><div class="tabs"><div class="on">Setup</div><div>Control</div><div>Gains</div><div>Telemetry</div></div>
+    <div class="body"><div class="row"><span>Model</span><span>LegOnly-AB ▾</span></div><div class="row"><span>Base</span><span class="seg"><span>free</span><span>fixed</span><span>pivot</span><span class="on">string</span></span></div><div class="row"><span>Control</span><span class="seg"><span class="on">Joints</span><span>Policy</span></span></div><div class="row"><span>단위</span><span class="seg"><span class="on">deg</span><span>rad</span></span></div></div></div></div></div>
+ <div class="win"><div class="title">창 2 — 플롯/관측 페이지 :8095/plots (WS 50 Hz)</div>
+  <div class="w2"><div class="grid"><div>L_hip_pitch</div><div>L_hip_roll</div><div>L_hip_yaw</div><div>L_knee</div><div>L_crank_A</div><div>L_crank_B</div><div>R_hip_pitch</div><div>R_hip_roll</div><div>R_hip_yaw</div><div>R_knee</div><div>R_crank_A</div><div>R_crank_B</div></div>
+   <div class="obs"><div>gyro (3)</div><div>grav (3)</div><div>q hist (24)</div><div>last act (12)</div><div>cmd (3)</div></div></div></div>
+</div></body></html>
