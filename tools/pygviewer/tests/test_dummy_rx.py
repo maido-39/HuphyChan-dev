@@ -45,10 +45,17 @@ def _default_deg(c, sim_joint: str) -> float:
   to default" check compares against the REAL default (LegOnly-AB uses a bent-knee/bent-hip
   keyframe, not a straight/zero pose - discovered while debugging this file, see docs/123
   section 5) rather than an assumed 0."""
+  return _target_deg(c, sim_joint, c.default_q(sim_joint))
+
+
+def _target_deg(c, sim_joint: str, rad: float) -> float:
+  """Same conversion, for an arbitrary commanded rad value rather than the contract default -
+  lets a test assert "moved to near the COMMANDED value" instead of a threshold like ">5 deg"
+  that a nonzero default pose can already satisfy before anything was ever commanded."""
   mapper = JointTargetMapper(c)
   _limb, _motor, row = mapper.motor_row(sim_joint)
   ts = mapper.travel_sign[sim_joint]
-  return sim_rad_to_cal_deg(c.default_q(sim_joint), row["sign"], row["offset_rad"], ts)
+  return sim_rad_to_cal_deg(rad, row["sign"], row["offset_rad"], ts)
 
 
 def _wait_until(cond, timeout=3.0, interval=0.02):
@@ -71,13 +78,21 @@ class TelemetryCatcher:
     self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     self.sock.bind(("127.0.0.1", port))
-    self.sock.settimeout(0.05)
+    self.sock.settimeout(0.01)
 
   def latest(self, key_prefix: str) -> dict | None:
     """Drains up to ``_MAX_DRAIN`` currently-queued packets and returns the last one
     containing ``key_prefix``.  Capped, not "until a timeout" - dummy_rx's physics thread
     streams telemetry continuously at 100 Hz for as long as it runs, so an uncapped
-    "read until the socket goes quiet" loop never sees the socket go quiet and livelocks."""
+    "read until the socket goes quiet" loop never sees the socket go quiet and livelocks.
+
+    ``_MAX_DRAIN`` is deliberately SMALL: dummy_rx sends ~200 packets/s, so draining a large
+    cap when the queue is nearly empty turns "drain what's queued" into "block until N MORE
+    packets arrive from the still-running sender" - measured at max=64 with a 50ms timeout,
+    this cost ~300ms PER CALL (found while debugging test_bridge_roundtrip.py, where the same
+    pattern stalled that test's own send loop long enough between ticks to blow past the
+    100ms default ttl_ms and spuriously retrigger the deadman - a reader that is too eager to
+    drain perturbs the very system it is trying to only observe)."""
     out = None
     for _ in range(self._MAX_DRAIN):
       try:
@@ -89,7 +104,7 @@ class TelemetryCatcher:
         out = obj
     return out
 
-  _MAX_DRAIN = 64
+  _MAX_DRAIN = 8
 
   def close(self):
     self.sock.close()
@@ -121,6 +136,7 @@ def rig():
 
 def test_live_target_moves_the_motor_toward_it(rig):
   c, rx, client, catcher = rig
+  target_deg = _target_deg(c, "L_knee_joint", 0.4)
   client.arm()
   client.set_target({"L_knee_joint": 0.4})
   # keep feeding fresh packets faster than the 0.15s deadman for a bit, so it stays "live"
@@ -128,14 +144,16 @@ def test_live_target_moves_the_motor_toward_it(rig):
     client.tick()
     time.sleep(0.02)
 
+  # LegOnly-AB's default pose is already a nonzero bent-knee angle, so ">5 deg" alone would
+  # pass even for an untouched joint - compare against the actual COMMANDED degrees instead.
   def _moved():
     pkt = catcher.latest("left/knee/")
     if pkt is None:
       return None
-    return pkt if pkt.get("left/knee/pos", 0.0) > 5.0 else None  # some visible motion toward +
+    return pkt if abs(pkt.get("left/knee/pos", 1e9) - target_deg) < 2.0 else None
 
   pkt = _wait_until(_moved, timeout=3.0)
-  assert pkt["left/knee/pos"] > 5.0
+  assert abs(pkt["left/knee/pos"] - target_deg) < 2.0
 
 
 def test_deadman_then_return_to_default(rig):
@@ -151,9 +169,18 @@ def test_deadman_then_return_to_default(rig):
 
   # stop sending; the deadman (0.15s) then the return-to-default (0.3s) should land the
   # physics model back within a few degrees of `default_deg`, well before the 2s timeout.
+  #
+  # `catcher`'s UDP socket was never read during the 0.4s sending loop above, so it is
+  # sitting on a backlog of ~80 EARLY packets (dummy_rx streams continuously regardless of
+  # whether anything is reading). A bounded `latest()` drains the OLDEST of those first - and
+  # the very earliest ones, from right after `set_target`, still show a position close to
+  # `default_deg` simply because the PD model had not had time to move away from it yet. That
+  # is a coincidence of stale data, not a sign the deadman actually fired - so the predicate
+  # ALSO requires `rx.last_phase` to have actually left "live", which only becomes true once
+  # the catcher has caught up to now.
   def _back_near_default():
     pkt = catcher.latest("left/knee/")
-    if pkt is None:
+    if pkt is None or rx.last_phase == "live":
       return None
     return pkt if abs(pkt.get("left/knee/pos", 1e9) - default_deg) < 2.0 else None
 
@@ -172,6 +199,7 @@ def test_disabled_joint_never_moves(rig):
     deadman_s=0.15, return_s=0.3, hz=100.0, enable={"L_knee_joint"},
   )
   rx2.start()
+  knee_target_deg = _target_deg(c, "L_knee_joint", 0.4)
   try:
     client.arm()
     client.set_target({"L_knee_joint": 0.4, "L_hip_pitch_joint": 0.4})
@@ -181,7 +209,7 @@ def test_disabled_joint_never_moves(rig):
 
     def _knee_moved():
       pkt = catcher.latest("left/knee/")
-      return pkt if pkt and pkt.get("left/knee/pos", 0.0) > 5.0 else None
+      return pkt if pkt and abs(pkt.get("left/knee/pos", 1e9) - knee_target_deg) < 2.0 else None
 
     _wait_until(_knee_moved, timeout=3.0)
     hip_pkt = catcher.latest("left/hip_pitch/")

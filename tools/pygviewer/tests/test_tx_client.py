@@ -43,6 +43,22 @@ def test_non_positive_hz_is_rejected():
     _client(hz=0)
 
 
+def test_ttl_ms_defaults_to_250_and_is_carried_on_the_message():
+  c = _client()
+  c.arm()
+  c.set_target({"L_knee_joint": 0.1})
+  msg = c.build_message()
+  assert msg.ttl_ms == 250
+
+
+def test_ttl_ms_is_overridable():
+  c = _client(ttl_ms=50)
+  c.arm()
+  c.set_target({"L_knee_joint": 0.1})
+  msg = c.build_message()
+  assert msg.ttl_ms == 50
+
+
 # --------------------------------------------------------------------------- mode gating
 def test_set_target_raises_for_blocked_modes():
   c = _client()

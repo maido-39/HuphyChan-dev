@@ -48,6 +48,14 @@ DEFAULT_PORT = 9872
 DEFAULT_HZ = 50.0
 DEFAULT_KP_MAX = 5.0
 DEFAULT_KD_MAX = 0.5
+DEFAULT_TTL_MS = 250
+"""Deliberately larger than the standard 0.2s (200ms) deadman default, with margin for a
+couple of dropped packets at 50 Hz (20ms apart) - so a receiver's OWN ``deadman_s`` is what
+governs staleness by default, not this message's ``ttl_ms`` racing ahead of it. Found the
+hard way: ``JointTarget.ttl_ms``'s own schema default (100ms) is TIGHTER than the 200ms
+deadman default, so leaving it unset made a receiver configured for "0.2s deadman" actually
+trigger at ~0.1s (``DeadmanFilter.update`` takes ``min(deadman_s, ttl_ms/1000)`` - correct
+behaviour, but not what a caller expecting the 0.2s number would predict)."""
 
 BLOCKED_MODES = frozenset({"policy_sim", "policy_shadow"})
 """Viewer run-modes this client refuses to transmit from (docs/123 section 4: "policy output
@@ -87,6 +95,7 @@ class TxClient:
     hz: float = DEFAULT_HZ,
     kp_max: float = DEFAULT_KP_MAX,
     kd_max: float = DEFAULT_KD_MAX,
+    ttl_ms: int = DEFAULT_TTL_MS,
     src: str = "sim",
     frame: str = "model_v30",
   ) -> None:
@@ -106,6 +115,7 @@ class TxClient:
     self.arm_token = arm_token
     self.origin = origin
     self.hz = float(hz)
+    self.ttl_ms = int(ttl_ms)
     self.kp_max = float(kp_max)
     self.kd_max = float(kd_max)
     self.src = src
@@ -273,6 +283,7 @@ class TxClient:
       kp=kp,
       kd=kd,
       tau_ff=tau_ff,
+      ttl_ms=self.ttl_ms,
       arm_token=self.arm_token,
       origin=self.origin,
     )
