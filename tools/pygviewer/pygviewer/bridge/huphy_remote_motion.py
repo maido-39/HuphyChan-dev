@@ -673,6 +673,32 @@ def run_real(args) -> int:
       print(f"[remote_motion] cleared any latched motor fault on {part.id} before enabling torque",
             flush=True)
 
+  # Seed each motor's measured position before the control loop starts (2026-09-05, bench).
+  #
+  # HUPHY refuses to send a command for a motor whose position it does not know:
+  # `safety/guards.py::apply` returns `RejectReason.NO_STATE` when `current_deg is None`, and
+  # `Leg.build_commands` skips that motor. But in CONTROL mode a position only ever arrives as
+  # the REPLY to a command (`ControlLoop.step` calls `refresh()` only in OBSERVE; MIT has no
+  # read-only frame). So an empty state table is self-sustaining: no state -> every command is
+  # rejected -> nothing is sent -> no reply -> still no state. Measured on the bench: the loop
+  # ran a clean 1200 cycles at 100 Hz reporting "0 cycles with no response" - because it sent
+  # nothing at all - while the viewer showed every joint dead at 0.0 deg and HUPHY's own
+  # telemetry reported ack=-1 ("not commanded") for both live motors.
+  #
+  # `refresh_states()` is HUPHY's own way out: it sends an all-gains-zero PASSIVE frame, which
+  # applies no torque but does make the motor answer with its state. One call before the loop
+  # is enough to break the deadlock; after that each command's own reply keeps the table fresh.
+  for part in biped.parts:
+    bus_obj = getattr(part, "bus", None)
+    if bus_obj is None or not hasattr(bus_obj, "refresh_states"):
+      continue
+    missing = bus_obj.refresh_states()
+    ids = getattr(bus_obj, "motor_ids", ())
+    got = [m for m in ids if m not in (missing or ())]
+    print(f"[remote_motion] seeded measured positions on {part.id}: "
+          f"{len(got)}/{len(ids)} motors answered (no answer: {sorted(missing or ())})",
+          flush=True)
+
   listen_host, listen_port = args.listen.rsplit(":", 1)
   latest = LatestOnly(expected_arm_token=args.arm_token, expected_contract_hash=contract.contract_sha)
   deadman = DeadmanFilter(
