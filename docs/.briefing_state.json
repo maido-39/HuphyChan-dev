@@ -1195,7 +1195,8 @@
    "section": "done",
    "changed": "2026-09-04 20:06",
    "finding": "모터가 원격 명령을 받아 목표 자세(무릎 20.05도)로 이동해 유지 중(현재 22.0도, 오차 1.95도, 유지 토크 0.2 N·m). 막고 있던 실제 원인 2건: (1) 로봇 생성 코드가 6개 모터짜리 다리만 지원해 모터 1개짜리 시험대에서 실패 — 이미 만들어 둔 단일관절 로봇 경로를 쓰도록 교체, (2) 이전 실행에서 걸린 모터 보호정지가 남아 토크를 막고 있었음 — 명령은 정상으로 보이는데 모터만 안 움직이는 형태라 발견이 어려웠음, 기동 시 자동 해제하도록 수정",
-   "number": "제어 주기 100 Hz, 텔레메트리 무손실"
+   "number": "제어 주기 100 Hz, 텔레메트리 무손실",
+   "collapsed": true
   },
   "bench-remote-verified": {
    "id": "bench-remote-verified",
@@ -1287,6 +1288,16 @@
    "changed": "2026-09-04 22:46",
    "finding": "18,099회 전 구간 완료. 최종 점수 114.45로 학습 내내 최고치를 갱신하며 마감했고 넘어짐은 0.0000. 34번의 중간 점검에서 모두 '계속' 판정으로 조기 중단 사유가 한 번도 없었음",
    "needs": "★측정이 아직 안 됐습니다 — 모터 사용률(RMS/p95/peak)과 무릎 스윙 각도(사람 55~65도 대비) 재측정이 다음 작업입니다. 이번 학습의 핵심 가설(좌우 축이 반대인 것을 반영한 수정이 무릎 스윙을 되살렸는가)이 이 측정으로만 검증됩니다"
+  },
+  "idle-refresh-fix": {
+   "id": "idle-refresh-fix",
+   "created": "2026-09-04 22:48",
+   "title": "CONTROL모드 무장전 텔레메트리 0 고정 결함 수정",
+   "why": "벤치 실측: 실물모드 기동 정상이나 전 관절 텔레메트리 0.0 고정. 원인=HUPHY ControlLoop이 CONTROL모드에서 robot.refresh()를 호출하지 않고 우리가 보낸 명령 응답으로만 상태를 갱신하는데, 무장 전 RemoteMotion이 None을 반환해 프레임이 전혀 안 나갔음(HUPHY 구조, 버그 아님)",
+   "finding": "신규 불변식 테스트 9건(가짜 Leg로 huphy 없이 직접 구동): idle 액션 kp/kd=0·비활성관절 배제·위치는 관측치(디폴트포즈 아님)·발목 한쪽만 켜지면 드롭+경고·라이브 도착시 게인 즉시 정상복귀. pygviewer 전체 스위트 그린. --dry-run만 확인, 하드웨어 검증은 사용자 담당",
+   "now_": "docs/123 §11b에 원인·수정·테스트 기록; 커밋 대기(Viewer-Prototype 브랜치)",
+   "section": "done",
+   "changed": "2026-09-04 22:48"
   }
  },
  "order": [
@@ -1401,7 +1412,8 @@
   "biped-motor-commission",
   "scenario-mockup-b-iteration",
   "biped-bridge-rewrite",
-  "legonly-ab-v2-done"
+  "legonly-ab-v2-done",
+  "idle-refresh-fix"
  ],
- "updated": "2026-09-04 22:46"
+ "updated": "2026-09-04 22:48"
 }
