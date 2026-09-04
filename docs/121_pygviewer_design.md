@@ -891,3 +891,114 @@ real_replay→향후 kinematic); S1/S2/S3는 문서 대조용 보조 태그로�
   히스테리시스, 관절별 독립)은 13a 커밋에 이미 포함돼 있었다(`motor_fault.py`를 두 기능
   공용 파일로 먼저 썼기 때문 — 커밋을 둘로 나누라는 지시와 완전히는 안 맞지만, 그 자체로는
   비활성 순수 유틸이라 해는 없다는 판단으로 그대로 두고 여기 적어둔다).
+
+## 14. 판(pane) 드래그 크기조절 + 위반기록창 겹침 사고 (2026-09-05, 코더)
+
+사용자 지시: "지금 창 Pane 들 슬라이더 달아서 슬라이드가능하게 해." 그리고 그 직전 발견:
+**오늘 처음으로 화면을 헤드리스 브라우저(obscura 0.2.1, 이 호스트)로 직접 캡처해 보니, 빨간
+경고색 오버레이 하나가 오른쪽 조작판(Control 탭의 관절 슬라이더들)을 거의 다 덮고 있었다** —
+실물 모터가 붙어 있는 상태에서 마우스로 값을 넣을 수단이 막혀 있던 것. `docs/../scratchpad`에
+남아있던 그 증거 사진(이 작업 시작 전 이미 존재)을 보니, 덮은 주범은 이름으로 짐작한
+`#violation-panel`("위반 기록창")이 **아니라** 상시 표시되는 `#op-console`("console" 로그
+스트립)이었다 — 폭이 고정 460px인데 조작판(right 컬럼) 기본폭은 340px밖에 안 돼, 컨솔이
+조작판 왼쪽 경계를 넘어 가운데 3D 씬 컬럼까지 흘러넘치고 있었다.
+
+### 14a. 판 크기조절 (`.wrap` 그리드를 하드코딩 → CSS 커스텀 프로퍼티)
+
+- `dashboard.html`의 `.wrap` 그리드를 `250px 1fr 340px` / `38px 1fr 320px` 리터럴에서
+  `var(--col-left) 7px 1fr 7px var(--col-right)` / `38px 1fr 7px var(--row-plots)` 로 바꿨다
+  (5열×4행 — 7px 폭의 두 트랙이 세로 손잡이 2개, 7px 높이 한 트랙이 가로 손잡이 1개). 기존
+  왼쪽판↔가운데(3D/플롯)↔오른쪽조작판 세로 구분 2개, (3D·조작판)↔플롯 가로 구분 1개라는
+  레이아웃 자체는 그대로 두고 그 경계에만 손잡이를 끼워 넣었다 — `.right`는 여전히
+  `grid-row:2/5`(전체 높이)라서 가로 손잡이는 왼쪽판+씬 컬럼 밑에서만 그려지고 오른쪽
+  조작판은 그 경계와 무관하게 계속 한 덩어리다(기존 설계 그대로).
+- 손잡이(`#divider-left`/`#divider-right`/`#divider-bottom`, `.divider` 클래스)는 폭/높이
+  7px, hover·드래그 중 `var(--border2)`로 밝아지고 커서가 바뀐다. 드래그 중에는
+  `body.resizing-v`/`resizing-h`가 전역 `cursor`를 고정하고 `user-select:none`으로 텍스트
+  선택을 막는다(빠른 드래그가 라벨/플롯 텍스트를 쓸어버리지 않게).
+- `dashboard.js`에 순수 함수 4개 추가: `clampColLeft`/`clampColRight`/`clampRowPlots`(각 판
+  최소값 아래로 안 내려가게 — left 160px·right 300px·center 220px·top행 160px·plots행
+  120px)와 `sanitizePaneLayout`(localStorage에서 읽은 값이 없거나/NaN이거나/지금 창보다 큰
+  화면에서 저장된 값이면 기본값 250/340/320으로 되돌림). right의 최소 300px은 근거가 있다 —
+  `.joint-row`의 고정 컬럼 합(88+62+52+20+게이지4×6=246px)+본문 패딩 20px=266px보다 커야
+  슬라이더 트랙이 조금이라도 남는다(오늘 사고의 재발 방지 수치).
+- 드래그는 `pointerdown`(손잡이) → `pointermove`/`pointerup`(**window**, 손잡이 자신이
+  아님 — 이유는 14c) → `--col-left`/`--col-right`/`--row-plots` 갱신만 하고, uPlot 리빌드는
+  **드래그가 끝난 뒤 딱 한 번**만: 기존에 있던 `window resize` 디바운스 리스너(200ms 후
+  `buildPlotGrid()`)를 그대로 재사용해 `pointerup`에서 `window.dispatchEvent(new
+  Event("resize"))`로 대신 트리거한다(끄는 동안은 CSS 트랙만 바뀌고 캔버스는 그대로라 약간
+  늘어나 보일 수 있으나 버벅임은 없다 — 지시된 트레이드오프 그대로).
+- 손잡이 더블클릭 = 그 쪽 판을 완전히 접기/펼치기(`leftCollapsed`/`rightCollapsed`/
+  `plotsCollapsed`, 접히면 0px). 크기·접힘 상태·위반기록창 열림상태를 한 localStorage 키
+  (`pygviewer.paneLayout.v1`)에 함께 저장, 새로고침 후 복원. 저장값이 화면보다 크거나
+  숫자가 아니면 `sanitizePaneLayout`이 기본값으로 되돌린다.
+
+### 14b. 조작판을 덮던 진범 수정 — `#op-console` 폭을 오른쪽판 실폭에 맞춤
+
+`.op-console{width:460px}` → `width:min(460px, calc(var(--col-right) - 16px))`로 변경.
+이제 콘솔은 자기 자신이 속한 오른쪽 조작판 컬럼의 "실제" 폭(사용자가 드래그로 얼마로
+줄이든)을 절대 넘지 않는다 — 왼쪽으로 흘러넘쳐 3D 씬이나 왼쪽 탭까지 덮는 일은 구조적으로
+불가능해졌다(그 컬럼 안에서 세로로 얼마나 덮느냐는 여전히 콘텐츠 길이에 달렸지만, 그건
+"자기 담당 구역 안에서"이지 남의 판을 덮는 게 아니다).
+
+`#violation-panel`("위반 기록창", 배지 클릭으로 여는 표 형태 상세 패널) 자체도 항상
+`left:8px;right:8px`로 전체 폭을 덮게 되어 있어 같은 종류의 위험이 있었다 — 이쪽은
+`left:calc(var(--col-left) + 14px);right:calc(var(--col-right) + 14px)`로 바꿔 가운데
+3D 씬 컬럼 안에만 뜨도록 구조적으로 가뒀다(왼쪽판·오른쪽판 둘 다 절대 덮지 않음, 판 크기를
+어떻게 조절해도 마찬가지). 기존 배지 클릭 토글 동작(기본 닫힘)은 그대로 두고, 열림/닫힘
+상태만 위 localStorage 키에 같이 저장해 "접기 상태도 기억"하도록 했다.
+
+### 14c. 검증 중 발견한 실제 버그 — PointerEvent NaN이 그리드 전체를 깨뜨릴 뻔함
+
+obscura(헤드리스 브라우저, `~/pyg_fea/tools/obscura`, 0.2.1)로 실제 `pointerdown/move/up`
+시퀀스를 흉내내 봤더니 두 가지가 드러났다:
+
+1. **`setPointerCapture`가 이 엔진엔 없다**(`TypeError: ... is not a function`) — 원래
+   손잡이(`handle`)에 캡처를 걸고 그 위에서만 `pointermove`/`pointerup`을 듣던 코드라, 캡처
+   없이는 커서가 7px짜리 손잡이를 벗어나는 순간 드래그가 끊긴다. 리스너를 손잡이가 아니라
+   **`window`**에 걸도록 고쳐 캡처가 없어도 동작하게 했고(실제 브라우저에도 흔한 안전한
+   패턴), 캡처 호출 자체는 `try/catch`로 감싸 "있으면 쓰고 없으면 그냥 넘어가게" 했다.
+2. **더 심각한 것**: 이 엔진의 `new PointerEvent(...)`가 생성자 옵션의 `clientX`/`clientY`를
+   전혀 반영하지 않아(`MouseEvent`는 정상 반영 — PointerEvent만의 구현 결함으로 확인),
+   `onMove`가 `NaN`으로 계산한 값을 `S.paneSizes`에 그대로 넣었다. `JSON.stringify`는
+   `NaN`을 `null`로 적어 당장은 안 보이지만, 그 값을 CSS 커스텀 프로퍼티로 내보내면
+   `"NaNpx"`가 되고 — CSS 스펙상 `var()`에 유효하지 않은 값이 들어가면 그 값을 쓰는
+   선언(`grid-template-columns`/`rows`) **전체**가 무효화돼 그리드 레이아웃이 통째로
+   깨진다. 이건 이 헤드리스 엔진만의 문제가 아니라 **내 코드가 입력을 안 믿었어야 했던
+   자리**였다 — `onMove` 맨 앞에 `Number.isFinite(mv.clientX/clientY)` 가드를 추가해 비정상
+   좌표는 그냥 무시하도록 고쳤다(고치기 전: 드래그 후 `--col-right`가 `"NaNpx"`가 되고 오른쪽
+   판이 사라지는 것을 실제로 재현·확인함).
+
+### 14d. 검증 결과
+
+`tools/pygviewer/tests/test_pane_resize.py` 신규 21건(기존 504건 + 21 = 525건, 전부 통과) —
+`clampColLeft`/`clampColRight`/`clampRowPlots`/`sanitizePaneLayout`의 파이썬 미러(경계값,
+NaN/문자열 거부, 화면보다 큰 저장값 축소, 접힘 플래그는 아무 크기에서나 유효) + 실제
+`dashboard.js` 소스 텍스트 잠금 시험(상수·공식·`onMove`의 NaN 가드·`savePaneLayout`이 7개
+필드를 다 저장하는지·드래그 중엔 `buildPlotGrid`를 안 부르는지 등) + HTML/CSS 구조 잠금
+(손잡이 3개 존재, 하드코딩 그리드 리터럴 삭제 확인, violation-panel의 `left/right`가
+`--col-left`/`--col-right`를 쓰는지 텍스트로 확인).
+
+라이브 확인(같은 obscura, `http://127.0.0.1:8095/?no3d=1`, 실행 중인 프로세스 재시작 없이 —
+정적 파일은 매 요청 디스크에서 다시 읽으므로 재시작 불필요, 모터 API는 전혀 호출 안 함):
+
+| 확인 항목 | 결과 |
+|---|---|
+| `.joint-row input.slider` 개수 | 12개, 전부 `getBoundingClientRect()` 폭>0(74px)·화면 안 |
+| 위반기록창 vs 오른쪽판 사각형 교차 | `false`(안 겹침) — 기본폭에서도, `colLeft=180/colRight=420`으로 늘린 뒤에도 |
+| 위반기록창 vs 왼쪽판 사각형 교차 | `false` |
+| `--col-right`를 500px로 바꾼 뒤 `.right`/`.scene` 경계 | 정확히 500px/`1280-500-7=773`으로 재계산됨(CSS 배선 확인) |
+| 손잡이 더블클릭(divider-left) | `--col-left` 250→0→250, `leftCollapsed` true→false, localStorage 동기화 확인 |
+| localStorage 키(`pygviewer.paneLayout.v1`) 저장 내용 | 7개 필드(colLeft/colRight/rowPlots/leftCollapsed/rightCollapsed/plotsCollapsed/violationOpen) 왕복 확인 |
+| 스크린샷 | `dash_ready.png`(작업 전, 콘솔이 조작판을 덮은 증거) / `out4.png`(수정 후 기본 레이아웃, 슬라이더 12개 다 보임) / `out_resized2.png`(colLeft=180·colRight=420·rowPlots=220으로 조절한 뒤에도 콘솔이 조작판 폭에 맞춰 줄어들고 안 넘침) |
+
+**정직하게 미검증으로 남긴 것**: 실제 마우스 `pointerdown→move→up` 드래그 자체의
+end-to-end 재현은 이 헤드리스 엔진의 `PointerEvent` 구현 결함(14c) 때문에 끝까지 못 했다
+(clientX가 항상 무시됨). 대신 (a) 드래그가 실행하는 정확히 같은 클램프 산수는 21개 단위
+시험으로 덮었고, (b) 드래그가 마지막에 하는 일(CSS 커스텀 프로퍼티 갱신 → 그리드 재계산)은
+`--col-right`를 직접 바꿔 재현해 확인했다. 남은 것은 "이벤트가 핸들러까지 도달하는가"
+뿐인데, 이는 표준 `pointerdown`/`pointermove`/`pointerup` 리스너 등록이라 실제 브라우저
+(Chrome/Firefox)에서는 위험이 낮다고 판단한다. 새로고침 없이 localStorage 왕복은 같은
+세션 안에서 저장→직후 읽기로 확인했지만, obscura의 `fetch`가 호출마다 새 컨텍스트를 만들어
+"완전히 닫았다 새로 연 것"과 동등한 크로스-로드 복원은 별도로(=CDP `serve` 붙여) 확인하지
+못했다 — `sanitizePaneLayout`의 강한 단위 시험 커버리지로 대신했다.

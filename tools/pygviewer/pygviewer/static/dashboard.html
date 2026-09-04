@@ -30,10 +30,36 @@ button:disabled{opacity:.4;cursor:not-allowed}
 input[type=range]{padding:0}
 a{color:var(--blueL)}
 h3{margin:.2em 0 .4em;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--dim)}
-.wrap{display:grid;grid-template-columns:250px 1fr 340px;grid-template-rows:38px 1fr 320px;
-  height:100vh;gap:1px;background:var(--border)}
-.top{grid-column:1/4;background:#101010;display:flex;align-items:center;gap:10px;padding:0 12px;
-  overflow-x:auto;white-space:nowrap}
+/* Resizable panes (2026-09-05, docs/121 section 14): the three widths/heights that used to
+   be hard 250px/340px/320px literals are now CSS custom properties so a drag handle can
+   change them live via element.style.setProperty on .wrap - see dashboard.js's
+   initPaneResize(). Two extra thin grid tracks (7px, "divider-left"/"divider-right") carry
+   the vertical drag handles between left|scene|right; a third ("divider-bottom") carries the
+   horizontal handle between the scene/tabs row and the plots row below. The defaults here
+   (250/340/320) are what a first-ever load with nothing in localStorage falls back to. */
+.wrap{display:grid;
+  --col-left:250px; --col-right:340px; --row-plots:320px;
+  grid-template-columns:var(--col-left) 7px 1fr 7px var(--col-right);
+  grid-template-rows:38px 1fr 7px var(--row-plots);
+  height:100vh;background:var(--border)}
+.top{grid-column:1/6;grid-row:1;background:#101010;display:flex;align-items:center;gap:10px;padding:0 12px;
+  overflow-x:auto;white-space:nowrap;border-bottom:1px solid var(--border)}
+
+/* drag handles: plain background bars, brighten on hover/while dragging so they read as
+   "grabbable" (user ask: "잡기 쉬운 폭(6~8px)에 마우스를 올리면 커서가 바뀌고 색이 살짝
+   밝아질 것"). Double-click folds/unfolds the pane on the near side (dashboard.js). */
+.divider{background:var(--border);position:relative;z-index:5}
+.divider:hover,.divider.dragging{background:var(--border2)}
+.divider-v{grid-row:2/5;cursor:col-resize}
+#divider-left{grid-column:2;grid-row:2}
+#divider-right{grid-column:4}
+#divider-bottom{grid-column:1/4;grid-row:3;cursor:row-resize}
+/* while a drag is in progress: lock the cursor shape everywhere (not just over the handle,
+   since the pointer runs ahead of a fast drag) and kill text selection so dragging across
+   labels/plots doesn't highlight them (user ask: "드래그 중에는 텍스트 선택이 되지 않게"). */
+body.resizing-v,body.resizing-v *{cursor:col-resize!important}
+body.resizing-h,body.resizing-h *{cursor:row-resize!important}
+body.resizing-v,body.resizing-h{user-select:none}
 .top b.logo{font-size:14px}
 .pill{background:#2a2a2a;border-radius:10px;padding:2px 9px;font-size:11px;white-space:nowrap}
 .pill.warn{background:#4a3a12;color:var(--accent2)}
@@ -41,24 +67,24 @@ h3{margin:.2em 0 .4em;font-size:12px;text-transform:uppercase;letter-spacing:.04
 .pill.ok{background:#173a22;color:var(--accent)}
 .rates{margin-left:auto;font-size:11px;color:var(--dim);white-space:nowrap}
 
-.left{grid-row:2/3;background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+.left{grid-column:1;grid-row:2;min-width:0;min-height:0;background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
 .tabs-v{display:flex;flex-direction:column;border-bottom:1px solid var(--border)}
 .tabs-v .tab{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--dim);cursor:pointer;font-size:12px}
 .tabs-v .tab.on{background:#262626;color:#fff;font-weight:600;border-left:3px solid var(--accent)}
 .tabs-v .tab:hover{background:#202020}
 .leftbody{padding:10px;overflow:auto;flex:1}
 
-.scene{grid-column:2/3;grid-row:2/3;background:#20242a;position:relative;overflow:hidden}
+.scene{grid-column:3;grid-row:2;min-width:0;min-height:0;background:#20242a;position:relative;overflow:hidden}
 .scene iframe{width:100%;height:100%;border:0;background:#20242a}
 .scene .badge-tr{position:absolute;right:8px;top:8px;font-size:11px;color:var(--dim)}
 
-.right{grid-column:3/4;grid-row:2/4;background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+.right{grid-column:5;grid-row:2/5;min-width:0;min-height:0;background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
 .tabs-h{display:flex;border-bottom:1px solid var(--border)}
 .tabs-h .tab{flex:1;text-align:center;padding:8px 4px;color:var(--dim);cursor:pointer;font-size:12px}
 .tabs-h .tab.on{background:#262626;color:#fff;font-weight:600;border-bottom:2px solid var(--accent)}
 .rightbody{padding:10px;overflow:auto;flex:1}
 
-.plots{grid-column:1/3;grid-row:3/4;background:#101010;padding:6px;overflow:auto}
+.plots{grid-column:1/4;grid-row:4;min-width:0;min-height:0;background:#101010;padding:6px;overflow:auto}
 .plots-toolbar{display:flex;align-items:center;gap:10px;padding:2px 4px 6px;font-size:11px;color:var(--dim)}
 .plots-toolbar .seg span{cursor:pointer}
 .plots-row{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:5px}
@@ -106,10 +132,19 @@ h3{margin:.2em 0 .4em;font-size:12px;text-transform:uppercase;letter-spacing:.04
 .hr{border:0;border-top:1px solid var(--border);margin:8px 0}
 
 /* A2 (2026-09-04): ROM/torque violation red panel - a fixed overlay so it never needs its
-   own row in the .wrap grid (every other tab's layout stays untouched). */
+   own row in the .wrap grid (every other tab's layout stays untouched).
+   FIX (2026-09-05, docs/121 section 14): a headless screenshot caught this panel spanning
+   `left:8px;right:8px` - the full window width - which sat directly on top of the right
+   control pane (sliders/number inputs unreachable while a live motor was armed). left/right
+   are now pinned to the SAME --col-left/--col-right custom properties the resizable grid
+   uses (inherited from .wrap, since this element is one of its children), so the panel is
+   always confined to the middle (3D scene) column and can never cover the left tab strip or
+   the right control pane, at any pane width the user drags to. */
 #violation-badge{background:#5a1414;color:#f88;border:1px solid #a33;animation:violation-pulse 1.4s ease-in-out infinite}
 @keyframes violation-pulse{0%,100%{opacity:1}50%{opacity:.55}}
-.violation-panel{display:none;position:fixed;top:42px;left:8px;right:8px;max-height:52vh;overflow:auto;
+.violation-panel{display:none;position:fixed;top:42px;
+  left:calc(var(--col-left) + 14px);right:calc(var(--col-right) + 14px);
+  max-height:52vh;overflow:auto;
   background:#210d0d;border:1px solid var(--bad);border-radius:6px;padding:10px;z-index:80;
   box-shadow:0 6px 20px #000c}
 .violation-panel.on{display:block}
@@ -122,8 +157,18 @@ h3{margin:.2em 0 .4em;font-size:12px;text-transform:uppercase;letter-spacing:.04
    같은거에서 띄우던지" (put it up somewhere like a console log). Deliberately NOT part of the
    .wrap grid (same reasoning as .violation-panel above) so no existing tab's layout has to
    change; floats bottom-right, collapsible to just its header bar. Streams both violation
-   lines and caught render errors (A6) - see dashboard.js's renderOpConsole. */
-.op-console{position:fixed;right:8px;bottom:8px;width:460px;max-width:44vw;
+   lines and caught render errors (A6) - see dashboard.js's renderOpConsole.
+   FIX (2026-09-05, docs/121 section 14): this - not #violation-panel - turned out to be the
+   element an earlier headless screenshot of this same session caught fully covering the
+   right control pane's sliders: its width was a flat 460px, WIDER than the control pane's
+   own default 340px (and, now that the pane is resizable, wider still than its 300px
+   minimum), so it spilled left past the pane's own edge into the 3D scene column instead of
+   staying "docked" to the pane whose data it is reporting on. `width` is now capped to the
+   right pane's own current width (`--col-right`, minus a small margin) so the console can
+   still cover part of ITS OWN column when open with a lot of content (unavoidable - a
+   log needs to sit somewhere) but can never again spill past that column's left edge into
+   the scene or the left tab strip. */
+.op-console{position:fixed;right:8px;bottom:8px;width:min(460px, calc(var(--col-right) - 16px));max-width:44vw;
   background:#150d0d;border:1px solid var(--bad);border-radius:6px;z-index:70;
   box-shadow:0 6px 20px #000c;display:flex;flex-direction:column}
 .op-console-hdr{display:flex;align-items:center;gap:6px;padding:5px 8px;font-size:11px;
@@ -225,10 +270,14 @@ table.gains input{width:56px;text-align:right}
     <div class="leftbody" id="left-body"></div>
   </div>
 
+  <div class="divider divider-v" id="divider-left" title="drag to resize - double-click to hide/show the left panel"></div>
+
   <div class="scene">
     <iframe id="viser-frame" src="about:blank" title="viser 3D scene"></iframe>
     <div class="badge-tr" id="scene-badge"></div>
   </div>
+
+  <div class="divider divider-v" id="divider-right" title="drag to resize - double-click to hide/show the control panel"></div>
 
   <div class="right">
     <div class="tabs-h" id="right-tabs">
@@ -238,6 +287,8 @@ table.gains input{width:56px;text-align:right}
     </div>
     <div class="rightbody" id="right-body"></div>
   </div>
+
+  <div class="divider divider-h" id="divider-bottom" title="drag to resize - double-click to hide/show the plots panel"></div>
 
   <div class="plots" id="plots-panel">
     <div class="plots-toolbar" id="plots-toolbar"></div>
@@ -251,7 +302,24 @@ table.gains input{width:56px;text-align:right}
 </div></div>
 
 <script src="/static/vendor/uPlot.iife.min.js"></script>
-<script src="/static/vendor/three.min.js"></script>
+<script>
+/* Headless verification mode (2026-09-04, docs/121 section 10c): `?no3d=1` or `?headless=1`
+ * skips the WebGL-heavy pieces (three.min.js + the viser iframe dashboard.js sets up in
+ * boot()) so a headless browser without a real GPU/WebGL context (obscura 0.2.1 on this host
+ * - crashes hard, "dumped core", on the plain 3D scene with no error text to act on) can load
+ * and drive the rest of the dashboard for automated checks. Never the default: with no query
+ * param this is byte-for-byte the same load as before. three.min.js is loaded via an inserted
+ * <script> tag rather than a static one so headless mode skips the network fetch entirely,
+ * not just its result - dashboard.js only ever touches the `THREE` global from inside
+ * functions invoked well after page load (opening the Obs tab), never at parse time, so the
+ * normal (non-headless) load order here is not race-sensitive. */
+window.PYG_HEADLESS = /[?&](no3d|headless)(=|&|$)/.test(location.search);
+if (!window.PYG_HEADLESS) {
+  var pygThreeScript = document.createElement("script");
+  pygThreeScript.src = "/static/vendor/three.min.js";
+  document.currentScript.parentNode.insertBefore(pygThreeScript, document.currentScript.nextSibling);
+}
+</script>
 <script src="/static/dashboard.js"></script>
 </body>
 </html>

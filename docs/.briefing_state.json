@@ -1272,7 +1272,8 @@
     "tools/pygviewer/mockups/scenario_B.html"
    ],
    "section": "done",
-   "changed": "2026-09-04 22:06"
+   "changed": "2026-09-04 22:06",
+   "collapsed": true
   },
   "biped-bridge-rewrite": {
    "id": "biped-bridge-rewrite",
@@ -1375,6 +1376,20 @@
    "number": "무릎 최고 1,072도/초, 엉덩이 회전 134도/초",
    "media": [
     "docs/img/bench_joint_speed_2026-09-05.png"
+   ]
+  },
+  "resizable-panes": {
+   "id": "resizable-panes",
+   "created": "2026-09-05 04:08",
+   "title": "조작판 로그창이 슬라이더를 가리던 문제 해결 + 창 크기 마우스로 조절 가능하게",
+   "why": "헤드리스 브라우저로 화면을 직접 찍어보니, 화면 오른쪽 아래에 항상 떠 있는 경고 로그 상자가 실물 모터를 조작하는 슬라이더 칸을 거의 다 가리고 있었음 — 모터가 연결된 채로 마우스로 값을 넣을 방법이 없는 상태였음",
+   "section": "done",
+   "changed": "2026-09-05 04:09",
+   "finding": "원인은 이름과 달리 '위반 기록창'이 아니라 항상 떠 있는 로그 상자였음(폭이 고정돼 있어 조작판보다 넓으면 왼쪽으로 흘러넘쳤음) — 로그 상자 폭을 조작판 폭에 맞춰 절대 못 넘치게 고침. 동시에 화면의 3칸(왼쪽 목록/가운데 3D·그래프/오른쪽 조작판)을 마우스로 드래그해 크기를 바꿀 수 있게 만들고, 바꾼 크기는 다음에 열 때도 그대로 유지됨. 너무 작게 줄어들어 사라지지 않도록 최소 크기를 두었고, 손잡이를 더블클릭하면 그 칸을 완전히 접었다 펼 수 있음",
+   "number": "조작 슬라이더 12개 전부 화면에 보임(가려진 것 0개, 화면 캡처로 확인) / 자동 검증 시험 21개 새로 추가, 기존 504개 포함 총 525개 전부 통과 / 검증 중 실제 결함 1건 발견·수정: 되돌아오지 않는 좌표값이 들어오면 화면 전체 배치가 깨질 뻔한 경우를 미리 막음",
+   "media": [
+    "docs/img/dashboard_console_covering_control_before.png",
+    "docs/img/dashboard_resizable_panes_after.png"
    ]
   }
  },
@@ -1498,7 +1513,8 @@
   "overheat-cutoff",
   "fault-visible-on-screen",
   "self-lock-no-state",
-  "bench-speed-measured"
+  "bench-speed-measured",
+  "resizable-panes"
  ],
- "updated": "2026-09-05 03:23"
+ "updated": "2026-09-05 04:09"
 }

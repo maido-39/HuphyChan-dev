@@ -304,6 +304,7 @@ async function pollSlow() {
 /* ------------------------------------------------------------------ A2: violation panel */
 function toggleViolationPanel() {
   S.violationPanelOpen = !S.violationPanelOpen;
+  savePaneLayout(); // 2026-09-05: open/closed state is remembered alongside the pane sizes
   if (S.violationPanelOpen) {
     api("GET", "/violations?limit=50").then((v) => { S.violations = v; renderViolationPanel(); }).catch(() => {});
   } else {
@@ -545,7 +546,7 @@ function renderViolationPanel() {
       <tbody>${rows || '<tr><td colspan="6" class="small">none</td></tr>'}</tbody></table>
   `;
   el("viol-clear").onclick = async () => { await apiOk("POST", "/violations/clear"); S.violations = await api("GET", "/violations?limit=50"); renderViolationPanel(); };
-  el("viol-close").onclick = () => { S.violationPanelOpen = false; renderViolationPanel(); };
+  el("viol-close").onclick = () => { S.violationPanelOpen = false; savePaneLayout(); renderViolationPanel(); };
   panel.querySelectorAll("tbody tr[data-joint]").forEach((tr) => {
     tr.addEventListener("click", () => {
       const joint = tr.dataset.joint;
@@ -583,6 +584,181 @@ function renderViolationPanel() {
  * see tests/test_tab_build_flags.py. */
 function tabNeedsBuild(currentBuiltTab, tabName, force) {
   return currentBuiltTab !== tabName || !!force;
+}
+
+/* ------------------------------------------------------------------ resizable panes
+ * User ask (2026-09-05, docs/121 section 14): "지금 창 Pane 들 슬라이더 달아서 슬라이드가능
+ * 하게 해" - drag handles between the left tab strip / 3D scene / right control panel
+ * (2 vertical dividers) and between that whole row and the plots panel below it (1
+ * horizontal divider), sizes remembered in localStorage, and each pane kept above a minimum
+ * so a plain drag cannot shrink it to 0 and make it vanish by accident - a DOUBLE-click on a
+ * handle is the deliberate, explicit way to fully fold/unfold the pane on its near side.
+ *
+ * The four functions below (clampColLeft/clampColRight/clampRowPlots/sanitizePaneLayout) are
+ * pure - no DOM, no clock, no globals read - specifically so a plain Python mirror can unit-
+ * test the resize arithmetic on a host with no browser (same reasoning as this file's other
+ * pure functions; see the violation-console block above and its tests/test_violation_console.py
+ * sibling; this feature's mirror is tests/test_pane_resize.py).
+ */
+const TOPBAR_H = 38;   // must track .top's CSS height (dashboard.html .wrap grid-template-rows)
+const DIVIDER_PX = 7;  // must track .divider's CSS grid track size
+const PANE_MIN = {
+  left: 160,    // narrowest the left tab body (Model/Base link/Telemetry/...) stays usable at
+  right: 300,   // below this the Control tab's sliders start clipping - the exact failure this
+                // feature exists to prevent (.joint-row's own columns sum to ~246px + padding)
+  center: 220,  // 3D scene / plots column
+  mainH: 160,   // top row (left tabs / scene / control panel) height
+  plotsH: 120,  // plots row height - a floor, not a target; one row of plot-cells plus its
+                // toolbar wants noticeably more than this to look good
+};
+const PANE_DEFAULTS = { colLeft: 250, colRight: 340, rowPlots: 320, leftCollapsed: false, rightCollapsed: false, plotsCollapsed: false };
+const PANE_LS_KEY = "pygviewer.paneLayout.v1";
+
+function clampColLeft(value, containerW, colRight) {
+  const maxLeft = containerW - 2 * DIVIDER_PX - colRight - PANE_MIN.center;
+  return clamp(value, PANE_MIN.left, Math.max(PANE_MIN.left, maxLeft));
+}
+function clampColRight(value, containerW, colLeft) {
+  const maxRight = containerW - 2 * DIVIDER_PX - colLeft - PANE_MIN.center;
+  return clamp(value, PANE_MIN.right, Math.max(PANE_MIN.right, maxRight));
+}
+function clampRowPlots(value, containerH) {
+  const maxPlots = containerH - TOPBAR_H - DIVIDER_PX - PANE_MIN.mainH;
+  return clamp(value, PANE_MIN.plotsH, Math.max(PANE_MIN.plotsH, maxPlots));
+}
+
+/* Validates a layout object straight out of localStorage - untrusted: it can be missing,
+ * saved on a wider/taller screen than this one, or hand-edited into nonsense. Any field that
+ * is not a finite number, or that clamping cannot fit onto the CURRENT viewport (e.g. a
+ * 1200px-wide layout reloaded on a 480px-wide window where even the minimums do not add up),
+ * falls back to PANE_DEFAULTS for that field - never to NaN, a negative size, or something
+ * wider than the window. Booleans (the collapsed flags) pass straight through: a folded pane
+ * is valid at any viewport size. */
+function sanitizePaneLayout(raw, containerW, containerH) {
+  const d = PANE_DEFAULTS;
+  const out = Object.assign({}, d);
+  if (!raw || typeof raw !== "object") return out;
+  const num = (v, fallback) => (Number.isFinite(v) ? v : fallback);
+  out.leftCollapsed = raw.leftCollapsed === true;
+  out.rightCollapsed = raw.rightCollapsed === true;
+  out.plotsCollapsed = raw.plotsCollapsed === true;
+  out.colLeft = clampColLeft(num(raw.colLeft, d.colLeft), containerW, num(raw.colRight, d.colRight));
+  out.colRight = clampColRight(num(raw.colRight, d.colRight), containerW, out.colLeft);
+  out.colLeft = clampColLeft(out.colLeft, containerW, out.colRight); // re-settle both ways once more
+  out.rowPlots = clampRowPlots(num(raw.rowPlots, d.rowPlots), containerH);
+  return out;
+}
+
+function loadPaneLayout() {
+  try { return JSON.parse(localStorage.getItem(PANE_LS_KEY)); } catch (e) { return null; }
+}
+function savePaneLayout() {
+  if (!S.paneSizes) return;
+  try {
+    const s = S.paneSizes;
+    localStorage.setItem(PANE_LS_KEY, JSON.stringify({
+      colLeft: s.colLeft, colRight: s.colRight, rowPlots: s.rowPlots,
+      leftCollapsed: s.leftCollapsed, rightCollapsed: s.rightCollapsed, plotsCollapsed: s.plotsCollapsed,
+      violationOpen: S.violationPanelOpen,
+    }));
+  } catch (e) { /* private browsing / quota exceeded - sizes just won't persist, not fatal */ }
+}
+
+function initPaneResize() {
+  const wrap = document.querySelector(".wrap");
+  const raw = loadPaneLayout();
+  S.paneSizes = sanitizePaneLayout(raw, wrap.clientWidth, wrap.clientHeight);
+  // the violation panel's open/closed state (2026-09-05: "접기 상태도 기억할 것") rides in the
+  // same localStorage blob as the pane sizes rather than a second key - it is part of the
+  // same "remembered layout" concept from the user's point of view.
+  if (raw && typeof raw.violationOpen === "boolean") S.violationPanelOpen = raw.violationOpen;
+
+  function applyPaneSizes() {
+    const s = S.paneSizes;
+    wrap.style.setProperty("--col-left", (s.leftCollapsed ? 0 : s.colLeft) + "px");
+    wrap.style.setProperty("--col-right", (s.rightCollapsed ? 0 : s.colRight) + "px");
+    wrap.style.setProperty("--row-plots", (s.plotsCollapsed ? 0 : s.rowPlots) + "px");
+  }
+  applyPaneSizes();
+  renderViolationPanel();
+
+  // Only ONE redraw after a drag ends (user ask: "끌 때 버벅이지 않게") - while dragging we
+  // only ever touch the CSS custom properties above, never uPlot itself; the plot cells just
+  // stretch with their container via ordinary CSS until the drag settles. The existing
+  // debounced window "resize" listener (further down this file) already does exactly
+  // "resize -> rebuild the plot grid once after 200ms of quiet", so re-dispatching that same
+  // event on drag-end reuses it instead of duplicating the rebuild logic here.
+  function afterDragSettled() { savePaneLayout(); window.dispatchEvent(new Event("resize")); }
+
+  function startDrag(kind, downEv) {
+    downEv.preventDefault();
+    const handle = downEv.currentTarget;
+    // Pointer capture (where supported) keeps events routed to `handle` even if a fast drag
+    // momentarily outruns the mouse past its 7px hit area - but the move/up listeners below
+    // are on `window`, not `handle`, specifically so dragging still works correctly WITHOUT
+    // it (some embedded/automation browser engines - e.g. the one used for this feature's own
+    // screenshot verification - do not implement setPointerCapture at all).
+    try { handle.setPointerCapture(downEv.pointerId); } catch (e) { /* not supported - window-level listeners below still work */ }
+    handle.classList.add("dragging");
+    document.body.classList.add(kind === "bottom" ? "resizing-h" : "resizing-v");
+    const startX = downEv.clientX, startY = downEv.clientY;
+    const start = Object.assign({}, S.paneSizes);
+    function onMove(mv) {
+      // Defensive: a pointermove with a non-finite clientX/clientY (seen from at least one
+      // headless engine's incomplete PointerEvent support during this feature's own
+      // screenshot testing) must never reach the clamp math below - clampColLeft/Right/
+      // RowPlots would happily propagate that NaN into the CSS custom property, and per the
+      // CSS spec an invalid var() substitution invalidates the WHOLE grid-template-columns/
+      // rows declaration using it, silently breaking every pane's layout until reload. A
+      // no-op skip here is strictly safer than "resize to garbage".
+      if (!Number.isFinite(mv.clientX) || !Number.isFinite(mv.clientY)) return;
+      const cw = wrap.clientWidth, ch = wrap.clientHeight;
+      if (kind === "left") {
+        S.paneSizes.leftCollapsed = false;
+        S.paneSizes.colLeft = clampColLeft(start.colLeft + (mv.clientX - startX), cw, S.paneSizes.rightCollapsed ? 0 : S.paneSizes.colRight);
+      } else if (kind === "right") {
+        S.paneSizes.rightCollapsed = false;
+        S.paneSizes.colRight = clampColRight(start.colRight - (mv.clientX - startX), cw, S.paneSizes.leftCollapsed ? 0 : S.paneSizes.colLeft);
+      } else {
+        S.paneSizes.plotsCollapsed = false;
+        S.paneSizes.rowPlots = clampRowPlots(start.rowPlots - (mv.clientY - startY), ch);
+      }
+      applyPaneSizes();
+    }
+    function onUp(upEv) {
+      try { handle.releasePointerCapture(upEv.pointerId); } catch (e) { /* see setPointerCapture above */ }
+      handle.classList.remove("dragging");
+      document.body.classList.remove("resizing-v", "resizing-h");
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      afterDragSettled();
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
+  function wireDivider(id, kind, collapseKey) {
+    const h = el(id);
+    h.addEventListener("pointerdown", (e) => startDrag(kind, e));
+    h.addEventListener("dblclick", () => {
+      S.paneSizes[collapseKey] = !S.paneSizes[collapseKey];
+      applyPaneSizes();
+      afterDragSettled();
+    });
+  }
+  wireDivider("divider-left", "left", "leftCollapsed");
+  wireDivider("divider-right", "right", "rightCollapsed");
+  wireDivider("divider-bottom", "bottom", "plotsCollapsed");
+
+  // Window resized/rotated under us, or a saved layout from a wider screen just loaded onto a
+  // narrower one - re-settle onto the new viewport so nothing stays wider/taller than it.
+  window.addEventListener("resize", () => {
+    const cw = wrap.clientWidth, ch = wrap.clientHeight;
+    S.paneSizes.colLeft = clampColLeft(S.paneSizes.colLeft, cw, S.paneSizes.colRight);
+    S.paneSizes.colRight = clampColRight(S.paneSizes.colRight, cw, S.paneSizes.colLeft);
+    S.paneSizes.rowPlots = clampRowPlots(S.paneSizes.rowPlots, ch);
+    applyPaneSizes();
+  });
 }
 
 /* ------------------------------------------------------------------ tabs */
@@ -694,8 +870,18 @@ function renderTick() {
 
 function boot() {
   document.title = "pygviewer";
-  el("viser-frame").src = `http://${location.hostname}:8094`;
+  // Headless verification mode (2026-09-04, dashboard.html's own inline script sets this
+  // BEFORE dashboard.js loads, from `?no3d=1`/`?headless=1`): skip the viser iframe - loading
+  // a second full WebGL scene inside it is what crashes a headless browser with no real GPU
+  // context. #scene-badge (unused elsewhere) carries a visible "3D off" label so a human
+  // looking at a headless screenshot is never confused about why the scene panel is blank.
+  if (window.PYG_HEADLESS) {
+    el("scene-badge").textContent = "3D off (headless)";
+  } else {
+    el("viser-frame").src = `http://${location.hostname}:8094`;
+  }
   initTabs();
+  initPaneResize();
   initPlotsToolbar();
   initModal();
   initOpConsole();
@@ -1466,7 +1652,11 @@ function renderTabObs(body) {
       <div id="imu3d"></div>
       <div class="imu-legend" id="imu-legend"></div>`;
     body.dataset.builtTab = "obs";
-    imu3d = initImu3D(el("imu3d"));
+    // Headless mode: THREE was never loaded (dashboard.html's inline loader) and there is no
+    // WebGL context to create one against - updateImu3D()'s own `if (!imu3d) return;` already
+    // makes this a no-op skip, not a crash, for every tick after.
+    if (!window.PYG_HEADLESS) imu3d = initImu3D(el("imu3d"));
+    else el("imu3d").innerHTML = `<div class="small">3D off (headless)</div>`;
   }
   const snapPolicy = (S.snapshot || {}).policy;
   const termsEl = el("obs-terms");
@@ -2170,5 +2360,6 @@ window.__pygdash = {
   S, api, apiOk, toast, el, fmt, clamp, displayVal, internalVal, unitSuffix, obsTermDims, RAD2DEG, DEG2RAD,
   policyLoadErrorText, loadAndRunPolicy, loadAndRunPolicyByPath,
   tabNeedsBuild, coalesceLines, fmtHms, violationLineText, violationBadgeText, violationSideShort,
+  clampColLeft, clampColRight, clampRowPlots, sanitizePaneLayout, PANE_MIN, PANE_DEFAULTS,
 };
 })();
