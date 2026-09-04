@@ -1217,7 +1217,8 @@
    "section": "done",
    "changed": "2026-09-04 20:58",
    "finding": "모터가 갑자기 100도씩 튀며 제어 불능이 된 원인은 고장이 아니라, 통신선에 물린 두 번째 모터가 공장 기본 주소(127번)를 그대로 쓰고 있어 벤치 모터와 주소가 겹친 것. 제어기가 남의 위치값을 자기 것으로 받아 반대 방향으로 밀기를 반복함. 여분 모터를 빼자 판독이 8회 연속 일치하고 자세 고정 오차 0.00도로 즉시 정상화",
-   "needs": "다음 개발용 모터를 다시 연결하기 전에 주소를 127에서 다른 값으로 변경할 것 — 같은 주소로 두 대를 물리면 재발함"
+   "needs": "다음 개발용 모터를 다시 연결하기 전에 주소를 127에서 다른 값으로 변경할 것 — 같은 주소로 두 대를 물리면 재발함",
+   "collapsed": true
   },
   "scenario-switch-mockups": {
    "id": "scenario-switch-mockups",
@@ -1308,6 +1309,18 @@
    "now_": "Fixed: drift check now compares real-vs-real only; a non-blocking clip_warnings report shows the exact travel (deg) arming a clipped joint will cause. Also fixed: a disconnected motor reporting a fake 0.0 position no longer gets synced (excluded via the existing ack/miss/motor_age_ms health check).",
    "section": "pygviewer",
    "changed": "2026-09-04 23:58"
+  },
+  "huphy-handoff-doc": {
+   "id": "huphy-handoff-doc",
+   "created": "2026-09-05 01:34",
+   "title": "로봇 제어 프로그램에서 찾은 문제들을 개발자에게 넘길 문서로 정리",
+   "section": "done",
+   "changed": "2026-09-05 01:34",
+   "finding": "모터 2대가 동시에 멈춘 원인이 전압 보호였는데, 제어 프로그램이 그 고장 코드를 거꾸로 읽어 '설명서에 없는 값'으로 보였음. 제조사 설명서와 공식 코드로 확인해 바로잡았고, 발견 5건을 세 갈래(치명적 오류/버그/우리에게 필요한 것)로 나눠 한 문서에 정리. 추가로 과열 예고값은 지금 통신 방식에서 아예 오지 않는다는 것도 실측으로 확인",
+   "number": "제어 프로그램 시험 1074건 통과",
+   "media": [
+    "docs/124_huphy_handoff_findings.md"
+   ]
   }
  },
  "order": [
@@ -1424,7 +1437,8 @@
   "biped-bridge-rewrite",
   "legonly-ab-v2-done",
   "idle-refresh-fix",
-  "sync-clip-fix"
+  "sync-clip-fix",
+  "huphy-handoff-doc"
  ],
- "updated": "2026-09-05 01:05"
+ "updated": "2026-09-05 01:34"
 }
