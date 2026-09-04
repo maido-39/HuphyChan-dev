@@ -945,7 +945,8 @@
    "why": "로봇이 실제로 어떻게 걷는지 확인하려면, 학습이 만들어낸 '걸음 방법'(정책)을 아무 때나 불러와 화면 속 로봇에게 실행시켜 볼 수 있어야 한다. 1단계(완료분)는 로봇을 손으로 움직여보는 것까지였고, 이번에 학습된 걸음 정책을 불러와 실제로 걷게 하는 기능을 완성했다.",
    "finding": "이어받아 확인해보니 이전 작업자가 코드 대부분을 이미 완성해 두었고, 남은 일은 검증과 버그 발견이었다. 검증 중 '걷기 모드로 전환' 명령이 옛날 버전 규칙에 걸려 항상 거부되는 버그를 찾았다 — 화면의 조작 버튼은 이 규칙을 우회해서 작동했기 때문에 눈으로만 봐서는 몰랐고, 외부 프로그램이 명령을 보내는 방식(실물 로봇과 연결할 때 쓰는 방식)으로 시도해서야 드러났다. 고쳐서 재확인했다. 정지 자세와 걷기 속도 모두 학습 시스템이 직접 낸 기준값과 비교했다.",
    "number": "학습이 내놓은 두 시점(700번째/5200번째 갱신)의 걸음 정책을 각각 불러와 확인. 정지 상태(10초 이상 유지)에서 몸통 높이 오차 1.4 mm(허용 기준 20 mm), 양 무릎 각도 오차 0.5도/0.2도(허용 기준 2도). 초속 0.6 m로 걷기 명령 시 15초 동안 넘어지지 않고 7.25 m 이동, 속도 오차 초속 0.055 m(허용 기준 0.1 m). 자동 검사 130개 전부 통과(이전 122개 + 이번에 새로 만든 8개, 13초 소요). 정책 파일을 직접 불러오는 방식은 로딩에 약 11초, 메모리 1.3 GB까지 증가(사전 예상치와 일치).",
-   "needs": "다음 단계는 실물 로봇에서 실제 관절 데이터를 받아오는 부분(3단계)이다. 그 다음에야 시뮬레이션과 실물을 겹쳐서 비교하는 화면(4단계)을 만들 수 있다."
+   "needs": "다음 단계는 실물 로봇에서 실제 관절 데이터를 받아오는 부분(3단계)이다. 그 다음에야 시뮬레이션과 실물을 겹쳐서 비교하는 화면(4단계)을 만들 수 있다.",
+   "collapsed": true
   },
   "pygviewer-p3": {
    "id": "pygviewer-p3",
@@ -1023,6 +1024,27 @@
    "changed": "2026-09-04 12:15",
    "finding": "뷰어가 관절 목표(초당 50번)를 로봇 쪽 프로그램으로 보내고, 로봇 쪽은 그걸 받아 실제 모터 명령으로 바꾸는 프로그램 두 개를 만들었다. 안전장치를 이중으로 넣었다: (1) 정책(스스로 걷는 AI)이 만든 값은 애초에 이 통로에 실어보낼 수 없게 코드 구조 자체로 막았다(허용값은 '사람이 슬라이더로', '미리 짠 스크립트로' 두 가지뿐, 그 외 값은 메시지를 만드는 시점에 즉시 거부됨). (2) 신호가 0.2초 이상 끊기면 로봇이 그 자리에서 멈췄다가(사람이 실수로 케이블을 뽑거나 프로그램이 죽어도) 3초에 걸쳐 천천히 원래 안전 자세로 돌아간다 — 이 타이밍을 실제 시계로 재서 확인했다. 로봇이 아직 없어도 검증할 수 있도록 '가짜 로봇'(모터처럼 반응하는 계산 모델) 프로그램도 만들어, 뷰어→가짜 로봇→돌아오는 신호까지 전체 왕복을 실제로 돌려봤다: 두 다리 무릎에 반대 부호로 목표를 동시에 줘도 각각 정확히 원하는 각도로 돌아왔고, 끄기로 지정하지 않은 모터는 명령을 줘도 전혀 움직이지 않았다. 진짜 로봇 제어 프로그램(HUPHY)이 설치된 원격 컴퓨터에 어떻게 설치하고 벤치에서 모터 1개로 첫 테스트를 하는지 단계별 설명서도 만들었다. 다만 이 개발 컴퓨터에는 진짜 로봇 프로그램도 CAN 통신 장치도 없어서, '진짜 로봇에 연결하는 부분'은 아직 한 번도 실행해보지 못했다 — 다음 단계는 그 설명서를 따라 원격 벤치에서 실제로 켜보는 것. 화면(웹페이지)에서 이 송신 프로그램을 실제로 누르면 나가게 연결하는 작업은 아직 남아있다(다른 담당자 진행 중이던 화면 작업과 별개).",
    "number": "새 자동검사 89개 추가(전체 333개 전부 통과, 약 30초 소요) · 각도 계산 정확도: 순수 계산은 10억분의 1도 이내, 실제 통신선을 통과하면 로봇 쪽 자체 반올림 때문에 약 0.01도(360도 중 0.01도) 단위까지만 보장 · 신호 끊김 감지 시각: 마지막 신호 후 0.15~0.25초 사이(목표 0.2초) · 안전 클램프 상한: 게인(강성) kp 5·kd 0.5 이하로 자동 제한"
+  },
+  "pygviewer-tx-ui": {
+   "id": "pygviewer-tx-ui",
+   "created": "2026-09-04 13:04",
+   "title": "pygviewer TX dashboard wiring (plan A finish)",
+   "why": "The web dashboard's 'send commands to the real robot' panel was a safety-only mockup that recorded intent but never put a byte on the wire; the actual sending library existed separately, unconnected.",
+   "now_": "Connecting the dashboard buttons to the real sender, fixing a robot-side timing rule, adding a duplicate-process guard, and fixing a hidden button in the policy panel.",
+   "section": "done",
+   "changed": "2026-09-04 13:04",
+   "finding": "Enable a joint, arm, and hold a key: the dashboard now sends real network commands (50 times/second) and a test robot simulator moved to within 2 degrees of the requested angle. Letting go of the key stops new commands within 0.3 seconds without disarming (the robot side then safely freezes and eases back to its resting pose on its own). Switching to autonomous-policy mode auto-blocks sending within one control step. A joint not explicitly enabled is never sent, confirmed by the test robot staying at its own resting angle.",
+   "number": "343 tests passing (up from 333; old stub-only tests replaced), live 2-degree tracking, 0.3s heartbeat cutoff, 1 control-tick auto-block on mode change",
+   "needs": "Real hardware (motor + CAN bus) still untested - only the physics-model test-double and the safety wiring were verified; a second, previously-reported dashboard bug (Policy panel's Load button being visually hidden) was also fixed in the same pass; a duplicate-viewer-process bug from earlier today was closed with a same-process guard."
+  },
+  "bench-rs03": {
+   "id": "bench-rs03",
+   "created": "2026-09-04 13:40",
+   "title": "벤치 모터 1개(RS03) 실물 연결 준비",
+   "why": "뷰어→실물 송신 경로를 실제 모터 하나로 처음 검증하기 위해",
+   "section": "blocked",
+   "changed": "2026-09-04 13:40",
+   "needs": "모터가 CAN 버스에서 전혀 응답하지 않음(두 프로토콜 모두 0응답, 버스 트래픽 0). 원격 PC 쪽 준비는 끝(HUPHY 설치, USB-CAN 어댑터 slcan 경로 확인). 사용자 확인 필요: 모터 전원(24~48 V) 투입 여부, CAN H/L 배선·종단저항, 커넥터"
   }
  },
  "order": [
@@ -1115,7 +1137,9 @@
   "arm-abduction-fix",
   "pygviewer-ui2",
   "pygviewer-tx-stub",
-  "pygviewer-tx"
+  "pygviewer-tx",
+  "pygviewer-tx-ui",
+  "bench-rs03"
  ],
- "updated": "2026-09-04 12:15"
+ "updated": "2026-09-04 13:40"
 }

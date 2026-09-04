@@ -1,0 +1,37 @@
+# bench_rs03_slcan.yaml — same bench as bench_rs03.yaml but talking to the CANable's SLCAN
+# firmware DIRECTLY through python-can's `slcan` backend (USB CDC serial /dev/ttyACM0).
+#
+# Why: this CANable runs canable-fw (slcan), NOT candleLight (gs_usb) — it shows up as
+# /dev/ttyACM0 via cdc_acm, and `gs_usb` will never bind it. Two ways to use it:
+#   (a) socketcan:  sudo apt install can-utils; sudo slcand -o -c -s8 /dev/ttyACM0 can0;
+#                   sudo ip link set can0 up   -> then use bench_rs03.yaml (channel can0)
+#   (b) NO sudo:    this file. HUPHY passes channel/interface straight to python-can; the
+#                   bitrate is not a HUPHY field, so set it via python-can's env var:
+#                   export CAN_BITRATE=1000000   (RobStride bus = 1 Mbps)
+#
+#   export CAN_BITRATE=1000000
+#   huphy-commission --config bench_rs03_slcan.yaml --limb bench scan
+name: bench_rs03_slcan
+safety:
+  command_margin_deg: 3.0
+  max_delta_deg: 20.0
+  enforce_limits: false      # commissioning mode: no calibration/limits yet
+telemetry:
+  host: 192.168.20.177       # pygviewer host (bridge/huphy_udp.py listens on :9870)
+  port: 9870
+  csv_path: null
+  csv_flush_every: 50
+imus: {}
+limbs:
+  bench:
+    kind: leg
+    side: left
+    channel: /dev/ttyACM0    # or /dev/serial/by-id/usb-Protofusion_Labs_CANable_*-if00
+    interface: slcan
+    control_hz: 100.0
+    motors:
+      m127: {id: 127, model: RS03, kp: 5.0, kd: 0.5}   # factory default id of a new RobStride
+      m1:   {id: 1,   model: RS03, kp: 5.0, kd: 0.5}
+      m3:   {id: 3,   model: RS03, kp: 5.0, kd: 0.5}
+      m5:   {id: 5,   model: RS03, kp: 5.0, kd: 0.5}
+      m6:   {id: 6,   model: RS03, kp: 5.0, kd: 0.5}
