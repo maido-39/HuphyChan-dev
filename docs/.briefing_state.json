@@ -1077,7 +1077,8 @@
    "changed": "2026-09-04 14:49",
    "finding": "Root cause was the opposite of the initial suspicion: it was NOT the dashboard server getting overloaded and going quiet - it was the SENDING program itself never reading its own inbox. It kept talking but never listened, so its own inbox filled up and, once full, it stopped listening entirely - including to the dashboard's routine 'are you still there' checks - so it disconnected itself, thinking the dashboard had gone silent. Fixed by having the sending program also read (and discard) what comes back. Confirmed live: streamed telemetry through the fixed program into the actual running dashboard for 2 full minutes at double the reported rate with zero drops; the old, unfixed version reliably failed at 40 seconds in the same test.",
    "number": "Old version: disconnects at ~40s (matches the ~60s reported, same error). Fixed version: 2 minutes streamed live with 0 gaps, 0 disconnects, at ~200 messages/second (double the reported 50/s).",
-   "needs": "Two sending programs had this same bug (the HUPHY forwarder and the built-in test transmitter) - both fixed the same way. The dashboard side itself needed no change once the real cause was found; a suggested dashboard-side timing tweak was deliberately NOT applied since it would only have masked the symptom."
+   "needs": "Two sending programs had this same bug (the HUPHY forwarder and the built-in test transmitter) - both fixed the same way. The dashboard side itself needed no change once the real cause was found; a suggested dashboard-side timing tweak was deliberately NOT applied since it would only have masked the symptom.",
+   "collapsed": true
   },
   "bench-closed-loop": {
    "id": "bench-closed-loop",
@@ -1167,6 +1168,16 @@
    "number": "회귀 테스트 20건 신규, 전체 스위트 420 passed, 라이브 실측: 벤치 무릎 관절이 실측 -1.5 rad로 허용범위 [0, 2.09] 밖(초당 약 51건 위반 확인)",
    "section": "done",
    "changed": "2026-09-04 18:49"
+  },
+  "bench-tx-bringup": {
+   "id": "bench-tx-bringup",
+   "created": "2026-09-04 19:32",
+   "title": "벤치 모터를 뷰어에서 조작하기 위한 연결 준비",
+   "why": "사용자가 '이전에 연결했던 모터 셋업에 연결하려면 어떻게 하나' 질문 — 확인해 보니 로봇 쪽 수신 프로그램이 아예 설치된 적이 없었음",
+   "section": "done",
+   "changed": "2026-09-04 19:32",
+   "finding": "로봇 호스트에 수신 프로그램 배포 + 누락 라이브러리 설치 + 벤치 전용 관절 이름('bench')을 거부하던 버그 수정. 모터를 건드리지 않는 모의 실행으로 수신·매핑 정상 확인. 실제 모터 구동 전환은 사용자 입회 하에 진행 예정",
+   "number": "테스트 422건 통과"
   }
  },
  "order": [
@@ -1271,7 +1282,8 @@
   "motor-health",
   "viewer-render-freeze",
   "pygviewer-render-crash",
-  "pygviewer-violation-console"
+  "pygviewer-violation-console",
+  "bench-tx-bringup"
  ],
- "updated": "2026-09-04 19:23"
+ "updated": "2026-09-04 19:32"
 }

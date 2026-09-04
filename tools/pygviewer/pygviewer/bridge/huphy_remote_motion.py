@@ -113,19 +113,39 @@ def split_motor_targets_into_action(
   return single, ankle
 
 
-def resolve_side(limb_arg: str) -> str:
-  """Accepts either the joint map's own vocabulary (``"left"``/``"right"``) or HUPHY
-  ``robot.yaml``'s limb config key (``"left_leg"``/``"right_leg"``) - docs/123's own example
-  CLI (section 3b) uses the former, HUPHY's ``config/robot_v1.0.yaml`` uses the latter, so
-  both are accepted rather than picking one and having the other silently fail to match."""
-  s = limb_arg.strip().lower()
+def resolve_side(limb_arg: str, jmap: JointMap | None = None) -> str:
+  """Resolve ``--limb`` to the key the JOINT MAP uses for that limb.
+
+  The returned value is not merely "left"/"right": every downstream use treats it as the
+  map's own limb key (``row["limb"] == side`` in :func:`sim_joints_for_limb`, the lookup in
+  :func:`enable_motor_names_to_sim_joints`, and the ``f"{side}/{motor}/{field}"`` telemetry
+  keys that must match HUPHY's own wire format). So a map that names a limb something other
+  than left/right - ``joint_map_bench.json`` labels the single bench RS03's row
+  ``limb: "bench"``, matching ``bench_rs03_slcan.yaml``'s own limb key and the
+  ``bench/knee/...`` keys `deploy/bench/bench_telemetry.py` emits - must resolve to THAT
+  name, or nothing matches and the receiver silently drives nothing.
+
+  Accepted, in order: the map's own limb keys verbatim (when ``jmap`` is given), then the
+  historical aliases - the map vocabulary ``left``/``right`` (docs/123 section 3b's example
+  CLI) and HUPHY ``robot.yaml``'s config keys ``left_leg``/``right_leg``
+  (``config/robot_v1.0.yaml``) - since both spellings were already in use and picking one
+  would make the other fail to match without saying why.
+  """
+  raw = limb_arg.strip()
+  s = raw.lower()
+  known = sorted({limb for (limb, _motor) in jmap.motors}) if jmap is not None else []
+  if raw in known:
+    return raw
+  if s in known:
+    return s
   if s in ("left", "right"):
     return s
   if s in ("left_leg", "leftleg"):
     return "left"
   if s in ("right_leg", "rightleg"):
     return "right"
-  raise ValueError(f"--limb {limb_arg!r}: expected one of left/right/left_leg/right_leg")
+  extra = f" or one of this map's limbs {known}" if known else ""
+  raise ValueError(f"--limb {limb_arg!r}: expected one of left/right/left_leg/right_leg{extra}")
 
 
 @dataclasses.dataclass
@@ -245,7 +265,7 @@ def run_dry(args) -> int:
   contract = load_contract(args.cache, args.variant)
   jmap = JointMap(args.map) if args.map else JointMap(DEFAULT_MAP_PATH)
   mapper = JointTargetMapper(contract, jmap)
-  side = resolve_side(args.limb)
+  side = resolve_side(args.limb, jmap)
   our_sim_joints = sim_joints_for_limb(jmap, side)
   enable = (
     enable_motor_names_to_sim_joints(args.enable.split(","), side, jmap)
@@ -333,7 +353,7 @@ def run_real(args) -> int:
   contract = load_contract(args.cache, args.variant)
   jmap = JointMap(args.map) if args.map else JointMap(DEFAULT_MAP_PATH)
   mapper = JointTargetMapper(contract, jmap)
-  side = resolve_side(args.limb)
+  side = resolve_side(args.limb, jmap)
   our_sim_joints = sim_joints_for_limb(jmap, side)
   enable = (
     enable_motor_names_to_sim_joints(args.enable.split(","), side, jmap)

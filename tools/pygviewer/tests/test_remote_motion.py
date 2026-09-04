@@ -11,6 +11,8 @@ import socket
 import threading
 import time
 
+from pathlib import Path
+
 import pytest
 
 from pygviewer import CACHE_DIR
@@ -279,3 +281,28 @@ def test_run_dry_rejects_unknown_joint_and_wrong_arm_token():
   finally:
     sock.close()
     t.join(timeout=3.0)
+
+
+# ---------------------------------------------------------------- bench limb (2026-09-04)
+def test_resolve_side_accepts_a_map_limb_name_that_is_not_left_or_right():
+  """`joint_map_bench.json` labels the single bench RS03's row `limb: "bench"` (matching
+  `bench_rs03_slcan.yaml`'s own limb key and the `bench/knee/...` telemetry keys
+  `deploy/bench/bench_telemetry.py` emits). `side` is used downstream AS the map's limb key,
+  so it must come back verbatim - the old hardcoded left/right list made `--limb bench` a
+  hard ValueError, which is exactly what blocked the first bench TX bring-up."""
+  from pygviewer.bridge.huphy_remote_motion import resolve_side, sim_joints_for_limb
+  from pygviewer.bridge.huphy_udp import JointMap
+  jmap = JointMap(str(Path(DEFAULT_MAP_PATH).parent / "joint_map_bench.json"))
+  assert resolve_side("bench", jmap) == "bench"
+  assert sim_joints_for_limb(jmap, "bench") == ["L_knee_joint"]
+
+
+def test_resolve_side_keeps_the_historical_aliases_and_names_the_map_limbs_when_it_fails():
+  from pygviewer.bridge.huphy_remote_motion import resolve_side
+  from pygviewer.bridge.huphy_udp import JointMap
+  jmap = JointMap(str(Path(DEFAULT_MAP_PATH).parent / "joint_map_bench.json"))
+  assert resolve_side("left_leg", jmap) == "left"
+  assert resolve_side("RIGHT", jmap) == "right"
+  assert resolve_side("left") == "left"  # still works with no map at all
+  with pytest.raises(ValueError, match="bench"):
+    resolve_side("nosuchlimb", jmap)

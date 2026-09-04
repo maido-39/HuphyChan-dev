@@ -289,3 +289,18 @@ forward.py`, `bridge/dummy_tx.py` 둘 다)이 `ws.send()`만 하고 `ws.recv()`�
   NOTE로만 출력 — 계획 문구("있으면 절대 클립")와의 의도적 편차, docstring에 사유 명시. 진짜
   안전보증은 `sim_core.py`의 하드 range 클립(수신측, docs/121 §4/§9)이며 이 절의 항목들은 전부
   그 앞단 방어층. 커밋: `f4ba171`(TxClient)·`9115180`(rom_deg 조인트맵)·`ae5a1f3`(bench 문서화).
+
+
+## §10. 벤치 TX 브링업 (2026-09-04)
+
+첫 실연결 시도에서 막힌 지점과 조치:
+
+| 증상 | 원인 | 조치 |
+|---|---|---|
+| 뷰어 TX를 설정해도 아무 일도 없음 | 로봇 호스트에 **브리지가 배포된 적 없음**(`~/pygviewer_bridge` 부재) → :9872에 수신자 없음 | `rsync`로 `pygviewer/` 패키지 + `LegOnly-AB.model_contract.json` 배포 |
+| `ModuleNotFoundError: pydantic` | 벤치 venv에 미설치 | `pip install pydantic`(2.13.5) — 호스트 인터넷 가능 확인 |
+| `--limb bench` 거부(ValueError) | `resolve_side()`가 left/right/left_leg/right_leg만 허용. 그러나 `side`는 downstream에서 **조인트맵의 limb 키 그 자체**로 쓰인다(`row["limb"]==side`, 텔레메트리 키 `{side}/{motor}/{field}`). 벤치 맵은 `limb:"bench"`(`bench_rs03_slcan.yaml`·`bench_telemetry.py`의 `bench/knee/...`와 일치) | `resolve_side(limb, jmap)`가 **맵에 존재하는 limb 이름을 그대로 허용**하도록 수정(기존 별칭 유지, 실패 시 사용 가능한 limb 목록을 오류에 표시). 테스트 2건 추가 |
+
+`--dry-run` 검증 통과(CAN 미접촉): 수신기가 :9872 바인드, `bench/knee` 매핑 해소, idle 타깃 에코 확인.
+
+**남은 단계(사용자 입회 필요)**: 벤치의 `bench_telemetry.py`가 CAN 버스를 점유 중이라 수신기와 동시 실행 불가 → 송신기 종료 후 실모드 수신기 기동. 실제 모터 구동이므로 e-stop 대기 상태에서 진행.
