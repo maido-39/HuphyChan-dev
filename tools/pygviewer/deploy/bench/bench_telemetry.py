@@ -72,6 +72,7 @@ def main() -> int:
   q0 = ((bus.state(mid).position_deg + 180.0) % 360.0) - 180.0
   tgt = q0
   if active:
+    bus.clear_fault([mid])   # a latched stall fault from a previous run blocks torque
     bus.enable_torque([mid])
   n = 0
   try:
@@ -79,13 +80,13 @@ def main() -> int:
       tick = time.perf_counter()
       t = tick - t0
       if active:
-        want = a.sine[0] * math.sin(2 * math.pi * a.sine[1] * t)
+        want = q0 + a.sine[0] * math.sin(2 * math.pi * a.sine[1] * t)
         want = max(-a.rom, min(a.rom, want))
         tgt = tgt + max(-a.slew, min(a.slew, want - tgt))      # slew clamp
         bus.send_mit({mid: MitCommand(position_deg=tgt, velocity_deg_s=0.0, kp=kp, kd=kd, torque_nm=0.0)})
-        bus.collect()
+        bus.collect(expect=1, timeout_s=dt * 0.8)
       else:
-        bus.refresh_states([mid])
+        bus.refresh_states([mid])  # sends a zero-force query and collects the reply
       st = bus.state(mid)
       # HUPHY's cal space wraps to +-180 deg (motors/base.py wrap180); without a calibration file
       # the raw multi-turn angle would leak through (e.g. 344 deg for -16 deg), so wrap here.
