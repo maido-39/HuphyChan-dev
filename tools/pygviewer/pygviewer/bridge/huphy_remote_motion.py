@@ -702,16 +702,43 @@ def run_real(args) -> int:
   print("[remote_motion] torque enabled before seeding (motors ignore command frames while off)",
         flush=True)
 
+  # One `refresh_states()` is NOT enough on a partial rig (2026-09-05, third bench incident).
+  # It ends in `collect(expect=len(ids))` with HUPHY's default 2 ms reply window
+  # (robstride/bus.py:218, 258). `expect` is the number of DECLARED motors, so on the bench
+  # rig it waits for 6 replies that can never all arrive and always burns the full timeout.
+  # At 1 Mbit/s six command frames plus two replies is about 0.9 ms of bus time - inside 2 ms,
+  # but only just, so whether the replies land before the window closes comes down to
+  # scheduling. Measured: the identical call answered 2/6 on one start and 0/6 on the next,
+  # and 0/6 is unrecoverable (no state -> NO_STATE rejects every command -> nothing is ever
+  # sent -> no reply). A two-motor bus declared as two motors never missed, which is what
+  # pinned the cause to the window rather than to the motors.
+  #
+  # So retry until the answering set stops growing, rather than trusting one 2 ms window.
+  # Absent motors (ids 1/2/5/6 here) never answer and must not hold this up, hence "stops
+  # growing" rather than "all declared motors answered".
+  SEED_DEADLINE_S, SEED_GAP_S = 1.0, 0.02
   for part in biped.parts:
     bus_obj = getattr(part, "bus", None)
     if bus_obj is None or not hasattr(bus_obj, "refresh_states"):
       continue
-    missing = bus_obj.refresh_states()
-    ids = getattr(bus_obj, "motor_ids", ())
-    got = [m for m in ids if m not in (missing or ())]
+    ids = list(getattr(bus_obj, "motor_ids", ()))
+    answered: set[int] = set()
+    attempts = 0
+    deadline = time.monotonic() + SEED_DEADLINE_S
+    while time.monotonic() < deadline:
+      attempts += 1
+      missing = set(bus_obj.refresh_states() or ())
+      grew = {m for m in ids if m not in missing} - answered
+      answered |= grew
+      if answered and not grew:
+        break          # settled: another window added nobody new
+      time.sleep(SEED_GAP_S)
     print(f"[remote_motion] seeded measured positions on {part.id}: "
-          f"{len(got)}/{len(ids)} motors answered (no answer: {sorted(missing or ())})",
-          flush=True)
+          f"{len(answered)}/{len(ids)} motors answered in {attempts} tries "
+          f"(no answer: {sorted(set(ids) - answered)})", flush=True)
+    if not answered:
+      print(f"[remote_motion] WARNING {part.id}: no motor answered - every command will be "
+            f"rejected as NO_STATE and nothing will move. Is the motor power on?", flush=True)
 
   listen_host, listen_port = args.listen.rsplit(":", 1)
   latest = LatestOnly(expected_arm_token=args.arm_token, expected_contract_hash=contract.contract_sha)

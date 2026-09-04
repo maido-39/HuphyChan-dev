@@ -26,6 +26,7 @@
 | **크리티컬** | **속도 제한 장치가 없음 (실기 안전 직결)** | `robots/leg.py:490`, 모터 `0x7017/0x7018` 미설정 | **로봇 전체 동시 정지** |
 | **크리티컬** | **온도 칸의 위쪽 4비트를 온도로 계산 (33도 -> 3309.8도)** | `codec/mit.py:124` | 과열을 놓치거나 헛차단 |
 | **크리티컬** | **모터 전원을 켜기 전에 각도를 물어 재시작마다 멈춤** | `control/loop.py:363` | 정상 종료 후 재시작하면 항상 죽음 |
+| **크리티컬** | **상태 수신 창 2 ms 고정 — 일부만 꽂힌 장비에서 간헐 실패** | `robstride/bus.py:218,258` | 0/6이면 영구 정지 |
 | 크리티컬 | 고장값을 반대 순서로 읽음 | `codec/mit.py::decode_fault` | 진단이 통째로 틀림 |
 | 버그 | 고장이 나도 아무 데도 안 실림 | `telemetry/snapshot.py` | 멈춘 걸 아무도 모름 |
 | 버그 | 화면 출력이 파일로 갈 때 안 보임 | `scripts/*` 전반 | 진단 지연 |
@@ -226,6 +227,66 @@ def _enter(self) -> None:
 통신선로 3초간  송신 +600  수신 +600    (모터 2개 x 100 Hz, 응답률 100%)
 화면: 두 관절 모두 '정상', 응답 지연 0.26 ms, 놓친 응답 0
 ```
+
+---
+
+## 0d. 크리티컬 — 상태를 받는 창이 2 ms 로 고정이라, 일부만 꽂힌 장비에서 실패합니다
+
+### 쉬운 말로
+
+`refresh_states()` 는 "모터들아 지금 각도가 몇이냐" 하고 물어본 뒤 **2 ms 동안만** 답을 기다립니다.
+그리고 **선언된 모터 수만큼** 답이 와야 일찍 빠져나옵니다. 벤치처럼 6개를 선언하고 2개만 꽂혀 있으면
+6개는 절대 안 채워지므로 **항상 2 ms 를 다 씁니다.**
+
+1 Mbit/s 에서 명령 6개 + 응답 2개는 약 0.9 ms 입니다. 2 ms 안에 들어가긴 하지만 **아슬아슬**해서,
+그날의 스케줄링에 따라 응답이 창 안에 들어오기도 하고 못 들어오기도 합니다.
+
+### 증상 (실측, 2026-09-05)
+
+같은 코드, 같은 장비, 연속된 두 번의 시작:
+
+```
+[remote_motion] seeded measured positions on left_leg: 2/6 motors answered   <- 성공
+[remote_motion] seeded measured positions on left_leg: 0/6 motors answered   <- 실패
+```
+
+**0/6 은 회복되지 않습니다.** 각도를 모르면 0.5절의 `NO_STATE` 가 모든 명령을 막고, 명령이 안 나가면
+응답도 없어 영영 각도를 모릅니다. 화면에는 100 Hz 로 멀쩡히 도는 것처럼 보이고 모터만 죽어 있습니다.
+
+원인을 여기로 좁힌 근거: **모터 2개를 2개로 선언한** 같은 버스에서는 같은 호출이 한 번도 실패하지
+않았습니다(6회 연속 성공). 즉 모터가 아니라 기다리는 창이 문제입니다.
+
+### 위치
+
+`src/huphy/motors/robstride/bus.py:218` (`collect`), `:258` (`refresh_states`)
+
+```python
+def collect(self, *, expect=None, timeout_s: float = 0.002) -> List[int]:
+    frames = self.bus.drain(expect=expect, timeout_s=timeout_s)
+...
+def refresh_states(self, motors=None) -> List[int]:
+    ...
+    missing = self.collect(expect=len(ids))     # 창 길이를 부르는 쪽이 정할 수 없음
+```
+
+### 수정안
+
+기다리는 시간을 부르는 쪽이 정할 수 있게 하고, 기본값도 올립니다.
+
+```python
+def refresh_states(self, motors=None, *, timeout_s: float = 0.05) -> List[int]:
+    ids = resolve_motor_list(motors, self.motor_ids)
+    self.bus.flush_rx()
+    self.send_mit({mid: PASSIVE for mid in ids})
+    missing = self.collect(expect=len(ids), timeout_s=timeout_s)
+    return [mid for mid in ids if mid in set(missing)]
+```
+
+제어 루프는 이 함수를 쓰지 않으므로(자기 명령의 응답을 `collect()` 로 받음) 기본값을 올려도 주기
+예산에 영향이 없습니다.
+
+우리 쪽은 그때까지 **답하는 모터가 더 안 늘어날 때까지 반복**하는 것으로 우회했습니다
+(`bridge/huphy_remote_motion.py`, 최대 1초). 고친 뒤 실측: `2/6 motors answered in 2 tries`.
 
 ---
 
