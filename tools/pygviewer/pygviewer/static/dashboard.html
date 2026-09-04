@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <title>pygviewer dashboard</title>
+<link rel="icon" href="data:,"> <!-- silence the /favicon.ico 404 - no real icon needed -->
+
 <link rel="stylesheet" href="/static/vendor/uPlot.min.css">
 <style>
 /* Gains tab: plain numeric fields, no spinner arrows (user 2026-09-04) */
@@ -90,6 +92,26 @@ h3{margin:.2em 0 .4em;font-size:12px;text-transform:uppercase;letter-spacing:.04
 .violation-panel td{padding:3px 6px;border-bottom:1px dashed #422}
 .violation-panel tbody tr[data-joint]:hover{background:#341515;cursor:pointer}
 
+/* A5 (2026-09-04): always-visible operator console strip - user feedback "console log
+   같은거에서 띄우던지" (put it up somewhere like a console log). Deliberately NOT part of the
+   .wrap grid (same reasoning as .violation-panel above) so no existing tab's layout has to
+   change; floats bottom-right, collapsible to just its header bar. Streams both violation
+   lines and caught render errors (A6) - see dashboard.js's renderOpConsole. */
+.op-console{position:fixed;right:8px;bottom:8px;width:460px;max-width:44vw;
+  background:#150d0d;border:1px solid var(--bad);border-radius:6px;z-index:70;
+  box-shadow:0 6px 20px #000c;display:flex;flex-direction:column}
+.op-console-hdr{display:flex;align-items:center;gap:6px;padding:5px 8px;font-size:11px;
+  color:#f88;white-space:nowrap;overflow:hidden}
+.op-console-hdr b{flex:none}
+.op-console-hdr .small{overflow:hidden;text-overflow:ellipsis}
+.op-console-hdr .spacer{flex:1}
+.op-console-hdr button{font-size:10px;padding:2px 6px;flex:none}
+.op-console:not(.collapsed) .op-console-hdr{border-bottom:1px solid #422}
+.op-console.collapsed #op-console-body{display:none}
+#op-console-body{margin:0;padding:6px 8px;font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10px;line-height:1.5;color:#e8b8b8;max-height:200px;overflow:auto;white-space:pre-wrap;
+  word-break:break-word}
+
 /* Motor health (2026-09-04): a status LIGHT, deliberately unlike the violation panel's red
    warning-banner look (green/yellow/grey, no pulsing red, no click-to-open overlay). */
 .led{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:2px;vertical-align:middle}
@@ -152,6 +174,18 @@ table.gains input{width:56px;text-align:right}
     <span class="rates" id="topbar-rates"></span>
   </div>
   <div class="violation-panel" id="violation-panel"></div>
+  <div class="op-console" id="op-console">
+    <div class="op-console-hdr">
+      <b>&#9888; console</b>
+      <span class="small" id="op-console-count"></span>
+      <span class="spacer"></span>
+      <button id="op-console-autoscroll">autoscroll: on</button>
+      <button id="op-console-copy">copy</button>
+      <button id="op-console-clear">clear</button>
+      <button id="op-console-toggle">collapse</button>
+    </div>
+    <pre id="op-console-body"></pre>
+  </div>
 
   <div class="left">
     <div class="tabs-v" id="left-tabs">

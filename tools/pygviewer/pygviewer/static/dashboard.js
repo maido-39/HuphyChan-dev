@@ -83,6 +83,14 @@ const S = {
                           // agree (see panelsFor()).
   violations: null,      // GET /violations, polled only while the panel is open - {records, by_joint, total}
   violationPanelOpen: false,
+  // A6 (2026-09-04 crash fix): one always-visible, collapsible console strip (#op-console)
+  // that streams any exception caught out of the render loop (renderTick's per-stage
+  // try/catch), so a caught bug is visible on screen instead of only in a devtools console
+  // the operator may not have open - same-key events inside a 1s window coalesce into one
+  // growing "(x N)" line (see coalesceLines) instead of flooding the screen every tick.
+  // `state` holds still-growing (open) lines keyed by a caller-chosen string; `lines` is the
+  // ring of lines that finished growing (capped 200).
+  opConsole: { state: {}, lines: [], collapsed: false, autoScroll: true },
   health: null,          // GET /health, polled only while the Telemetry tab is open - {link, joints, summary}
   lastHealthRxCount: undefined, // drives the topbar heartbeat dot's flicker (renderTopBar)
   policyLoadedName: null,
@@ -302,6 +310,136 @@ function violationSideLabel(side) {
   })[side] || side;
 }
 
+/* ------------------------------------------------------------------ A6: operator console
+ * (engine only, for now - A6 crash fix): renderTick's per-stage try/catch (below) needs
+ * somewhere on-screen to put a caught exception, since "silent freeze" is the exact bug this
+ * fix is for. This is a generic, always-visible, collapsible console strip (#op-console) that
+ * coalesces same-key events inside a 1s window into one growing "(x N)" line instead of
+ * flooding the screen with a repeat message every render tick. A later change (docs/121 sec
+ * 10 "violation console") feeds ROM/torque violation lines into this same engine.
+ *
+ * Every function below is PURE (no DOM, no internal Date.now()/wall-clock read) precisely so
+ * it can be reimplemented in Python and checked against fixed input/output pairs without a JS
+ * runtime on this host (there is no node/browser here - see tests/test_tab_build_flags.py's
+ * own docstring for the same constraint). */
+function fmtHms(ms) {
+  const d = new Date(ms);
+  const p2 = (n) => String(n).padStart(2, "0");
+  const p3 = (n) => String(n).padStart(3, "0");
+  return `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}.${p3(d.getMilliseconds())}`;
+}
+
+const OP_CONSOLE_WINDOW_MS = 1000; // "same key at 50Hz" -> collapse to 1 line/s, per task spec
+const OP_CONSOLE_MAX_LINES = 200;
+
+// Pure coalescing engine shared by violation records and caught render errors: `items` is
+// [{key, text}], `state` is the previous call's still-open (growing) entries keyed by `key`.
+// A key merges into its existing open entry while `nowMs` is within `windowMs` of when that
+// entry STARTED (not of its last update - a steady 50 Hz stream would otherwise never close);
+// once a batch's `nowMs` moves past that window for a key with no new item this call, that
+// entry is finalized (moved to `closed`) even without a fresh item to trigger it - this is
+// what lets a console rendered every poll tick actually freeze a count instead of leaving the
+// last line open forever after the underlying condition clears.
+function coalesceLines(state, items, nowMs, windowMs) {
+  const open = Object.assign({}, state);
+  const closed = [];
+  const groups = {};
+  items.forEach((it) => { (groups[it.key] = groups[it.key] || []).push(it); });
+  Object.keys(groups).forEach((key) => {
+    const its = groups[key];
+    const last = its[its.length - 1];
+    const existing = open[key];
+    if (existing && (nowMs - existing.startMs) < windowMs) {
+      open[key] = { startMs: existing.startMs, count: existing.count + its.length, text: last.text };
+    } else {
+      if (existing) closed.push(Object.assign({ key }, existing));
+      open[key] = { startMs: nowMs, count: its.length, text: last.text };
+    }
+  });
+  Object.keys(open).forEach((key) => {
+    if (groups[key]) return; // already handled (merged or replaced) above
+    const entry = open[key];
+    if (nowMs - entry.startMs >= windowMs) {
+      closed.push(Object.assign({ key }, entry));
+      delete open[key];
+    }
+  });
+  return { state: open, closed };
+}
+
+function ingestConsoleItems(items) {
+  if (!items.length && !Object.keys(S.opConsole.state).length) return; // nothing to do or age out
+  const cons = S.opConsole;
+  const nowMs = Date.now();
+  const { state, closed } = coalesceLines(cons.state, items, nowMs, OP_CONSOLE_WINDOW_MS);
+  cons.state = state;
+  if (closed.length) {
+    cons.lines.push(...closed);
+    if (cons.lines.length > OP_CONSOLE_MAX_LINES) cons.lines.splice(0, cons.lines.length - OP_CONSOLE_MAX_LINES);
+  }
+}
+
+// A6: renderTick's per-stage try/catch feeds a caught exception in here instead of only
+// `console.error`-ing it, per the "조용한 실패는 이번 버그의 본질" note in that fix - see
+// tests/test_tab_build_flags.py for the crash this specifically guards against.
+function reportRenderError(stage, err) {
+  const msg = err && err.message ? err.message : String(err);
+  console.error(`[pygdash] ${stage} render failed:`, err);
+  ingestConsoleItems([{ key: `jserror|${stage}`, text: `[JS ERROR] ${stage}: ${msg}` }]);
+  renderOpConsole();
+}
+
+function opConsoleEntries() {
+  const cons = S.opConsole;
+  const open = Object.values(cons.state).sort((a, b) => a.startMs - b.startMs);
+  return cons.lines.concat(open);
+}
+
+function renderOpConsole() {
+  const box = el("op-console");
+  if (!box) return;
+  const cons = S.opConsole;
+  box.classList.toggle("collapsed", cons.collapsed);
+  const entries = opConsoleEntries();
+  const countEl = el("op-console-count");
+  if (countEl) countEl.textContent = `${entries.length} line(s) shown`;
+  if (cons.collapsed) return; // body stays un-rendered while collapsed - nothing else to sync
+  const body = el("op-console-body");
+  if (!body) return;
+  const wasAtBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 8;
+  body.textContent = entries.map((e) => {
+    const suffix = e.count > 1 ? ` (x${e.count})` : "";
+    return `${fmtHms(e.startMs)} ${e.text}${suffix}`;
+  }).join("\n");
+  if (cons.autoScroll && (wasAtBottom || entries.length <= 1)) body.scrollTop = body.scrollHeight;
+}
+
+function initOpConsole() {
+  el("op-console-toggle").onclick = () => {
+    S.opConsole.collapsed = !S.opConsole.collapsed;
+    el("op-console-toggle").textContent = S.opConsole.collapsed ? "expand" : "collapse";
+    renderOpConsole();
+  };
+  el("op-console-autoscroll").onclick = () => {
+    S.opConsole.autoScroll = !S.opConsole.autoScroll;
+    el("op-console-autoscroll").textContent = `autoscroll: ${S.opConsole.autoScroll ? "on" : "off"}`;
+  };
+  el("op-console-clear").onclick = () => {
+    S.opConsole.state = {};
+    S.opConsole.lines = [];
+    renderOpConsole();
+  };
+  el("op-console-copy").onclick = async () => {
+    const text = opConsoleEntries().map((e) => {
+      const suffix = e.count > 1 ? ` (x${e.count})` : "";
+      return `${fmtHms(e.startMs)} ${e.text}${suffix}`;
+    }).join("\n");
+    try { await navigator.clipboard.writeText(text); toast("console log copied"); }
+    catch (err) { toast("copy failed: " + err.message); }
+  };
+  renderOpConsole();
+}
+
 function renderViolationPanel() {
   const panel = el("violation-panel");
   if (!panel) return;
@@ -349,6 +487,32 @@ function renderViolationPanel() {
       else toast(`no plot panel for ${joint} (${kind})`);
     });
   });
+}
+
+/* ------------------------------------------------------------------ A6 tab-build flag fix
+ * User-reported crash (2026-09-04 browser console, repeating): "TypeError: can't access
+ * property 'dataset', sub is null" at renderJointsPanel <- renderTabControl <- renderRightTab
+ * <- renderTick. Root cause: every one of the 6 tab renderers below shared ONE body element
+ * (#left-body for Model/Base link/Telemetry/Script/Status, #right-body for Control/Gains/
+ * Obs) and stamped a per-tab "already built" flag onto THAT SHARED element's dataset -
+ * Base/Telemetry/Script all used the exact same bare `body.dataset.built`, and Control/
+ * Gains/Obs each used their own name (`builtControl`/`builtGains`/`builtObs`) but never
+ * cleared the OTHER two's flags. `body.innerHTML = ...` replaces the element's CHILDREN, not
+ * its own attributes, so switching Control -> Gains -> Control left `builtControl` still
+ * "1" while the actual DOM under #right-body was Gains' table; back on Control,
+ * renderTabControl's old `if (!body.dataset[flagName])` check skipped rebuilding, `el("control-sub")`
+ * found nothing (Gains' markup has no such id) and returned null, and renderJointsPanel(null)
+ * crashed on `sub.dataset` - every tick, with no try/catch around it (see renderTick below),
+ * which is why the ENTIRE render loop (including renderPlots - the "real motor plot invisible"
+ * report) froze from that point on, not a color/width problem in the plotting code itself.
+ *
+ * Fix: one flag per shared body element, storing WHICH tab is currently built
+ * (`body.dataset.builtTab`), so arriving from a different tab always rebuilds and the
+ * previous tab's stale DOM can never be mistaken for the current one's.
+ * tabNeedsBuild() is pure (no DOM) so tab-switch sequences are testable without a browser -
+ * see tests/test_tab_build_flags.py. */
+function tabNeedsBuild(currentBuiltTab, tabName, force) {
+  return currentBuiltTab !== tabName || !!force;
 }
 
 /* ------------------------------------------------------------------ tabs */
@@ -439,13 +603,19 @@ function renderTopBar() {
   }
 }
 
-/* ------------------------------------------------------------------ main render loop (20 Hz) */
+/* ------------------------------------------------------------------ main render loop (20 Hz)
+ * A6 (2026-09-04 crash fix): each stage isolated in its own try/catch - previously one
+ * uncaught exception (the stale-tab-build-flag bug fixed above) silently froze EVERY stage
+ * after it, including renderPlots(), for the rest of the session (the actual mechanism behind
+ * the "real motor plot never shows" report - see tabNeedsBuild's docstring). A caught
+ * exception is never just swallowed: it goes to console.error AND to #op-console
+ * (reportRenderError) so a silent freeze is visible on screen, not just in devtools. */
 function renderTick() {
-  renderTopBar();
-  renderLeftTab();
-  renderRightTab();
-  renderPlots();
-  if (S.modal) renderModalChart();
+  try { renderTopBar(); } catch (e) { reportRenderError("renderTopBar", e); }
+  try { renderLeftTab(); } catch (e) { reportRenderError("renderLeftTab", e); }
+  try { renderRightTab(); } catch (e) { reportRenderError("renderRightTab", e); }
+  try { renderPlots(); } catch (e) { reportRenderError("renderPlots", e); }
+  try { if (S.modal) renderModalChart(); } catch (e) { reportRenderError("renderModalChart", e); }
 }
 
 function boot() {
@@ -454,6 +624,7 @@ function boot() {
   initTabs();
   initPlotsToolbar();
   initModal();
+  initOpConsole();
   loadContract()
     .then(() => {
       renderLeftTab();
@@ -516,7 +687,7 @@ function renderTabBase(body) {
   const st = S.status;
   const base = st ? st.base : { mode: "fixed", ground: true, pivot_offset: [0, 0, 0], pos: [0, 0, 0] };
   const stringSt = st ? st.string : null;
-  if (!body.dataset.built) {
+  if (tabNeedsBuild(body.dataset.builtTab, "base")) {
     body.innerHTML = `
       <h3>Base mode</h3>
       <div class="seg" id="base-mode-seg">
@@ -538,7 +709,7 @@ function renderTabBase(body) {
       <div class="row"><button id="btn-reset-home" style="flex:1">home</button>
         <button id="btn-reset-bent" style="flex:1">knees_bent</button></div>
     `;
-    body.dataset.built = "1";
+    body.dataset.builtTab = "base";
     el("base-mode-seg").addEventListener("click", (ev) => {
       const s = ev.target.closest("span");
       if (!s) return;
@@ -583,7 +754,7 @@ function renderTabBase(body) {
 function renderTabTelemetry(body) {
   const st = S.status;
   const tel = st ? (st.telemetry || {}) : {};
-  if (!body.dataset.built) {
+  if (tabNeedsBuild(body.dataset.builtTab, "telemetry")) {
     body.innerHTML = `
       <div id="tel-banner"></div>
       <h3>Receive</h3>
@@ -610,7 +781,7 @@ function renderTabTelemetry(body) {
       <hr class="hr">
       ${renderTxSectionHtml()}
     `;
-    body.dataset.built = "1";
+    body.dataset.builtTab = "telemetry";
     el("btn-rec-start").onclick = async () => { const r = await apiOk("POST", "/record/start", {}); if (r) el("rec-status").textContent = "recording -> " + r.path; };
     el("btn-rec-stop").onclick = async () => { const r = await apiOk("POST", "/record/stop"); if (r) el("rec-status").textContent = `stopped: ${r.path} (${r.n_lines || r.n_lines === 0 ? r.n_lines : "?"} lines)`; };
     el("btn-replay-load").onclick = async () => { const r = await apiOk("POST", "/replay/load", { path: el("replay-path").value }); if (r) toast(`loaded ${r.n_rows} rows, ${fmt(r.duration_s, 1)}s`); };
@@ -670,7 +841,7 @@ function renderHealthGrid() {
 }
 
 function renderTabScript(body) {
-  if (!body.dataset.built) {
+  if (tabNeedsBuild(body.dataset.builtTab, "script")) {
     body.innerHTML = `
       <h3>Target-q script player</h3>
       <select id="script-path" style="width:100%;margin-bottom:6px">
@@ -682,7 +853,7 @@ function renderTabScript(body) {
         <button id="btn-script-stop" style="flex:1">stop</button></div>
       <div class="small" id="script-status"></div>
     `;
-    body.dataset.built = "1";
+    body.dataset.builtTab = "script";
     el("btn-script-run").onclick = async () => {
       const r = await apiOk("POST", "/script/run", { path: el("script-path").value, run_id: el("script-runid").value || null });
       if (r) toast(`running ${r.run_id} (${fmt(r.duration_s, 1)}s)`);
@@ -748,7 +919,7 @@ async function setControlMode(mode) {
 }
 
 function renderTabControl(body, force) {
-  if (!body.dataset.builtControl || force) {
+  if (tabNeedsBuild(body.dataset.builtTab, "control", force)) {
     body.innerHTML = `
       <div class="row tight">
         <span class="seg" id="control-mode-seg">
@@ -758,7 +929,7 @@ function renderTabControl(body, force) {
       </div>
       <div id="control-sub"></div>
     `;
-    body.dataset.builtControl = "1";
+    body.dataset.builtTab = "control";
     el("control-mode-seg").addEventListener("click", (ev) => {
       const s = ev.target.closest("span"); if (!s) return;
       setControlMode(s.dataset.m);
@@ -778,6 +949,12 @@ function renderTabControl(body, force) {
 
 /* ---------------------------------------------------------------- Joints (item 2) */
 function renderJointsPanel(sub, force) {
+  // A6: `sub` is `#control-sub`, a child of #right-body created fresh only when Control's
+  // OWN tab-build runs (see renderTabControl / tabNeedsBuild) - if the caller ever passes a
+  // stale reference to a node that got replaced by another tab's innerHTML (the exact crash
+  // this guard is for: "can't access property 'dataset', sub is null"), do nothing instead
+  // of throwing every render tick.
+  if (!sub) return;
   const c = S.contract;
   if (!sub.dataset.builtJoints || force) {
     const rows = c.action_joint_names.map((n) => {
@@ -925,6 +1102,7 @@ async function loadAndRunPolicyByPath(path) {
 }
 
 function renderPolicyPanel(sub) {
+  if (!sub) return; // A6: same stale-node guard as renderJointsPanel - see its comment
   const st = S.status;
   const snapPolicy = (S.snapshot || {}).policy;
   if (!sub.dataset.builtPolicy) {
@@ -1073,7 +1251,7 @@ function renderObsSourceStrip(container, snapPolicy) {
 /* ================================================================== Right tab: Gains (item 5) */
 function renderTabGains(body) {
   const c = S.contract;
-  if (!body.dataset.builtGains) {
+  if (tabNeedsBuild(body.dataset.builtTab, "gains")) {
     body.innerHTML = `
       <div class="row tight">
         <label>preset</label>
@@ -1088,7 +1266,7 @@ function renderTabGains(body) {
         <th>joint</th><th>motor</th><th>kp</th><th>kd</th><th>real kp</th><th>real kd</th>
       </tr></thead><tbody></tbody></table></div>
     `;
-    body.dataset.builtGains = "1";
+    body.dataset.builtTab = "gains";
     el("btn-preset-apply").onclick = async () => {
       const name = el("gains-preset-sel").value;
       if (!name) return;
@@ -1165,14 +1343,14 @@ function renderGainsTable() {
 let imu3d = null;
 
 function renderTabObs(body) {
-  if (!body.dataset.builtObs) {
+  if (tabNeedsBuild(body.dataset.builtTab, "obs")) {
     body.innerHTML = `<div id="obs-terms"></div>
       <h3 style="margin-top:10px">IMU (body frame)</h3>
       <div class="small">solid = sim, translucent = real (when connected). Red/green/blue =
         X/Y/Z body axes, yellow = projected gravity, cyan = gyro (scaled).</div>
       <div id="imu3d"></div>
       <div class="imu-legend" id="imu-legend"></div>`;
-    body.dataset.builtObs = "1";
+    body.dataset.builtTab = "obs";
     imu3d = initImu3D(el("imu3d"));
   }
   const snapPolicy = (S.snapshot || {}).policy;
@@ -1687,5 +1865,6 @@ document.addEventListener("DOMContentLoaded", boot);
 window.__pygdash = {
   S, api, apiOk, toast, el, fmt, clamp, displayVal, internalVal, unitSuffix, obsTermDims, RAD2DEG, DEG2RAD,
   policyLoadErrorText, loadAndRunPolicy, loadAndRunPolicyByPath,
+  tabNeedsBuild, coalesceLines, fmtHms,
 };
 })();
