@@ -18,6 +18,13 @@ The mapping table (``joint_map_huphy.json``) has exactly 12 rows (2 legs x 6 mot
 ankle-joint rows (2 legs x pitch/roll, the FK-derived values HUPHY reports alongside the
 crank motors).  A ``(limb, motor)`` pair on the wire that is not one of those rows is a HARD
 FAILURE - counted, logged, surfaced in ``Status`` - never a regex match or a silent default.
+
+ROM clip task (2026-09-04): each row MAY also carry an optional ``rom_deg: [lo, hi]`` field -
+the real hardware's own calibrated ROM (HUPHY ``Motor.limits_deg``), in the same
+already-calibrated cal-space degrees ``pos``/``tgt`` arrive in.  ``null`` (both maps ship
+with it null on every row, since neither rig is commissioned yet) means "no clip here".
+This is defense-in-depth ONLY, layered in FRONT of ``sim_core.py``'s own hard model-range
+clip at the qpos-snap point, which stays the actual safety backstop regardless.
 """
 
 from __future__ import annotations
@@ -110,6 +117,28 @@ class HuphyBridge:
     self._minus_one_streak: dict[str, int] = {}
     self.warnings: deque[str] = deque(maxlen=20)
     self.packets_parsed = 0
+    # ROM clip task (2026-09-04): a joint-map row MAY carry an optional `rom_deg: [lo, hi]`
+    # field - the real hardware's OWN calibrated ROM (HUPHY `Motor.limits_deg`, filled in
+    # once the leg has been through `commission sweep`), in the same already-calibrated
+    # cal-space degrees `pos`/`tgt` arrive in on this wire. `None` (both joint maps ship
+    # with `rom_deg: null` on every row today, since neither rig has been commissioned yet)
+    # means "no clip here" - defense-in-depth ONLY, layered in FRONT of SimCore's own hard
+    # model-range clip at the qpos-snap point (sim_core.py `_update_replay_targets`), which
+    # is the actual safety backstop regardless of whether any bridge sets this.
+    self.rom_clamp_count: dict[str, int] = {}
+
+  def _clip_rom_deg(self, sim_joint: str, row: dict, value: float) -> float:
+    rom = row.get("rom_deg")
+    if rom is None:
+      return value
+    lo, hi = float(rom[0]), float(rom[1])
+    clipped = min(max(value, lo), hi)
+    if clipped != value:
+      n = self.rom_clamp_count.get(sim_joint, 0) + 1
+      self.rom_clamp_count[sim_joint] = n
+      if n == 1:
+        self.warnings.append(f"{sim_joint}: rom_deg {value:.2f} -> {clipped:.2f} deg")
+    return clipped
 
   # ---------------------------------------------------------------------- fast
   def parse_fast(self, payload: dict) -> JointState | None:
@@ -129,8 +158,10 @@ class HuphyBridge:
           continue
         ts = self.travel_sign[sim_joint]
         if field == "pos":
+          value = self._clip_rom_deg(sim_joint, row, value)
           self._buf[sim_joint]["q"] = huphy_deg_to_sim_rad(value, row["sign"], row["offset_rad"], ts)
         elif field == "tgt":
+          value = self._clip_rom_deg(sim_joint, row, value)
           self._buf[sim_joint]["target"] = huphy_deg_to_sim_rad(value, row["sign"], row["offset_rad"], ts)
         elif field == "vel":
           self._buf[sim_joint]["qd"] = huphy_deg_s_to_sim_rad_s(value, row["sign"], ts)

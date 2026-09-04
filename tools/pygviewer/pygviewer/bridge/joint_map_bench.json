@@ -8,7 +8,8 @@
    "sim_joint": "L_hip_pitch_joint",
    "sign": 1,
    "offset_rad": 0.0,
-   "motor_model": "RS03"
+   "motor_model": "RS03",
+   "rom_deg": null
   },
   {
    "limb": "left",
@@ -16,7 +17,8 @@
    "sim_joint": "L_hip_roll_joint",
    "sign": 1,
    "offset_rad": 0.0,
-   "motor_model": "RS03"
+   "motor_model": "RS03",
+   "rom_deg": null
   },
   {
    "limb": "left",
@@ -24,7 +26,8 @@
    "sim_joint": "L_hip_yaw_joint",
    "sign": 1,
    "offset_rad": 0.0,
-   "motor_model": "RS03"
+   "motor_model": "RS03",
+   "rom_deg": null
   },
   {
    "limb": "bench",
@@ -33,7 +36,8 @@
    "sign": 1,
    "offset_rad": 0.35,
    "motor_model": "RS03",
-   "_note": "BENCH: single RS03 (id 127) wired as knee on the bench rig, 2026-09-04 ; offset_rad 0.35 = bench zero -> sim knee default (20.05 deg) so the free rotor sits inside the knee window"
+   "_note": "BENCH: single RS03 (id 127) wired as knee on the bench rig, 2026-09-04 ; offset_rad 0.35 = bench zero -> sim knee default (20.05 deg) so the free rotor sits inside the knee window",
+   "rom_deg": null
   },
   {
    "limb": "left",
@@ -41,7 +45,8 @@
    "sim_joint": "L_crank_A_joint",
    "sign": 1,
    "offset_rad": 0.0,
-   "motor_model": "RS03"
+   "motor_model": "RS03",
+   "rom_deg": null
   },
   {
    "limb": "left",
@@ -49,7 +54,8 @@
    "sim_joint": "L_crank_B_joint",
    "sign": 1,
    "offset_rad": 0.0,
-   "motor_model": "RS03"
+   "motor_model": "RS03",
+   "rom_deg": null
   },
   {
    "limb": "right",
@@ -57,7 +63,8 @@
    "sim_joint": "R_hip_pitch_joint",
    "sign": 1,
    "offset_rad": 0.0,
-   "motor_model": "RS03"
+   "motor_model": "RS03",
+   "rom_deg": null
   },
   {
    "limb": "right",
@@ -65,7 +72,8 @@
    "sim_joint": "R_hip_roll_joint",
    "sign": 1,
    "offset_rad": 0.0,
-   "motor_model": "RS03"
+   "motor_model": "RS03",
+   "rom_deg": null
   },
   {
    "limb": "right",
@@ -73,7 +81,8 @@
    "sim_joint": "R_hip_yaw_joint",
    "sign": 1,
    "offset_rad": 0.0,
-   "motor_model": "RS03"
+   "motor_model": "RS03",
+   "rom_deg": null
   },
   {
    "limb": "right",
@@ -81,7 +90,8 @@
    "sim_joint": "R_knee_joint",
    "sign": 1,
    "offset_rad": 0.0,
-   "motor_model": "RS03"
+   "motor_model": "RS03",
+   "rom_deg": null
   },
   {
    "limb": "right",
@@ -89,7 +99,8 @@
    "sim_joint": "R_crank_A_joint",
    "sign": 1,
    "offset_rad": 0.0,
-   "motor_model": "RS03"
+   "motor_model": "RS03",
+   "rom_deg": null
   },
   {
    "limb": "right",
@@ -97,7 +108,8 @@
    "sim_joint": "R_crank_B_joint",
    "sign": 1,
    "offset_rad": 0.0,
-   "motor_model": "RS03"
+   "motor_model": "RS03",
+   "rom_deg": null
   }
  ],
  "ankle_joints": [
@@ -107,7 +119,8 @@
    "side": "L",
    "field": "pitch",
    "sign": 1,
-   "offset_rad": 0.0
+   "offset_rad": 0.0,
+   "rom_deg": null
   },
   {
    "limb": "left",
@@ -115,7 +128,8 @@
    "side": "L",
    "field": "roll",
    "sign": 1,
-   "offset_rad": 0.0
+   "offset_rad": 0.0,
+   "rom_deg": null
   },
   {
    "limb": "right",
@@ -123,7 +137,8 @@
    "side": "R",
    "field": "pitch",
    "sign": 1,
-   "offset_rad": 0.0
+   "offset_rad": 0.0,
+   "rom_deg": null
   },
   {
    "limb": "right",
@@ -131,7 +146,8 @@
    "side": "R",
    "field": "roll",
    "sign": 1,
-   "offset_rad": 0.0
+   "offset_rad": 0.0,
+   "rom_deg": null
   }
  ]
 }

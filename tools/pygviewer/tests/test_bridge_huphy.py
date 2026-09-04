@@ -74,6 +74,37 @@ def test_bridge_end_to_end_both_knees_plus_30_deg():
       assert v is None
 
 
+def test_rom_deg_clips_pos_and_tgt_before_conversion_when_set():
+  """ROM clip task (2026-09-04): an optional `rom_deg` on a joint-map row clips the incoming
+  HUPHY cal-space degrees BEFORE the sim-rad conversion. Both shipped joint maps have
+  rom_deg: null on every row (neither rig is commissioned) so this only exercises the
+  mechanism via a mutated in-memory JointMap, not a change to the checked-in JSON."""
+  c = _contract()
+  jmap = JointMap(DEFAULT_MAP_PATH)
+  jmap.motors[("left", "knee")]["rom_deg"] = [-10.0, 10.0]
+  bridge = HuphyBridge(c, jmap=jmap)
+  payload = {"t": 0.0, "left/knee/pos": 30.0, "left/knee/tgt": -30.0}
+  msg = bridge.parse_fast(payload)
+  by_name = dict(zip(msg.joint_names, msg.q))
+  by_name_tgt = dict(zip(msg.joint_names, msg.target))
+  assert by_name["L_knee_joint"] == pytest.approx(math.radians(10.0), abs=1e-6)
+  assert by_name_tgt["L_knee_joint"] == pytest.approx(math.radians(-10.0), abs=1e-6)
+  assert bridge.rom_clamp_count["L_knee_joint"] == 2
+  assert any("rom_deg" in w for w in bridge.warnings)
+
+
+def test_rom_deg_null_is_a_no_op_on_the_shipped_maps():
+  """The actual, checked-in behaviour today: rom_deg is null on every row of both maps, so
+  this is byte-identical to the pre-rom_deg conversion path."""
+  c = _contract()
+  bridge = HuphyBridge(c)  # DEFAULT_MAP_PATH, rom_deg: null everywhere
+  payload = {"t": 0.0, "left/knee/pos": 1000.0}  # absurd, uncalibrated multi-turn value
+  msg = bridge.parse_fast(payload)
+  by_name = dict(zip(msg.joint_names, msg.q))
+  assert by_name["L_knee_joint"] == pytest.approx(math.radians(1000.0), abs=1e-6)
+  assert bridge.rom_clamp_count == {}
+
+
 def test_bridge_converts_velocity_and_torque_with_the_same_sign(monkeypatch=None):
   c = _contract()
   bridge = HuphyBridge(c)
