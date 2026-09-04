@@ -68,6 +68,20 @@ code{background:#000;padding:1px 5px;border-radius:3px;font-size:11px}
 .modal{background:#1c1c1c;border:1px solid var(--bad);border-radius:8px;padding:18px 22px;max-width:420px}
 .modal h3{margin:0 0 8px;color:var(--bad)}
 .hidden{display:none}
+.tab-group{font-size:9px;color:var(--dim2);text-transform:uppercase;letter-spacing:.05em;
+  padding:7px 12px 3px;background:#161616;border-top:1px solid var(--border)}
+.tab-group:first-child{border-top:0}
+.tabs-v .tab.scenario{background:#2a2418;border-left:3px solid var(--accent2)}
+.tabs-v .tab.stub{cursor:default}
+.scChip{max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.scChip.ok{background:var(--okbg);color:var(--accent)}
+.scChip.bad{background:var(--badbg);color:var(--bad)}
+.scChip.custom{background:var(--warnbg);color:var(--accent2)}
+.pendingRow{font-size:11px;color:var(--dim);display:flex;gap:6px;align-items:center}
+.pendingRow .spin{color:var(--accent2)}
+.failDemo{font-size:10px;color:var(--dim2);background:none;border:1px dashed var(--border2);padding:2px 6px}
+.riskAck{display:flex;gap:6px;align-items:flex-start;font-size:11px;color:var(--accent2);margin-bottom:12px}
+.riskAck input{margin-top:2px}
 </style>
 </head>
 <body>
@@ -77,17 +91,21 @@ code{background:#000;padding:1px 5px;border-radius:3px;font-size:11px}
     <span class="pill">LegOnly-AB · bench 10.8.0.14</span>
     <span>mode:</span><select id="modeSel"></select>
     <span id="txChip" class="pill" onclick="toggleTx()" style="cursor:pointer"></span>
+    <span id="scenarioChip" class="pill scChip" title=""></span>
     <span class="rates">100 Hz telemetry · ok 1 / warn 0 / dead 11</span>
   </div>
 
   <div class="left">
     <div class="tabs-v">
-      <div class="tab">Model</div>
-      <div class="tab">Base link</div>
-      <div class="tab on">Scenario</div>
-      <div class="tab">Telemetry</div>
-      <div class="tab">Script</div>
-      <div class="tab">Status</div>
+      <div class="tab-group">설정 (보기)</div>
+      <div class="tab stub" onclick="stubTab('Model')">Model</div>
+      <div class="tab stub" onclick="stubTab('Base link')">Base link</div>
+      <div class="tab-group">전환 (조작)</div>
+      <div class="tab on scenario">Scenario</div>
+      <div class="tab-group">관측 (보기)</div>
+      <div class="tab stub" onclick="stubTab('Telemetry')">Telemetry</div>
+      <div class="tab stub" onclick="stubTab('Script')">Script</div>
+      <div class="tab stub" onclick="stubTab('Status')">Status</div>
     </div>
     <div class="leftbody">
       <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:8px">
@@ -104,17 +122,42 @@ code{background:#000;padding:1px 5px;border-radius:3px;font-size:11px}
       <div>전환은 액션(동사) 항목을 눌러 시작하고, 펼치면 그 조합에 필요한 3개 축(뷰어 모드/TX/로봇 프로그램)을
       하나씩 개별적으로 충족시키는 체크리스트가 나온다. 상단의 "현재" 표시는 여전히 실제 상태에서 계산되며,
       체크리스트를 다 채웠다고 해서 자동으로 "선택됨"이 되는 게 아니라 실제로 세 축이 맞아떨어져야 이름이 뜬다.</div>
-      <details>
-        <summary>불편 요소 5가지 (펼치기)</summary>
+      <details open>
+        <summary>개선 이력 — 라운드별 발견 5개 + 조치 (펼치기)</summary>
+
+        <div style="margin-top:8px"><b>Round 1</b> — 클릭수·정직성·재기동가정·탭계층·위험경로 이원화</div>
+        <div style="color:var(--dim);font-size:11px;margin:2px 0 4px">발견 (벤치 시나리오에 대입):</div>
         <ul>
-          <li>클릭 수가 많다 — 탭 이동 → 항목 펼치기 → 축마다 개별 버튼, 3단계를 거쳐야 완전히 전환된다.</li>
-          <li>왼쪽 탭이 여섯 개나 되어 Scenario 탭을 찾는 데 한 번 더 훑어야 한다(탭 혼동).</li>
-          <li>로봇 프로그램 확인 축은 안내 모드에서 "모름"으로 오래 남는다 — 사람이 직접 확인 버튼을 눌러줘야
-          "확인됨"이 되므로 화면에 ? 표시가 방치되기 쉽다.</li>
-          <li>축을 하나씩 맞추다 실패(예: 확인 안 함)하면 "custom"으로 남는데, 되돌아갈 지점(바로 전 조합)이
-          명확히 표시되지 않는다.</li>
-          <li>이 패널이 3D 뷰·플롯과 물리적으로 분리돼 있어(왼쪽 vs 중앙/오른쪽), 전환하면서 로봇이 실제로
-          어떻게 움직이는지 동시에 보기 어렵다.</li>
+          <li><b>반복 전환 클릭수</b> — S3→S1 전환 1회에 최소 6클릭(탭은 이미 열려 있다 쳐도: 펼치기 →
+          모드 전환 → TX 무장 → 위험모달 확인 → 자동전환 실행). 무릎 1개 모터만 실물인 벤치에서는 같은
+          조합을 하루에도 여러 번 오간다 — 이 6클릭이 반복 비용으로 누적된다.</li>
+          <li><b>로봇 확인 축이 "모름"으로 방치되는데, 사람이 스스로 "완료함"을 누르면 실측 확인과
+          동일하게 초록 ✓로 표시됐다</b> — 11관절 텔레메트리가 애초에 없는 벤치에서는 SSH 성공 여부를
+          코드가 검증하지 않고 "종료코드 0"이라 로그에 못박아 두면서도 실제로는 리드백이 없다.
+          자기신고와 실측 확인이 화면에서 구별되지 않았다.</li>
+          <li><b>뷰어 재기동 시 TX 무장·확인 토큰이 초기화되는 벤치 특성을, 목업 초기 상태가
+          거꾸로 가정</b> — 첫 로드부터 TX 무장 + 로봇 확인됨으로 시작해 "이미 실물 동시 구동 중"처럼
+          보였다. 실제로는 재기동 직후엔 아무것도 무장돼 있지 않다.</li>
+          <li><b>Scenario 탭이 Model/Telemetry 등 5개 관측/설정 탭과 같은 층위</b> — 게다가 Scenario 탭을
+          벗어나면(Telemetry·Status를 보러 가면) 현재 조합 이름·custom 여부가 화면에서 완전히 사라진다.</li>
+          <li><b>위험(토크 ON) 진입 경로가 두 갈래였다</b> — 체크리스트의 "TX 무장" 버튼은 전용 모달을
+          거치지만, 상단바 TX 칩을 직접 클릭하는 지름길은 브라우저 기본 <code>confirm()</code>만 거치고
+          로봇 확인 상태를 전혀 보지 않았다. 오조작으로 토크를 켜는 두 번째 경로가 있었던 셈.</li>
+        </ul>
+        <div style="color:var(--dim);font-size:11px;margin:6px 0 4px">조치:</div>
+        <ul>
+          <li>열린 항목마다 "일괄 진행" 버튼 추가 — 모드→로봇→TX 순서(안전한 순서, 위험 축은 항상 마지막)로
+          자동 적용하되 TX 무장 단계는 절대 건너뛰지 않고 항상 위험 모달을 띄운다.</li>
+          <li>자동 SSH 전환에 <b>가상 지연(≈1.4초, "SSH 실행 중…"으로 그 축만 잠금)</b>을 넣고, 완료 시
+          로그에 "리드백 없음"을 계속 명시. 옆에 <b>"실패로 표시 (모의)"</b> 버튼을 추가해 불일치 상태가
+          실제로 어떻게 보이는지 언제든 시연 가능.</li>
+          <li>이 목업의 초기 상태를 <b>TX 해제 + 로봇 확인 "모름"</b>(재기동 직후 가정)으로 바꿈 — 무장된
+          채 시작하지 않는다.</li>
+          <li>상단바에 <b>항상 보이는 시나리오 칩</b>을 추가(파생값, custom이면 개수까지) + 왼쪽 탭을
+          "설정/전환/관측" 3그룹으로 나누고 Scenario 탭에만 amber 강조를 줌.</li>
+          <li>상단바 TX 칩 클릭과 체크리스트의 "TX 무장"이 <b>같은 위험 모달 함수</b>를 타도록 통합.
+          로봇 확인이 "확인됨"이 아니면 모달에 <b>동의 체크박스</b>가 추가로 나타나고, 체크 전에는
+          확인 버튼이 비활성 — 위험이 겹치는 경우에만 클릭 한 번을 더 요구한다(비례 마찰).</li>
         </ul>
       </details>
     </div>
@@ -126,10 +169,14 @@ code{background:#000;padding:1px 5px;border-radius:3px;font-size:11px}
 <div class="modal-bg hidden" id="riskModal">
   <div class="modal">
     <h3>실물 토크가 켜집니다</h3>
-    <div id="riskBody" style="font-size:12px;margin-bottom:12px"></div>
+    <div id="riskBody" style="font-size:12px;margin-bottom:10px"></div>
+    <label class="riskAck hidden" id="riskAckRow">
+      <input type="checkbox" id="riskAck" onchange="updateRiskConfirmEnabled()">
+      <span>로봇이 지금 무엇을 실행 중인지 확실치 않은(모름/불일치) 상태에서 그래도 토크를 켭니다.</span>
+    </label>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button onclick="closeRisk()">취소</button>
-      <button style="background:#5a2020;border-color:#a44" onclick="confirmRisk()">확인, 전환</button>
+      <button id="riskConfirmBtn" style="background:#5a2020;border-color:#a44" onclick="confirmRisk()">확인, 전환</button>
     </div>
   </div>
 </div>
@@ -138,8 +185,15 @@ code{background:#000;padding:1px 5px;border-radius:3px;font-size:11px}
 <script>
 var SM = window.ScenarioMockup;
 var st = SM.freshState();
+// Round 1 fix: a viewer restart on the bench clears the TX arm token and the
+// robot-program confirmation (docs/121 bench note). Start THIS mockup from that
+// realistic post-restart state instead of freshState()'s already-armed default,
+// so the page doesn't imply torque survives a restart.
+st.tx = false;
+st.robotConfirm = 'unknown';
 var openKey = 'S1';
-var pendingKey = null;
+var pendingApply = null;      // fn to run if the risk modal is confirmed
+var robotSwitchPending = null; // scenario key whose SSH switch is mid-flight, or null
 
 function log(line){
   var el = document.getElementById('log');
@@ -167,6 +221,30 @@ function renderTxChip(){
 function markFor(ok, dim){
   if (dim === 'robot' && st.robotConfirm === 'unknown') return '<span class="mark q">?</span>';
   return ok ? '<span class="mark yes">✓</span>' : '<span class="mark no">✗</span>';
+}
+
+// Round 1 fix: the current combination name used to be visible only inside the
+// Scenario tab's own body. Switching to Telemetry/Status to watch the 3D/plot
+// side lost that context entirely (TX chip stayed, but not the scenario name or
+// which axes are off). Mirror a compact version in the top bar, always visible.
+function renderScenarioChip(){
+  var el = document.getElementById('scenarioChip');
+  var key = SM.deriveScenario(st);
+  if (key){
+    var sc = SM.SCENARIOS[key];
+    el.textContent = '시나리오: ' + sc.nameKo + (sc.broken ? ' (불가)' : '');
+    el.className = 'pill scChip ' + (sc.broken ? 'bad' : 'ok');
+    el.title = sc.summary;
+  } else {
+    var info = SM.nearestCustomInfo(st);
+    el.textContent = '시나리오: custom (' + info.diffs.length + '개 항목 불일치)';
+    el.className = 'pill scChip custom';
+    el.title = info.diffs.join(' / ');
+  }
+}
+
+function stubTab(name){
+  log('[탭 클릭] "' + name + '"은(는) 이 목업에서 시연되지 않음 (Scenario 탭만 동작)');
 }
 
 function renderModeStateBanner(){
@@ -218,17 +296,32 @@ function renderItems(){
       (modeOk ? markFor(true) : '<button onclick="fixMode(\'' + key + '\')">이 모드로 전환</button>') + '</div>';
     html += '<div class="check"><span>TX: 필요 ' + (sc.tx?'무장':'해제') + ' · 현재 ' + (st.tx?'무장':'해제') + '</span>' +
       (txOk ? markFor(true) : '<button onclick="fixTx(\'' + key + '\')">TX ' + (sc.tx?'무장':'해제') + '</button>') + '</div>';
+    var guided = document.getElementById('guidedToggle').checked;
+    var pendingHere = (robotSwitchPending === key);
     html += '<div class="check"><span>로봇 프로그램: 필요 <code>' + SM.ROBOT_PROGRAMS[sc.robotProgram].label + '</code> · ' +
-      '현재 ' + ({confirmed:'확인됨',unknown:'모름',mismatch:'불일치'})[st.robotConfirm] + ' (' + SM.ROBOT_PROGRAMS[st.robotProgram].label + ')</span>' +
-      (robotOk ? markFor(true, 'robot') : '<button onclick="fixRobot(\'' + key + '\')">' +
-        (document.getElementById('guidedToggle').checked ? '안내 명령 보기' : '자동 전환 실행') + '</button>') + '</div>';
-    if (!robotOk && document.getElementById('guidedToggle').checked){
+      '현재 ' + ({confirmed:'확인됨',unknown:'모름',mismatch:'불일치'})[st.robotConfirm] + ' (' + SM.ROBOT_PROGRAMS[st.robotProgram].label + ')</span>';
+    if (robotOk){
+      html += markFor(true, 'robot');
+    } else if (pendingHere){
+      html += '<span class="pendingRow"><span class="spin">…</span>SSH 실행 중 (실측 수 초, 이 축 잠금)</span>';
+    } else {
+      html += '<button onclick="fixRobot(\'' + key + '\')">' + (guided ? '안내 명령 보기' : '자동 전환 실행') + '</button>';
+      if (!guided){
+        html += '<button class="failDemo" onclick="failRobotDemo(\'' + key + '\')" title="실측 리드백이 없다는 것을 보여주기 위한 모의 실패 버튼">실패로 표시 (모의)</button>';
+      }
+    }
+    html += '</div>';
+    if (!robotOk && guided){
       html += '<div class="copybox"><code id="cmd_' + key + '">' + sc.sshCmd + '</code>' +
         '<button onclick="copyCmd(\'' + key + '\')">복사</button>' +
-        '<button onclick="confirmManual(\'' + key + '\')">완료함, 확인</button></div>';
+        '<button onclick="confirmManual(\'' + key + '\')">완료함, 확인 (자기신고)</button></div>';
     }
     if (sc.broken){
       html += '<div class="brokenbanner">' + sc.brokenReason + (modeOk && txOk && robotOk ? ' (조건은 모두 일치하지만 여전히 불가)' : '') + '</div>';
+    }
+    if (!(modeOk && txOk && robotOk) && !pendingHere){
+      html += '<div style="margin-top:8px;border-top:1px dashed #222;padding-top:8px">' +
+        '<button onclick="batchAdvance(\'' + key + '\')">일괄 진행 (모드→로봇→TX 순, TX는 항상 확인 모달을 거침)</button></div>';
     }
     html += '</div></div>';
   });
@@ -245,21 +338,70 @@ function fixMode(key){
 function fixTx(key){
   var sc = SM.SCENARIOS[key];
   if (sc.tx && !st.tx){
-    pendingKey = key;
-    document.getElementById('riskBody').innerHTML = 'TX를 무장하면 목표가 실물로 전송되고 <b>토크가 켜집니다</b>. 계속할까요?';
-    document.getElementById('riskModal').classList.remove('hidden');
+    armTxWithConfirm(
+      'TX를 무장하면 목표가 실물로 전송되고 <b>토크가 켜집니다</b>. 계속할까요?',
+      function(){ log('[체크리스트] ' + key + ' TX 무장 확인 후 적용'); }
+    );
     return;
   }
   st.tx = sc.tx;
   log('[체크리스트] ' + key + ' TX만 맞춤 -> ' + st.tx);
   renderAll();
 }
+
+// Round 1 fix: robot-program switching used to flip robotConfirm to 'confirmed'
+// synchronously and unconditionally, both hiding that real SSH takes several
+// seconds AND never showing what a failed switch looks like. Now it simulates
+// the delay (the axis locks meanwhile) and offers an explicit failure demo.
 function fixRobot(key){
-  var res = SM.performRobotSwitch(st, key, document.getElementById('guidedToggle').checked);
-  if (res.executed){
-    log('[체크리스트] ' + key + ' 로봇 자동 전환 성공(종료코드 0, 리드백 없음): ' + res.cmd);
-  } else {
+  var guided = document.getElementById('guidedToggle').checked;
+  if (guided){
+    var res = SM.performRobotSwitch(st, key, true);
     log('[체크리스트] ' + key + ' 안내 명령 표시: ' + res.cmd);
+    renderAll();
+    return;
+  }
+  robotSwitchPending = key;
+  log('[체크리스트] ' + key + ' 자동 SSH 전환 시작 (실측 수 초, 완료까지 이 축 잠금)');
+  renderAll();
+  setTimeout(function(){
+    if (robotSwitchPending !== key) return; // superseded by a fail-demo or a re-open
+    var res = SM.performRobotSwitch(st, key, false);
+    robotSwitchPending = null;
+    log('[체크리스트] ' + key + ' 로봇 자동 전환 완료(종료코드 0, 리드백 없음): ' + res.cmd);
+    renderAll();
+  }, 1400);
+}
+function failRobotDemo(key){
+  robotSwitchPending = null;
+  st.robotConfirm = 'mismatch';
+  log('[체크리스트] ' + key + ' SSH 실패를 모의 표시 — 마지막 확인 상태 = 불일치 (실제로는 SSH 종료코드나 타임아웃으로 판정될 자리)');
+  renderAll();
+}
+
+// Round 1 fix: cuts the repeated-switch click count. Applies the safe axes
+// (mode, then robot-program) automatically in order, but NEVER auto-arms TX —
+// arming always stops at the same risk-confirm modal used everywhere else.
+function batchAdvance(key){
+  var sc = SM.SCENARIOS[key];
+  var guided = document.getElementById('guidedToggle').checked;
+  if (st.mode !== sc.mode){
+    st.mode = sc.mode;
+    log('[일괄 진행] ' + key + ' 뷰어 모드 -> ' + st.mode);
+  }
+  var robotOk = st.robotConfirm === 'confirmed' && st.robotProgram === sc.robotProgram;
+  if (!robotOk && !guided && robotSwitchPending !== key){
+    fixRobot(key); // starts the timed SSH simulation; batch stops here for this click
+    return;
+  }
+  if (!robotOk && guided){
+    log('[일괄 진행] ' + key + ' 안내 모드에서는 로봇 확인을 자동화할 수 없음 — 아래 명령을 직접 실행하세요');
+    renderAll();
+    return;
+  }
+  if (st.tx !== sc.tx){
+    fixTx(key); // safe direction applies immediately; arming still opens the modal
+    return;
   }
   renderAll();
 }
@@ -270,28 +412,57 @@ function confirmManual(key){
   var sc = SM.SCENARIOS[key];
   st.robotConfirm = 'confirmed';
   st.robotProgram = sc.robotProgram;
-  log('[체크리스트] ' + key + ' 사람이 "완료함"으로 수동 확인');
+  log('[체크리스트] ' + key + ' 사람이 "완료함"으로 자기신고 (SSH 종료코드로 검증된 것이 아님, 실측 아님)');
   renderAll();
 }
 
-function closeRisk(){ pendingKey = null; document.getElementById('riskModal').classList.add('hidden'); }
+// Round 1 fix: the risk modal used to only fire from the checklist's own TX
+// button, keyed by a scenario. The top-bar TX chip had a SEPARATE, weaker path
+// (plain browser confirm(), no robot-state awareness) into the exact same
+// torque-ON transition. Both paths now go through one function so there is
+// only one gate, not two of differing strictness.
+function armTxWithConfirm(bodyHtml, onConfirmed){
+  pendingApply = onConfirmed;
+  document.getElementById('riskBody').innerHTML = bodyHtml;
+  var needsAck = st.robotConfirm !== 'confirmed';
+  var ackRow = document.getElementById('riskAckRow');
+  var ackBox = document.getElementById('riskAck');
+  var btn = document.getElementById('riskConfirmBtn');
+  ackBox.checked = false;
+  ackRow.classList.toggle('hidden', !needsAck);
+  btn.disabled = needsAck;
+  document.getElementById('riskModal').classList.remove('hidden');
+}
+function updateRiskConfirmEnabled(){
+  document.getElementById('riskConfirmBtn').disabled = !document.getElementById('riskAck').checked;
+}
+function closeRisk(){ pendingApply = null; document.getElementById('riskModal').classList.add('hidden'); }
 function confirmRisk(){
-  var key = pendingKey; closeRisk();
-  st.tx = SM.SCENARIOS[key].tx;
-  log('[체크리스트] ' + key + ' TX 무장 확인 후 적용');
+  var fn = pendingApply;
+  pendingApply = null;
+  document.getElementById('riskModal').classList.add('hidden');
+  if (fn) fn();
+  st.tx = true;
   renderAll();
 }
 
 function toggleTx(){
-  if (!st.tx && confirm('TX를 무장하면 실물로 목표가 전송되고 토크가 켜집니다. 계속?') === false) return;
-  st.tx = !st.tx;
-  log('[상단바 TX 칩 직접 조작] tx = ' + st.tx + ' (체크리스트와 별개 경로)');
-  renderAll();
+  if (st.tx){
+    st.tx = false;
+    log('[상단바 TX 칩 직접 조작] TX 해제 (안전한 방향은 확인 없이 즉시 적용)');
+    renderAll();
+    return;
+  }
+  armTxWithConfirm(
+    'TX를 무장하면 실물로 목표가 전송되고 <b>토크가 켜집니다</b>. 이 조작은 체크리스트를 거치지 않은 지름길입니다.',
+    function(){ log('[상단바 TX 칩 직접 조작] TX 무장 (체크리스트와 별개 경로, 동일한 위험 확인 통과)'); }
+  );
 }
 
 function renderAll(){
   renderModeSelect();
   renderTxChip();
+  renderScenarioChip();
   renderModeStateBanner();
   renderItems();
 }
@@ -307,7 +478,7 @@ document.getElementById('guidedToggle').onchange = function(e){
 };
 
 renderAll();
-log('초기 상태: manual + TX 무장 + huphy_remote_motion 확인됨 -> 실물 동시 구동');
+log('초기 상태 (뷰어 방금 재기동됐다고 가정): mode=manual, TX 해제, 로봇 확인 모름 -> custom (아직 어떤 조합도 아님)');
 </script>
 </body>
 </html>
