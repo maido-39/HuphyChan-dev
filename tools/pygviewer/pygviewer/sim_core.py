@@ -201,7 +201,24 @@ class SimCore:
     self.default_q = np.array([r["default_q"][n] for n in self.act_names])
     self.clip_lo = np.array([contract.clip(n)[0] for n in self.act_names])
     self.clip_hi = np.array([contract.clip(n)[1] for n in self.act_names])
+    # Hard model range (the MJCF joint range, NEVER the soft safe_clip window above) - the
+    # absolute bound nothing received from outside this process may cross before it is
+    # snapped into qpos.  Task: "pygviewer ROM clip enforcement" (2026-09-04) - a real_replay
+    # joint driven straight from telemetry with no bound at all is what produced
+    # range_violations L_knee 1373 (an uncalibrated/multi-turn real value landing in qpos
+    # unclipped); see _update_replay_targets.
+    self.range_lo = np.array([r["joint_contract"][n]["range"][0] for n in self.act_names])
+    self.range_hi = np.array([r["joint_contract"][n]["range"][1] for n in self.act_names])
     self.default_q_map = {n: float(v) for n, v in zip(self.act_names, self.default_q)}
+    # Per-joint clamp bookkeeping for the hard-range clip above: `_now` is this control
+    # tick's flag (reset to False the instant a joint stops being clamped, and whenever a
+    # replay mode is left), `_count` is a cumulative, never-reset counter across the whole
+    # process lifetime. Deliberately a SEPARATE structure from RealState.range_violations
+    # (telemetry.py) - that counter tracks the raw signal quality (untouched by this clip,
+    # scope of a different task item), this one tracks what the DRIVE actually had to do
+    # about it.
+    self.replay_clamped_now: dict[str, bool] = {n: False for n in self.act_names}
+    self.replay_clamp_count: dict[str, int] = {n: 0 for n in self.act_names}
 
     # Replay drive split (P3): a crank (AB only) can only be reached through the PD - see
     # the module docstring - everything else (hips/knees, and the RP ankle) is kinematically
@@ -797,16 +814,61 @@ class SimCore:
     NEW PD target and (b) which direct-drive joints have fresh data this tick, cached for
     ``_substep`` to snap.  A joint the source has no value for is untouched here - it keeps
     whatever ``self.target``/qpos it already had, which is the default pose right after a
-    reset (design item 6: "no data" holds default, it is never guessed)."""
+    reset (design item 6: "no data" holds default, it is never guessed).
+
+    ROM enforcement (2026-09-04): a value that IS present is never trusted blind.
+      * direct-drive joints (hip/knee/RP-ankle) are snapped straight into qpos by
+        ``_substep`` - so they are clipped here to the HARD model range
+        (``self.range_lo/hi``, the MJCF joint range) before being cached into
+        ``self._replay_direct_vals_now``. A non-finite (NaN/inf) sample is treated
+        EXACTLY like "no data this tick" - excluded from ``self._replay_direct_now``
+        entirely, never guessed, never snapped as NaN.
+      * the AB crank only ever reaches qpos through the PD (module docstring - snapping a
+        crank qpos tears the closed loop open and MuJoCo answers with QACC NaN), so its
+        target keeps going through the existing, tighter, soft ``clip_lo/hi`` (safe_clip)
+        below - soft ⊂ hard, so the applied PD target can never mechanically exceed the
+        crank's hard range either. The raw value is still checked against the HARD range
+        here purely for clamp bookkeeping (a real host asking for something outside the
+        crank's mechanical range is worth counting even though the soft clip already
+        absorbs it), and non-finite values are skipped the same way as direct-drive.
+
+    Either way, the RAW value received stays untouched in ``self.real.q`` - only what gets
+    fed to the physics/solver is bounded here.
+    """
     src = self._replay_source() or {}
-    self._replay_direct_now = [
-      i for i in self._direct_idx if src.get(self.act_names[i]) is not None
-    ]
-    self._replay_direct_vals_now = {i: float(src[self.act_names[i]]) for i in self._replay_direct_now}
+    direct_now: list[int] = []
+    vals: dict[int, float] = {}
+    for i in self._direct_idx:
+      n = self.act_names[i]
+      raw = src.get(n)
+      if raw is None or not math.isfinite(raw):
+        self.replay_clamped_now[n] = False
+        continue
+      raw = float(raw)
+      lo, hi = float(self.range_lo[i]), float(self.range_hi[i])
+      clipped = min(max(raw, lo), hi)
+      clamped = clipped != raw
+      self.replay_clamped_now[n] = clamped
+      if clamped:
+        self.replay_clamp_count[n] += 1
+      direct_now.append(i)
+      vals[i] = clipped
+    self._replay_direct_now = direct_now
+    self._replay_direct_vals_now = vals
+
     for i in self._pd_idx:
-      v = src.get(self.act_names[i])
-      if v is not None:
-        self.target[i] = float(np.clip(v, self.clip_lo[i], self.clip_hi[i]))
+      n = self.act_names[i]
+      v = src.get(n)
+      if v is None or not math.isfinite(v):
+        self.replay_clamped_now[n] = False
+        continue
+      v = float(v)
+      hard_lo, hard_hi = float(self.range_lo[i]), float(self.range_hi[i])
+      clamped = v < hard_lo or v > hard_hi
+      self.replay_clamped_now[n] = clamped
+      if clamped:
+        self.replay_clamp_count[n] += 1
+      self.target[i] = float(np.clip(v, self.clip_lo[i], self.clip_hi[i]))
 
   def _drain(self) -> None:
     with self._lock:
@@ -895,8 +957,13 @@ class SimCore:
       self._policy_tick()
     if self.mode in REPLAY_MODES:
       self._update_replay_targets()
-    elif getattr(self, "_replay_direct_now", None):
-      self._replay_direct_now = []  # left a replay mode: stop snapping, resume ordinary PD
+    else:
+      if getattr(self, "_replay_direct_now", None):
+        self._replay_direct_now = []  # left a replay mode: stop snapping, resume ordinary PD
+      if any(self.replay_clamped_now.values()):
+        # "clamped THIS tick" must not linger true after leaving replay mode; clamp_count
+        # is cumulative and is never touched here.
+        self.replay_clamped_now = {n: False for n in self.replay_clamped_now}
     if self.mode == "manual" and self.script is not None:
       vals = self.script.at(self.d.time)
       if vals is not None:
@@ -951,6 +1018,20 @@ class SimCore:
       self._stats["t_wall"] = now - t0
 
   # ------------------------------------------------------------------ snapshot
+  def _telemetry_status(self) -> dict:
+    """``RealState.status()`` plus this module's OWN ROM-clamp bookkeeping, merged under a
+    separate ``replay_clamp`` key rather than into ``telemetry.py`` - that module's
+    ``range_violations`` counter tracks raw signal quality (a different task's scope) and is
+    deliberately left untouched by this key. Filtered to non-trivial entries the same way
+    ``RealState.status()`` already filters ``range_violations``, so an idle/no-replay client
+    sees an empty dict rather than 12 explicit ``False``/``0`` entries every tick."""
+    tel = self.real.status()
+    tel["replay_clamp"] = dict(
+      clamped_now={n: True for n, v in self.replay_clamped_now.items() if v},
+      clamp_count={n: c for n, c in self.replay_clamp_count.items() if c},
+    )
+    return tel
+
   def _publish(self) -> None:
     d, m = self.d, self.m
     q_all = d.qpos[self.all_q]
@@ -991,7 +1072,7 @@ class SimCore:
       ),
       warnings=self._warnings(q_all),
       gains_source=self.gains_source,
-      telemetry=self.real.status(),
+      telemetry=self._telemetry_status(),
       sign_sanity=self.real.sign_sanity(),
     )
     if self.replayer is not None:
