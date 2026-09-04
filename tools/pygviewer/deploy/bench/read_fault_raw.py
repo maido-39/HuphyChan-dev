@@ -76,16 +76,21 @@ def main() -> int:
               f"len={len(d)} bytes={' '.join(f'{b:02X}' for b in d)}")
         if len(d) < 8:
           continue
-        manual_fault_le = int.from_bytes(d[0:4], "little")
-        manual_fault_be = int.from_bytes(d[0:4], "big")
-        manual_warn_le = int.from_bytes(d[4:8], "little")
-        manual_warn_be = int.from_bytes(d[4:8], "big")
-        huphy = int.from_bytes(d[1:5], "big")
-        print(f"    manual Byte0~3 fault : LE 0x{manual_fault_le:08X} [{named(manual_fault_le, FAULT_BITS)}]"
-              f"  BE 0x{manual_fault_be:08X} [{named(manual_fault_be, FAULT_BITS)}]")
-        print(f"    manual Byte4~7 warn  : LE 0x{manual_warn_le:08X} [{named(manual_warn_le, WARN_BITS)}]"
-              f"  BE 0x{manual_warn_be:08X} [{named(manual_warn_be, WARN_BITS)}]")
-        print(f"    HUPHY  Byte1~4 (BE)  : 0x{huphy:08X} [{named(huphy, FAULT_BITS)}]")
+        # In MIT (11-bit) frames data[0] is the motor id, so the manual's byte numbering (which
+        # is written for the 29-bit frame, where the id lives in the arbitration field) shifts
+        # by one. Reading d[0:4] as the fault word would take the motor id for a fault bit -
+        # id 4 would read as "undervoltage" (bit 2) and id 3 as bits 0+1. That is exactly the
+        # kind of confidently-wrong readout this whole exercise exists to stamp out, so the
+        # shifted window is the only one printed, in both byte orders.
+        fault_le = int.from_bytes(d[1:5], "little")   # correct: vendor sends low byte first
+        fault_be = int.from_bytes(d[1:5], "big")      # what HUPHY currently does
+        warn_le = int.from_bytes(d[5:9], "little") if len(d) >= 9 else None
+        print(f"    fault (little-endian, correct) : 0x{fault_le:08X} [{named(fault_le, FAULT_BITS)}]")
+        print(f"    fault (big-endian, HUPHY today): 0x{fault_be:08X} [{named(fault_be, FAULT_BITS)}]")
+        if warn_le is not None:
+          print(f"    warning (little-endian)        : 0x{warn_le:08X} [{named(warn_le, WARN_BITS)}]")
+        else:
+          print(f"    warning                        : not in this reply ({len(d)} bytes)")
       time.sleep(0.05)
     return 0
   finally:
