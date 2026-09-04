@@ -713,3 +713,123 @@ def test_remote_motion_sends_supplementary_stuck_telemetry_over_udp():
     assert pkt["left_leg/knee/stuck"] == 0.0
   finally:
     sock.close()
+
+
+# ---------------------------------------------------------------- overheat cutoff (2026-09-05)
+# docs/121 section 13c, user instruction: 50 C cuts a joint's torque to zero, 45 C resumes it.
+# The pure ThermalCutoff logic (hysteresis, invalid-reading handling) is tested on its own in
+# tests/test_motor_fault.py; these tests prove RemoteMotion actually WITHHOLDS torque (zero
+# gain, target held at the last observed pose) when a joint is cut, resumes it, and never
+# touches any OTHER enabled joint.
+def test_remote_motion_cuts_torque_when_a_joint_overheats():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  motion, latest = _remote_motion(mapper, enable={"L_knee_joint"})
+  latest.put(JointTarget(
+    t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.4], arm_token="tok",
+    origin="manual", ttl_ms=5000,
+  ))
+  obs = {"left_leg/knee.pos": 12.3, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 51.0}
+
+  action = motion(0.0, observation=obs)
+
+  assert action is not None
+  assert action["left_leg/knee"] == pytest.approx(12.3)  # held at the LAST OBSERVED pose
+  motors = motion.leg.config.motors
+  assert motors["knee"].gains.kp == 0.0 and motors["knee"].gains.kd == 0.0
+  assert any("과열" in w for w in motion.warnings)
+
+
+def test_remote_motion_resumes_torque_once_the_joint_cools():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  motion, latest = _remote_motion(mapper, enable={"L_knee_joint"})
+  latest.put(JointTarget(
+    t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.4], arm_token="tok",
+    origin="manual", ttl_ms=5000,
+  ))
+  target_deg = mapper.to_motor_targets(["L_knee_joint"], [0.4])["left_leg"]["knee"]
+
+  motion(0.0, observation={"left_leg/knee.pos": 12.3, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 51.0})
+  assert motion.leg.config.motors["knee"].gains.kp == 0.0  # cut
+
+  motion(0.1, observation={"left_leg/knee.pos": 12.3, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 47.0})
+  assert motion.leg.config.motors["knee"].gains.kp == 0.0  # still above resume threshold
+
+  action = motion(0.2, observation={"left_leg/knee.pos": target_deg, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 44.0})
+  assert action["left_leg/knee"] == pytest.approx(target_deg)  # tracking the real target again
+  motors = motion.leg.config.motors
+  assert motors["knee"].gains.kp == pytest.approx(5.0)  # back to the real (default) gain
+  assert any("식어서" in w for w in motion.warnings)
+
+
+def test_remote_motion_never_cuts_on_an_implausible_temperature():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  motion, latest = _remote_motion(mapper, enable={"L_knee_joint"})
+  latest.put(JointTarget(
+    t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.4], arm_token="tok",
+    origin="manual", ttl_ms=5000,
+  ))
+  target_deg = mapper.to_motor_targets(["L_knee_joint"], [0.4])["left_leg"]["knee"]
+
+  action = motion(0.0, observation={
+    "left_leg/knee.pos": target_deg, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 3308.8,
+  })
+
+  assert action["left_leg/knee"] == pytest.approx(target_deg)  # not held back - never cut
+  assert motion.leg.config.motors["knee"].gains.kp == pytest.approx(5.0)  # the REAL gain plan
+  assert any("읽을 수 없음" in w for w in motion.warnings)
+
+
+def test_remote_motion_only_cuts_the_overheated_joint_not_others():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  motion, latest = _remote_motion(mapper, enable={"L_knee_joint", "L_hip_pitch_joint"})
+  latest.put(JointTarget(
+    t_ns=1, seq=1, joint_names=["L_knee_joint", "L_hip_pitch_joint"], q_target=[0.4, 0.1],
+    arm_token="tok", origin="manual", ttl_ms=5000,
+  ))
+  hip_target_deg = mapper.to_motor_targets(["L_hip_pitch_joint"], [0.1])["left_leg"]["hip_pitch"]
+
+  action = motion(0.0, observation={
+    "left_leg/knee.pos": 12.3, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 51.0,
+    "left_leg/hip_pitch.pos": hip_target_deg, "left_leg/hip_pitch.tau": 1.0, "left_leg/hip_pitch.temp": 30.0,
+  })
+
+  assert motion.leg.config.motors["knee"].gains.kp == 0.0  # cut
+  assert action["left_leg/hip_pitch"] == pytest.approx(hip_target_deg)
+  assert motion.leg.config.motors["hip_pitch"].gains.kp == pytest.approx(5.0)  # untouched
+
+
+def test_remote_motion_sends_temp_valid_and_cutoff_telemetry():
+  sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+  sock.bind(("127.0.0.1", 0))
+  sock.settimeout(1.0)
+  addr = ("127.0.0.1", sock.getsockname()[1])
+  try:
+    c = _contract()
+    from pygviewer.bridge.tx_map import JointTargetMapper
+
+    mapper = JointTargetMapper(c)
+    motion, latest = _remote_motion(mapper, enable={"L_knee_joint"}, telemetry_addr=addr)
+    latest.put(JointTarget(
+      t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.4], arm_token="tok",
+      origin="manual", ttl_ms=5000,
+    ))
+    motion(0.0, observation={"left_leg/knee.pos": 12.3, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 51.0})
+
+    data, _from = sock.recvfrom(4096)
+    pkt = json.loads(data.decode("utf-8"))
+    assert pkt["left_leg/knee/temp_valid"] == 1.0
+    assert pkt["left_leg/knee/cutoff"] == 1.0
+  finally:
+    sock.close()

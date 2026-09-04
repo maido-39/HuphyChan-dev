@@ -118,6 +118,19 @@ class JointState(Header):
     "robot's checkout. Shown alongside fault_le so an operator is never silently shown only "
     "one, possibly-wrong, interpretation.",
   )
+  temp_valid: list[float | None] | None = Field(
+    default=None,
+    description="Overheat cutoff (2026-09-05, docs/121 section 13c): 0.0 = this joint's last "
+    "reported temperature was outside the plausible -20~150 C range (docs/124's own 3308.8 C "
+    "incident - now understood to be a fault-state artifact, not a sensor/encoding bug) and "
+    "was NOT used to cut or clear a cutoff either way. 1.0 = plausible. null = not evaluated.",
+  )
+  cutoff: list[float | None] | None = Field(
+    default=None,
+    description="1.0 = this joint's torque is currently withheld by the 50 C overheat cutoff "
+    "(bridge/motor_fault.py ThermalCutoff) - resumes automatically at 45 C. 0.0 = not cut. "
+    "null = not evaluated this tick.",
+  )
 
 
 class ImuState(Header):

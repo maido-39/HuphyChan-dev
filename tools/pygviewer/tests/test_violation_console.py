@@ -34,7 +34,13 @@ def _dashboard_js_text():
 # shipped JS for the literal expressions these mirrors depend on staying true to).
 
 def violation_side_short(side):
-  return {"recv": "recv", "recv_torque": "recv-torque", "sim_actuator": "sim", "send": "send"}.get(side, side)
+  return {
+    "recv": "recv", "recv_torque": "recv-torque", "sim_actuator": "sim", "send": "send",
+    # Fault visibility (2026-09-05, docs/121/docs/124):
+    "stuck": "stuck", "fault": "fault",
+    # Overheat cutoff (2026-09-05, docs/121 section 13c):
+    "cutoff": "cutoff", "temp_unreadable": "temp?",
+  }.get(side, side)
 
 
 def violation_badge_text(tv):
@@ -233,6 +239,18 @@ def test_dashboard_js_violation_line_text_also_checks_reason_first():
   m = re.search(r"function violationLineText\(rec\) \{(.*?)\n\}", src, re.S)
   assert m
   assert "if (rec.reason) return rec.reason;" in m.group(1)
+
+
+def test_dashboard_js_violation_side_short_knows_the_new_sides():
+  """Fault visibility + overheat cutoff (2026-09-05) added four new violation `side`
+  values - the badge/console short-label map must know all of them, not fall through to the
+  raw side string."""
+  src = _dashboard_js_text()
+  m = re.search(r"function violationSideShort\(side\) \{(.*?)\n\}", src, re.S)
+  assert m
+  body = m.group(1)
+  for side in ('stuck: "stuck"', 'fault: "fault"', 'cutoff: "cutoff"', 'temp_unreadable: "temp?"'):
+    assert side in body
 
 
 # ============================================================================ plot readout

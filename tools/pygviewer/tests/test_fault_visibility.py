@@ -55,6 +55,68 @@ def _joint_state(**stuck_fault_kwargs):
   )
 
 
+# =========================================================================== overheat cutoff
+def test_schema_joint_state_has_temp_valid_and_cutoff_fields():
+  assert "temp_valid" in JointState.model_fields
+  assert "cutoff" in JointState.model_fields
+
+
+def test_huphy_bridge_parses_temp_valid_and_cutoff_fields():
+  from pygviewer import CACHE_DIR
+  from pygviewer.bridge.huphy_udp import HuphyBridge, JointMap
+  from pygviewer.contract import load_contract
+
+  try:
+    c = load_contract(CACHE_DIR, "LegOnly-AB")
+  except FileNotFoundError:
+    pytest.skip("no baked contract for LegOnly-AB")
+  bridge = HuphyBridge(c, JointMap())
+  msg = bridge.parse_fast({
+    "left_leg/knee/temp_valid": 0.0,
+    "left_leg/knee/cutoff": 1.0,
+  })
+  assert msg is not None
+  assert dict(zip(msg.joint_names, msg.temp_valid))["L_knee_joint"] == pytest.approx(0.0)
+  assert dict(zip(msg.joint_names, msg.cutoff))["L_knee_joint"] == pytest.approx(1.0)
+
+
+def test_real_state_fault_reason_shows_cutoff_and_unreadable_temperature():
+  rs = RealState(["j1"], {"j1": (-10.0, 10.0)}, "sha")
+  rs.ingest_joint_state(_joint_state(cutoff=[1.0]))
+  assert "과열로 힘을 끊음" in rs.health()["joints"]["j1"]["fault_reason"]
+
+  rs2 = RealState(["j1"], {"j1": (-10.0, 10.0)}, "sha")
+  rs2.ingest_joint_state(_joint_state(temp_valid=[0.0]))
+  assert "온도를 읽을 수 없음" in rs2.health()["joints"]["j1"]["fault_reason"]
+
+
+def test_real_state_records_a_cutoff_transition_violation():
+  log = ViolationLog()
+  rs = RealState(["j1"], {"j1": (-10.0, 10.0)}, "sha", violations=log)
+  msg = JointState(
+    t_ns=1, seq=1, src="real", joint_names=["j1"], q=[0.0], temp_c=[51.0], cutoff=[1.0],
+  )
+  rs.ingest_joint_state(msg)
+  recs = log.list(side="cutoff")
+  assert len(recs) == 1
+  assert "과열로 힘을 끊음" in recs[0]["reason"]
+  # a second tick still cut - no NEW transition record (only the edge is recorded)
+  rs.ingest_joint_state(msg)
+  assert len(log.list(side="cutoff")) == 1
+
+
+def test_real_state_records_a_temp_unreadable_violation_for_the_docs124_incident_value():
+  """The exact docs/124 incident number - 3308.8 C, a fault-state artifact, not a real
+  temperature - must be recorded as unreadable."""
+  log = ViolationLog()
+  rs = RealState(["j1"], {"j1": (-10.0, 10.0)}, "sha", violations=log)
+  msg = JointState(t_ns=1, seq=1, src="real", joint_names=["j1"], q=[0.0], temp_c=[3308.8], temp_valid=[0.0])
+  rs.ingest_joint_state(msg)
+  recs = log.list(side="temp_unreadable")
+  assert len(recs) == 1
+  assert "온도를 읽을 수 없음" in recs[0]["reason"]
+
+
 def test_real_state_stores_stuck_and_fault_without_affecting_ok_warn_dead():
   """The docs/124 point exactly: a joint flagged stuck must still show connectivity state
   'ok' (comm is fine) while ALSO carrying a non-null fault_reason."""

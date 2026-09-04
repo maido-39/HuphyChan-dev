@@ -85,7 +85,9 @@ from .motor_fault import (
   FaultPoller,
   FaultReading,
   StuckDetector,
+  ThermalCutoff,
   decode_fault_word,
+  describe_cutoff_simple,
   describe_fault_simple,
   describe_stuck_simple,
   query_fault_raw,
@@ -115,6 +117,7 @@ sense to enable exactly one of them."""
 
 OBS_POS_SUFFIX = ".pos"
 OBS_TAU_SUFFIX = ".tau"
+OBS_TEMP_SUFFIX = ".temp"
 """Observation dict key suffixes (2026-09-05, fault visibility task, docs/121/docs/124).
 ``OBS_POS_SUFFIX`` is the ONE confirmed key this file already reads (``_idle_refresh_action``,
 ``f"{action_prefix}/{j}.pos"``, docs/123 section "6c"). ``OBS_TAU_SUFFIX`` is inferred by the
@@ -126,7 +129,11 @@ human operator's job, not this session's (project rule). If ``get_observation()`
 names this field something else, ``StuckDetector.update`` simply never sees a torque value
 (``obs.get(...)`` returns ``None``) and reports "not stuck" for every tick, exactly as it does
 for any other missing reading - a wrong key name fails SAFE (no stuck reports at all), never
-a false positive. Confirm this key on the bench before relying on layer (a)'s torque gate."""
+a false positive. Confirm this key on the bench before relying on layer (a)'s torque gate.
+``OBS_TEMP_SUFFIX`` (2026-09-05, overheat cutoff task) carries the SAME caveat and the SAME
+fail-safe direction: ``ThermalCutoff.update`` treats a missing reading as ``None``, which is
+already its own "unreadable, do not cut" case (see that class's docstring) - a wrong key name
+here means the cutoff never engages, never that it engages wrongly."""
 
 
 # =========================================================================== pure helpers
@@ -795,6 +802,16 @@ class RemoteMotion:
     real one, best-effort (see that function's own docstring)."""
     self.last_fault: dict[str, FaultReading] = {}
     self._stuck_active: dict[str, bool] = {}
+
+    # Overheat cutoff (2026-09-05, docs/121 section 13c): 50 C cuts a joint's torque to zero,
+    # 45 C resumes it (ThermalCutoff, bridge/motor_fault.py). Runs alongside layer (a)/(b)
+    # above in `_update_fault_visibility` - same reasoning applies (comm can look perfectly
+    # fine while a joint is overheating, so this must never depend on the ok/warn/dead verdict
+    # either). `_cut_motor_names` is written every tick by `_update_thermal_cutoff` and read by
+    # `__call__`'s live-command path to actually withhold torque.
+    self.thermal_cutoff = ThermalCutoff()
+    self._cut_motor_names: set[str] = set()
+    self._temp_unreadable_active: dict[str, bool] = {}
     self.telemetry_addr = telemetry_addr
     self._telemetry_sock = (
       socket.socket(socket.AF_INET, socket.SOCK_DGRAM) if telemetry_addr is not None else None
@@ -864,6 +881,22 @@ class RemoteMotion:
         )
       self.leg.config = dataclasses.replace(self.leg.config, motors=motors)
 
+    # Overheat cutoff (2026-09-05, docs/121 section 13c): applied LAST, strictly AFTER the
+    # gain plan above, so a cut motor's forced zero-gain can never be clobbered by
+    # plan_gains's own kp/kd for that same motor. The motor's key STAYS in `action` (never
+    # just omitted) at its LAST OBSERVED pose - never a synthesized target, the exact same
+    # reasoning `_idle_refresh_action` already uses ("never drive toward default_q") - so
+    # HUPHY's own uncommanded-joint hold behaviour can never apply a real gain against a
+    # stale target either; omitting the key is not enough on its own to guarantee zero
+    # torque. `_cut_motor_names` only ever contains SINGLE_MOTOR_NAMES (see
+    # `_update_thermal_cutoff`'s own docstring for why ankle is not covered).
+    for motor_name in self._cut_motor_names:
+      obs_pos = (observation or {}).get(f"{self.action_prefix}/{motor_name}{OBS_POS_SUFFIX}")
+      action[motor_name] = obs_pos if obs_pos is not None else action.get(motor_name, 0.0)
+      motors = dict(self.leg.config.motors)
+      motors[motor_name] = dataclasses.replace(motors[motor_name], gains=self.Gains(kp=0.0, kd=0.0))
+      self.leg.config = dataclasses.replace(self.leg.config, motors=motors)
+
     # Biped structure migration (2026-09-04): `action` above is built in bare per-leg names
     # (`Leg.action_features`'s own vocabulary - "hip_pitch"/.../"ankle_pitch"/"ankle_roll",
     # unchanged from before biped existed). `ControlLoop.step` hands this dict to
@@ -928,10 +961,65 @@ class RemoteMotion:
         )
         self.warnings.append(line)
 
-    self._send_fault_telemetry(stuck_flags, fault_now)
+    temp_flags = self._update_thermal_cutoff(observation)
+    self._send_fault_telemetry(stuck_flags, fault_now, temp_flags)
+
+  def _enabled_single_motor_names(self) -> set[str]:
+    """The subset of :data:`SINGLE_MOTOR_NAMES` currently enabled on this side - the same
+    "ankle not covered" restriction as :meth:`_update_fault_visibility` (see that method's
+    docstring), reused by the overheat cutoff below."""
+    return {
+      self.mapper.motor_row(sj)[1] for sj in self._enabled_sim_joints()
+    } & set(SINGLE_MOTOR_NAMES)
+
+  def _update_thermal_cutoff(self, observation) -> dict[str, float]:
+    """Overheat cutoff (2026-09-05, docs/121 section 13c, user instruction): 50 C cuts a
+    joint's torque to zero, 45 C resumes it (:class:`ThermalCutoff`, hysteresis so it does not
+    chatter right at the line). Runs every tick, independent of phase - same reasoning as
+    :meth:`_update_fault_visibility`: communication can look perfectly healthy while a joint
+    is overheating, so this cannot depend on that verdict either.
+
+    Writes :attr:`_cut_motor_names` (consulted by ``__call__``'s live-command path to
+    actually withhold torque - this method only DECIDES, it never touches ``action`` or
+    ``leg.config`` itself, since idle ticks have no ``action`` to withhold from and already
+    send zero gain regardless). Returns the ``{motor}/temp_valid`` and ``{motor}/cutoff``
+    telemetry flags for :meth:`_send_fault_telemetry`.
+
+    Restricted to :data:`SINGLE_MOTOR_NAMES` - same ankle limitation as stuck detection
+    (cutting one crank motor of an atomic ankle pair without the other would twist the joint,
+    ``split_motor_targets_into_action``'s own "통째로 버림" rule).
+    """
+    obs = observation or {}
+    flags: dict[str, float] = {}
+    cut_now: set[str] = set()
+    for motor_name in self._enabled_single_motor_names():
+      temp = obs.get(f"{self.action_prefix}/{motor_name}{OBS_TEMP_SUFFIX}")
+      result = self.thermal_cutoff.update(motor_name, temp)
+      flags[f"{motor_name}/temp_valid"] = 1.0 if result["valid"] else 0.0
+      flags[f"{motor_name}/cutoff"] = 1.0 if result["cut"] else 0.0
+      if result["cut"]:
+        cut_now.add(motor_name)
+      if result["transitioned"]:
+        line = describe_cutoff_simple(motor_name, result, resumed=not result["cut"])
+        logger.warning("remote_motion: %s", line)
+        self.warnings.append(line)
+      if result["valid"]:
+        self._temp_unreadable_active[motor_name] = False
+      elif not self._temp_unreadable_active.get(motor_name, False):
+        # Log once per NEW unreadable streak (not every 100 Hz tick) - the telemetry flag
+        # above still stays 0.0 for the whole streak, so the dashboard shows "unreadable"
+        # continuously (user instruction: "조용히 정규화하지 말 것") even though the
+        # log/warnings deque gets one line, not a flood.
+        line = f"{motor_name}: 온도를 읽을 수 없음 (값 {temp!r})"
+        logger.warning("remote_motion: %s", line)
+        self.warnings.append(line)
+        self._temp_unreadable_active[motor_name] = True
+    self._cut_motor_names = cut_now
+    return flags
 
   def _send_fault_telemetry(
     self, stuck_flags: dict[str, float], fault_now: dict[str, FaultReading],
+    temp_flags: dict[str, float] | None = None,
   ) -> None:
     if self._telemetry_sock is None or self.telemetry_addr is None:
       return
@@ -941,6 +1029,8 @@ class RemoteMotion:
     for motor_name, reading in fault_now.items():
       pkt[f"{self.action_prefix}/{motor_name}/fault_le"] = float(reading.little)
       pkt[f"{self.action_prefix}/{motor_name}/fault_be"] = float(reading.big)
+    for key, flag in (temp_flags or {}).items():
+      pkt[f"{self.action_prefix}/{key}"] = flag  # key already "{motor_name}/temp_valid" etc.
     if not pkt:
       return
     try:

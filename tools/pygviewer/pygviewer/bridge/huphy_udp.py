@@ -72,7 +72,9 @@ KNOWN_ANKLE_JOINTS = ("ankle_pitch", "ankle_roll")
 # diag-only packet (real HUPHY) or a combined one (bench) both set `touched=True` and
 # refresh whichever of temp/age/ack/miss it carries in the SAME persistent per-joint buffer
 # FAST already accumulates into - see the class docstring.
-DIAG_MOTOR_FIELDS = ("temp", "age", "ack", "miss", "stuck", "fault_le", "fault_be")
+DIAG_MOTOR_FIELDS = (
+  "temp", "age", "ack", "miss", "stuck", "fault_le", "fault_be", "temp_valid", "cutoff",
+)
 """Fault visibility (2026-09-05, docs/121/docs/124) added `stuck`/`fault_le`/`fault_be` to the
 original temp/age/ack/miss set - handled the SAME way (never travel-sign/offset corrected,
 since none of these is a joint ANGLE; a negative value is treated as "no data" the same as any
@@ -154,7 +156,7 @@ class HuphyBridge:
     self._buf = {
       n: dict(
         q=None, target=None, qd=None, tau=None, temp=None, age=None, ack=None, miss=None,
-        stuck=None, fault_le=None, fault_be=None,
+        stuck=None, fault_le=None, fault_be=None, temp_valid=None, cutoff=None,
       )
       for n in self.act_names
     }
@@ -264,6 +266,8 @@ class HuphyBridge:
       stuck=[self._buf[n]["stuck"] for n in self.act_names],
       fault_le=[self._buf[n]["fault_le"] for n in self.act_names],
       fault_be=[self._buf[n]["fault_be"] for n in self.act_names],
+      temp_valid=[self._buf[n]["temp_valid"] for n in self.act_names],
+      cutoff=[self._buf[n]["cutoff"] for n in self.act_names],
     )
 
   # ---------------------------------------------------------------------- imu

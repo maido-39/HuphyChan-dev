@@ -342,6 +342,8 @@ function violationSideShort(side) {
     recv: "recv", recv_torque: "recv-torque", sim_actuator: "sim", send: "send",
     // Fault visibility (2026-09-05, docs/121/docs/124):
     stuck: "stuck", fault: "fault",
+    // Overheat cutoff (2026-09-05, docs/121 section 13c):
+    cutoff: "cutoff", temp_unreadable: "temp?",
   }[side] || side;
 }
 

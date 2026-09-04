@@ -31,6 +31,9 @@ from typing import Any
 from .bridge.motor_fault import (
   FAULT_BIT_NAMES,
   FAULT_BIT_SIMPLE_KO,
+  OVERHEAT_CUTOFF_C,
+  TEMP_VALID_MAX_C,
+  TEMP_VALID_MIN_C,
   named_fault_bits,
 )
 from .schema import ImuState, JointState, PolicyIO
@@ -100,6 +103,10 @@ class RealState:
     self.stuck: dict[str, float | None] = {n: None for n in act_names}
     self.fault_le: dict[str, float | None] = {n: None for n in act_names}
     self.fault_be: dict[str, float | None] = {n: None for n in act_names}
+    # Overheat cutoff (2026-09-05, docs/121 section 13c) - same "own signal, not folded into
+    # ok/warn/dead" treatment as stuck/fault above.
+    self.temp_valid: dict[str, float | None] = {n: None for n in act_names}
+    self.cutoff: dict[str, float | None] = {n: None for n in act_names}
     self._stuck_since_mono: dict[str, float] = {}
     # This process's OWN reception clock, per joint - the last time ingest_joint_state saw
     # ANY field (fast or diag) not None for that specific joint name. Unlike `_last_rx_mono`
@@ -165,9 +172,13 @@ class RealState:
       stuck_list = msg.stuck or [None] * len(msg.joint_names)
       fault_le_list = msg.fault_le or [None] * len(msg.joint_names)
       fault_be_list = msg.fault_be or [None] * len(msg.joint_names)
-      for n, q, qd, tau, tgt, temp, age, ack, miss, stuck, fault_le, fault_be in zip(
+      temp_valid_list = msg.temp_valid or [None] * len(msg.joint_names)
+      cutoff_list = msg.cutoff or [None] * len(msg.joint_names)
+      for (
+        n, q, qd, tau, tgt, temp, age, ack, miss, stuck, fault_le, fault_be, temp_valid, cutoff,
+      ) in zip(
         msg.joint_names, msg.q, qd_list, tau_list, tgt_list, temp_list, age_list, ack_list,
-        miss_list, stuck_list, fault_le_list, fault_be_list,
+        miss_list, stuck_list, fault_le_list, fault_be_list, temp_valid_list, cutoff_list,
       ):
         if n not in self.q:
           continue  # the ws/in route already rejected unknown names; defensive only
@@ -230,6 +241,31 @@ class RealState:
             self.violations.record(
               side="fault", joint=n, value=float(fault_le), limit_lo=0.0, limit_hi=0.0,
               src=msg.src, extra=dict(reason=reason, fault_be=fault_be), rate_limit_s=5.0,
+            )
+        # Overheat cutoff (2026-09-05, docs/121 section 13c) - same orthogonal-to-connectivity
+        # treatment as stuck/fault above (see this class's module docstring note).
+        if temp_valid is not None:
+          self.temp_valid[n] = temp_valid
+          if temp_valid < 1.0 and self.violations is not None:
+            self.violations.record(
+              side="temp_unreadable", joint=n, value=temp, limit_lo=TEMP_VALID_MIN_C,
+              limit_hi=TEMP_VALID_MAX_C, src=msg.src,
+              extra=dict(reason=f"{n}: 온도를 읽을 수 없음 (값 {temp!r})"), rate_limit_s=5.0,
+            )
+        if cutoff is not None:
+          was_cut = bool(self.cutoff.get(n))
+          self.cutoff[n] = cutoff
+          now_cut = cutoff >= 1.0
+          if now_cut != was_cut and self.violations is not None:
+            reason = (
+              f"{n}: 과열로 힘을 끊음 (온도 {temp:.1f}도, 기준 {OVERHEAT_CUTOFF_C:.0f}도)"
+              if now_cut and temp is not None
+              else f"{n}: 식어서 다시 시작 (온도 {temp:.1f}도)" if temp is not None
+              else f"{n}: {'과열로 힘을 끊음' if now_cut else '식어서 다시 시작'}"
+            )
+            self.violations.record(
+              side="cutoff", joint=n, value=temp, limit_lo=None, limit_hi=None, src=msg.src,
+              extra=dict(reason=reason, cut=now_cut),
             )
         prev = self.q[n]
         if q is not None and prev is not None and abs(q - prev) > math.pi:
@@ -422,11 +458,15 @@ class RealState:
     warn = warn or (temp_c is not None and temp_c > temp_limit_c)
     return "warn" if warn else "ok"
 
-  def _joint_fault_reason(self, stuck: float | None, fault_le: float | None) -> str | None:
+  def _joint_fault_reason(
+    self, stuck: float | None, fault_le: float | None,
+    cutoff: float | None = None, temp_valid: float | None = None,
+  ) -> str | None:
     """Plain-language reason this joint should show RED regardless of its ok/warn/dead
     connectivity verdict above (docs/124: comm/ack/miss can look perfectly healthy while the
-    joint itself is stuck or has cut its own torque - see this class's module docstring note
-    above ``self.stuck``). ``None`` means neither condition is currently active."""
+    joint itself is stuck, has cut its own torque, or is being held at zero by the overheat
+    cutoff - see this class's module docstring note above ``self.stuck``). ``None`` means none
+    of these conditions is currently active."""
     parts = []
     if stuck is not None and stuck >= 1.0:
       parts.append("명령을 따르지 않음 (고장 의심)")
@@ -434,6 +474,10 @@ class RealState:
       code = int(fault_le)
       simple = "/".join(FAULT_BIT_SIMPLE_KO[b] for b in FAULT_BIT_NAMES if code >> b & 1)
       parts.append(f"고장 코드 0x{code:08X}" + (f" ({simple})" if simple else " (정의되지 않음)"))
+    if cutoff is not None and cutoff >= 1.0:
+      parts.append("과열로 힘을 끊음")
+    if temp_valid is not None and temp_valid < 1.0:
+      parts.append("온도를 읽을 수 없음")
     return " · ".join(parts) if parts else None
 
   def health(
@@ -454,6 +498,8 @@ class RealState:
       qs = dict(self.q)
       stuck = dict(self.stuck)
       fault_le = dict(self.fault_le)
+      cutoff = dict(self.cutoff)
+      temp_valid = dict(self.temp_valid)
     joints: dict[str, dict] = {}
     summary = {"ok": 0, "warn": 0, "dead": 0}
     for n in self.act_names:
@@ -474,8 +520,12 @@ class RealState:
         q=qs.get(n),
         diag=has_diag.get(n, False),
         # Fault visibility (2026-09-05, docs/121/docs/124): NEVER folds into `state` above -
-        # see `_joint_fault_reason`'s own docstring for why. `None` when neither is active.
-        fault_reason=self._joint_fault_reason(stuck.get(n), fault_le.get(n)),
+        # see `_joint_fault_reason`'s own docstring for why. `None` when none is active.
+        fault_reason=self._joint_fault_reason(
+          stuck.get(n), fault_le.get(n), cutoff.get(n), temp_valid.get(n),
+        ),
+        cutoff=cutoff.get(n),
+        temp_valid=temp_valid.get(n),
       )
     return dict(joints=joints, summary=summary)
 
