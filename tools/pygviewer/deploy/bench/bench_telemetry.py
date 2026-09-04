@@ -69,7 +69,7 @@ def main() -> int:
   dt = 1.0 / a.hz
   t0 = time.perf_counter()
   bus.refresh_states([mid])
-  q0 = ((bus.state(mid).position_deg + 180.0) % 360.0) - 180.0
+  q0 = bus.state(mid).position_deg   # RAW multi-turn deg: the space MitCommand.position_deg lives in
   tgt = q0
   if active:
     bus.clear_fault([mid])   # a latched stall fault from a previous run blocks torque
@@ -80,21 +80,21 @@ def main() -> int:
       tick = time.perf_counter()
       t = tick - t0
       if active:
-        want = q0 + a.sine[0] * math.sin(2 * math.pi * a.sine[1] * t)
-        want = max(-a.rom, min(a.rom, want))
+        osc = max(-a.rom, min(a.rom, a.sine[0] * math.sin(2 * math.pi * a.sine[1] * t)))
+        want = q0 + osc          # centered on the startup pose; --rom limits the swing, not the absolute angle
         tgt = tgt + max(-a.slew, min(a.slew, want - tgt))      # slew clamp
         bus.send_mit({mid: MitCommand(position_deg=tgt, velocity_deg_s=0.0, kp=kp, kd=kd, torque_nm=0.0)})
         bus.collect(expect=1, timeout_s=dt * 0.8)
       else:
         bus.refresh_states([mid])  # sends a zero-force query and collects the reply
       st = bus.state(mid)
-      # HUPHY's cal space wraps to +-180 deg (motors/base.py wrap180); without a calibration file
-      # the raw multi-turn angle would leak through (e.g. 344 deg for -16 deg), so wrap here.
-      pos = ((st.position_deg + 180.0) % 360.0) - 180.0
+      raw = st.position_deg                 # command/error stay in RAW space (firmware convention)
+      # wrap ONLY the number we DISPLAY/emit; never feed a wrapped value back into a command.
+      pos = ((raw + 180.0) % 360.0) - 180.0
       snap = {
         "t": round(t, 4), "loop_dt": round((time.perf_counter() - tick) * 1e3, 3),
         f"{LIMB}/{JOINT}/pos": pos, f"{LIMB}/{JOINT}/tgt": tgt if active else pos,
-        f"{LIMB}/{JOINT}/err": (tgt - pos) if active else 0.0,
+        f"{LIMB}/{JOINT}/err": (tgt - raw) if active else 0.0,
         f"{LIMB}/{JOINT}/vel": st.velocity_deg_s, f"{LIMB}/{JOINT}/tau": st.torque_nm,
         f"{LIMB}/{JOINT}/temp": st.temp_c,
       }
