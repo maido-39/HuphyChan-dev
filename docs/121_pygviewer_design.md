@@ -42,7 +42,7 @@ viser(30 Hz 렌더, 10 Hz 플롯) · FastAPI/uvicorn(REST·WS·UDP 어댑터·�
 ## 4. Sim2Real 안전장치 (설계 내장, 요약)
 R1 부호/영점(joint_contract travel_sign·mirrored + 브리지 명시표 + UI sign-sanity + 합성 스트림 테스트) · R2 발목 크랭크↔관절 FK 교차(0.02 rad) ·
 R3 rad 고정·null 결측·|Δq|>π 플래그 · R4 속도/토크 부호 보정·유한차분 검사 · R5 t_ns/seq·clock offset 추정·jitter>15 ms 회색 · R6 default 계약 일치·창≥0.2 rad ·
-R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·정지 |Δg|<0.05 · R9 base 모드/높이/지면을 기록 헤더에 · R10 섀도우 전송 금지·소스별 히스토리 · R11 contract_hash 불일치 오버레이 거부.
+R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·정지 |Δg|<0.05 · R9 base 모드/높이/지면을 기록 헤더에 · R10 섀도우 전송 금지·소스별 히스토리 · R11 contract_hash 불일치 오버레이 거부 · R12 sync-before-arm 게이트(실물 텔레메트리로 수동 목표를 먼저 동기화해야 `/tx/arm` 허용).
 
 **[추가, 2026-09-04 ROM 클립 세션]** R6("default 계약 일치")·R3("null 결측·플래그, 값을 지어내지 않음")를
 수신측 구동 지점까지 확장: `real_replay`/`file_replay`가 관절을 qpos로 스냅하기 직전(`sim_core.py
@@ -573,3 +573,41 @@ q 불변 확인, 같은-다리 결합은 의도적으로 별도 취급).
   4.0.1로 전체 파싱만 확인, `??`는 esprima probe에서만 `||`로 중립화) 배지·콘솔·범례·리드아웃이
   실제 화면에서 어떻게 보이는지는 여전히 미검증 — 서버 데이터·순수함수 로직·서빙 파일까지만
   이 코더가 확인 가능한 한계.
+
+## 11. 시나리오 전환 UI 3안 목업 (2026-09-04, 코더)
+
+사용자 요청(09-04): "예시를 호스팅하고 확인하게 해줘" — §10과 같은 방식(3안 클릭 가능한 목업)으로
+S1/S2/S3 전환 UI 후보를 만들어 사용자가 직접 눌러보고 고르게 함. **핵심 설계 결정(코디네이터 지시,
+목업 착수 중 2회 수정)**: (1) 시나리오는 뷰어가 소유하는 새 상태가 아니라 기존 `mode`+TX 무장+로봇
+프로그램 확인 상태에서 **계산되는 이름표** — 버튼은 그 조합으로 점프하는 스위치일 뿐 눌린 채 남지
+않고, 세 축이 정확히 안 맞으면 항상 `custom`으로 떨어져 어긋난 항목을 지목한다. (2) 이름 자체를
+`S1/S2/S3`가 아니라 **"누가 움직이는가/전송 방향"을 드러내는 한국어 이름**으로 교체 — 실물 동시 구동
+(`drive-both`, 전송 ON, manual+TX무장), 로봇 정책 관측(`shadow-policy`, 전송 OFF, policy_shadow) —
+**현재 불가**(관측이 뷰어에서 버려지고 로봇도 안 보냄), 손으로 미러링(`mirror-hardware`, 전송 OFF,
+real_replay→향후 kinematic); S1/S2/S3는 문서 대조용 보조 태그로만 작게 병기. 로봇 쪽 확인 상태는
+3단(확인됨/모름/불일치)으로 표시해 "화면과 실제 로봇 상태가 어긋날 수 있음"을 숨기지 않음. 로봇
+프로그램 전환은 "안내만" 토글로 자동 SSH(현재 기본)와 안내 전용(향후 기본) 두 경로를 한 구조 안에
+모두 표현.
+
+**산출물**: `tools/pygviewer/mockups/scenario_common.js`(공유 상태머신 — SCENARIOS 정의·
+`deriveScenario`·`diffFromScenario`/`nearestCustomInfo`·`isRiskyActivation`·
+`performRobotSwitch`), `scenario_A.html`(상단바 전환 스위치), `scenario_B.html`(좌측 Scenario 탭 +
+축별 체크리스트), `scenario_C.html`(TX 패널 "운용 모드" 카드 — 위험 전환에 해제→설정→ARM 강제),
+`scenario_index.html`(3안 비교·선택기준). 각 목업에 이름 접이식 "불편 요소 5가지" 포함(A: 상단바
+혼잡·custom 표현 공간 없음 등 / B: 클릭 수 많음·로봇 항목 "모름" 방치 등 / C: 무관한 두 조합이 TX
+패널에 들어와 위치 혼동·패널 매우 길어짐 등). 모든 각도 표기는 `27.8 (deg)` 형식.
+
+**호스팅**: `pygviewer/api.py`에 `/mockups` 읽기전용 `StaticFiles` 마운트 1줄 추가(`/static` 마운트
+바로 아래, `dashboard.{js,html}`·`sim_core.py`·`telemetry.py`·`tx.py` 무변경). 기존
+`mockups/layout_{A,B,C}.html`도 같은 마운트로 처음 호스팅됨(§10 당시엔 서빙 안 됐고 코드 리뷰로만
+확인됐던 것 — 이번에 확인차 같이 켬). 뷰어 안전 재기동(README 절차: `pgrep -f
+'tools/pygviewer/run.py'` + `comm=python3*` 필터 2회 kill → 재기동, pid 2035146→2566062) 후
+`curl`로 5개 파일(`scenario_{index,A,B,C}.html`, `scenario_common.js`) 200 + 로컬 파일과 바이트
+일치 확인, 기존 `dashboard.js`/`layout_A.html` 서빙도 무영향 확인. **접속 URL**:
+`http://192.168.20.177:8095/mockups/scenario_index.html`.
+
+**검증**: 브라우저/Node 부재 — esprima 4.0.1로 `scenario_common.js` + 3개 목업의 인라인
+`<script>`(scenario_index.html은 스크립트 없음) 전부 `esprima.parseScript` 통과 확인(§10 "미결"과
+같은 한계, 이번엔 문자열 브레이스 카운팅이 아니라 실제 파서 사용). HTML 4개 전부 태그 스택이
+빈 상태로 정확히 닫힘(void 태그 제외 후 열림/닫힘 짝 검사, 파이썬 `html.parser`류 정규식 스캔) 확인.
+실제 화면에서 클릭 반응이 어떻게 보이는지는 여전히 사용자가 브라우저로 직접 확인해야 함.

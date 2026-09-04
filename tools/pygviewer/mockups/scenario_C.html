@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>목업 C — TX 패널 "운용 모드" 카드</title>
+<style>
+:root{
+  --bg:#141414; --panel:#181818; --panel2:#1e1e1e; --border:#333; --border2:#444;
+  --text:#ddd; --dim:#999; --dim2:#777; --accent:#4a7; --accent2:#fc6; --bad:#e55;
+  --warnbg:#4a3a12; --badbg:#4a1414; --okbg:#173a22;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:13px/1.4 -apple-system,system-ui,"Segoe UI",sans-serif}
+button,select{font:inherit;color:var(--text);background:#222;border:1px solid var(--border2);
+  border-radius:4px;padding:3px 7px;cursor:pointer}
+button:hover{background:#2a2a2a}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:#2d5a3d;border-color:#3a7a4d}
+button.arm{background:#5a2020;border-color:#a44}
+.pill{background:#2a2a2a;border-radius:10px;padding:2px 9px;font-size:11px;white-space:nowrap}
+.pill.warn{background:var(--warnbg);color:var(--accent2)}
+.pill.bad{background:var(--badbg);color:var(--bad)}
+.pill.ok{background:var(--okbg);color:var(--accent)}
+.wrap{display:grid;grid-template-columns:1fr 360px;grid-template-rows:38px 1fr;height:100vh;gap:1px;background:var(--border)}
+.top{grid-column:1/3;background:#101010;display:flex;align-items:center;gap:10px;padding:0 12px;overflow-x:auto;white-space:nowrap}
+.scene{background:#20242a;position:relative;overflow:auto;padding:16px}
+.txpanel{background:var(--panel);display:flex;flex-direction:column;overflow-y:auto}
+.txpanel h3{margin:14px 12px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--dim)}
+.txsec{padding:0 12px 10px;border-bottom:1px solid #222}
+.row{display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:11px}
+.rates{margin-left:auto;font-size:11px;color:var(--dim)}
+.note{background:#181c22;border:1px solid #2a3038;border-radius:8px;padding:10px 14px;max-width:640px;margin-bottom:14px}
+.note h2{margin:0 0 6px;font-size:14px}
+.note summary{cursor:pointer;color:var(--dim);font-size:12px;margin-top:6px}
+.note ul{margin:6px 0 0 18px;padding:0;font-size:12px;color:#ccc}
+.note li{margin:3px 0}
+.deg{font-variant-numeric:tabular-nums}
+.opcard{margin:8px 12px;border:1px solid var(--border2);border-radius:8px;overflow:hidden}
+.opcard .ophead{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:#1c1c1c;cursor:pointer}
+.opcard .opbody{padding:8px 10px}
+.opcard.collapsed .opbody{display:none}
+.oprow{display:flex;align-items:flex-start;gap:8px;padding:7px 4px;border-bottom:1px dashed #222;font-size:11px}
+.oprow:last-child{border-bottom:0}
+.dot{width:10px;height:10px;border-radius:50%;border:1px solid var(--dim2);margin-top:3px;flex:none}
+.dot.on{background:var(--accent);border-color:var(--accent)}
+.dot.custom{background:none;border-color:var(--accent2)}
+.oprow .body{flex:1}
+.oprow .verb{font-weight:600}
+.oprow .tag{font-size:9px;color:var(--dim2);margin-left:4px}
+.oprow .sub{font-size:10px;color:var(--dim);margin-top:2px}
+.oprow .txnote{font-size:10px;margin-top:3px}
+.oprow .txnote.on{color:var(--bad)}
+.oprow .txnote.off{color:var(--accent)}
+.oprow button{margin-top:5px}
+.brokenbanner{background:var(--badbg);color:var(--bad);font-size:10px;padding:5px 7px;border-radius:5px;margin-top:5px}
+.readout{background:#111;border:1px solid var(--border2);border-radius:6px;padding:6px 10px;margin:8px 12px;font-size:11px}
+.readout .name{font-weight:700;font-size:13px}
+.readout .name.custom{color:var(--accent2)}
+.readout .name.custom-broken{color:var(--bad)}
+.difflist{margin:4px 0 0 14px;padding:0;font-size:10px;color:var(--accent2)}
+.armbar{margin-top:auto;padding:10px 12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.armbar .state{font-weight:700}
+.armbar .state.armed{color:var(--bad)}
+.armbar .state.disarmed{color:var(--accent)}
+.stepnote{font-size:10px;color:var(--accent2);padding:0 12px 8px}
+.log{background:#0c0c0c;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font:11px/1.4 ui-monospace,monospace;color:#8f8;max-width:640px;height:70px;overflow:auto}
+.modal-bg{position:fixed;inset:0;background:#000a;display:flex;align-items:center;justify-content:center;z-index:9}
+.modal{background:#1c1c1c;border:1px solid var(--bad);border-radius:8px;padding:18px 22px;max-width:420px}
+.modal h3{margin:0 0 8px;color:var(--bad)}
+.hidden{display:none}
+code{background:#000;padding:1px 5px;border-radius:3px;font-size:10px}
+.copybox{display:flex;gap:6px;align-items:center;margin-top:4px}
+.copybox code{flex:1;overflow-x:auto;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <b>pygviewer</b>
+    <span class="pill">LegOnly-AB · bench 10.8.0.14</span>
+    <span>mode:</span><select id="modeSel"></select>
+    <span id="robotChip" class="pill" title="화면 표시와 실제 로봇 상태가 어긋날 수 있음"></span>
+    <label style="font-size:11px;color:var(--dim)"><input type="checkbox" id="guidedToggle"> 안내만 (자동 SSH 끄기)</label>
+    <span class="rates">100 Hz telemetry · ok 1 / warn 0 / dead 11</span>
+  </div>
+
+  <div class="scene">
+    <div class="note">
+      <h2>목업 C — TX 패널 확장 "운용 모드" 카드</h2>
+      <div>모드/로봇 전환은 그대로 상단에서 하되, 전송(TX) 관련 전제는 TX 패널 안 "운용 모드" 카드에서 한
+      번에 확인한다. 원(●)은 라디오처럼 보이지만 저장된 선택이 아니라 <b>현재 실제 조합과 정확히 일치할
+      때만</b> 채워지는 계산값이다 — 항목을 눌러도 원이 바로 안 채워질 수 있다(다른 축이 아직 안 맞으면).</div>
+      <details>
+        <summary>불편 요소 5가지 (펼치기)</summary>
+        <ul>
+          <li>로봇 정책 관측·손으로 미러링은 TX와 무관(둘 다 전송 OFF)한데도 TX 패널 안에 들어가 있어
+          "여기가 왜 이 얘기를 하지"라는 위치 혼동이 생긴다.</li>
+          <li>Target/Enable/Gains/TTL 위에 운용 모드 카드까지 얹혀 패널이 매우 길어진다(스크롤 필수).</li>
+          <li>"여기서 항목을 누르면 바로 전송되나?"라는 오해가 생기기 쉽다 — 실제로는 실물 동시 구동을
+          눌러도 별도 ARM을 눌러야 전송이 시작된다(의도적 마찰이지만 처음엔 헷갈린다).</li>
+          <li>운용 모드 카드를 접으면(공간 절약) 현재 조합 이름 표시도 같이 사라진다 — 상태를 보려면 다시
+          펼쳐야 한다.</li>
+          <li>전환마다 <b>해제→설정→무장</b>을 반복해야 한다 — 실물 동시 구동으로 갈 때마다 자동 해제 후
+          수동 ARM 클릭이 필요해, 세 조합을 자주 오갈 때 절차가 누적된다.</li>
+        </ul>
+      </details>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <div class="txpanel" id="txpanel">
+    <h3>Target</h3>
+    <div class="txsec">
+      <div class="row"><span>host</span><span>10.8.0.14</span></div>
+      <div class="row"><span>port</span><span>9872</span></div>
+    </div>
+    <h3>Enable joints</h3>
+    <div class="txsec">
+      <div class="row"><span>L_knee_joint</span><span style="color:var(--accent)">☑ (id 127, RS03)</span></div>
+      <div class="row"><span>나머지 11관절</span><span style="color:var(--dim2)">☐ dead — 데이터 없음</span></div>
+    </div>
+    <h3>Gains / TTL</h3>
+    <div class="txsec">
+      <div class="row"><span>kp max</span><span>5</span></div>
+      <div class="row"><span>kd max</span><span>0.5</span></div>
+      <div class="row"><span>ttl</span><span>250 ms</span></div>
+      <div class="row"><span>L_knee 목표각</span><span class="deg">27.8 (deg)</span></div>
+    </div>
+
+    <h3>운용 모드</h3>
+    <div class="opcard" id="opcard">
+      <div class="ophead" onclick="toggleCollapse()">
+        <span>현재 조합에 맞춰 세 항목 중 하나가 켜집니다</span>
+        <span id="collapseIcon">▾</span>
+      </div>
+      <div class="opbody" id="opbody"></div>
+    </div>
+    <div id="readoutSlot"></div>
+
+    <div class="armbar">
+      <span>TX:</span> <span class="state" id="armState"></span>
+      <button id="armBtn" style="margin-left:auto"></button>
+    </div>
+    <div class="stepnote" id="stepNote"></div>
+  </div>
+</div>
+
+<div class="modal-bg hidden" id="riskModal">
+  <div class="modal">
+    <h3>실물 토크가 켜집니다</h3>
+    <div id="riskBody" style="font-size:12px;margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeRisk()">취소</button>
+      <button class="arm" onclick="confirmRisk()">확인, ARM</button>
+    </div>
+  </div>
+</div>
+
+<script src="scenario_common.js"></script>
+<script>
+var SM = window.ScenarioMockup;
+var st = SM.freshState();
+var collapsed = false;
+var pendingArm = false;
+var armStepPending = null; // scenario key waiting on a manual ARM click
+
+function log(line){
+  var el = document.getElementById('log');
+  var t = new Date().toISOString().substr(11,8);
+  el.innerHTML += '['+t+'] '+line+'\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderModeSelect(){
+  var sel = document.getElementById('modeSel');
+  sel.innerHTML = '';
+  SM.MODES.forEach(function(m){
+    var o = document.createElement('option');
+    o.value = m; o.textContent = m;
+    if (m === st.mode) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+function renderRobotChip(){
+  var el = document.getElementById('robotChip');
+  var map = {confirmed:'확인됨', unknown:'모름', mismatch:'불일치'};
+  el.textContent = '로봇: ' + map[st.robotConfirm] + ' (' + SM.ROBOT_PROGRAMS[st.robotProgram].label + ')';
+  el.className = 'pill ' + (st.robotConfirm === 'confirmed' ? 'ok' : st.robotConfirm === 'unknown' ? 'warn' : 'bad');
+}
+
+function renderReadout(){
+  var slot = document.getElementById('readoutSlot');
+  if (collapsed){ slot.innerHTML = ''; return; }
+  var key = SM.deriveScenario(st);
+  var html = '<div class="readout">';
+  if (key){
+    var sc = SM.SCENARIOS[key];
+    html += '<div class="name' + (sc.broken?' custom-broken':'') + '">현재: ' + sc.nameKo + ' <span class="tag">(' + sc.tag + ')</span></div>';
+    if (sc.broken) html += '<div style="color:var(--bad);margin-top:3px">' + sc.brokenReason + '</div>';
+  } else {
+    var info = SM.nearestCustomInfo(st);
+    var near = SM.SCENARIOS[info.key];
+    html += '<div class="name custom">현재: custom</div>';
+    html += '<div>가장 가까운 조합: ' + near.nameKo + ' (' + near.tag + ')</div>';
+    html += '<ul class="difflist">' + info.diffs.map(function(d){return '<li>'+d+'</li>';}).join('') + '</ul>';
+  }
+  html += '</div>';
+  slot.innerHTML = html;
+}
+
+function opRowHTML(key){
+  var sc = SM.SCENARIOS[key];
+  var modeOk = st.mode === sc.mode;
+  var txOk = st.tx === sc.tx;
+  var robotOk = st.robotConfirm === 'confirmed' && st.robotProgram === sc.robotProgram;
+  var matched = modeOk && txOk && robotOk;
+  var dotClass = matched ? 'on' : 'custom';
+  var html = '<div class="oprow">';
+  html += '<div class="dot ' + dotClass + '"></div>';
+  html += '<div class="body">';
+  html += '<span class="verb">' + sc.nameKo + '</span><span class="tag">(' + sc.tag + ' · ' + sc.id + ')</span>';
+  html += '<div class="sub">' + sc.actionSubtitle + '</div>';
+  html += '<div class="txnote ' + (sc.tx ? 'on' : 'off') + '">전송: ' + sc.txDirection + '</div>';
+  if (sc.broken) html += '<div class="brokenbanner">' + sc.brokenReason + (matched ? ' (조건은 일치, 여전히 불가)' : '') + '</div>';
+  html += '<div><button onclick="chooseOp(\'' + key + '\')">' + sc.actionVerb + '</button></div>';
+  if (!robotOk && document.getElementById('guidedToggle') && document.getElementById('guidedToggle').checked){
+    html += '<div class="copybox"><code>' + sc.sshCmd + '</code>' +
+      '<button onclick="confirmManualRobot(\'' + key + '\')">완료함, 확인</button></div>';
+  }
+  html += '</div></div>';
+  return html;
+}
+
+function renderOpBody(){
+  var el = document.getElementById('opbody');
+  el.innerHTML = SM.SCENARIO_ORDER.map(opRowHTML).join('');
+}
+
+function renderArmBar(){
+  var stateEl = document.getElementById('armState');
+  var btn = document.getElementById('armBtn');
+  var stepNote = document.getElementById('stepNote');
+  stateEl.textContent = st.tx ? '무장 (ON)' : '해제 (OFF)';
+  stateEl.className = 'state ' + (st.tx ? 'armed' : 'disarmed');
+  if (armStepPending){
+    btn.textContent = 'ARM (' + SM.SCENARIOS[armStepPending].nameKo + ' 적용)';
+    btn.className = 'arm';
+    btn.disabled = false;
+    btn.onclick = function(){ doArmStep(); };
+    stepNote.textContent = '실물 동시 구동은 자동으로 무장되지 않습니다 — 위 카드에서 모드는 이미 바뀌었고, 전송을 시작하려면 이 ARM 버튼을 직접 눌러야 합니다.';
+  } else {
+    btn.textContent = st.tx ? 'DISARM' : 'ARM (수동 무장 없음)';
+    btn.className = st.tx ? '' : '';
+    btn.disabled = !st.tx;
+    btn.onclick = function(){ if (st.tx) manualDisarm(); };
+    stepNote.textContent = '';
+  }
+}
+
+function chooseOp(key){
+  var sc = SM.SCENARIOS[key];
+  if (sc.tx){
+    // arming direction: change mode now, but require an explicit separate ARM step (friction by design)
+    st.mode = sc.mode;
+    armStepPending = key;
+    log('[운용 모드] ' + sc.nameKo + ' 선택: mode=' + sc.mode + ' 적용, TX는 아직 해제 상태 — 별도 ARM 필요');
+    var res = SM.performRobotSwitch(st, key, document.getElementById('guidedToggle').checked);
+    if (res.executed) log('  로봇 자동 전환 성공(종료코드 0, 리드백 없음): ' + res.cmd);
+    else log('  안내만: 로봇에서 직접 실행 필요: ' + res.cmd);
+  } else {
+    // disarming direction: safe to apply immediately (mode + auto-disarm)
+    st.mode = sc.mode;
+    st.tx = false;
+    armStepPending = null;
+    log('[운용 모드] ' + sc.nameKo + ' 적용: mode=' + sc.mode + ', TX 자동 해제');
+    var res2 = SM.performRobotSwitch(st, key, document.getElementById('guidedToggle').checked);
+    if (res2.executed) log('  로봇 자동 전환 성공(종료코드 0, 리드백 없음): ' + res2.cmd);
+    else log('  안내만: 로봇에서 직접 실행 필요: ' + res2.cmd);
+  }
+  renderAll();
+}
+
+function doArmStep(){
+  var key = armStepPending;
+  document.getElementById('riskBody').innerHTML =
+    'TX를 무장하면 목표가 실물로 전송되고 <b>토크가 켜집니다</b>. 벤치에는 모터 1대(id 127, L_knee_joint)만 연결되어 있습니다.';
+  document.getElementById('riskModal').classList.remove('hidden');
+}
+function closeRisk(){ document.getElementById('riskModal').classList.add('hidden'); }
+function confirmRisk(){
+  closeRisk();
+  st.tx = true;
+  log('[ARM] 무장 완료 — 전송 시작');
+  armStepPending = null;
+  renderAll();
+}
+function manualDisarm(){
+  st.tx = false;
+  log('[DISARM] 전송 중단');
+  renderAll();
+}
+
+function confirmManualRobot(key){
+  var sc = SM.SCENARIOS[key];
+  st.robotConfirm = 'confirmed';
+  st.robotProgram = sc.robotProgram;
+  log('[운용 모드] ' + key + ' 사람이 "완료함"으로 수동 확인');
+  renderAll();
+}
+
+function toggleCollapse(){
+  collapsed = !collapsed;
+  document.getElementById('opcard').classList.toggle('collapsed', collapsed);
+  document.getElementById('collapseIcon').textContent = collapsed ? '▸' : '▾';
+  renderReadout();
+}
+
+function renderAll(){
+  renderModeSelect();
+  renderRobotChip();
+  renderOpBody();
+  renderReadout();
+  renderArmBar();
+}
+
+document.getElementById('modeSel').onchange = function(e){
+  st.mode = e.target.value;
+  armStepPending = null;
+  log('[상단바 모드 드롭다운 직접 조작] mode = ' + st.mode + ' (운용 모드 카드와 별개 경로)');
+  renderAll();
+};
+document.getElementById('guidedToggle').onchange = function(e){
+  log('안내만 모드: ' + (e.target.checked ? 'ON (수동 확인 필요)' : 'OFF (자동 SSH, 현재 기본값)'));
+  renderAll();
+};
+
+renderAll();
+log('초기 상태: manual + TX 무장 + huphy_remote_motion 확인됨 -> 실물 동시 구동');
+</script>
+</body>
+</html>

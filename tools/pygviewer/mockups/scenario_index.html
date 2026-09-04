@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>시나리오 전환 UI — 3안 비교</title>
+<style>
+:root{
+  --bg:#141414; --panel:#181818; --border:#333; --border2:#444;
+  --text:#ddd; --dim:#999; --dim2:#777; --accent:#4a7; --accent2:#fc6; --bad:#e55;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",sans-serif}
+.wrap{max-width:980px;margin:0 auto;padding:28px 20px 60px}
+h1{font-size:20px;margin-bottom:4px}
+h2{font-size:15px;margin:28px 0 8px;color:var(--accent2)}
+p{color:#ccc}
+a{color:#8ab4e0}
+code{background:#000;padding:1px 5px;border-radius:3px;font-size:12px}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+th,td{border:1px solid var(--border2);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:#1c1c1c;color:var(--dim)}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0}
+.card{background:var(--panel);border:1px solid var(--border2);border-radius:10px;padding:14px}
+.card h3{margin:0 0 6px;font-size:15px}
+.card .tag{font-size:11px;color:var(--dim2)}
+.card p{font-size:12.5px;color:#ccc;min-height:64px}
+.card a.open{display:inline-block;margin-top:6px;background:#2d5a3d;border:1px solid #3a7a4d;color:#fff;
+  text-decoration:none;padding:6px 12px;border-radius:6px;font-size:12px}
+.card a.open:hover{background:#356b48}
+.pill{display:inline-block;background:#2a2a2a;border-radius:10px;padding:2px 8px;font-size:11px;margin:2px 4px 2px 0}
+.pill.bad{background:#4a1414;color:var(--bad)}
+.note{background:#181c22;border:1px solid #2a3038;border-radius:8px;padding:12px 16px;margin:14px 0;font-size:13px}
+ul{padding-left:20px}
+li{margin:4px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>시나리오 전환 UI — 3안 비교 목업</h1>
+  <p>클릭 가능한 목업 3개. 순수 프론트엔드이며 서버 호출 없음 — 상태는 페이지 안에서만 가짜로 계산된다.
+  실제 대시보드(<code>/</code>, <code>/dash</code>)는 이 페이지들과 무관하게 그대로 동작한다.</p>
+
+  <div class="note">
+    <b>공통 설계 원칙</b> — 세 조합은 <b>뷰어가 소유한 새 상태가 아니라</b>, 이미 존재하는 상태
+    (<code>mode</code> + TX 무장 + 로봇 프로그램 확인)에서 <b>계산되는 이름</b>이다. 버튼은 그 조합으로
+    점프하는 <b>스위치</b>일 뿐 눌린 채로 남지 않으며, 세 축이 정확히 맞지 않으면 이름은 언제나
+    <code>custom</code>으로 떨어지고 어긋난 항목을 지목한다. 로봇 쪽 확인 상태는 3단계
+    (확인됨/모름/불일치)로 표시해 "화면 표시와 실제 로봇 상태가 어긋날 수 있음"을 숨기지 않는다.
+  </div>
+
+  <table>
+    <tr><th>조합</th><th>이름(주 표기)</th><th>보조 태그</th><th>뷰어 모드</th><th>TX</th><th>뜻</th></tr>
+    <tr><td>사람이 직접 지시</td><td><b>실물 동시 구동</b> <span class="pill bad">전송 ON</span></td><td>S1 · drive-both</td>
+      <td><code>manual</code></td><td>무장</td><td>같은 목표를 sim·실물에 동시에 주고 응답 비교</td></tr>
+    <tr><td>로봇이 스스로 움직임</td><td>로봇 정책 관측 <span class="pill">전송 OFF</span></td><td>S2 · shadow-policy</td>
+      <td><code>policy_shadow</code></td><td>해제</td><td>로봇 정책 실행 관측을 받아 sim 정책과 비교 — <b>현재 불가</b>(로봇이 관측 안 보냄 / 뷰어가 받은 관측을 버림)</td></tr>
+    <tr><td>사람 손이 움직임</td><td>손으로 미러링 <span class="pill">전송 OFF</span></td><td>S3 · mirror-hardware</td>
+      <td><code>real_replay</code>(→향후 <code>kinematic</code>)</td><td>해제</td><td>물리 없이 사람이 움직인 값을 그대로 표시</td></tr>
+  </table>
+
+  <div class="cards">
+    <div class="card">
+      <h3>안 A</h3>
+      <div class="tag">상단바 전환 스위치</div>
+      <p>기존 <code>mode:</code> 자리 옆에 전환 버튼 3개. 화면 폭 최소, 구현비용 최소. 대신 로봇 확인 상태·
+      custom 사유·불가 사유를 담을 자리가 사실상 없어 hover/toast에 의존한다.</p>
+      <a class="open" href="./scenario_A.html">목업 열기 →</a>
+    </div>
+    <div class="card">
+      <h3>안 B</h3>
+      <div class="tag">좌측 Scenario 탭 + 체크리스트</div>
+      <p>조합을 펼치면 뷰어 모드/TX/로봇 프로그램 3축을 하나씩 개별적으로 맞추는 체크리스트. 정보는 가장
+      풍부하지만 클릭 수가 많고 3D·플롯과 화면이 분리된다.</p>
+      <a class="open" href="./scenario_B.html">목업 열기 →</a>
+    </div>
+    <div class="card">
+      <h3>안 C</h3>
+      <div class="tag">TX 패널 "운용 모드" 카드</div>
+      <p>전송이 실제로 걸린 유일한 축(TX 패널) 안에서 조합을 고른다. 위험한 전환(실물 동시 구동)에
+      해제→설정→ARM 절차를 강제해 세 안 중 가장 마찰이 크다. 대신 전송과 무관한 두 조합까지 TX 패널에
+      들어와 위치가 어색하고 패널이 길어진다.</p>
+      <a class="open" href="./scenario_C.html">목업 열기 →</a>
+    </div>
+  </div>
+
+  <h2>선택 기준</h2>
+  <ul>
+    <li><b>정직성</b> — custom·불가·로봇 확인상태(모름/불일치)를 상시 보이는 자리에 담을 수 있는가. B &gt; C &gt; A.</li>
+    <li><b>위험 마찰</b> — 실물 동시 구동(토크 ON) 전환이 실수로 일어나기 얼마나 어려운가. C(해제→설정→ARM
+      강제) &gt; B(축별 확인모달) &gt; A(같은 줄의 버튼 하나, 모달은 있지만 다른 두 버튼과 시각적으로
+      제일 안 떨어져 있음).</li>
+    <li><b>도달 비용</b> — 전환에 필요한 클릭 수. A &lt; C &lt; B.</li>
+    <li><b>구현 비용</b> — 기존 상단바/좌측탭/TX패널 중 무엇을 얼마나 건드리는가. A가 가장 작고, B는 새
+      탭+체크리스트 로직, C는 TX 패널 리팩터가 가장 크다.</li>
+    <li><b>로봇 전환 이행 경로(2번→1번)</b> — 세 안 모두 "안내만" 토글로 동일 구조를 이미 갖고 있어, 기본값만
+      바꾸면 자동 SSH → 안내 전용으로 이행 가능함을 목업에서 확인.</li>
+  </ul>
+
+  <h2>검증 메모</h2>
+  <p>이 호스트에는 브라우저가 없어 실제 렌더링/클릭 동작은 육안으로 확인하지 못했다. HTML/JS 구문 검사와
+  <code>curl</code> 서빙 확인(200, 파일 바이트 일치)만 거쳤다 — 사용자가 브라우저로 열어 직접 클릭해봐야
+  최종 확인이 끝난다.</p>
+</div>
+</body>
+</html>

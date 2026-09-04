@@ -63,6 +63,7 @@ from .tx import TxNotAllowed
 _NOT_YET: dict[str, str] = {}
 
 STATIC_DIR = Path(__file__).parent / "static"
+MOCKUPS_DIR = Path(__file__).parent.parent / "mockups"
 PRESETS_DIR = Path(__file__).parent.parent / "presets"
 _BUILTIN_PRESET_NAMES = ("train", "real")
 
@@ -694,6 +695,10 @@ def build_app(core, freshness: dict) -> FastAPI:
 
   # ------------------------------------------------------------- UI v2 dashboard (layout B)
   app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+  # Read-only mount so clickable UI mockups (layout_*, scenario_*) can be reviewed in a
+  # browser the same way the real dashboard is served, without touching dashboard.{js,html}.
+  if MOCKUPS_DIR.is_dir():
+    app.mount("/mockups", StaticFiles(directory=str(MOCKUPS_DIR)), name="mockups")
 
   @app.get("/", include_in_schema=False)
   def get_dashboard():
