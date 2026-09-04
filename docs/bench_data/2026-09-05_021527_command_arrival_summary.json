@@ -1,0 +1,148 @@
+{
+ "checks": [
+  {
+   "name": "L_hip_yaw_joint 방향",
+   "passed": false,
+   "detail": "반대로 움직인 단계가 있음",
+   "numbers": {}
+  },
+  {
+   "name": "L_hip_yaw_joint 단위",
+   "passed": true,
+   "detail": "10 (deg) 명령에 8.0 (deg) 움직임 (비율 0.80)",
+   "numbers": {
+    "ratio": 0.804
+   }
+  },
+  {
+   "name": "L_hip_yaw_joint 크기",
+   "passed": false,
+   "detail": "기울기 0.697 (1.0이면 정확)",
+   "numbers": {
+    "slope": 0.697
+   }
+  },
+  {
+   "name": "L_knee_joint 방향",
+   "passed": false,
+   "detail": "반대로 움직인 단계가 있음",
+   "numbers": {}
+  },
+  {
+   "name": "L_knee_joint 단위",
+   "passed": false,
+   "detail": "10 (deg) 명령에 0.0 (deg) 움직임 (비율 0.00)",
+   "numbers": {
+    "ratio": 0.0
+   }
+  },
+  {
+   "name": "L_knee_joint 크기",
+   "passed": false,
+   "detail": "기울기 0.000 (1.0이면 정확)",
+   "numbers": {
+    "slope": 0.0
+   }
+  },
+  {
+   "name": "보내는 횟수",
+   "passed": true,
+   "detail": "화면 46.5회/초, 로봇 45.8회/초 (차이 1.6%)",
+   "numbers": {
+    "viewer_hz": 46.5,
+    "robot_hz": 45.76
+   }
+  }
+ ],
+ "samples": [
+  {
+   "joint": "L_hip_yaw_joint",
+   "commanded_deg": 1.4300000000000002,
+   "applied_deg": 1.4300000000000002,
+   "settled_deg": -3.57,
+   "spread_deg": 0.020000000000000018,
+   "n": 30,
+   "dwell_s": 15.0,
+   "start_deg": -3.57
+  },
+  {
+   "joint": "L_knee_joint",
+   "commanded_deg": -117.79000000000002,
+   "applied_deg": 6.000014030609976,
+   "settled_deg": -122.79000000000002,
+   "spread_deg": 0.0,
+   "n": 30,
+   "dwell_s": 15.0,
+   "start_deg": -122.79000000000002
+  },
+  {
+   "joint": "L_hip_yaw_joint",
+   "commanded_deg": 6.43,
+   "applied_deg": 6.43,
+   "settled_deg": 4.47,
+   "spread_deg": 0.019999999999999574,
+   "n": 30,
+   "dwell_s": 15.0,
+   "start_deg": -3.57
+  },
+  {
+   "joint": "L_knee_joint",
+   "commanded_deg": -112.79000000000002,
+   "applied_deg": 6.000014030609976,
+   "settled_deg": -122.79000000000002,
+   "spread_deg": 0.0,
+   "n": 30,
+   "dwell_s": 15.0,
+   "start_deg": -122.79000000000002
+  },
+  {
+   "joint": "L_hip_yaw_joint",
+   "commanded_deg": 11.43,
+   "applied_deg": 11.43,
+   "settled_deg": 4.56,
+   "spread_deg": 0.0,
+   "n": 30,
+   "dwell_s": 15.0,
+   "start_deg": -3.57
+  },
+  {
+   "joint": "L_knee_joint",
+   "commanded_deg": -107.79000000000002,
+   "applied_deg": 6.000014030609976,
+   "settled_deg": -122.79000000000002,
+   "spread_deg": 0.0,
+   "n": 30,
+   "dwell_s": 15.0,
+   "start_deg": -122.79000000000002
+  },
+  {
+   "joint": "L_hip_yaw_joint",
+   "commanded_deg": -8.57,
+   "applied_deg": -8.57,
+   "settled_deg": -8.12,
+   "spread_deg": 0.019999999999999574,
+   "n": 30,
+   "dwell_s": 15.0,
+   "start_deg": -3.57
+  },
+  {
+   "joint": "L_knee_joint",
+   "commanded_deg": -127.79000000000002,
+   "applied_deg": 6.000014030609976,
+   "settled_deg": -122.79000000000002,
+   "spread_deg": 0.0,
+   "n": 30,
+   "dwell_s": 15.0,
+   "start_deg": -122.79000000000002
+  }
+ ],
+ "settings": {
+  "dwell_s": 15.0,
+  "repeats": 1,
+  "joints": [
+   "L_hip_yaw_joint",
+   "L_knee_joint"
+  ],
+  "inverted": false
+ }
+}

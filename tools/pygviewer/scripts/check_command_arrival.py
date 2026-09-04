@@ -184,6 +184,10 @@ def main() -> int:
   ap.add_argument("--robot-log", default="~/remote_motion.log")
   ap.add_argument("--dwell", type=float, default=DWELL_S)
   ap.add_argument("--repeats", type=int, default=REPEATS)
+  ap.add_argument("--robot-host", default="10.8.0.14", help="명령을 받을 로봇 주소")
+  ap.add_argument("--robot-port", type=int, default=9872)
+  ap.add_argument("--kp-max", type=float, default=5.0, help="세기 상한 (실제 세기가 아니라 자르는 값)")
+  ap.add_argument("--kd-max", type=float, default=0.5)
   ap.add_argument("--invert-check", action="store_true",
                   help="일부러 부호를 뒤집어 보낸다. 이 시험이 진짜 검사하는지 확인용 — 실패해야 정상")
   a = ap.parse_args()
@@ -201,6 +205,15 @@ def main() -> int:
     print("  ** 부호를 일부러 뒤집었습니다. 이 시험은 실패해야 정상입니다. **")
 
   try:
+    # 보낼 곳과 대상 관절을 먼저 정한다. 이걸 스크립트가 직접 하지 않으면 화면 서버를 새로 켤 때마다
+    # 사람이 손으로 맞춰야 하고, 빠뜨리면 "전송이 꺼져 있다"는 이유로 시험이 시작도 못 한다.
+    api.post("/tx/config", {"host": a.robot_host, "port": a.robot_port, "enable": joints,
+                            "kp_max": a.kp_max, "kd_max": a.kd_max, "ttl_ms": 250})
+    api.post("/tx/enable", {"on": True})
+    api.post("/mode", {"mode": "manual"})
+    time.sleep(3.0)          # 모드가 실제로 바뀔 때까지 기다린다
+    print(f"보낼 곳 {a.robot_host}:{a.robot_port}, 대상 {joints}, 세기 상한 {a.kp_max}/{a.kd_max}")
+
     # 실물 각도를 불러와 목표를 실제 자세에 맞춘다. 이걸 건너뛰면 전송을 켜는 순간 크게 움직인다.
     s = api.post("/sync_from_real")
     for j, info in (s.get("clipped") or {}).items():

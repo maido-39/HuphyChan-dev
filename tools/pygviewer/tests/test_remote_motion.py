@@ -601,7 +601,7 @@ def test_remote_motion_flags_a_frozen_joint_as_stuck_after_the_hold_duration():
   ))
   target_deg = mapper.to_motor_targets(["L_knee_joint"], [0.4])["left_leg"]["knee"]
   frozen_pos = target_deg + 50.0  # far outside STUCK_ERR_DEG=3.0deg
-  obs = {"left_leg/knee.pos": frozen_pos, "left_leg/knee.tau": 0.0}
+  obs = {"left_leg/knee.pos": frozen_pos, "left_leg/knee.torque": 0.0}
 
   t = 0.0
   for _ in range(12):  # 12 * 0.1s > STUCK_HOLD_S (1.0s)
@@ -622,7 +622,7 @@ def test_remote_motion_never_flags_stuck_while_tracking_normally():
     origin="manual", ttl_ms=5000,
   ))
   target_deg = mapper.to_motor_targets(["L_knee_joint"], [0.4])["left_leg"]["knee"]
-  obs = {"left_leg/knee.pos": target_deg, "left_leg/knee.tau": 1.0}  # tracking fine, real torque
+  obs = {"left_leg/knee.pos": target_deg, "left_leg/knee.torque": 1.0}  # tracking fine, real torque
 
   t = 0.0
   for _ in range(30):
@@ -706,7 +706,7 @@ def test_remote_motion_sends_supplementary_stuck_telemetry_over_udp():
       origin="manual", ttl_ms=5000,
     ))
     target_deg = mapper.to_motor_targets(["L_knee_joint"], [0.4])["left_leg"]["knee"]
-    motion(0.0, observation={"left_leg/knee.pos": target_deg, "left_leg/knee.tau": 1.0})
+    motion(0.0, observation={"left_leg/knee.pos": target_deg, "left_leg/knee.torque": 1.0})
 
     data, _from = sock.recvfrom(4096)
     pkt = json.loads(data.decode("utf-8"))
@@ -731,7 +731,7 @@ def test_remote_motion_cuts_torque_when_a_joint_overheats():
     t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.4], arm_token="tok",
     origin="manual", ttl_ms=5000,
   ))
-  obs = {"left_leg/knee.pos": 12.3, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 51.0}
+  obs = {"left_leg/knee.pos": 12.3, "left_leg/knee.torque": 1.0, "left_leg/knee.temp": 51.0}
 
   action = motion(0.0, observation=obs)
 
@@ -754,13 +754,13 @@ def test_remote_motion_resumes_torque_once_the_joint_cools():
   ))
   target_deg = mapper.to_motor_targets(["L_knee_joint"], [0.4])["left_leg"]["knee"]
 
-  motion(0.0, observation={"left_leg/knee.pos": 12.3, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 51.0})
+  motion(0.0, observation={"left_leg/knee.pos": 12.3, "left_leg/knee.torque": 1.0, "left_leg/knee.temp": 51.0})
   assert motion.leg.config.motors["knee"].gains.kp == 0.0  # cut
 
-  motion(0.1, observation={"left_leg/knee.pos": 12.3, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 47.0})
+  motion(0.1, observation={"left_leg/knee.pos": 12.3, "left_leg/knee.torque": 1.0, "left_leg/knee.temp": 47.0})
   assert motion.leg.config.motors["knee"].gains.kp == 0.0  # still above resume threshold
 
-  action = motion(0.2, observation={"left_leg/knee.pos": target_deg, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 44.0})
+  action = motion(0.2, observation={"left_leg/knee.pos": target_deg, "left_leg/knee.torque": 1.0, "left_leg/knee.temp": 44.0})
   assert action["left_leg/knee"] == pytest.approx(target_deg)  # tracking the real target again
   motors = motion.leg.config.motors
   assert motors["knee"].gains.kp == pytest.approx(5.0)  # back to the real (default) gain
@@ -780,7 +780,7 @@ def test_remote_motion_never_cuts_on_an_implausible_temperature():
   target_deg = mapper.to_motor_targets(["L_knee_joint"], [0.4])["left_leg"]["knee"]
 
   action = motion(0.0, observation={
-    "left_leg/knee.pos": target_deg, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 3308.8,
+    "left_leg/knee.pos": target_deg, "left_leg/knee.torque": 1.0, "left_leg/knee.temp": 3308.8,
   })
 
   assert action["left_leg/knee"] == pytest.approx(target_deg)  # not held back - never cut
@@ -801,8 +801,8 @@ def test_remote_motion_only_cuts_the_overheated_joint_not_others():
   hip_target_deg = mapper.to_motor_targets(["L_hip_pitch_joint"], [0.1])["left_leg"]["hip_pitch"]
 
   action = motion(0.0, observation={
-    "left_leg/knee.pos": 12.3, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 51.0,
-    "left_leg/hip_pitch.pos": hip_target_deg, "left_leg/hip_pitch.tau": 1.0, "left_leg/hip_pitch.temp": 30.0,
+    "left_leg/knee.pos": 12.3, "left_leg/knee.torque": 1.0, "left_leg/knee.temp": 51.0,
+    "left_leg/hip_pitch.pos": hip_target_deg, "left_leg/hip_pitch.torque": 1.0, "left_leg/hip_pitch.temp": 30.0,
   })
 
   assert motion.leg.config.motors["knee"].gains.kp == 0.0  # cut
@@ -825,7 +825,7 @@ def test_remote_motion_sends_temp_valid_and_cutoff_telemetry():
       t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.4], arm_token="tok",
       origin="manual", ttl_ms=5000,
     ))
-    motion(0.0, observation={"left_leg/knee.pos": 12.3, "left_leg/knee.tau": 1.0, "left_leg/knee.temp": 51.0})
+    motion(0.0, observation={"left_leg/knee.pos": 12.3, "left_leg/knee.torque": 1.0, "left_leg/knee.temp": 51.0})
 
     data, _from = sock.recvfrom(4096)
     pkt = json.loads(data.decode("utf-8"))

@@ -116,24 +116,20 @@ atomic (both loads or neither, ``Leg._motor_targets``'s "통째로 버림" rule)
 sense to enable exactly one of them."""
 
 OBS_POS_SUFFIX = ".pos"
-OBS_TAU_SUFFIX = ".tau"
+OBS_TAU_SUFFIX = ".torque"
 OBS_TEMP_SUFFIX = ".temp"
-"""Observation dict key suffixes (2026-09-05, fault visibility task, docs/121/docs/124).
-``OBS_POS_SUFFIX`` is the ONE confirmed key this file already reads (``_idle_refresh_action``,
-``f"{action_prefix}/{j}.pos"``, docs/123 section "6c"). ``OBS_TAU_SUFFIX`` is inferred by the
-same naming convention and by this bridge's own parallel wire vocabulary
-(``bench_telemetry.py``/``huphy_udp.py``'s ``FAST_MOTOR_FIELDS`` short field names -
-``pos``/``vel``/``tau``) but is NOT independently verified against a live HUPHY install - this
-machine has neither HUPHY nor a CAN bus (module docstring), and hardware verification is the
-human operator's job, not this session's (project rule). If ``get_observation()`` actually
-names this field something else, ``StuckDetector.update`` simply never sees a torque value
-(``obs.get(...)`` returns ``None``) and reports "not stuck" for every tick, exactly as it does
-for any other missing reading - a wrong key name fails SAFE (no stuck reports at all), never
-a false positive. Confirm this key on the bench before relying on layer (a)'s torque gate.
-``OBS_TEMP_SUFFIX`` (2026-09-05, overheat cutoff task) carries the SAME caveat and the SAME
-fail-safe direction: ``ThermalCutoff.update`` treats a missing reading as ``None``, which is
-already its own "unreadable, do not cut" case (see that class's docstring) - a wrong key name
-here means the cutoff never engages, never that it engages wrongly."""
+"""Observation-dict key suffixes, now read off HUPHY's source rather than inferred
+(2026-09-05, bench). ``Leg.get_observation`` (``robots/leg.py:364-367``) writes exactly:
+
+    out[f"{motor_name}.pos"]     out[f"{motor_name}.vel"]
+    out[f"{motor_name}.torque"]  out[f"{motor_name}.temp"]
+
+The torque suffix was ``.tau`` here until the bench proved the cost of guessing: the stuck
+detector needs a torque reading, ``obs.get(".tau")`` always returned ``None``, and the
+detector's own fail-safe ("no reading -> report nothing") meant a knee that sat frozen for
+170 s under an overvoltage cutout was never once reported as stuck. The wire vocabulary this
+bridge uses elsewhere (``FAST_MOTOR_FIELDS``: pos/vel/tau) is NOT the observation vocabulary -
+they differ on this one field."""
 
 
 # =========================================================================== pure helpers
