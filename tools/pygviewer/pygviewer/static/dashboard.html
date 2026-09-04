@@ -5,6 +5,11 @@
 <title>pygviewer dashboard</title>
 <link rel="stylesheet" href="/static/vendor/uPlot.min.css">
 <style>
+/* Gains tab: plain numeric fields, no spinner arrows (user 2026-09-04) */
+input.gkp, input.gkd { -moz-appearance: textfield; appearance: textfield; }
+input.gkp::-webkit-outer-spin-button, input.gkp::-webkit-inner-spin-button,
+input.gkd::-webkit-outer-spin-button, input.gkd::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
 :root{
   --bg:#141414; --panel:#181818; --panel2:#1e1e1e; --border:#333; --border2:#444;
   --text:#ddd; --dim:#999; --dim2:#777; --accent:#4a7; --accent2:#fc6; --bad:#e55;
