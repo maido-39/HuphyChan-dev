@@ -205,6 +205,10 @@ body.resizing-v,body.resizing-h{user-select:none}
 .joint-row .num{width:100%}
 .joint-row .name{font-size:11px}
 .joint-row .phys{font-size:10px;color:var(--dim)}
+/* A joint whose command cannot reach the motor right now (hwHoldState): visibly greyed, and
+   the row still takes pointer events so clicking it can explain why. */
+.joint-row.hw-held{opacity:.45}
+.joint-row.hw-held input[type=range],.joint-row.hw-held .num{cursor:not-allowed}
 .tx-cb{transform:scale(.85)}
 
 /* Obs tab */

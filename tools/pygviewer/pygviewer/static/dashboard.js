@@ -348,17 +348,52 @@ function violationSideShort(side) {
   }[side] || side;
 }
 
-function violationBadgeText(tv) {
+/* What UNIT a violation's numbers are in. The badge used to print "rad" for all of them,
+ * which was wrong twice over: position sides carry radians that the operator reads in
+ * degrees, and the torque sides carry N.m. Bench, 2026-09-05: the banner read
+ * "L_hip_yaw_joint (sim) 60.000 rad" for a 60 N.m torque saturation. */
+function violationUnitForSide(side) {
+  if (side === "recv_torque" || side === "sim_actuator") return "torque";
+  return "angle";
+}
+
+function violationFormatValue(side, v) {
+  if (v === null || v === undefined) return null;
+  if (violationUnitForSide(side) === "torque") return `${Number(v).toFixed(3)} N·m`;
+  return `${displayVal(Number(v)).toFixed(S.unit === "deg" ? 2 : 3)} ${S.unit}`;
+}
+
+/* Age past which a violation stops being news. The badge's own number is CUMULATIVE and
+ * never resets, so after a bad run it sat at "203758 violations" for hours while nothing at
+ * all was wrong - measured 0 new records in 20 s at the time. What an operator needs to know
+ * is whether something is happening NOW. */
+const VIOLATION_RECENT_S = 60;
+
+function violationBadgeText(tv, recentCount) {
   if (!tv || !tv.total) return null;
   const byJoint = tv.by_joint || {};
   const nJoints = Object.keys(byJoint).length;
   const last = tv.last;
-  if (!last) return `⚠ ${tv.total} ROM/torque violation(s)`;
-  const val = (last.value === null || last.value === undefined) ? (last.rejected || "non-finite") : Number(last.value).toFixed(3);
+  const recent = (recentCount === null || recentCount === undefined) ? null : recentCount;
+  if (recent === 0) return `최근 ${VIOLATION_RECENT_S}초간 새 위반 없음 (누적 ${tv.total}건)`;
+  const head = recent === null ? `⚠ ${tv.total}` : `⚠ 최근 ${recent}건 (누적 ${tv.total})`;
+  if (!last) return `${head} ROM/torque violation(s)`;
+  const val = violationFormatValue(last.side, last.value) || (last.rejected || "non-finite");
   const hasLim = last.limit_lo !== null && last.limit_lo !== undefined && last.limit_hi !== null && last.limit_hi !== undefined;
-  const lim = hasLim ? ` ∉ [${Number(last.limit_lo).toFixed(3)}, ${Number(last.limit_hi).toFixed(3)}]` : "";
+  const lim = hasLim
+    ? ` ∉ [${violationFormatValue(last.side, last.limit_lo)}, ${violationFormatValue(last.side, last.limit_hi)}]`
+    : "";
   const extra = nJoints > 1 ? ` 외 ${nJoints - 1}개` : ""; // "and N more" joints
-  return `⚠ ${tv.total} · ${last.joint} (${violationSideShort(last.side)}) ${val} rad${lim}${extra}`;
+  return `${head} · ${last.joint} (${violationSideShort(last.side)}) ${val}${lim}${extra}`;
+}
+
+/* How many of the records we currently hold are newer than VIOLATION_RECENT_S. Returns null
+ * when no records have been fetched yet, so the badge falls back to the cumulative wording
+ * rather than claiming a confident "0". */
+function violationRecentCount(violations) {
+  const recs = violations && violations.records;
+  if (!recs) return null;
+  return recs.filter((r) => r.age_s !== undefined && r.age_s !== null && r.age_s <= VIOLATION_RECENT_S).length;
 }
 
 function violationLineText(rec) {
@@ -809,9 +844,13 @@ function renderTopBar() {
     // the joint that most recently violated (violationBadgeText, pure - see
     // tests/test_violation_console.py) instead of a bare count that needs a click to explain.
     const tv = tel.violations || {};
-    const badgeTxt = violationBadgeText(tv);
+    const badgeTxt = violationBadgeText(tv, violationRecentCount(S.violations));
     if (badgeTxt) {
-      badges.push(`<span class="pill bad" id="violation-badge" title="click for full detail table">${badgeTxt}</span>`);
+      // Calm styling once nothing is CURRENTLY violating: a red pill that stays red for hours
+      // after the incident it describes has ended trains the operator to ignore it.
+      const recent = violationRecentCount(S.violations);
+      const cls = recent === 0 ? "pill" : "pill bad";
+      badges.push(`<span class="${cls}" id="violation-badge" title="누적 ${tv.total}건 - 눌러서 전체 표 보기">${badgeTxt}</span>`);
     }
   }
   el("topbar-badges").innerHTML = badges.join(" ");
@@ -1265,6 +1304,13 @@ function renderJointsPanel(sub, force) {
       };
       slider.addEventListener("input", () => push(parseFloat(slider.value)));
       num.addEventListener("change", () => push(parseFloat(num.value)));
+      // A disabled <input> fires no events of its own, so an operator who grabs a greyed-out
+      // slider gets silence unless the ROW answers for it. Bench request: "그레이아웃되고,
+      // 알림으로 띄워야지 못움직인다고".
+      row.addEventListener("pointerdown", () => {
+        const why = row.dataset.blockReason;
+        if (why) toast(`${n.replace("_joint", "")}: 지금은 움직일 수 없습니다 - ${why}`);
+      });
     });
     el("btn-joints-home").onclick = () => {
       const values = {};
@@ -1277,11 +1323,15 @@ function renderJointsPanel(sub, force) {
   // telemetry is connected but not (yet, or no longer) synced - never locks a pure-sim
   // session with no real telemetry at all (jointsLockState's own docstring).
   const lock = jointsLockState(S.status, S.txStatus);
+  const hold = hwHoldState(S.txStatus);
   const banner = sub.querySelector("#joints-lock-banner");
   if (banner) {
-    banner.style.display = lock.locked ? "" : "none";
+    banner.style.display = (lock.locked || hold.holding) ? "" : "none";
     if (lock.locked) {
       banner.textContent = `Locked: press "0. sync from hardware" (Telemetry tab) to unlock manual control - ${lock.reason}`;
+    } else if (hold.holding) {
+      banner.textContent = `지금은 움직일 수 없습니다 — ${hold.reason}. `
+        + `(${hold.joints.map((j) => j.replace("_joint", "")).join(", ")})`;
     }
   }
   sub.querySelectorAll(".ankle-slider").forEach((sl) => { sl.disabled = lock.locked; });
@@ -1294,10 +1344,18 @@ function renderJointsPanel(sub, force) {
     const row = sub.querySelector(`.joint-row[data-n="${n}"]`);
     if (!row) return;
     const slider = row.querySelector(".slider"), num = row.querySelector(".num"), phys = row.querySelector(".phys");
-    slider.disabled = lock.locked;
-    num.disabled = lock.locked;
-    slider.title = lock.locked ? `locked - ${lock.reason} - press "0. sync from hardware" to unlock` : "";
+    const held = hold.holding && hold.joints.includes(n);
+    const blocked = lock.locked || held;
+    slider.disabled = blocked;
+    num.disabled = blocked;
+    row.classList.toggle("hw-held", held && !lock.locked);
+    slider.title = lock.locked
+      ? `locked - ${lock.reason} - press "0. sync from hardware" to unlock`
+      : (held ? `지금은 움직일 수 없습니다 - ${hold.reason}` : "");
     num.title = slider.title;
+    row.dataset.blockReason = blocked
+      ? (lock.locked ? `먼저 "0. sync from hardware" 를 누르세요 - ${lock.reason}` : hold.reason)
+      : "";
     const target = c.default_q[n];
     const cur = q[n];
     if (document.activeElement !== slider && document.activeElement !== num) {
@@ -1318,6 +1376,32 @@ function zipNamed2(names, arr) { const o = {}; if (!arr) return o; names.forEach
  * decision is reviewable/testable on its own - real telemetry connected but not (yet, or no
  * longer) synced is the ONLY case that locks; a pure-sim session (no real telemetry at all)
  * must never be blocked by a gate that exists for hardware safety. */
+/* Hardware-hold gate (bench, 2026-09-05).  Distinct from jointsLockState above, which asks
+ * "have we synced?".  This asks "if I move this slider right now, will the motor follow?" -
+ * and if the answer is no, the slider must not move the SIM either, or the picture on screen
+ * silently stops matching the hardware.  Operator report: "스페이스바 안누르고 슬라이더를
+ * 조정하면, 시뮬에서는 움직이는데 실제로는 안움직여서 좌표싱크 깨져".
+ *
+ * Only joints the TX client is configured to send are held - a joint that was never going to
+ * reach hardware is a pure-sim joint and moving it cannot desynchronise anything.
+ *
+ * PURE (no DOM), so the decision is testable on its own. */
+function hwHoldState(txStatus) {
+  const none = { holding: false, reason: null, joints: [] };
+  if (!txStatus || !txStatus.enabled) return none;
+  const joints = txStatus.enable || [];
+  if (!joints.length) return none;
+  if (!txStatus.armed) {
+    return { holding: true, joints, reason: "하드웨어 전송이 켜져 있지만 아직 무장(ARM) 전입니다" };
+  }
+  const age = txStatus.deadman_age_s;
+  const timeout = txStatus.deadman_timeout_s || 0.3;
+  if (age === null || age === undefined || age > timeout) {
+    return { holding: true, joints, reason: "스페이스를 누르고 있는 동안에만 실물이 따라옵니다" };
+  }
+  return none;
+}
+
 function jointsLockState(status, txStatus) {
   const health = status && status.telemetry ? status.telemetry.health : null;
   const realConnected = !!(health && health.link && health.link.connected);
@@ -2243,12 +2327,38 @@ function startTxDeadman() {
 }
 
 function stopTxDeadman() {
-  if (S.txDeadmanTimer) { clearInterval(S.txDeadmanTimer); S.txDeadmanTimer = null; }
+  if (!S.txDeadmanTimer) return;
+  clearInterval(S.txDeadmanTimer); S.txDeadmanTimer = null;
+  // The instant the dead-man lapses the hardware stops following, but the manual target is
+  // wherever the operator last dragged it. Pull the target back onto the measured pose so the
+  // two can never sit apart while nothing is being transmitted - the sliders are locked from
+  // here on (hwHoldState), so this is the last moment they can diverge at all.
+  // Bench requirement: "어떤때라도 그 싱크가 깨지면 안되".
+  if (S.txStatus && S.txStatus.enabled) {
+    apiOk("POST", "/sync_from_real").then((r) => { if (r) S.txStatus = { ...S.txStatus }; }).catch(() => {});
+  }
 }
+
+/* Input types that genuinely consume a space character. Everything else - range, checkbox,
+ * radio, button, color, file - does not, and must not block the dead-man key. */
+const TEXT_INPUT_TYPES = new Set([
+  "text", "number", "password", "email", "search", "url", "tel",
+  "date", "time", "datetime-local", "month", "week",
+]);
 
 function isTypingTarget(ev) {
   const t = ev.target;
-  return t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName);
+  if (!t) return false;
+  if (t.isContentEditable) return true;
+  const tag = t.tagName;
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag !== "INPUT") return false;
+  // Bench, 2026-09-05 ("스페이스바도 어디서는 인식되고 어디서는 인식안되서 동작 불안정해"):
+  // this used to return true for EVERY <input>. The Joints tab is nothing but
+  // <input type="range"> sliders, so the moment an operator touched a slider the focus
+  // landed on an INPUT and Space silently stopped feeding the dead-man - precisely when it
+  // is needed. Only text-entry inputs may swallow it.
+  return TEXT_INPUT_TYPES.has((t.type || "text").toLowerCase());
 }
 
 function wireTxSection() {
@@ -2290,16 +2400,19 @@ function wireTxSection() {
   // but never hijacks Space while the operator is typing into a text field.
   if (!window.__txKeyWired) {
     window.__txKeyWired = true;
-    document.addEventListener("keydown", (ev) => {
+    // CAPTURE phase on `window`: the 3D canvas and any focused control see the event after
+    // this does, so nothing downstream can swallow the dead-man key by calling
+    // stopPropagation() on its own keydown handler.
+    window.addEventListener("keydown", (ev) => {
       if (ev.code !== "Space" || ev.repeat || isTypingTarget(ev)) return;
       if (!S.txStatus || !S.txStatus.armed) return;
       ev.preventDefault();
       startTxDeadman();
-    });
-    document.addEventListener("keyup", (ev) => {
+    }, true);
+    window.addEventListener("keyup", (ev) => {
       if (ev.code !== "Space") return;
       stopTxDeadman();
-    });
+    }, true);
     window.addEventListener("blur", stopTxDeadman); // losing window focus must stop it too
   }
 }

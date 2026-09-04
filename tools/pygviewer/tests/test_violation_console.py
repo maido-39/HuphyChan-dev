@@ -18,6 +18,7 @@ bench telemetry reporting `L_knee_joint` real q = -1.5007 rad against a sim q of
 (the other 11 joints null - single-motor bench), at ~50 Hz alongside the sim's own frames.
 """
 
+import math
 import re
 from pathlib import Path
 
@@ -43,21 +44,50 @@ def violation_side_short(side):
   }.get(side, side)
 
 
-def violation_badge_text(tv):
+VIOLATION_RECENT_S = 60
+
+
+def violation_unit_for_side(side):
+  """Torque sides carry N.m; every other side carries an angle."""
+  return "torque" if side in ("recv_torque", "sim_actuator") else "angle"
+
+
+def violation_format_value(side, v, unit="deg"):
+  """Mirror of dashboard.js violationFormatValue. `unit` is the operator's display unit."""
+  if v is None:
+    return None
+  if violation_unit_for_side(side) == "torque":
+    return f"{v:.3f} N·m"
+  shown = math.degrees(v) if unit == "deg" else v
+  return f"{shown:.2f} deg" if unit == "deg" else f"{shown:.3f} rad"
+
+
+def violation_recent_count(violations):
+  recs = (violations or {}).get("records")
+  if recs is None:
+    return None
+  return sum(1 for r in recs if r.get("age_s") is not None and r["age_s"] <= VIOLATION_RECENT_S)
+
+
+def violation_badge_text(tv, recent=None, unit="deg"):
   if not tv or not tv.get("total"):
     return None
   by_joint = tv.get("by_joint") or {}
   n_joints = len(by_joint)
   last = tv.get("last")
+  if recent == 0:
+    return f"최근 {VIOLATION_RECENT_S}초간 새 위반 없음 (누적 {tv['total']}건)"
+  head = f"⚠ {tv['total']}" if recent is None else f"⚠ 최근 {recent}건 (누적 {tv['total']})"
   if not last:
-    return f"⚠ {tv['total']} ROM/torque violation(s)"
-  value = last.get("value")
-  val = f"{value:.3f}" if value is not None else (last.get("rejected") or "non-finite")
+    return f"{head} ROM/torque violation(s)"
+  val = violation_format_value(last["side"], last.get("value"), unit) or (
+    last.get("rejected") or "non-finite")
   lo, hi = last.get("limit_lo"), last.get("limit_hi")
   has_lim = lo is not None and hi is not None
-  lim = f" ∉ [{lo:.3f}, {hi:.3f}]" if has_lim else ""
+  lim = (f" ∉ [{violation_format_value(last['side'], lo, unit)}, "
+         f"{violation_format_value(last['side'], hi, unit)}]") if has_lim else ""
   extra = f" 외 {n_joints - 1}개" if n_joints > 1 else ""
-  return f"⚠ {tv['total']} · {last['joint']} ({violation_side_short(last['side'])}) {val} rad{lim}{extra}"
+  return f"{head} · {last['joint']} ({violation_side_short(last['side'])}) {val}{lim}{extra}"
 
 
 def violation_line_text(rec):
@@ -149,8 +179,57 @@ def test_badge_names_the_joint_and_value_single_joint():
     "by_joint": {"L_knee_joint": {"total": 26153, "recv": 26153}},
     "last": {"side": "recv", "joint": "L_knee_joint", "value": -1.5007, "limit_lo": 0.0, "limit_hi": 2.094, "over_by": 1.5007},
   }
+  text = violation_badge_text(tv, unit="rad")
+  assert text == "⚠ 26153 · L_knee_joint (recv) -1.501 rad ∉ [0.000 rad, 2.094 rad]"
+
+
+def test_badge_shows_degrees_when_that_is_the_operators_unit():
+  """The operator reads degrees; the badge used to print the raw radian number and label it
+  "rad" regardless. -1.5007 rad is -85.98 deg."""
+  tv = {
+    "total": 3,
+    "by_joint": {"L_knee_joint": {"total": 3, "recv": 3}},
+    "last": {"side": "recv", "joint": "L_knee_joint", "value": -1.5007, "limit_lo": 0.0, "limit_hi": 2.094},
+  }
+  assert "-85.98 deg" in violation_badge_text(tv, unit="deg")
+
+
+def test_badge_labels_torque_sides_in_newton_metres():
+  """Bench, 2026-09-05: the banner read "L_hip_yaw_joint (sim) 60.000 rad" for a 60 N.m
+  torque saturation - the number was right and the unit was nonsense."""
+  tv = {
+    "total": 441,
+    "by_joint": {"L_hip_yaw_joint": {"total": 441, "sim_actuator": 441}},
+    "last": {"side": "sim_actuator", "joint": "L_hip_yaw_joint", "value": 60.0,
+             "limit_lo": -59.68, "limit_hi": 59.68},
+  }
   text = violation_badge_text(tv)
-  assert text == "⚠ 26153 · L_knee_joint (recv) -1.501 rad ∉ [0.000, 2.094]"
+  assert "60.000 N·m" in text
+  assert "rad" not in text
+
+
+def test_badge_goes_quiet_when_nothing_violated_recently():
+  """The count is cumulative and never resets. After a bad run it sat at "203758" for hours
+  with zero new records, which trains an operator to ignore the badge entirely."""
+  tv = {"total": 203758, "by_joint": {"L_knee_joint": {"total": 203758}},
+        "last": {"side": "stuck", "joint": "L_knee_joint", "value": None}}
+  text = violation_badge_text(tv, recent=0)
+  assert text == "최근 60초간 새 위반 없음 (누적 203758건)"
+  assert "⚠" not in text
+
+
+def test_badge_leads_with_the_recent_count_when_there_is_one():
+  tv = {"total": 900, "by_joint": {"L_knee_joint": {"total": 900, "recv": 900}},
+        "last": {"side": "recv", "joint": "L_knee_joint", "value": 0.5, "limit_lo": 0.0, "limit_hi": 0.4}}
+  assert violation_badge_text(tv, recent=7).startswith("⚠ 최근 7건 (누적 900)")
+
+
+def test_recent_count_is_none_before_any_records_are_fetched():
+  """None, not 0 - claiming "nothing recent" before looking would be a lie the operator acts on."""
+  assert violation_recent_count(None) is None
+  assert violation_recent_count({}) is None
+  assert violation_recent_count({"records": []}) == 0
+  assert violation_recent_count({"records": [{"age_s": 3.0}, {"age_s": 900.0}]}) == 1
 
 
 def test_badge_appends_and_n_more_when_multiple_joints():
@@ -160,7 +239,7 @@ def test_badge_appends_and_n_more_when_multiple_joints():
     "last": {"side": "sim_actuator", "joint": "R_hip_pitch_joint", "value": 12.0, "limit_lo": -10.0, "limit_hi": 10.0, "over_by": 2.0},
   }
   text = violation_badge_text(tv)
-  assert text.startswith("⚠ 5 · R_hip_pitch_joint (sim) 12.000 rad")
+  assert text.startswith("⚠ 5 · R_hip_pitch_joint (sim) 12.000 N·m")
   assert text.endswith("외 1개")  # "and 1 more" joint
 
 
@@ -330,8 +409,8 @@ def test_api_and_bridge_senders_populate_tau_est_key():
 # ============================================================================ source-text locks
 def test_dashboard_js_badge_uses_violation_badge_text():
   src = _dashboard_js_text()
-  assert "function violationBadgeText(tv)" in src
-  assert "const badgeTxt = violationBadgeText(tv);" in src
+  assert "function violationBadgeText(tv, recentCount)" in src
+  assert "const badgeTxt = violationBadgeText(tv, violationRecentCount(S.violations));" in src
   # the OLD bare-count-only badge markup must not still be the one actually rendered
   assert 'ROM/torque violation(s)</span>' not in re.sub(r"/\*.*?\*/", "", src, flags=re.S)
 
