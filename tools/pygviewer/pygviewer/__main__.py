@@ -15,8 +15,57 @@ import socket
 import sys
 import threading
 import time
+from pathlib import Path
 
 from . import CACHE_DIR, VARIANTS
+
+PID_FILE = Path(__file__).resolve().parent.parent / "logs" / "pygviewer.pid"
+"""Second, independent guard against two live instances - found necessary 2026-09-04 after
+``port_free()`` alone let a second ``run.py`` start while a first one's API thread had
+apparently died without killing the process (viser on :8094 owned by the OLD process, API on
+:8095 re-bound by the NEW one, so the dashboard and the viser iframe silently pointed at two
+different SimCore instances - "policy loaded but nothing moves"). ``port_free()`` is kept too
+(it also catches a foreign, non-pygviewer process squatting a port) - this is belt AND
+suspenders, checked by PID liveness rather than socket state, which is what actually failed."""
+
+
+def _pid_alive(pid: int) -> bool:
+  try:
+    os.kill(pid, 0)
+  except ProcessLookupError:
+    return False
+  except PermissionError:
+    return True  # exists, just owned by someone else - still alive
+  return True
+
+
+def acquire_pidfile() -> None:
+  """Refuse to start a second live instance. Raises ``SystemExit`` if one is already running;
+  silently reclaims a stale pidfile left by a process that crashed without cleaning up."""
+  PID_FILE.parent.mkdir(parents=True, exist_ok=True)
+  if PID_FILE.exists():
+    try:
+      old_pid = int(PID_FILE.read_text().strip())
+    except (ValueError, OSError):
+      old_pid = None
+    if old_pid is not None and old_pid != os.getpid() and _pid_alive(old_pid):
+      print(
+        f"pygviewer is already running as pid {old_pid} ({PID_FILE}) - refusing to start a "
+        f"second instance (two instances = dashboard/viser pointing at different SimCores, "
+        f"see docs/121). Kill it first: `kill {old_pid}` or "
+        f"`pkill -f 'tools/pygviewer/run.py'`, then retry.",
+        file=sys.stderr,
+      )
+      raise SystemExit(5)
+  PID_FILE.write_text(str(os.getpid()))
+
+
+def release_pidfile() -> None:
+  try:
+    if PID_FILE.exists() and PID_FILE.read_text().strip() == str(os.getpid()):
+      PID_FILE.unlink()
+  except OSError:
+    pass
 
 
 def port_free(port: int, host: str = "0.0.0.0") -> bool:
@@ -141,6 +190,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"port {p} ({what}) is already in use - refusing to start", file=sys.stderr)
         return 4
 
+  acquire_pidfile()  # second, PID-liveness-based guard - see PID_FILE's own docstring above
+
   core.start()
   ip = lan_ip()
 
@@ -176,6 +227,7 @@ def main(argv: list[str] | None = None) -> int:
       server_v.stop()
     except Exception:
       pass
+    release_pidfile()
   return 0
 
 

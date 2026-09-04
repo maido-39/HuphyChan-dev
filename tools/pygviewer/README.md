@@ -46,6 +46,43 @@ so a free base topples in about 2 s), `--string-z-set METERS` and `--string-foll
 LAN: **`http://192.168.20.177:8095/`** (the dashboard - start here), viser directly at
 `http://192.168.20.177:8094`, OpenAPI at `http://192.168.20.177:8095/docs`.
 
+**Restarting safely - always kill any existing instance first.** Two live instances at once
+has actually happened here (2026-09-04): a second `run.py` started while a first one's own
+API thread had died without killing the process, so the dashboard (:8095, re-bound by the
+new process) and the viser iframe (:8094, still owned by the old one) silently pointed at
+TWO DIFFERENT `SimCore`s - symptom: "I loaded a policy but nothing moves". `run.py` now
+refuses a second live instance via a pidfile (`tools/pygviewer/logs/pygviewer.pid`, checked
+by PID liveness, not just the port_free() socket check above - a crashed process's stale
+pidfile is reclaimed automatically) - but the SAFE restart sequence is still to kill first:
+
+**Do not use a bare `pkill -f 'tools/pygviewer/run.py'`** - docs/121 section 9 (2026-09-04
+12:45 entry) already caught this failing twice (exit 144): `pkill -f`/`pgrep -f` match against
+a process's FULL command line, and the shell wrapper running your own kill command can ALSO
+contain that same literal substring (e.g. inside a quoted argument), so a plain substring
+pattern can kill the very shell you typed it into. Filter by the actual executable name
+(`comm`) instead - only a real `python3` process is a candidate, never a `bash`/`sh` wrapper:
+
+```bash
+kill_pygviewer() {
+  for pid in $(pgrep -f 'tools/pygviewer/run.py'); do
+    case "$(ps -o comm= -p "$pid" 2>/dev/null)" in
+      python3*) kill "$pid" ;;
+    esac
+  done
+}
+kill_pygviewer
+sleep 1
+kill_pygviewer   # second pass - a process mid-shutdown on the first pass still needs this
+
+CUDA_VISIBLE_DEVICES="" mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/run.py \
+    --variant LegOnly-AB --port 8094 --api-port 8095 \
+    > tools/pygviewer/logs/pygviewer.log 2>&1 &
+```
+
+If `run.py` refuses to start with "pygviewer is already running as pid N", that pid really is
+still alive (the pidfile check would have reclaimed a stale one on its own) - `kill <pid>` (or
+repeat the loop above) and retry; do not delete the pidfile by hand as a shortcut.
+
 ## Dashboard (UI v2, layout B)
 
 A single page (`pygviewer/static/dashboard.{html,js}`, no build step, no CDN - three.js
