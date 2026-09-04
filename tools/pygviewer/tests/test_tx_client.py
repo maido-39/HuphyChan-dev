@@ -134,6 +134,45 @@ def test_in_range_target_is_unaffected_by_safe_clip():
   assert msg.q_target == pytest.approx([0.2])
 
 
+# --------------------------------------------------------------- hard_range fallback (ROM clip task, 2026-09-04)
+def test_hard_range_clamps_a_joint_with_no_contract_and_no_explicit_safe_clip():
+  """A joint name that is neither in an explicit ``safe_clip`` nor known to any contract
+  (``contract=None`` here) used to be sent fully unclamped. ``hard_range`` is a defensive
+  fallback for exactly that case - e.g. a per-joint ROM sourced from a joint-map's optional
+  ``rom_deg`` field, converted to rad by the caller before construction."""
+  c = _client(joint_names=["bench_joint"], hard_range={"bench_joint": (-1.0, 1.0)})
+  c.arm()
+  c.set_target({"bench_joint": 5.0})
+  msg = c.build_message()
+  assert msg.q_target == pytest.approx([1.0])
+  assert any("safe_clip" in w for w in c.warnings)
+
+
+def test_hard_range_is_ignored_when_an_explicit_safe_clip_is_narrower():
+  """Explicit ``safe_clip`` always wins over ``hard_range`` for the same joint - hard_range
+  is only ever a FALLBACK for a joint safe_clip/the contract say nothing about."""
+  c = _client(
+    joint_names=["bench_joint"],
+    safe_clip={"bench_joint": (-0.2, 0.2)},
+    hard_range={"bench_joint": (-1.0, 1.0)},
+  )
+  c.arm()
+  c.set_target({"bench_joint": 5.0})
+  msg = c.build_message()
+  assert msg.q_target == pytest.approx([0.2])
+
+
+def test_no_hard_range_and_no_contract_stays_unclamped():
+  """Unchanged pre-existing behaviour: with neither a contract, an explicit safe_clip, nor
+  a hard_range for a joint, that joint is still sent exactly as requested - never invented
+  a range for it."""
+  c = _client(joint_names=["bench_joint"])
+  c.arm()
+  c.set_target({"bench_joint": 5.0})
+  msg = c.build_message()
+  assert msg.q_target == pytest.approx([5.0])
+
+
 # --------------------------------------------------------------------------- slew
 def test_slew_limits_a_big_jump_to_max_delta_per_tick():
   c = _client(max_delta_rad=0.05)

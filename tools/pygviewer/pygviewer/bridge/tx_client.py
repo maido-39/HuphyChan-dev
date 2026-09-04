@@ -91,6 +91,7 @@ class TxClient:
     origin: str,
     contract: ModelContract | None = None,
     safe_clip: Mapping[str, tuple[float, float]] | None = None,
+    hard_range: Mapping[str, tuple[float, float]] | None = None,
     max_delta_rad: float | Mapping[str, float] | None = None,
     hz: float = DEFAULT_HZ,
     kp_max: float = DEFAULT_KP_MAX,
@@ -123,17 +124,29 @@ class TxClient:
     self.contract_hash = contract.contract_sha if contract is not None else None
 
     # safe_clip: explicit dict wins; else derive from the contract (only for joints the
-    # contract actually knows - a joint outside that set is sent unclamped, with a one-time
-    # warning, rather than silently invented a range for.
+    # contract actually knows). A joint outside that set falls back to `hard_range` (ROM
+    # clip task, 2026-09-04: e.g. a per-joint ROM sourced from a joint-map's optional
+    # `rom_deg`, converted to rad by the caller) if the caller supplied one for it; only a
+    # joint with NEITHER a contract entry NOR an explicit hard_range is sent truly
+    # unclamped, with a one-time warning - never silently invented a range for.
     self._safe_clip: dict[str, tuple[float, float]] = dict(safe_clip or {})
-    if contract is not None:
-      for n in self.joint_names:
-        if n in self._safe_clip:
-          continue
+    self._hard_range: dict[str, tuple[float, float]] = dict(hard_range or {})
+    for n in self.joint_names:
+      if n in self._safe_clip:
+        continue
+      got = None
+      if contract is not None:
         try:
-          self._safe_clip[n] = contract.clip(n)
+          got = contract.clip(n)
         except KeyError:
-          pass  # not an actuated joint of this contract - left unclamped, see docstring
+          got = None  # not an actuated joint of this contract
+      if got is None:
+        got = self._hard_range.get(n)
+      if got is not None:
+        self._safe_clip[n] = got
+      # else: no explicit safe_clip, no contract entry, no hard_range for this joint -
+      # left truly unclamped (`_safe_clip.get(n, ...)` falls through to (-inf, inf) in
+      # `_clamp_positions`), exactly today's pre-existing behaviour.
 
     if isinstance(max_delta_rad, Mapping):
       self._max_delta: dict[str, float] = dict(max_delta_rad)
