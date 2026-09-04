@@ -645,15 +645,46 @@ function wireAnkleFootSpace(sub, c) {
 }
 
 /* ---------------------------------------------------------------- Policy (item 4) */
-async function loadPolicyAndRun(name) {
-  const r = await apiOk("POST", "/policy/load", { name });
-  if (!r) return;
-  S.policyLoadedName = name;
-  S.policyLayoutDims = r.layout || null; // server's own builder.describe() - authoritative
-  await apiOk("POST", "/policy/cmd", { vx: 0, vy: 0, wz: 0 });
-  await apiOk("POST", "/mode", { mode: "policy_sim" });
-  toast(`loaded ${name}, running policy_sim at cmd=0`);
-  renderTabControl(el("right-body"), true);
+// PURE (no DOM, no fetch): given the name that was being loaded and whatever `api()` threw,
+// produce the text an operator should see. Split out so the "does a failure reason survive
+// as visible text" behaviour is testable without a browser - see this file's sibling
+// docs/121 section 10 note and tests/test_policy_ui_contract.py for the backend half of the
+// contract this depends on (POST /policy/load's error body is always {"detail": "<string>"}).
+function policyLoadErrorText(name, err) {
+  const label = name ? `'${name}'` : "policy";
+  const detail = err && err.message ? err.message : String(err || "unknown error");
+  return `failed to load ${label}: ${detail}`;
+}
+
+async function loadAndRunPolicy(name) {
+  try {
+    const r = await api("POST", "/policy/load", { name });
+    S.policyLoadedName = name;
+    S.policyLayoutDims = r.layout || null; // server's own builder.describe() - authoritative
+    await api("POST", "/policy/cmd", { vx: 0, vy: 0, wz: 0 });
+    await api("POST", "/mode", { mode: "policy_sim" });
+    toast(`loaded ${name}, running policy_sim at cmd=0`);
+    renderTabControl(el("right-body"), true);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: policyLoadErrorText(name, err) };
+  }
+}
+
+async function loadAndRunPolicyByPath(path) {
+  const body = path.trim().endsWith(".pt") ? { pt: path.trim() } : { onnx: path.trim() };
+  try {
+    const r = await api("POST", "/policy/load", body);
+    S.policyLoadedName = path.trim();
+    S.policyLayoutDims = r.layout || null;
+    await api("POST", "/policy/cmd", { vx: 0, vy: 0, wz: 0 });
+    await api("POST", "/mode", { mode: "policy_sim" });
+    toast(`loaded ${path}, running policy_sim at cmd=0`);
+    renderTabControl(el("right-body"), true);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: policyLoadErrorText(path, err) };
+  }
 }
 
 function renderPolicyPanel(sub) {
@@ -661,17 +692,29 @@ function renderPolicyPanel(sub) {
   const snapPolicy = (S.snapshot || {}).policy;
   if (!sub.dataset.builtPolicy) {
     sub.innerHTML = `
-      <div class="row"><label>policy</label>
-        <select id="pol-select" style="flex:1"></select>
-        <button id="btn-pol-load">load</button></div>
+      <div class="row tight">
+        <label>policy</label>
+        <select id="pol-select" style="flex:1;min-width:0;text-overflow:ellipsis;overflow:hidden;white-space:nowrap"></select>
+        <button id="btn-pol-refresh" title="refresh the baked-policy list">&#8635;</button>
+      </div>
+      <button id="btn-pol-load-run" class="primary" style="width:100%;margin:6px 0">Load &amp; Run</button>
+      <div class="small" id="pol-load-error" style="color:var(--bad);display:none;margin-bottom:6px"></div>
+      <div class="row tight"><label>status</label><span class="mono" id="pol-loaded-badge">none</span></div>
       <div class="row"><label>mode</label>
         <span class="seg" id="pol-mode-seg"><span data-m="policy_sim">policy_sim</span><span data-m="policy_shadow">policy_shadow</span></span></div>
       <div class="row"><label>shadow_follow</label><input type="checkbox" id="pol-shadow-follow"></div>
       <div class="row"><label>vx [m/s]</label><input type="range" id="pol-vx" min="-1" max="1" step="0.02" style="flex:1;margin:0 8px"><span class="mono" id="pol-vx-v">0</span></div>
       <div class="row"><label>vy [m/s]</label><input type="range" id="pol-vy" min="-0.5" max="0.5" step="0.02" style="flex:1;margin:0 8px"><span class="mono" id="pol-vy-v">0</span></div>
       <div class="row"><label>wz [rad/s]</label><input type="range" id="pol-wz" min="-1" max="1" step="0.02" style="flex:1;margin:0 8px"><span class="mono" id="pol-wz-v">0</span></div>
-      <div class="row"><button id="btn-pol-stop" style="flex:1">stop (idle)</button>
-        <button id="btn-pol-unload" style="flex:1">unload</button></div>
+      <div class="row tight"><button id="btn-pol-runstop" style="flex:1">Run</button>
+        <button id="btn-pol-unload" style="flex:1">Unload</button></div>
+      <details style="margin-top:6px">
+        <summary class="small" style="cursor:pointer">advanced: load by file path</summary>
+        <div class="row tight" style="margin-top:4px">
+          <input id="pol-path" placeholder="/path/to/policy.onnx or .pt" style="flex:1;min-width:0">
+          <button id="btn-pol-load-path">Load path</button>
+        </div>
+      </details>
       <hr class="hr">
       <h3>Obs source (per term)</h3>
       <div id="pol-obs-src"></div>
@@ -679,7 +722,39 @@ function renderPolicyPanel(sub) {
       <div class="small" id="pol-warn"></div>
     `;
     sub.dataset.builtPolicy = "1";
-    el("btn-pol-load").onclick = () => { const n = el("pol-select").value; if (n) loadPolicyAndRun(n); };
+
+    function setLoadBusy(busy) {
+      const b = el("btn-pol-load-run");
+      b.disabled = busy;
+      b.textContent = busy ? "loading..." : "Load & Run";
+    }
+    function showLoadError(text) {
+      const e = el("pol-load-error");
+      e.textContent = text;
+      e.style.display = text ? "block" : "none";
+    }
+
+    el("btn-pol-refresh").onclick = async () => {
+      try { S.policyList = await api("GET", "/policy/list"); } catch (e) { toast(e.message); }
+    };
+    el("btn-pol-load-run").onclick = async () => {
+      const n = el("pol-select").value;
+      if (!n) { showLoadError("no baked policy selected"); return; }
+      showLoadError("");
+      setLoadBusy(true);
+      const res = await loadAndRunPolicy(n);
+      setLoadBusy(false);
+      if (!res.ok) { showLoadError(res.error); toast(res.error); }
+    };
+    el("btn-pol-load-path").onclick = async () => {
+      const p = el("pol-path").value;
+      if (!p.trim()) { showLoadError("enter a .onnx or .pt path first"); return; }
+      showLoadError("");
+      setLoadBusy(true);
+      const res = await loadAndRunPolicyByPath(p);
+      setLoadBusy(false);
+      if (!res.ok) { showLoadError(res.error); toast(res.error); }
+    };
     el("pol-mode-seg").addEventListener("click", (ev) => {
       const s = ev.target.closest("span"); if (!s) return;
       apiOk("POST", "/mode", { mode: s.dataset.m });
@@ -693,18 +768,29 @@ function renderPolicyPanel(sub) {
         });
       });
     });
-    el("btn-pol-stop").onclick = () => apiOk("POST", "/mode", { mode: "idle" });
-    el("btn-pol-unload").onclick = async () => { await apiOk("POST", "/policy/unload"); S.policyLoadedName = null; renderTabControl(el("right-body"), true); };
+    el("btn-pol-runstop").onclick = () => {
+      const running = st && (st.mode === "policy_sim" || st.mode === "policy_shadow");
+      apiOk("POST", "/mode", { mode: running ? "idle" : "policy_sim" });
+    };
+    el("btn-pol-unload").onclick = async () => {
+      await apiOk("POST", "/policy/unload"); S.policyLoadedName = null; renderTabControl(el("right-body"), true);
+    };
   }
   const sel = el("pol-select");
   const names = (S.policyList || []).map((p) => p.name);
   if (sel.dataset.rendered !== JSON.stringify(names)) {
-    sel.innerHTML = (S.policyList || []).map((p) => `<option value="${p.name}" ${p.compatible ? "" : "disabled"}>${p.name}${p.compatible ? "" : " (incompatible)"}</option>`).join("") || `<option disabled>no baked policies found</option>`;
+    sel.innerHTML = (S.policyList || []).map((p) => `<option value="${p.name}" title="${p.name}" ${p.compatible ? "" : "disabled"}>${p.name}${p.compatible ? "" : " (incompatible)"}</option>`).join("") || `<option disabled>no baked policies found</option>`;
     sel.dataset.rendered = JSON.stringify(names);
   }
+  if (sel.selectedIndex >= 0 && sel.options[sel.selectedIndex]) sel.title = sel.options[sel.selectedIndex].title;
   document.querySelectorAll("#pol-mode-seg span").forEach((s) => s.classList.toggle("on", st && st.mode === s.dataset.m));
   const loaded = !!snapPolicy;
-  el("btn-pol-stop").disabled = !loaded;
+  const running = loaded && st && (st.mode === "policy_sim" || st.mode === "policy_shadow");
+  el("pol-loaded-badge").textContent = loaded
+    ? `loaded: ${snapPolicy.name || S.policyLoadedName || "?"} (${snapPolicy.kind === "torch" ? "pt" : (snapPolicy.kind || "?")})`
+    : "none";
+  el("btn-pol-runstop").disabled = !loaded;
+  el("btn-pol-runstop").textContent = running ? "Stop (idle)" : "Run";
   el("btn-pol-unload").disabled = !loaded;
   document.querySelectorAll("#pol-mode-seg span").forEach((s) => { s.style.pointerEvents = loaded ? "" : "none"; s.style.opacity = loaded ? "" : "0.4"; });
   if (snapPolicy) {
@@ -1322,5 +1408,8 @@ document.addEventListener("DOMContentLoaded", boot);
 
 /* expose a few internals for the later sections of this file (loaded as one script,
    but organised so each dashboard tab's rendering code can be reviewed independently) */
-window.__pygdash = { S, api, apiOk, toast, el, fmt, clamp, displayVal, internalVal, unitSuffix, obsTermDims, RAD2DEG, DEG2RAD };
+window.__pygdash = {
+  S, api, apiOk, toast, el, fmt, clamp, displayVal, internalVal, unitSuffix, obsTermDims, RAD2DEG, DEG2RAD,
+  policyLoadErrorText, loadAndRunPolicy, loadAndRunPolicyByPath,
+};
 })();

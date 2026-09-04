@@ -334,3 +334,17 @@ q 불변 확인, 같은-다리 결합은 의도적으로 별도 취급).
   docs/123 §5. pytest 89건 신규, 전체 333 passed(~30s). `api.py`/`ui.py`/대시보드는 건드리지 않음.
 - 09-04 12:45 — **장애: 뷰어 프로세스 2개 동시 가동**(11:25·12:27 시작; 코더 재기동 시 기존 프로세스 미종료) → 사용자 "Policy 로드 안 됨" 신고. API 재현: load 200·mode 200이나 UI/3D 불일치 가능. 단일 인스턴스로 재기동(pid 996139, 8094/8095 동일 프로세스 확인), 정책 load→policy_sim 정상(|action|max 5.3). 재발 방지: pidfile+포트 선점 검사를 run.py에 추가하도록 지시(배선 코더). 교훈: pkill/pgrep 패턴은 앵커(`^…python3 tools/pygviewer/run.py`)로 — 문자열 포함 패턴은 호출 셸 자체를 죽임(exit 144 재현 2회).
 
+- 09-04 (배선 세션) — **안 A 마무리: TX 대시보드 실배선 + pidfile 재발방지 + Policy 패널 UX**. (1)
+  `pygviewer/tx.py`/`api.py`/`dashboard.{html,js}`를 실제 `bridge/tx_client.py`에 연결(엔드포인트
+  재설계, 데드맨 3-노브 재설계, 실 UDP 왕복 검증) — 수치는 docs/123 §6. (2) 12:45 장애의 재발방지
+  지시 이행: `pygviewer/__main__.py`에 `PID_FILE`(`tools/pygviewer/logs/pygviewer.pid`, PID
+  liveness 확인 — 죽은 프로세스의 stale pidfile은 자동 회수) 추가, 기존 `port_free()`와 이중화;
+  README에 안전 재기동 절차(comm 필터링으로 pkill/pgrep 자기잠금 방지) 추가. (3) 사용자 UX 지적
+  (12:55, "Load UI가 안 보임" — `<select style="flex:1">`이 옵션 텍스트 길이 때문에 최소폭을
+  줄이지 못해 `btn-pol-load`가 시각적으로 밀려남): Policy 패널을 select(ellipsis+title)+새로고침
+  버튼 / 전폭 "Load & Run" 버튼(로딩 중 표시, 실패 시 토스트+영구 빨간 텍스트 둘 다) / 로드상태
+  배지 / Run·Stop(idle) 토글+Unload / 접힘 경로직접입력 5행 구조로 재구성. 검증은
+  `tests/test_policy_ui_contract.py`(3건, `/policy/load`의 400/404/409가 모두 표시가능한 문자열
+  `detail`을 반환함을 확인 — 이 저장소엔 JS 테스트 러너가 없어 프런트 순수함수
+  `policyLoadErrorText`는 백엔드 계약 테스트로 대체 검증, 별도로 기록해둠). 전체 스위트 343
+  passed. 뷰어 재기동(단일 인스턴스, pidfile 생성 확인).

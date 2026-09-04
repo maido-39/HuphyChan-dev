@@ -97,10 +97,14 @@ run/stop the two sample target-q scripts. **Status**: rates/RSS/warnings), the v
 a center iframe, and a 340px right column of tabs (**Control**: a Joints&harr;Policy
 mutually-exclusive toggle - Joints has one slider+number per actuated joint (range = safe_
 clip, a deg/rad display toggle, a mirrored joint's `travel_sign&times;q` physical angle
-alongside its raw q, AB foot-space pitch/roll sliders, a disabled "TX (HW)" checkbox
-placeholder for the docs/123 hardware-transmit work); Policy has the policy picker (its
-"load" button performs `load -> cmd(0,0,0) -> mode=policy_sim`, cmd sliders, mode/shadow-
-follow, per-term obs source). **Gains**: kp/kd table (edits POST immediately), train/real/
+alongside its raw q, AB foot-space pitch/roll sliders, a disabled "TX (HW)" checkbox that
+read-only mirrors the Telemetry tab's real TX enable list); Policy has a policy picker
+(ellipsis-truncated select with a refresh button, since baked names can be long) plus a
+full-width "Load & Run" button (`load -> cmd(0,0,0) -> mode=policy_sim`; a failed load
+shows the server's 400/404/409 reason as persistent red text, not just a toast that
+disappears), a `loaded: <name> (onnx|pt)`/`none` status line, a Run/Stop(idle) toggle +
+Unload (both disabled until something is loaded), a collapsed "load by file path" fallback,
+cmd sliders, mode/shadow-follow, per-term obs source). **Gains**: kp/kd table (edits POST immediately), train/real/
 custom presets. **Obs**: the 45-D observation as bar groups by term, colour-coded by
 effective source, plus a three.js body-frame/gravity/gyro widget). A 320px plot strip spans
 the left+center columns: up to three togglable rows (q+target, tau, qd), one uPlot panel per
