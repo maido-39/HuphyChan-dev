@@ -348,3 +348,26 @@ q 불변 확인, 같은-다리 결합은 의도적으로 별도 취급).
   `detail`을 반환함을 확인 — 이 저장소엔 JS 테스트 러너가 없어 프런트 순수함수
   `policyLoadErrorText`는 백엔드 계약 테스트로 대체 검증, 별도로 기록해둠). 전체 스위트 343
   passed. 뷰어 재기동(단일 인스턴스, pidfile 생성 확인).
+
+- 09-04 — **A4: 플롯에 실물 텔레메트리가 안 보이는 버그 수정** (`dashboard.js`만, 계획
+  `optimized-leaping-hamster.md` A4). 원인: 6항목 플롯 패널이 sim 계약의 `action_joint_names`에서
+  뽑은 관절 **종류**로만 만들어지고(`buildPlotGrid`), 데이터 조회도 `L_${kind}_joint`/
+  `R_${kind}_joint` 템플릿을 **다시 추측**(`seriesArraysFor`)해서 썼음 — real 프레임은
+  `onJointState`가 정상 수신·버퍼링(src="real" → `S.latestReal` → 링버퍼 realQ/realQd/realTau)
+  했지만, sim 계약에 없는 관절명(브리지 매핑 실패·벤치 전용 관절)이 real로 오면 패널 자체가 없어
+  조용히 사라짐. 추가로 velocity(qd) 행은 애초에 real 계열이 **정의돼 있지도 않았음**
+  (ROW_META.qd에 real 라벨 누락 — 코드 확인으로 발견, sim 계약 일치 여부와 무관하게 항상 안 보임).
+  수정: 패널 구성을 sim ∪ 관측된 real 관절명 합집합으로(`panelsFor(simNames, realNames)`, DOM 없는
+  순수 함수, L/R 페어 유지·미매칭은 단독 패널+"real only" 배지), `seriesArraysFor`/`openModal`은
+  그 패널이 실제로 만들어진 Lname/Rname을 그대로 읽음(재추측 제거로 구성-조회 불일치 가능성 소거),
+  qd 행에 real 계열 2개 추가, 범례에 "sim" 명시(`L q sim` 등), 새 real 관절명이 나중에 도착해도
+  자동 재구성(`realJointNames.length` 변화 감지), rx_count=0일 때 플롯 영역에 "no real stream"
+  한 줄 표시(있으면 "real stream: rx {hz}/s"). 검증: 이 호스트에 브라우저/Node가 전혀 없어(재확인,
+  `esprima` 4.0.1로 파일 전체 파싱 성공만 확인 — 미관련 기존 `??`/`?.` 문법은 esprima probe에서만
+  중립화) **브라우저 렌더는 이번에도 미검증**; 순수함수 `panelsFor`의 로직을 Python으로 동일
+  재구현해 4개 시나리오(벤치 단일 `L_knee_joint`/사전 미정의 이름 `knee_bench`/L·R 컨벤션은
+  맞지만 계약에 없는 `L_ankle_twist_joint`/무 real 스트림) 수동 검증 — 라이브 뷰어(8095)의 실제
+  벤치 케이스는 `L_knee_joint`가 sim 계약에도 있어 기존 코드로도 이름 매칭 자체는 됐었다는 것도
+  이번에 확인(그래도 qd 누락·비표준 이름 케이스·범례 불명확은 실제 결함이었음). 서버는 재기동
+  안 함(`/static/dashboard.js`가 디스크에서 매 요청 재서빙됨을 curl로 확인, 코드 변경이 바로 반영).
+  pytest 전체 348 passed(회귀 없음, 다른 코더 작업으로 343→348).

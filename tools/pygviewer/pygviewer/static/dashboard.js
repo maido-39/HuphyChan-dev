@@ -56,6 +56,11 @@ const S = {
   presets: null,        // GET /presets, polled
   policyList: [],       // GET /policy/list, polled while Policy tab open
   latestReal: { t: null, q: {}, qd: {}, tau: {}, target: {} },
+  realJointNames: [],    // A4 fix: ordered union of joint names ever seen on a src="real"
+                          // JointState frame - used (with sim action_joint_names) to build
+                          // plot panels, so a real joint that doesn't fit the sim's L/R
+                          // naming template still gets somewhere to plot instead of
+                          // silently resolving to null. See panelsFor() below.
   latestTxSent: {},      // {joint_name: rad} - from polling /tx/status().last_sent_target
   ring: [],             // [{t, q:{}, target:{}, tau:{}, qd:{}, realQ:{}, realTau:{}, realQd:{}, realAgeS, sentTarget:{}}]
   txStatus: null,        // GET /tx/status, polled - server-side truth for enabled/armed/sending
@@ -69,6 +74,13 @@ const S = {
   plotInstances: {},     // "pos:hip_pitch" -> uPlot instance
   modal: null,           // {row, kind} while the modal is open
   jointKinds: [],        // e.g. ['hip_pitch','hip_roll','hip_yaw','knee','crank_A','crank_B']
+  lastPanelRealCount: 0, // A4 fix: S.realJointNames.length as of the last buildPlotGrid() -
+                          // renderPlots() rebuilds when this goes stale (see there)
+  plotPanels: {},        // A4 fix: kind -> {kind,Lname,Rname,realOnly} as actually built by
+                          // buildPlotGrid() - seriesArraysFor()/openModal() read the real
+                          // joint names from here instead of re-deriving an `L_${kind}_joint`
+                          // guess, so a panel's own construction and its data query always
+                          // agree (see panelsFor()).
   policyLoadedName: null,
   policyLayoutDims: null, // {name,func,dim,offset}[] from POST /policy/load's own response -
                           // authoritative for THIS loaded policy (a policy_contract may
@@ -84,6 +96,62 @@ function jointKindsOf(actNames) {
     if (!seen.includes(kind)) seen.push(kind);
   }
   return seen;
+}
+
+/* ---- Plot panel construction (A4 fix, docs/121_pygviewer_design.md sec 10) --------------
+ * Panels used to be built ONLY from S.jointKinds (derived from the sim contract's
+ * action_joint_names), and seriesArraysFor() then re-guessed each panel's real-side data by
+ * re-templating `L_${kind}_joint` / `R_${kind}_joint`. onJointState() already received and
+ * buffered every src="real" joint (S.latestReal, then S.ring's realQ/realQd/realTau/
+ * realTarget) regardless of its name - but a real joint whose name didn't fit that template
+ * (an unmapped bridge name, an extra bench joint the sim contract doesn't actuate, a variant
+ * mismatch) had no panel to land in and its series silently resolved to null forever, with
+ * no visible error.
+ *
+ * Fix: build panels from the UNION of sim action_joint_names and every real joint name ever
+ * observed, not from the sim contract alone. Pure and DOM-free so it's independently
+ * testable (see the note below on verification limits - there is no JS test runner in this
+ * repo, so this is exercised by code review + the doc/commit trail, not an automated test). */
+function jointNameParts(name) {
+  const m = /^([LR])_(.*)_joint$/.exec(name);
+  if (m) return { kind: m[2], side: m[1] };
+  return { kind: name, side: null }; // doesn't fit the L_*_joint/R_*_joint convention at all
+}
+
+function panelsFor(simNames, realNames) {
+  const order = []; // display order: sim kinds first (stable, matches today's layout),
+                     // then any additional kind only ever seen on the real side, in the
+                     // order it was first observed
+  const info = {};
+  function ensure(kind) {
+    if (!info[kind]) {
+      info[kind] = { kind, Lname: null, Rname: null, single: null, inSim: false, inReal: false };
+      order.push(kind);
+    }
+    return info[kind];
+  }
+  function ingest(names, flag) {
+    (names || []).forEach((n) => {
+      const { kind, side } = jointNameParts(n);
+      const rec = ensure(kind);
+      rec[flag] = true;
+      if (side === "L") rec.Lname = n;
+      else if (side === "R") rec.Rname = n;
+      else rec.single = n; // no L/R prefix - gets a standalone (unpaired) panel
+    });
+  }
+  ingest(simNames, "inSim");
+  ingest(realNames, "inReal");
+  return order.map((kind) => {
+    const rec = info[kind];
+    return {
+      kind,
+      Lname: rec.Lname || rec.single, // a lone unpaired name plots in the "L" slot
+      Rname: rec.Rname,
+      realOnly: rec.inReal && !rec.inSim, // sim contract has no such joint - flag it instead
+                                          // of letting it look like an ordinary sim panel
+    };
+  });
 }
 
 function obsTermDims(contract) {
@@ -155,6 +223,14 @@ function onJointState(msg) {
       tau: zipNamed(msg.joint_names, msg.tau_est),
       target: zipNamed(msg.joint_names, msg.target),
     };
+    // A4 fix: remember every joint name ever seen on the real side, in first-seen order,
+    // so buildPlotGrid() can give a panel to a real joint the sim contract doesn't know
+    // about (see panelsFor()). This only ever grows; a real joint set is not expected to
+    // change mid-session, and a stale leftover name here costs nothing (its series just
+    // stops updating - a `-` in the modal - not a crash).
+    (msg.joint_names || []).forEach((n) => {
+      if (!S.realJointNames.includes(n)) S.realJointNames.push(n);
+    });
     return;
   }
   S.joints = msg;
@@ -1079,10 +1155,13 @@ function updateImu3D() {
 const ROW_META = {
   pos: {
     title: "position [rad] (solid=q, dashed=target, dotted=sent-to-hardware)",
-    labels: ["L q", "R q", "L target", "R target", "L real", "R real", "L sent", "R sent"],
+    labels: ["L q sim", "R q sim", "L target", "R target", "L real", "R real", "L sent", "R sent"],
   },
-  tau: { title: "torque [N·m]", labels: ["L tau", "R tau", "L real", "R real"] },
-  qd: { title: "velocity [rad/s]", labels: ["L qd", "R qd"] },
+  tau: { title: "torque [N·m]", labels: ["L tau sim", "R tau sim", "L real", "R real"] },
+  // A4 fix: qd used to have no real-side series at all (S.ring already carried realQd -
+  // onJointState/pollSlow filled it - seriesArraysFor's qd branch just never read it), so
+  // real velocity was invisible regardless of the panel-naming bug below. Added here.
+  qd: { title: "velocity [rad/s]", labels: ["L qd sim", "R qd sim", "L real", "R real"] },
 };
 
 function initPlotsToolbar() {
@@ -1098,6 +1177,7 @@ function initPlotsToolbar() {
       <span data-w="5">5s</span><span data-w="10" class="on">10s</span><span data-w="20">20s</span><span data-w="60">60s</span>
     </span>
     <span class="small">L=blue R=orange &middot; solid=sim dashed=target light=real &middot; click a panel to expand</span>
+    <span class="small" id="plots-real-status" style="margin-left:auto"></span>
   `;
   tb.querySelector("#plot-rows-seg").addEventListener("click", (ev) => {
     const s = ev.target.closest("span"); if (!s) return;
@@ -1161,20 +1241,32 @@ function buildPlotGrid() {
   destroyPlotInstances();
   const root = el("plots-rows");
   root.innerHTML = "";
+  // A4 fix: panels come from sim ∪ real observed names (panelsFor), not S.jointKinds alone,
+  // so a real joint that doesn't fit the sim's L/R naming template still gets a panel
+  // instead of silently disappearing. S.plotPanels is the lookup seriesArraysFor()/
+  // openModal() use, so panel construction and data query can never disagree on names.
+  const panels = panelsFor(S.contract.action_joint_names, S.realJointNames);
+  S.plotPanels = {};
+  panels.forEach((p) => { S.plotPanels[p.kind] = p; });
+  S.lastPanelRealCount = S.realJointNames.length;
   const cellsToInit = []; // [row, kind, cellEl] - uPlot needs real layout, so build the
                           // whole DOM tree and attach it to `root` FIRST, then measure
   Object.keys(ROW_META).forEach((row) => {
     if (!S.plotRows[row]) return;
     const rowDiv = document.createElement("div");
     rowDiv.className = "plots-row";
-    S.jointKinds.forEach((kind) => {
+    panels.forEach((p) => {
       const cell = document.createElement("div");
       cell.className = "plot-cell";
-      cell.dataset.row = row; cell.dataset.kind = kind;
-      cell.innerHTML = `<span class="pt">${kind}</span>`;
-      cell.addEventListener("click", () => openModal(row, kind));
+      cell.dataset.row = row; cell.dataset.kind = p.kind;
+      // realOnly: this joint name is on the real stream but not in the sim contract's
+      // action set (e.g. an unmapped bridge name) - tag it instead of letting it pass for
+      // an ordinary sim panel, per item 3 of the A4 fix.
+      const tag = p.realOnly ? ` <span class="pill warn" style="font-size:9px;padding:0 4px">real only</span>` : "";
+      cell.innerHTML = `<span class="pt">${p.kind}${tag}</span>`;
+      cell.addEventListener("click", () => openModal(row, p.kind));
       rowDiv.appendChild(cell);
-      cellsToInit.push([row, kind, cell]);
+      cellsToInit.push([row, p.kind, cell]);
     });
     const hdr = document.createElement("div");
     hdr.className = "small"; hdr.style.margin = "2px 4px";
@@ -1190,12 +1282,17 @@ function buildPlotGrid() {
 }
 
 function seriesArraysFor(row, kind) {
-  const Lname = `L_${kind}_joint`, Rname = `R_${kind}_joint`;
+  // A4 fix: read the panel's actual Lname/Rname (as built by buildPlotGrid -> panelsFor)
+  // instead of re-guessing `L_${kind}_joint` here - a second, independent template that
+  // could (and did) drift out of sync with what the panel was actually built from.
+  const p = S.plotPanels[kind];
+  const Lname = p ? p.Lname : `L_${kind}_joint`;
+  const Rname = p ? p.Rname : `R_${kind}_joint`;
   const now = S.ring.length ? S.ring[S.ring.length - 1].t : 0;
   const cutoff = now - S.plotWindowS;
   const rows = S.ring.filter((r) => r.t >= cutoff);
   const xs = rows.map((r) => r.t - now);
-  const get = (field, name) => rows.map((r) => (r[field] && r[field][name] !== undefined && r[field][name] !== null) ? r[field][name] : null);
+  const get = (field, name) => rows.map((r) => (name && r[field] && r[field][name] !== undefined && r[field][name] !== null) ? r[field][name] : null);
   if (row === "pos") {
     return [
       xs, get("q", Lname), get("q", Rname), get("target", Lname), get("target", Rname),
@@ -1203,10 +1300,26 @@ function seriesArraysFor(row, kind) {
     ];
   }
   if (row === "tau") return [xs, get("tau", Lname), get("tau", Rname), get("realTau", Lname), get("realTau", Rname)];
-  return [xs, get("qd", Lname), get("qd", Rname)];
+  return [xs, get("qd", Lname), get("qd", Rname), get("realQd", Lname), get("realQd", Rname)];
 }
 
 function renderPlots() {
+  // A4 fix item 1: a new real joint name can arrive any time (not just at contract load /
+  // row-toggle / resize, the only other buildPlotGrid() triggers) - if the observed real
+  // name set has grown since the panels were last built, rebuild so it gets a panel too.
+  // realJointNames only ever grows (see onJointState), so this settles after the first few
+  // frames of a real stream and does not thrash.
+  if (S.contract && S.realJointNames.length !== S.lastPanelRealCount) {
+    buildPlotGrid();
+  }
+  const st = S.status;
+  const tel = st ? (st.telemetry || {}) : {};
+  const statusEl = el("plots-real-status");
+  if (statusEl) {
+    // A4 fix item 4: previously nothing at all indicated whether "no real series visible"
+    // meant "no real stream" vs. "stream present but not plotting" (the actual bug).
+    statusEl.textContent = tel.rx_count ? `real stream: rx ${fmt(tel.rx_hz, 1)}/s` : "no real stream";
+  }
   Object.entries(S.plotInstances).forEach(([key, u]) => {
     const [row, kind] = key.split(":");
     u.setData(seriesArraysFor(row, kind));
@@ -1221,7 +1334,9 @@ function initModal() {
 
 function openModal(row, kind) {
   S.modal = { row, kind };
-  el("modal-title").textContent = `${kind} - ${ROW_META[row].title}`;
+  const p = S.plotPanels[kind];
+  const suffix = p && p.realOnly ? " (real only)" : "";
+  el("modal-title").textContent = `${kind}${suffix} - ${ROW_META[row].title}`;
   el("modal").classList.add("on");
   const container = el("modal-chart");
   container.innerHTML = "";
