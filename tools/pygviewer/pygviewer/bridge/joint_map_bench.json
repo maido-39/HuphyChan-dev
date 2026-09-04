@@ -1,0 +1,137 @@
+{
+ "_comment": "BENCH variant of joint_map_huphy.json: the left/knee row is re-labelled limb=bench (HUPHY config/robot_bench.yaml, joint `knee`, RS03 id 127). All other rows unchanged so the 12-row invariant holds.",
+ "side_mapping_verified": false,
+ "motors": [
+  {
+   "limb": "left",
+   "motor": "hip_pitch",
+   "sim_joint": "L_hip_pitch_joint",
+   "sign": 1,
+   "offset_rad": 0.0,
+   "motor_model": "RS03"
+  },
+  {
+   "limb": "left",
+   "motor": "hip_roll",
+   "sim_joint": "L_hip_roll_joint",
+   "sign": 1,
+   "offset_rad": 0.0,
+   "motor_model": "RS03"
+  },
+  {
+   "limb": "left",
+   "motor": "hip_yaw",
+   "sim_joint": "L_hip_yaw_joint",
+   "sign": 1,
+   "offset_rad": 0.0,
+   "motor_model": "RS03"
+  },
+  {
+   "limb": "bench",
+   "motor": "knee",
+   "sim_joint": "L_knee_joint",
+   "sign": 1,
+   "offset_rad": 0.0,
+   "motor_model": "RS03",
+   "_note": "BENCH: single RS03 (id 127) wired as knee on the bench rig, 2026-09-04"
+  },
+  {
+   "limb": "left",
+   "motor": "ankle_a",
+   "sim_joint": "L_crank_A_joint",
+   "sign": 1,
+   "offset_rad": 0.0,
+   "motor_model": "RS03"
+  },
+  {
+   "limb": "left",
+   "motor": "ankle_b",
+   "sim_joint": "L_crank_B_joint",
+   "sign": 1,
+   "offset_rad": 0.0,
+   "motor_model": "RS03"
+  },
+  {
+   "limb": "right",
+   "motor": "hip_pitch",
+   "sim_joint": "R_hip_pitch_joint",
+   "sign": 1,
+   "offset_rad": 0.0,
+   "motor_model": "RS03"
+  },
+  {
+   "limb": "right",
+   "motor": "hip_roll",
+   "sim_joint": "R_hip_roll_joint",
+   "sign": 1,
+   "offset_rad": 0.0,
+   "motor_model": "RS03"
+  },
+  {
+   "limb": "right",
+   "motor": "hip_yaw",
+   "sim_joint": "R_hip_yaw_joint",
+   "sign": 1,
+   "offset_rad": 0.0,
+   "motor_model": "RS03"
+  },
+  {
+   "limb": "right",
+   "motor": "knee",
+   "sim_joint": "R_knee_joint",
+   "sign": 1,
+   "offset_rad": 0.0,
+   "motor_model": "RS03"
+  },
+  {
+   "limb": "right",
+   "motor": "ankle_a",
+   "sim_joint": "R_crank_A_joint",
+   "sign": 1,
+   "offset_rad": 0.0,
+   "motor_model": "RS03"
+  },
+  {
+   "limb": "right",
+   "motor": "ankle_b",
+   "sim_joint": "R_crank_B_joint",
+   "sign": 1,
+   "offset_rad": 0.0,
+   "motor_model": "RS03"
+  }
+ ],
+ "ankle_joints": [
+  {
+   "limb": "left",
+   "joint": "ankle_pitch",
+   "side": "L",
+   "field": "pitch",
+   "sign": 1,
+   "offset_rad": 0.0
+  },
+  {
+   "limb": "left",
+   "joint": "ankle_roll",
+   "side": "L",
+   "field": "roll",
+   "sign": 1,
+   "offset_rad": 0.0
+  },
+  {
+   "limb": "right",
+   "joint": "ankle_pitch",
+   "side": "R",
+   "field": "pitch",
+   "sign": 1,
+   "offset_rad": 0.0
+  },
+  {
+   "limb": "right",
+   "joint": "ankle_roll",
+   "side": "R",
+   "field": "roll",
+   "sign": 1,
+   "offset_rad": 0.0
+  }
+ ]
+}

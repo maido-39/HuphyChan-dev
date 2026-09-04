@@ -217,4 +217,5 @@ before_any_slew_begins`) 추가, 기존 return-interpolation 테스트는 `hold_
 - HUPHY는 다른 관리자의 프로젝트. 영역 구분: **기반 라이브러리(무수정)** / **로봇 설정(config·calibration: 프리셋 복사로 추가)** / **임시 스크립트·로봇 구현체(추가 허용)**. 새 코드는 **HUPHY 안에서, 기존 docs·의도를 분석해 같은 합의로** 작성(포크 브랜치 `bench-single-joint`, PR 가능 형태).
 - 관절명 `knee`(RS03, id 127 유지), 한계 ±180°·margin 3°·슬루 20°/주기, kp 5/kd 0.5, slcan `/dev/ttyACM0`(`CAN_BITRATE` env), 텔레메트리는 HUPHY 내장 UDP(9870) 그대로 → 뷰어 브리지.
 - 구현 중(코더): `robots/single.py` SingleJoint(Robot) + `scripts/bringup.build_robot`(kind 분기) + `config/robot_bench.yaml` + `calibration/bench_v1.0.json` + 테스트 + `docs/bench_single_joint.md` + 버그리포트 `docs/bugreport_2026-09-04.md`.
+- 09-04 15:05 — **수동 제어 검증(사용자 승인 후 원격 실행)**: `clear-fault` → `zero`(현재 자세, 캘리브 파일 없어 메모 미저장) → `nudge +5°`: kp 5 → 0.0°(정지마찰 미돌파), kp 10 → +2.86°, kp 15 → +4.24°, **kp 20 → +5.23°**(추종). 릴리즈 후 자유 로터가 되돌아 2~3° 표류(정상). ⚠ 정지 상태 속도 리드백 −1.96/−4.76/−43 deg/s로 요동 → HUPHY 속도 디코딩 스케일 의심(버그리포트 ⑤ 후보). 온도 28 °C.
 
