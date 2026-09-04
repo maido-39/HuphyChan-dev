@@ -339,13 +339,17 @@ class _FakeLeg:
     self.config = _fake_leg_config(motor_names)
 
 
-def _remote_motion(mapper, *, side="left_leg", action_prefix="left_leg", arm_token="tok"):
+def _remote_motion(mapper, *, side="left_leg", action_prefix="left_leg", arm_token="tok",
+                    enable=None, default_q=None, idle_refresh=True):
   fake_leg = _FakeLeg(["hip_pitch", "hip_roll", "hip_yaw", "knee", "ankle_a", "ankle_b"])
   latest = LatestOnly(expected_arm_token=arm_token)
-  deadman = DeadmanFilter(default_q={}, deadman_s=1.0, hold_s=1.0, return_s=1.0)
+  deadman = DeadmanFilter(
+    default_q=default_q or {}, deadman_s=1.0, hold_s=1.0, return_s=1.0, enable=enable,
+  )
   motion = RemoteMotion(
     leg=fake_leg, side=side, action_prefix=action_prefix, mapper=mapper, deadman=deadman,
     latest=latest, gains_cls=_FakeGains, kp_max=5.0, kd_max=0.5, default_kp=5.0, default_kd=0.5,
+    idle_refresh=idle_refresh,
   )
   return motion, latest
 
@@ -408,6 +412,148 @@ def test_remote_motion_uses_a_different_action_prefix_than_the_mapper_side_when_
   action = motion(0.0, observation={})
   assert set(action.keys()) == {"left_leg/knee"}
   assert "left/knee" not in action
+
+
+# ---------------------------------------------------------------- idle refresh (2026-09-04)
+# docs/123 section 11b: a real bench finding, not a bug in this file's prior logic - HUPHY's
+# ControlLoop only updates a robot's observed state from the RESPONSE to a command it just
+# sent (CONTROL mode never calls robot.refresh(), that is OBSERVE-only - control/loop.py:
+# 257-275). Before this fix, RemoteMotion.__call__ returned None whenever nothing was armed
+# yet, so literally no frame ever went out and every enabled joint's telemetry stayed frozen
+# at the bus's pre-connect cache (all-zero) - even though the hardware was fully connected.
+def test_idle_refresh_sends_zero_gain_action_for_enabled_joints_before_anything_is_armed():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  enable = {"L_hip_pitch_joint", "L_knee_joint"}  # 2 of the 6 side joints
+  motion, latest = _remote_motion(mapper, enable=enable)
+
+  action = motion(0.0, observation={})  # nothing ever put() into `latest` - phase is "idle"
+
+  assert action is not None
+  assert set(action.keys()) == {"left_leg/hip_pitch", "left_leg/knee"}
+  assert motion.idle_refresh_count == 1
+  motors = motion.leg.config.motors
+  assert motors["hip_pitch"].gains.kp == 0.0 and motors["hip_pitch"].gains.kd == 0.0
+  assert motors["knee"].gains.kp == 0.0 and motors["knee"].gains.kd == 0.0
+  # never-enabled joints are untouched, not zeroed defensively - nothing was ever asked of them
+  assert motors["hip_roll"].gains is None
+
+
+def test_idle_refresh_never_includes_a_disabled_joint():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  motion, latest = _remote_motion(mapper, enable={"L_knee_joint"})
+
+  action = motion(0.0, observation={})
+
+  assert action is not None
+  assert set(action.keys()) == {"left_leg/knee"}
+  assert "left_leg/hip_pitch" not in action
+
+
+def test_idle_refresh_uses_the_last_observed_position_never_a_synthesized_target():
+  """Position is moot while kp=0, but this locks the SOURCE down: the observed pose, or 0.0
+  if nothing has been observed yet - never default_q, which is exactly the "drive toward the
+  default pose the instant the process connects, before anyone armed anything" swing this
+  fix exists to NOT reintroduce (default_q for L_hip_pitch_joint is -0.175 rad in this
+  contract - deliberately NOT what this test's observation or assertion use, so a regression
+  that started reading default_q back in would be caught, not coincidentally pass)."""
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  motion, latest = _remote_motion(mapper, enable={"L_hip_pitch_joint", "L_knee_joint"})
+
+  action = motion(0.0, observation={"left_leg/hip_pitch.pos": 0.42})  # knee: not observed yet
+
+  assert action["left_leg/hip_pitch"] == pytest.approx(0.42)
+  assert action["left_leg/knee"] == pytest.approx(0.0)
+
+
+def test_idle_refresh_drops_an_unpaired_enabled_ankle_motor_and_warns():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  # only the A crank motor enabled, not B - HUPHY's ankle command is atomic (both or neither,
+  # same rule split_motor_targets_into_action already applies on the live path)
+  motion, latest = _remote_motion(mapper, enable={"L_crank_A_joint"})
+
+  action = motion(0.0, observation={})
+
+  assert action is None  # nothing else was enabled either, so there is nothing left to send
+  assert any("ankle_a/ankle_b" in w for w in motion.warnings)
+
+
+def test_idle_refresh_returns_none_when_nothing_is_enabled_on_this_side():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  motion, latest = _remote_motion(mapper, enable=set())  # empty --enable
+
+  assert motion(0.0, observation={}) is None
+  assert motion.idle_refresh_count == 0
+
+
+def test_no_idle_refresh_flag_restores_the_old_send_nothing_before_arming_behaviour():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  motion, latest = _remote_motion(mapper, enable={"L_knee_joint"}, idle_refresh=False)
+
+  assert motion(0.0, observation={}) is None
+  assert motion.idle_refresh_count == 0
+
+
+def test_idle_refresh_gains_never_leak_into_the_next_live_tick():
+  """The instant a live target arrives, the gain path must be the message/default gain plan
+  again - not still holding the zero gains the idle tick set. Torque-capable code sharing a
+  path with a zero-gain safety frame is exactly the kind of thing that must never linger."""
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  motion, latest = _remote_motion(mapper, enable={"L_knee_joint"})
+
+  idle_action = motion(0.0, observation={})
+  assert idle_action is not None
+  motors = motion.leg.config.motors
+  assert motors["knee"].gains.kp == 0.0 and motors["knee"].gains.kd == 0.0
+
+  latest.put(JointTarget(
+    t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.3], arm_token="tok",
+    origin="manual", ttl_ms=5000,
+  ))
+  live_action = motion(1.0, observation={})
+
+  assert live_action is not None and "left_leg/knee" in live_action
+  motors = motion.leg.config.motors
+  # back to this RemoteMotion's real default_kp/default_kd (5.0/0.5, _remote_motion's own
+  # constants) - not 0, and not left over from the idle tick above.
+  assert motors["knee"].gains.kp == pytest.approx(5.0)
+  assert motors["knee"].gains.kd == pytest.approx(0.5)
+  assert motion.idle_refresh_count == 1  # unchanged - the live tick did not count as idle
+
+
+def test_stats_ticker_prints_idle_refresh_only_when_a_counter_fn_is_given(capsys):
+  from pygviewer.bridge.huphy_remote_motion import _Receiver, _StatsTicker
+
+  latest = LatestOnly(expected_arm_token="tok")
+  recv = _Receiver("127.0.0.1", 0, latest, set())
+
+  with_fn = _StatsTicker(latest, recv, idle_refresh_fn=lambda: 3)
+  with_fn.print_once()
+  assert "idle_refresh=3" in capsys.readouterr().out
+
+  without_fn = _StatsTicker(latest, recv)  # dry-run's own construction - no such concept there
+  without_fn.print_once()
+  assert "idle_refresh=" not in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------- bench limb (2026-09-04)

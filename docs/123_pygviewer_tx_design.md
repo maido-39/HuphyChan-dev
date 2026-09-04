@@ -416,3 +416,50 @@ docs/121 §12에 정리, 여기는 이 문서(§4/§5/§6/§10)가 전제했던 
   추가, "HUPHY 전체 995 passed")이 `biped` 브랜치와 같은 갈래에서 나온 것인지, 아니면 그 이후
   `biped`가 별도로 설계돼 그 작업이 폐기/미병합된 것인지는 이번 조사로 확정하지 못했다 — HUPHY
   리포 히스토리 비교는 "리포 자체는 절대 수정 금지"와 별개로 이번 작업 범위 밖이라 하지 않았다.
+
+## §11b. 벤치 실측 결함 — CONTROL 모드는 "명령해야만 상태가 온다" (2026-09-04, 코더)
+
+§11 배포 직후 사용자가 벤치에서 실물모드(`run_real`)를 띄워 실측: 기동 정상(`side=left_leg`, 폴트
+클리어 파트순회, 텔레메트리 UDP 개시, 주기 통계 출력 전부 정상 동작), 그런데 뷰어로 오는 값이
+**전 관절(42키) 0.0** — 물리적으로 존재하는 knee(id4)·ankle_a(id5)까지 포함. 키 형식·limb 이름은
+정확(`left_leg/{motor}/{field}`).
+
+**원인은 HUPHY `control/loop.py:257-275`의 `ControlLoop.step` 자체 구조**(HUPHY 코드, 버그
+아님): `Mode.OBSERVE`에서만 `robot.refresh()`(읽기전용 프레임)를 부르고, `Mode.CONTROL`(이
+스크립트가 항상 쓰는 모드)에서는 **우리가 보낸 명령의 응답으로만** 상태가 갱신된다(MIT 프로토콜엔
+읽기전용 프레임이 없음). 그런데 이 브리지의 `RemoteMotion.__call__`은 무장 전(라이브 목표 없음)엔
+`None`을 반환해 왔다 — "보낼 게 없다"는 자연스러운 해석이었지만, 그 결과 **무장 전엔 프레임이
+아예 나가지 않아** 모터가 실제로 연결·응답 가능한 상태여도 텔레메트리가 버스의 기동 전 캐시(전부
+0)에 영원히 멈춰 있었다. HUPHY를 고치지 않고(여전히 절대수정 금지) 액션 경로로 메운다.
+
+**고친 것** (`pygviewer/bridge/huphy_remote_motion.py`):
+
+- `RemoteMotion.__call__`은 이제 `state.phase == "idle"`(=아직 한 번도 무장되지 않음, `not
+  state.target`인 방어분기 포함)일 때 `None` 대신 **`_idle_refresh_action()`**을 반환한다 —
+  `--enable`된 관절만 대상으로, **kp=kd=0**(MIT PASSIVE와 동등한 효과)에 위치값은 **직전에
+  관측된 pose**(`observation`에서 `f"{action_prefix}/{joint}.pos"`로 읽음, 없으면 0.0). **절대
+  `default_q`로 끌지 않는다** — 그게 바로 되살리면 안 되는 "기동 즉시 39.9° 스윙" 원인 경로다
+  (무장 전 idle 단계에서 `DeadmanFilter`가 `default_q`를 목표로 이미 채워 두고 있고,
+  `plan_gains`가 `default_kp/kd`(=`kp_max/kd_max`, 0이 아님)를 쓰는 기존 경로를 그대로 타면 바로
+  이 스윙이 재현된다 — 그래서 idle 단계는 그 경로를 아예 타지 않고 새 zero-gain 경로로 분기).
+  발목 한쪽만 활성화된 경우 기존 라이브 경로와 동일하게 드롭+경고. 게인 주입은 기존 경로
+  (`dataclasses.replace(self.leg.config, motors=...)`)를 그대로 재사용, kp/kd만 0.
+- `hold`/`returning`/`default`(무장 이후 데드맨 발동) 단계는 **무변경** — `default_q`로 실제
+  게인으로 복귀하는 것은 의도된 안전 기능(§3·§5)이라 건드리지 않았다. idle(=한 번도 무장된 적
+  없음)만 새 경로.
+- `--no-idle-refresh`(기본 켬)로 끄면 예전처럼 `None`(무명령·무텔레메트리)으로 완전히 복귀.
+- 진단: `idle_refresh_count`를 `RemoteMotion`에 누적, `_StatsTicker`의 주기 라인과 종료 요약
+  양쪽에 `idle_refresh=N`으로 노출(`--dry-run`엔 해당 개념이 없어 필드 자체를 생략).
+- 라이브 목표가 도착하면(phase="live") 그 즉시 원래 게인 경로(`plan_gains`)로 돌아간다 — idle에서
+  주입한 0 게인은 `self.leg.config`에 남아있지 않고 다음 틱에서 덮어써진다(테스트로 고정).
+
+**테스트** (`tests/test_remote_motion.py`, 신규 9건, huphy 미설치 환경에서도 가짜 `Leg` 객체로
+`RemoteMotion.__call__` 직접 구동): idle 액션의 kp/kd가 정확히 0, 비활성 관절은 idle 액션에
+안 들어감, 위치값이 관측치(또는 미관측시 0.0)이지 `default_q`가 아님(회귀 방지용으로 실제
+`default_q`와 다른 값을 대조), 발목 한쪽만 켜지면 드롭+경고, 아무것도 안 켜지면 `None`,
+`--no-idle-refresh`가 예전 동작을 복원, **라이브 목표 도착 시 게인이 즉시 정상치로 복귀**(0이
+안 남음), `_StatsTicker`가 카운터 콜백 유무에 따라 `idle_refresh=` 필드를 넣거나 생략. 기존
+회귀 전부 통과(`pygviewer` 전체 스위트 그린).
+
+**검증**: `--dry-run` + 단위테스트까지만(하드웨어는 사용자 실측 담당, 이번에도 하지 않음).
+`--limb left`/`--no-idle-refresh` 조합으로 CLI 파싱·기동까지 확인.

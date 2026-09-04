@@ -75,6 +75,7 @@ import socket
 import threading
 import time
 from collections import deque
+from typing import Callable
 
 from .. import CACHE_DIR, VARIANTS
 from ..contract import load_contract
@@ -341,11 +342,19 @@ class _StatsTicker:
   another case where the symptom looked identical to several different root causes and only a
   number printed at the right time told them apart."""
 
-  def __init__(self, latest: LatestOnly, recv: _Receiver, *, interval_s: float = 5.0, label: str = ""):
+  def __init__(
+    self, latest: LatestOnly, recv: _Receiver, *, interval_s: float = 5.0, label: str = "",
+    idle_refresh_fn: Callable[[], int] | None = None,
+  ):
     self.latest = latest
     self.recv = recv
     self.interval_s = float(interval_s)
     self.label = label
+    self.idle_refresh_fn = idle_refresh_fn
+    """Optional ``() -> int`` returning the running idle-refresh-tick count (2026-09-04, docs/
+    123 section 11b) - ``None`` in ``--dry-run`` (no ``RemoteMotion``/real control loop, the
+    concept does not apply there) so the field is omitted rather than printed as a
+    misleading always-0."""
     self._thread: threading.Thread | None = None
     self._running = False
 
@@ -376,10 +385,11 @@ class _StatsTicker:
 
   def print_once(self) -> None:
     s = self.latest.stats
+    extra = f" idle_refresh={self.idle_refresh_fn()}" if self.idle_refresh_fn is not None else ""
     print(
       f"{self.label}stats: accepted={s.accepted} rejected_seq={s.rejected_seq} "
       f"rejected_arm_token={s.rejected_arm_token} rejected_contract={s.rejected_contract} "
-      f"parse_errors={self.recv.parse_errors}",
+      f"parse_errors={self.recv.parse_errors}{extra}",
       flush=True,
     )
 
@@ -571,7 +581,6 @@ def run_real(args) -> int:
     enable=enable,
   )
   recv = _Receiver(listen_host, int(listen_port), latest, mapper.known_sim_joints())
-  ticker = _StatsTicker(latest, recv, interval_s=args.stats_interval_s, label="")
 
   telemetry_cfg = robot.telemetry
   if args.telemetry:
@@ -583,6 +592,16 @@ def run_real(args) -> int:
     leg=leg, side=side, action_prefix=limb_cfg.name, mapper=mapper, deadman=deadman,
     latest=latest, gains_cls=Gains,
     kp_max=args.kp_max, kd_max=args.kd_max, default_kp=args.kp_max, default_kd=args.kd_max,
+    idle_refresh=args.idle_refresh,
+  )
+  # constructed after `motion` so the ticker's periodic line can report the running
+  # idle-refresh-tick count alongside the receive counters (docs/123 section 11b) - a
+  # visibly-nonzero idle_refresh with accepted=0 is exactly "connected but not armed yet",
+  # not silence, the same distinction that used to require someone to notice the motor
+  # never gets state-locked before Ctrl-C.
+  ticker = _StatsTicker(
+    latest, recv, interval_s=args.stats_interval_s, label="",
+    idle_refresh_fn=lambda: motion.idle_refresh_count,
   )
 
   loop = ControlLoop(biped, hz=args.hz, telemetry=telemetry, mode=Mode.CONTROL)
@@ -591,7 +610,8 @@ def run_real(args) -> int:
   print(
     f"huphy_remote_motion: side={side} (biped limb {limb_cfg.name!r}) {limb_cfg.channel} "
     f"listening on {args.listen}, telemetry -> {telemetry_cfg.host}:{telemetry_cfg.port}, "
-    f"enabled={sorted(enable)}, kp_max={args.kp_max} kd_max={args.kd_max}",
+    f"enabled={sorted(enable)}, kp_max={args.kp_max} kd_max={args.kd_max}, "
+    f"idle_refresh={'on' if args.idle_refresh else 'off'}",
     flush=True,
   )
   try:
@@ -604,6 +624,7 @@ def run_real(args) -> int:
     print(f"remote_motion: stopped. accepted={latest.stats.accepted} "
           f"rejected_seq={latest.stats.rejected_seq} rejected_arm_token={latest.stats.rejected_arm_token} "
           f"rejected_contract={latest.stats.rejected_contract} parse_errors={recv.parse_errors} "
+          f"idle_refresh={motion.idle_refresh_count} "
           f"warnings(last 20)={list(motion.warnings)[-20:]}", flush=True)
   return 0
 
@@ -627,11 +648,25 @@ class RemoteMotion:
     ``action_prefix``   the ACTUAL biped limb id (``Leg.id`` / ``LimbConfig.name``, e.g.
                          ``"left_leg"``) - the ``/``-prefix ``Biped.split_action`` requires on
                          every action key.  Applied ONLY at the very last step, on the way out.
+
+  Idle refresh (2026-09-04, docs/123 section 11b - a real bench finding, not a bug in this
+  file's own logic): HUPHY's ``ControlLoop.step`` only calls ``robot.refresh()`` in
+  ``Mode.OBSERVE``; in ``Mode.CONTROL`` (what this script always runs), state is updated
+  SOLELY from the response to a command this process just sent (``control/loop.py:257-275`` -
+  MIT has no read-only frame, "아무것도 보내지 않으면 아무것도 오지 않음"). Before an operator
+  has ever armed anything (``state.phase == "idle"``), returning ``None`` here - the natural
+  reading of "there is nothing to command yet" - means literally ZERO frames go out, so every
+  enabled joint's telemetry stays frozen at the bus's pre-connect cache (all-zero) forever,
+  even though the hardware is fully connected and would answer fine. The fix is NOT to drive
+  toward ``default_q`` while idle (that reintroduces the "kp_max toward default_q the instant
+  the process connects" swing this bridge deliberately avoided by returning `None` in the
+  first place) - it is to send a harmless kp=kd=0 "keep the channel alive" frame instead, at
+  the LAST OBSERVED pose (never a synthesized target). See ``_idle_refresh_action``.
   """
 
   def __init__(self, *, leg, side: str, action_prefix: str, mapper: JointTargetMapper,
                deadman: DeadmanFilter, latest: LatestOnly, gains_cls, kp_max: float,
-               kd_max: float, default_kp: float, default_kd: float):
+               kd_max: float, default_kp: float, default_kd: float, idle_refresh: bool = True):
     self.leg = leg
     self.side = side
     self.action_prefix = action_prefix
@@ -643,13 +678,24 @@ class RemoteMotion:
     self.kd_max = kd_max
     self.default_kp = default_kp
     self.default_kd = default_kd
+    self.idle_refresh = idle_refresh
+    self.idle_refresh_count = 0
     self._ankle_guess = (0.0, 0.0)
     self.warnings: deque[str] = deque(maxlen=200)
 
   def __call__(self, t: float, observation):
     msg, age = self.latest.get()
     state = self.deadman.update(msg, age)
-    if not state.target:
+
+    # "idle" - never armed yet (docs/123 section 11b's class docstring above). `not
+    # state.target` is kept as a second, defensive trigger for the same branch: it is
+    # normally already unreachable while idle (`DeadmanFilter` itself anchors the idle
+    # target to `default_q`), but an empty `--enable` (or a map/side mismatch) would still
+    # produce an empty target in a LATER phase too, and that must never fall through to
+    # `plan_gains` with an empty `state.target` list either.
+    if state.phase == "idle" or not state.target:
+      if self.idle_refresh:
+        return self._idle_refresh_action(observation)
       return None
 
     result = self.mapper.to_motor_targets(list(state.target), list(state.target.values()))
@@ -693,9 +739,56 @@ class RemoteMotion:
     # unchanged from before biped existed). `ControlLoop.step` hands this dict to
     # `self.robot.build_commands(action)` where `self.robot` is the `Biped`, not this `Leg` -
     # and `Biped.split_action` HARD-FAILS on any name without its owning limb's `/`-prefix
-    # (`robots/biped.py`: "모르는 이름은 에러임"). This is the one place in this file that
-    # prefixes for that - everywhere else (mapper, deadman, gain plan) stays in bare-name /
-    # `self.side` (the joint map's own vocabulary) terms, same as pre-biped.
+    # (`robots/biped.py`: "모르는 이름은 에러임"). This (and `_idle_refresh_action` below,
+    # the only other `return` in this class) are the only two places that prefix for that -
+    # everywhere else (mapper, deadman, gain plan) stays in bare-name / `self.side` (the
+    # joint map's own vocabulary) terms, same as pre-biped.
+    return {f"{self.action_prefix}/{k}": v for k, v in action.items()}
+
+  def _enabled_sim_joints(self) -> list[str]:
+    """Sim joint names enabled for THIS side. ``self.deadman.enable`` verbatim when it is a
+    concrete set (what ``run_real``/``run_dry`` always pass); if it were ``None`` (meaning
+    "everything", the same convention ``DeadmanFilter._enabled`` itself uses - not something
+    the CLI can currently produce, but this class should not assume its caller always will),
+    fall back to every sim joint the mapper knows for this side."""
+    universe = (
+      self.deadman.enable if self.deadman.enable is not None else self.mapper.known_sim_joints()
+    )
+    return [sj for sj in universe if self.mapper.motor_row(sj)[0] == self.side]
+
+  def _idle_refresh_action(self, observation) -> dict[str, float] | None:
+    """Zero-gain (kp=kd=0) "keep the state channel alive" frame for every ``--enable``d joint
+    on this side, positioned at the LAST OBSERVED pose - never ``default_q``, never any other
+    synthesized target (see the class docstring's "Idle refresh" section for why). Returns
+    ``None`` if nothing is enabled on this side (nothing to refresh, not an error).
+
+    kp=kd=0 through the SAME per-tick gain-override path `plan_gains`'s callers already use
+    (`dataclasses.replace(self.leg.config, motors=...)`) - a MIT frame with zero gains and
+    zero feedforward torque asks nothing of the motor (HUPHY's own guards/codec see a normal,
+    in-range command, not a special "observe" mode - MIT has none), so this can never move a
+    joint or fight a human hand on it, armed or not.
+    """
+    motor_names = {self.mapper.motor_row(sj)[1] for sj in self._enabled_sim_joints()}
+    single_names = motor_names & set(SINGLE_MOTOR_NAMES)
+    ankle_a_in, ankle_b_in = "ankle_a" in motor_names, "ankle_b" in motor_names
+    ankle_enabled = ankle_a_in and ankle_b_in
+    if ankle_a_in != ankle_b_in:
+      self.warnings.append("idle refresh: only one of ankle_a/ankle_b enabled - dropped")
+
+    joint_names = set(single_names) | ({"ankle_pitch", "ankle_roll"} if ankle_enabled else set())
+    if not joint_names:
+      return None
+
+    obs = observation or {}
+    action = {j: float(obs.get(f"{self.action_prefix}/{j}.pos", 0.0)) for j in joint_names}
+
+    motor_gain_names = single_names | ({"ankle_a", "ankle_b"} if ankle_enabled else set())
+    motors = dict(self.leg.config.motors)
+    for motor_name in motor_gain_names:
+      motors[motor_name] = dataclasses.replace(motors[motor_name], gains=self.Gains(kp=0.0, kd=0.0))
+    self.leg.config = dataclasses.replace(self.leg.config, motors=motors)
+
+    self.idle_refresh_count += 1
     return {f"{self.action_prefix}/{k}": v for k, v in action.items()}
 
 
@@ -733,6 +826,14 @@ def build_parser() -> argparse.ArgumentParser:
   ap.add_argument("--hz", type=float, default=DEFAULT_HZ)
   ap.add_argument("--seconds", type=float, default=None, help="run this long then exit; default = until Ctrl-C")
   ap.add_argument("--allow-uncalibrated", action="store_true")
+  ap.add_argument(
+    "--no-idle-refresh", dest="idle_refresh", action="store_false", default=True,
+    help="real mode only (docs/123 section 11b): CONTROL-mode HUPHY only updates a joint's "
+         "telemetry from the response to a command THIS process sent, so before anything is "
+         "armed, a kp=kd=0 frame is sent for every --enable'd joint just to keep state "
+         "flowing - never driving toward default_q. Pass this to go back to sending nothing "
+         "(and getting no telemetry) before the first armed target arrives.",
+  )
   ap.add_argument("--dry-run", action="store_true",
                    help="no huphy, no CAN - log + echo telemetry assuming instant tracking")
   ap.add_argument("-v", "--verbose", action="store_true")
