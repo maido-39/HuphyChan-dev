@@ -272,3 +272,5 @@ forward.py`, `bridge/dummy_tx.py` 둘 다)이 `ws.send()`만 하고 `ws.recv()`�
 테스트 하네스가 실제로 버그에 민감한지 확인하는 음성대조(안 읽는 클라이언트는 반드시 끊겨야 함,
 `"1011"`/`"keepalive"` 문자열 포함)을 확인. FastAPI `TestClient`의 웹소켓은 인메모리 시뮬레이션이라
 이 버그를 절대 못 잡음 — 실제 uvicorn+실제 asyncio 클라이언트가 필수였음. 전체 스위트 345 passed.
+- 09-04 15:50 — **WS keepalive 드롭 근본원인 = 클라이언트 미배수(코더)**: 송신 전용 클라이언트가 `/ws/in`의 ack(`{"ok":true,"seq"}`)를 안 읽어 websockets 수신 큐가 차면 자기 PONG도 못 처리→timeout. 서버 hang 아님. 수정: 송신 클라이언트(huphy_udp_forward·dummy_tx)에 응답 배수 태스크 + 지수백오프 재연결. 실측: 수정 후 200 msg/s로 2분+ 무절단(rx 39980, seq gap 0, age 0.009), 벤치 실경로도 무절단(age 0.004). fwd_supervisor.sh는 보험으로 유지→이제 불필요하여 회수, 단일 포워더로 가동. pytest 345.
+
