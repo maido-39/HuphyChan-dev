@@ -31,9 +31,9 @@
    "motor": "knee",
    "sim_joint": "L_knee_joint",
    "sign": 1,
-   "offset_rad": 0.0,
+   "offset_rad": 0.35,
    "motor_model": "RS03",
-   "_note": "BENCH: single RS03 (id 127) wired as knee on the bench rig, 2026-09-04"
+   "_note": "BENCH: single RS03 (id 127) wired as knee on the bench rig, 2026-09-04 ; offset_rad 0.35 = bench zero -> sim knee default (20.05 deg) so the free rotor sits inside the knee window"
   },
   {
    "limb": "left",
