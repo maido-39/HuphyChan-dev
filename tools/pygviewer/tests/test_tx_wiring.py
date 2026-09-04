@@ -30,6 +30,7 @@ from pygviewer.api import build_app
 from pygviewer.bridge.dummy_rx import DummyRx
 from pygviewer.bridge.tx_map import JointTargetMapper, sim_rad_to_cal_deg
 from pygviewer.contract import load_contract
+from pygviewer.schema import JointState
 from pygviewer.sim_core import SimCore
 from pygviewer.tx import DEADMAN_TIMEOUT_S, TxNotAllowed, TxState
 
@@ -205,6 +206,21 @@ def test_config_enable_arm_round_trip(client):
   assert r.status_code == 200, r.text
   assert r.json()["enabled"] is True
 
+  # Sync-before-arm gate (hw_sync.py, docs/123 section 10.2): arm is refused until a
+  # POST /sync_from_real covers every TX-enabled joint. Feed fresh real telemetry for
+  # L_knee_joint directly into RealState (the same thing WS /ws/in would do) so a sync has
+  # something to work with.
+  r = c.post("/tx/arm")
+  assert r.status_code == 409, r.text
+  assert "sync" in r.json()["detail"].lower()
+
+  core.real.ingest_joint_state(
+    JointState(t_ns=time.monotonic_ns(), seq=1, src="dummy", joint_names=["L_knee_joint"], q=[0.4])
+  )
+  r = c.post("/sync_from_real")
+  assert r.status_code == 200, r.text
+  assert "L_knee_joint" in r.json()["synced"]
+
   r = c.post("/tx/arm")
   assert r.status_code == 200, r.text
   assert r.json()["armed"] is True
@@ -306,6 +322,18 @@ def live_rig():
     core.stop()
 
 
+def _sync_knee(core, client, value: float = 0.3):
+  """Sync-before-arm gate (hw_sync.py, docs/123 section 10.2): every ``live_rig`` test below
+  arms TX for ``L_knee_joint`` and must feed it a fresh real sample first, same as an
+  operator pressing '0. sync from hardware' after a real telemetry stream connects."""
+  core.real.ingest_joint_state(
+    JointState(t_ns=time.monotonic_ns(), seq=1, src="dummy", joint_names=["L_knee_joint"], q=[value])
+  )
+  r = client.post("/sync_from_real")
+  assert r.status_code == 200, r.text
+  return r.json()
+
+
 def _drive(core, client, seconds: float, heartbeat: bool):
   """Steps the sim in real 20 ms slices (control-tick granularity), optionally sending a
   fresh keyboard dead-man heartbeat every slice - the dashboard's own ~100ms cadence, made
@@ -329,6 +357,7 @@ def test_live_enable_arm_heartbeat_target_tracks_over_real_udp(live_rig):
   )
   assert r.status_code == 200, r.text
   assert client.post("/tx/enable", json={"on": True}).status_code == 200
+  _sync_knee(core, client)
   assert client.post("/tx/arm").status_code == 200
 
   target_rad = 0.5
@@ -359,6 +388,7 @@ def test_live_heartbeat_stop_halts_sending_within_deadman_timeout(live_rig):
   )
   client.post("/tx/config", json={"host": "127.0.0.1", "port": listen_port, "enable": ["L_knee_joint"]})
   client.post("/tx/enable", json={"on": True})
+  _sync_knee(core, client)
   client.post("/tx/arm")
   client.post("/target", json={"values": {"L_knee_joint": 0.4}})
 
@@ -387,6 +417,7 @@ def test_live_policy_sim_mode_refuses_arm_and_auto_disarms(live_rig):
   )
   client.post("/tx/config", json={"host": "127.0.0.1", "port": listen_port, "enable": ["L_knee_joint"]})
   client.post("/tx/enable", json={"on": True})
+  _sync_knee(core, client)
   assert client.post("/tx/arm").status_code == 200
 
   core.mode = "policy_sim"  # bypasses POST /mode - only the structural gate should catch this
@@ -408,6 +439,7 @@ def test_live_joint_outside_enable_list_is_never_transmitted(live_rig):
   # only the knee is enabled - hip_pitch is commanded too, but must never reach the wire.
   client.post("/tx/config", json={"host": "127.0.0.1", "port": listen_port, "enable": ["L_knee_joint"]})
   client.post("/tx/enable", json={"on": True})
+  _sync_knee(core, client)
   client.post("/tx/arm")
   client.post("/target", json={"values": {"L_knee_joint": 0.3, "L_hip_pitch_joint": 0.35}})
 

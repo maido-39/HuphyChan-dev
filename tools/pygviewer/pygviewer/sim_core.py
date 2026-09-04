@@ -35,6 +35,7 @@ import mujoco
 import numpy as np
 
 from .contract import ModelContract
+from .hw_sync import HwSyncState
 from .policy import ObsBuilder, ObsSourceMux, action_to_target, check_compatible
 from .telemetry import RealState
 from .tx import TxState
@@ -324,6 +325,13 @@ class SimCore:
 
     # ---------------------------------------------------------------- TX (UI v2, 09-04)
     self.tx = TxState(self.act_names, contract, violations=self.violations)
+
+    # ---------------------------------------------------------------- HW sync gate (09-04)
+    # Real near-miss on the bench (docs/123 section 10.2): a manual target left over at
+    # 66.4 deg while the real knee sat at 27.8 deg, with nothing stopping an ARM from sending
+    # that 38.6 deg jump as the first packet. `POST /tx/arm` refuses until `POST
+    # /sync_from_real` has pulled a fresh baseline - see hw_sync.py's module docstring.
+    self.hw_sync = HwSyncState()
 
     self._cmds: deque = deque(maxlen=512)
     self._lock = threading.Lock()
@@ -937,6 +945,14 @@ class SimCore:
         if want == "file_replay":
           self.replayer.start(self.d.time)
       self.mode = want
+      # Sync-before-arm gate (hw_sync.py, docs/123 section 10.2): leaving manual invalidates
+      # any existing sync - a policy/replay mode can move the target through a path the sync
+      # snapshot never saw, so a later return to manual must not silently keep trusting it.
+      # (Also checked structurally every control tick in `_on_control_tick`, same pattern as
+      # `tx.check_mode_gate` - this call just makes it take effect immediately rather than
+      # waiting up to one tick, mirroring the honesty `/target`'s synchronous clip response
+      # already aims for elsewhere in this file.)
+      self.hw_sync.note_mode(want)
     elif op == "cmd":
       self.cmd = np.asarray(cmd["value"], dtype=float).reshape(3)
     elif op == "gains":
@@ -970,6 +986,11 @@ class SimCore:
     # auto-disarms the instant the mode is not "manual" - checked here every control tick,
     # not only by the API layer that requested the mode change.
     self.tx.check_mode_gate(self.mode)
+    # Sync-before-arm gate (hw_sync.py, docs/123 section 10.2): same structural pattern -
+    # `_apply_cmd`'s "mode" op already calls `hw_sync.note_mode`, but `self.mode` can also be
+    # written directly (tests, a future caller) without going through that path, so this is
+    # checked every tick too, not only when the API-driven op runs.
+    self.hw_sync.note_mode(self.mode)
     if self.tx.enabled:
       # The ONLY thing ever handed to the TX wrapper is the current manual/script target -
       # never a policy action, which is a different attribute entirely (self.last_action /

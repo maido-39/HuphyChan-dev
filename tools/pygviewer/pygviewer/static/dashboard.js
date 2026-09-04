@@ -1033,6 +1033,7 @@ function renderJointsPanel(sub, force) {
       </div>`;
     }).join("");
     sub.innerHTML = `
+      <div class="warnbanner" id="joints-lock-banner" style="display:none"></div>
       <div class="small" style="margin:4px 0">Slider range = contract safe_clip. "phys" on a
         mirrored joint is travel_sign&times;q, so both legs read alike. TX checkboxes mirror
         the Telemetry tab's TX enable list (read-only here - configure it there).</div>
@@ -1067,12 +1068,31 @@ function renderJointsPanel(sub, force) {
     };
     wireAnkleFootSpace(sub, c);
   }
+  // Sync-before-arm gate (docs/123 section 10.2): lock every slider/number input while real
+  // telemetry is connected but not (yet, or no longer) synced - never locks a pure-sim
+  // session with no real telemetry at all (jointsLockState's own docstring).
+  const lock = jointsLockState(S.status, S.txStatus);
+  const banner = sub.querySelector("#joints-lock-banner");
+  if (banner) {
+    banner.style.display = lock.locked ? "" : "none";
+    if (lock.locked) {
+      banner.textContent = `Locked: press "0. sync from hardware" (Telemetry tab) to unlock manual control - ${lock.reason}`;
+    }
+  }
+  sub.querySelectorAll(".ankle-slider").forEach((sl) => { sl.disabled = lock.locked; });
+  const homeBtn = el("btn-joints-home");
+  if (homeBtn) homeBtn.disabled = lock.locked;
+
   // live readout refresh (does not fight an in-progress drag: skip the focused control)
   const q = S.joints ? zipNamed2(S.joints.joint_names, S.joints.q) : {};
   c.action_joint_names.forEach((n) => {
     const row = sub.querySelector(`.joint-row[data-n="${n}"]`);
     if (!row) return;
     const slider = row.querySelector(".slider"), num = row.querySelector(".num"), phys = row.querySelector(".phys");
+    slider.disabled = lock.locked;
+    num.disabled = lock.locked;
+    slider.title = lock.locked ? `locked - ${lock.reason} - press "0. sync from hardware" to unlock` : "";
+    num.title = slider.title;
     const target = c.default_q[n];
     const cur = q[n];
     if (document.activeElement !== slider && document.activeElement !== num) {
@@ -1088,6 +1108,19 @@ function renderJointsPanel(sub, force) {
 }
 
 function zipNamed2(names, arr) { const o = {}; if (!arr) return o; names.forEach((n, i) => { o[n] = arr[i]; }); return o; }
+
+/* Sync-before-arm gate, Joints-tab half (docs/123 section 10.2): PURE (no DOM) so the lock
+ * decision is reviewable/testable on its own - real telemetry connected but not (yet, or no
+ * longer) synced is the ONLY case that locks; a pure-sim session (no real telemetry at all)
+ * must never be blocked by a gate that exists for hardware safety. */
+function jointsLockState(status, txStatus) {
+  const health = status && status.telemetry ? status.telemetry.health : null;
+  const realConnected = !!(health && health.link && health.link.connected);
+  if (!realConnected) return { locked: false, reason: null };
+  const sync = txStatus ? txStatus.sync : null;
+  if (sync && sync.valid) return { locked: false, reason: null };
+  return { locked: true, reason: (sync && sync.reason) || "no sync yet" };
+}
 
 function renderAnkleFootSpaceHtml(c) {
   if (!c.ankle_inverse) return "";
@@ -1890,6 +1923,15 @@ function renderTxSectionHtml() {
     <div class="small" style="margin-bottom:4px">Sends ONLY the current manual/script target -
       never a policy action. Only allowed while mode is <b>manual</b> (Joints tab, or a
       running script) - never while a policy drives.</div>
+    <div class="small" style="margin-bottom:4px">
+      <b>0. sync from hardware</b> pulls every fresh real-telemetry joint's manual target from
+      its live measured value. Required once before ARM (docs/123 section 10.2 - a stale
+      target left over at 66.4&deg; while the real joint sat at 27.8&deg; is exactly what this
+      prevents from being sent as the first packet). Joints with no real data are skipped, not
+      guessed.
+    </div>
+    <div class="row tight"><button id="btn-sync-from-real" class="primary" style="flex:1">0. sync from hardware</button></div>
+    <div class="small" id="sync-status" style="margin:2px 0 8px"></div>
     <div class="row tight"><label>host</label><input id="tx-host" value="127.0.0.1" style="width:96px">
       <label>port</label><input id="tx-port" type="number" value="9872" style="width:60px"></div>
     <div class="row tight"><label>kp max</label><input id="tx-kpmax" type="number" value="5" step="0.1" style="width:50px">
@@ -1910,6 +1952,54 @@ function renderTxSectionHtml() {
     <div class="small">arm_token (copy into the receiver's <span class="mono">--arm-token</span>):
       <span id="tx-token" class="mono">-</span></div>
   `;
+}
+
+/* Sync-before-arm gate (docs/123 section 10.2, hw_sync.py) - "0. sync from hardware". Pure
+ * text-formatting half split out (summariseSyncResult) so the exact wording is reviewable/
+ * testable without a browser, same reasoning as policyLoadErrorText above. */
+function summariseSyncResult(r) {
+  const synced = Object.keys(r.synced || {});
+  const skipped = r.skipped || {};
+  const clipped = Object.keys(r.clipped || {});
+  const skippedNames = Object.keys(skipped);
+  const parts = [];
+  if (synced.length) {
+    const detail = synced.map((n) => `${n} ${displayVal(r.synced[n]).toFixed(1)}${unitSuffix()}`).join(", ");
+    parts.push(`synced ${synced.length} joint${synced.length === 1 ? "" : "s"} (${detail})`);
+  } else {
+    parts.push("synced 0 joints");
+  }
+  if (skippedNames.length) {
+    const reasons = {};
+    skippedNames.forEach((n) => { reasons[skipped[n]] = (reasons[skipped[n]] || 0) + 1; });
+    const reasonTxt = Object.entries(reasons).map(([why, n]) => `${n} ${why}`).join(", ");
+    parts.push(`${skippedNames.length} skipped (${reasonTxt})`);
+  }
+  parts.push(`clipped ${clipped.length}`);
+  return parts.join(", ");
+}
+
+async function doSyncFromReal() {
+  let r;
+  try {
+    r = await api("POST", "/sync_from_real");
+  } catch (e) {
+    toast(e.message);
+    return;
+  }
+  toast(summariseSyncResult(r));
+  if (Object.keys(r.clipped || {}).length) {
+    const names = Object.keys(r.clipped).map((n) => {
+      const c = r.clipped[n];
+      return `${n}: real ${displayVal(c.real).toFixed(1)}${unitSuffix()} -> ${displayVal(c.applied).toFixed(1)}${unitSuffix()} `
+        + `(range [${displayVal(c.range[0]).toFixed(1)}, ${displayVal(c.range[1]).toFixed(1)}]${unitSuffix()})`;
+    }).join("; ");
+    toast(`clipped to sim range: ${names}`);
+  }
+  // Refresh immediately rather than waiting for the next 250ms poll - the Joints tab's lock
+  // and the ARM button's disabled state both depend on S.txStatus.sync being current.
+  try { S.txStatus = await api("GET", "/tx/status"); } catch (e) { /* transient */ }
+  renderJointsPanel(el("control-sub"), true);
 }
 
 function collectTxEnableList() {
@@ -1953,6 +2043,7 @@ function isTypingTarget(ev) {
 }
 
 function wireTxSection() {
+  el("btn-sync-from-real").onclick = doSyncFromReal;
   el("btn-tx-config").onclick = () => {
     if (S.txStatus && S.txStatus.armed) { toast("disarm before reconfiguring"); return; }
     pushTxConfig();
@@ -2002,8 +2093,27 @@ function renderTxStatusLive() {
   const tx = S.txStatus;
   const st = S.status;
   const modeOk = st && st.mode === "manual";
-  el("btn-tx-arm").disabled = !modeOk || !tx || !tx.enabled || tx.armed;
-  el("btn-tx-arm").title = modeOk ? "" : `blocked: mode is ${st ? st.mode : "?"}, TX only allowed in 'manual'`;
+  const sync = tx ? tx.sync : null;
+  const syncOk = !!(sync && sync.valid);
+  el("btn-tx-arm").disabled = !modeOk || !tx || !tx.enabled || tx.armed || !syncOk;
+  if (!modeOk) el("btn-tx-arm").title = `blocked: mode is ${st ? st.mode : "?"}, TX only allowed in 'manual'`;
+  else if (!syncOk) el("btn-tx-arm").title = `blocked: ${sync ? sync.reason : "no sync yet"} - press '0. sync from hardware' first`;
+  else el("btn-tx-arm").title = "";
+  const syncEl = el("sync-status");
+  if (syncEl) {
+    if (!sync) {
+      syncEl.textContent = "";
+    } else if (sync.valid) {
+      const when = sync.sync_time_wall ? new Date(sync.sync_time_wall * 1000).toLocaleTimeString() : "-";
+      const drift = displayVal(sync.target_drift_rad).toFixed(1);
+      syncEl.innerHTML = `<span style="color:var(--accent)">synced ${when}</span> &middot; ` +
+        `drift ${drift}${unitSuffix()}${sync.target_drift_joint ? ` (${sync.target_drift_joint})` : ""}`;
+      syncEl.className = "small";
+    } else {
+      syncEl.innerHTML = `<span style="color:var(--bad)">sync invalid: ${sync.reason || "not synced"}</span>`;
+      syncEl.className = "small";
+    }
+  }
   if (!tx) { badge.textContent = "-"; badge.className = "pill"; return; }
   if (tx.sending) { badge.textContent = "SENDING"; badge.className = "pill ok"; }
   else if (tx.armed) { badge.textContent = "ARMED (hold Space)"; badge.className = "pill warn"; }

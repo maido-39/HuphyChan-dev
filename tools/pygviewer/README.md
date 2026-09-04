@@ -123,8 +123,24 @@ per-motor `enable` list, kp_max/kd_max/ttl_ms) builds it; `POST /tx/enable` turn
 is not `manual` - **policy output must never be transmittable**, enforced both at arm time and
 every control tick by `SimCore._on_control_tick` -> `TxState.check_mode_gate`). Only the
 CURRENT manual/script target (`SimCore.target`) is ever sent - a policy's action lives in a
-different attribute entirely and is never read by the TX code path. On top of arm/disarm sits
-a THIRD, independent keyboard dead-man: holding **Space** (not while typing in a text field)
+different attribute entirely and is never read by the TX code path.
+
+**Sync-before-arm gate (R12, docs/123 section 10.2, 2026-09-04).** `POST /tx/arm` ALSO refuses
+(409) until `POST /sync_from_real` (dashboard button "0. sync from hardware", above "1.
+configure") has pulled every TX-enabled joint's manual target from live real telemetry, and
+that sync is still valid. This exists because of a real near-miss on the bench: the real
+L_knee sat at 27.8&deg; while the Joints tab's leftover manual target showed 66.4&deg; - arming
+at that moment would have sent that 38.6&deg; jump as the very first packet. A sync is
+invalidated by telemetry for a synced joint going stale (>1s), a `POST /tx/config` reconfigure,
+the sim mode leaving `manual`, or a model contract change; moving the manual target yourself
+AFTER syncing is never blocked (that is a deliberate operator command, shown only as "drift" in
+`GET /tx/status`) - what IS blocked is the real joint itself drifting more than 5&deg; away from
+an UN-touched synced target. While real telemetry is connected but not yet synced, the Joints
+tab's sliders/inputs and the "3. ARM" button are disabled in the dashboard (never for a pure-sim
+session with no real telemetry at all). See `pygviewer/hw_sync.py`'s module docstring for the
+full state machine and `tests/test_sync_from_real.py` for the six covered scenarios.
+
+On top of arm/disarm sits a THIRD, independent keyboard dead-man: holding **Space** (not while typing in a text field)
 calls `POST /tx/heartbeat` every ~100ms; letting go does **not** disarm - the dashboard just
 stops sending new packets ("hold", not "stop"), and the robot's own age-based dead-man
 (`bridge.remote_target`, 0.2s) takes it from there, exactly as if the cable had been unplugged.
@@ -513,6 +529,7 @@ trusting a number written here:
 | `test_rom_clip.py` (ROM clip task, 2026-09-04) | `real_replay`'s receive-side hard-range clip: a direct-drive joint (`L_knee`) 5 rad past its range lands in qpos clipped, finite, counted, with the raw telemetry value untouched; a NaN sample produces a bit-identical trajectory to no telemetry at all (differential); an AB crank pair scaled past its hard range stays inside the soft `safe_clip` and the loop stays closed; `POST /target` out-of-range vs in-range report `requested`/`applied` correctly; `POST /target` with a real NaN/Infinity over the wire (built by hand - httpx's own `json=` refuses to send one) is rejected 422, not 500 - all 7 share one module-scoped `SimCore`/`TestClient` after a per-test-instantiation version was measured to push `test_sim_rate.py`'s RSS budget over the cap in the full suite |
 | `test_violations.py` (A2, 2026-09-04) | pure `ViolationLog` unit tests (ring cap, cumulative counts surviving eviction, rate-limit suppresses ring entries but not counts, `clear()` never lets `seq` go backwards, `side` filtering); `RealState.ingest_joint_state` drops a `side="recv"` record (value/limit/`over_by`/`src`) on an out-of-range `q` and a `side="recv_torque"` record on a `tau_est` over the contract's effort limit, while the pre-existing `range_violations` counter stays intact; `SimCore._tn_clamp` drops a `side="sim_actuator"` record (`tau_raw`/`tau_clamped`) when a torque this large no motor could produce is clamped, rate-limited to one ring entry per 100 ms per joint (cumulative count still bumps every call); `GET /violations` (empty/`side=`-filtered/`age_s`) and `POST /violations/clear`; a NaN `POST /target` is both 422-rejected AND recorded as a `side="send"` violation naming the joint; `Status.telemetry.violations` carries the summary shape only, never the ring; `GET /tx/status` carries `violations_count`; A1's `replay_clamp` counter and this log agree on "something happened" without either silently staying quiet |
 | `test_health.py` (motor health task, 2026-09-04) | fresh HUPHY DIAG fields (temp/age/ack/miss) verdict `ok`; a fake-clock unit test (no real `time.sleep`) proves 1.5 s of silence for one joint verdicts `dead` while a never-touched joint stays `dead` with `age_s: null`; `ack=0` alone is `warn` (not `dead`); `miss>=1` is `warn`, `miss>=HEALTH_DEAD_MISS` is `dead`; diag present but `motor_age_ms` never reported is `dead`; a sender that never carries ANY diag field is judged on reception recency alone and flagged `diag: false` (never scored as if a missing ack/miss meant something); `GET /health` response shape (`link`/`joints`/`summary`); `Status.telemetry.health` carries the summary only, never the per-joint grid; a bench-style single-joint feed shows exactly one `ok` and the other 11 (never touched by this module) `dead` - the live shape this task actually measured against the running bench rig |
+| `test_sync_from_real.py` (R12, docs/123 section 10.2, 2026-09-04) | `POST /sync_from_real` 409s only when NO real telemetry has EVER arrived (`rx_count==0`), never merely "most joints have no data" (a bench-shaped 1-of-12 feed syncs fine, `synced`/`skipped` split correctly with named reasons); a real value outside `safe_clip` lands in `clipped` with `{real, applied, range}` AND the sim's own manual target actually stays inside the safe window; `POST /tx/arm` 409s naming the joint(s) with no synced value; sync then arm succeeds; a synced joint's telemetry going stale (>1s, no further packets) invalidates the sync and a later arm is refused again with nothing else having changed; plus text-presence checks that `dashboard.js` wires the "0. sync from hardware" button and never locks the Joints tab when no real telemetry is connected at all |
 
 Evidence figure (no OpenGL on this host, so it is matplotlib):
 `mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/make_verification_figure.py` ->
@@ -582,6 +599,10 @@ tools/pygviewer/
     record.py                Recorder (streaming jsonl.gz) / Replayer (seek, speed) (P3)
     tx.py                    (UI v2 TX, wired 2026-09-04) TxState: config/enable/arm/disarm/
                              heartbeat/on_control_tick, driving a real bridge.tx_client.TxClient
+    hw_sync.py               (R12, docs/123 section 10.2, 2026-09-04) sync-before-arm gate:
+                             POST /sync_from_real pulls manual targets from live real
+                             telemetry; POST /tx/arm refuses until a valid sync covers every
+                             TX-enabled joint
     bridge/
       huphy_udp.py           HUPHY UDP -> canonical JointState/ImuState (P3); clips pos/tgt
                              to a row's optional rom_deg before conversion, if set (2026-09-04)

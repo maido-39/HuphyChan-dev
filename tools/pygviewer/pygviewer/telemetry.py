@@ -270,6 +270,17 @@ class RealState:
         return None
       return time.monotonic() - self._last_rx_mono
 
+  def joint_age_s(self, name: str) -> float | None:
+    """Seconds since THIS joint specifically last carried any field (fast or diag) - the same
+    per-joint reception clock ``health()`` uses, exposed publicly for the sync-before-arm gate
+    (``hw_sync.py``), which needs "is this ONE joint's data fresh enough to sync/trust right
+    now" rather than the link-wide ``age_s()`` above (a link can be alive while one specific
+    joint's sender has gone quiet - the whole point of the per-joint clock, see this class's
+    module docstring)."""
+    with self._lock:
+      lu = self._joint_last_update_mono.get(name)
+    return None if lu is None else time.monotonic() - lu
+
   def rx_hz(self) -> float:
     with self._lock:
       if len(self._rx_times) < 2:

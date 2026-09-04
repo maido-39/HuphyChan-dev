@@ -574,6 +574,44 @@ q 불변 확인, 같은-다리 결합은 의도적으로 별도 취급).
   실제 화면에서 어떻게 보이는지는 여전히 미검증 — 서버 데이터·순수함수 로직·서빙 파일까지만
   이 코더가 확인 가능한 한계.
 
+### 10b. Sync-before-arm 게이트 — "0. sync from hardware" (R12, 2026-09-04, 코더)
+
+**왜**(§10.2에 상세, docs/123): 벤치 실구동 중 실물 무릎이 27.8°인데 UI 수동 목표는 66.4°로
+남아있었다. 이 상태로 무장했다면 첫 TX 패킷이 그 38.6° 차이를 그대로 모터에 명령했을 것 —
+이를 막는 장치가 전혀 없었다.
+
+**구현**: `pygviewer/hw_sync.py`의 `HwSyncState`가 무장 게이트 상태기계를 소유(의존성 없음
+— mujoco/FastAPI 없이 단위테스트 가능, `tx.py`의 순수 `TxState` 테스트와 같은 원칙).
+
+- **`POST /sync_from_real`**(신규): TX 대상 여부와 무관하게 **모든 actuated 관절**에 대해,
+  신선한(<0.5s) 유한값 실측이 있으면 sim 수동 목표 = 그 값(계약 `safe_clip`으로 클립)으로
+  설정. 응답 `{synced, clipped, skipped, max_delta_before, sync_token, t}` — `skipped`
+  사유는 `"no real data"`/`"stale"`/`"nan"`, `clipped`는 `{real, applied, range}`로
+  원값·적용값·범위를 숨기지 않음. 실물 스트림이 **한 번도** 온 적 없으면(`rx_count==0`)만
+  409 — 대부분 관절에 데이터가 없는 것(오늘 벤치: 12개 중 1개)은 정상, 에러 아님. 이 호출은
+  **어느 모드에서든** 허용(모드 전환 전에 먼저 sync 해도 되는 순서를 막지 않기 위해, §10.2
+  라이브 확인에서 드러난 요구).
+- **`POST /tx/arm`** 확장: `check_armable`(config/enable/mode, 부작용 없음) →
+  `HwSyncState.check_arm_ready` → 실제 `arm()` 순서로 체크 — TX 자체 설정 문제가 항상
+  "sync 안 했다"는 메시지보다 먼저 보이도록. sync 게이트는 (a) TX `enable` 목록의 모든
+  관절이 sync에 성공했을 것 — 실물 없는 관절이 껴 있으면 그 이름을 409에 명시, (b) sync 이후
+  목표를 조작하지 **않은** 관절에 한해 실물 라이브값이 sync 값에서 `arm_drift_limit_rad`
+  (기본 5°, `hw_sync.DEFAULT_ARM_DRIFT_LIMIT_RAD`)보다 멀어지지 않았을 것 — 사용자가 sync
+  후 슬라이더를 일부러 움직였다면 그 관절은 드리프트 검사에서 제외(의도된 조작이므로 막지
+  않음, `GET /tx/status`에 표시만).
+- **무효화**: TX 재설정(`/tx/config`), 실물 텔레메트리 stale(>1s, `refresh_staleness`로
+  요청 시점에 지연 평가), 모델 계약 변경, 그리고 **manual을 벗어나는 전환**(단, manual로
+  들어오는 전환이나 애초에 manual이 아니었던 상태는 무효화하지 않음 — §10.2 라이브 확인에서
+  "sync 직후 mode=idle이라 즉시 무효화"되는 실버그를 발견해 `_last_mode` 기반 전환 감지로
+  수정, `HwSyncState.note_mode` 참조).
+- **UI**(`dashboard.js`): TX 패널 맨 위 `0. sync from hardware` 버튼(1.configure 앞), 결과를
+  toast로 요약(synced/skipped/clipped 개수+관절명). `jointsLockState()`(순수함수)가 "실물
+  텔레메트리 연결됨 AND sync 무효"일 때만 Joints 탭 슬라이더/입력/ARM 버튼을 잠금 — 순수
+  sim 세션(실물 전혀 없음)은 절대 잠그지 않음. TX 패널에 `synced HH:MM:SS · drift X°` 또는
+  `sync invalid: <reason>` 상시 표시.
+- **테스트**: `tests/test_sync_from_real.py` 10건(§10.2 참조) + 기존 `test_tx_wiring.py`의
+  arm 라운드트립 테스트들을 sync-then-arm 순서로 갱신(4건). 전체 스위트 422→432(무실패).
+
 ## 11. 시나리오 전환 UI 3안 목업 (2026-09-04, 코더)
 
 사용자 요청(09-04): "예시를 호스팅하고 확인하게 해줘" — §10과 같은 방식(3안 클릭 가능한 목업)으로

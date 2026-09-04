@@ -162,7 +162,14 @@ class TxState:
       self.disarm(reason="TX panel deactivated")
 
   # -------------------------------------------------------------------------- stage 2: arm
-  def arm(self, mode: str) -> None:
+  def check_armable(self, mode: str) -> None:
+    """The two checks :meth:`arm` makes BEFORE it mutates any state, split out so a caller
+    (``api.py``'s ``POST /tx/arm``, which also has to check the sync-before-arm gate -
+    ``hw_sync.py``, docs/123 section 10.2) can check "would arm() succeed on TX's own terms"
+    without side effects, so config/mode problems always surface before a "you haven't synced
+    yet" message even when the sync check would ALSO fail - the more fundamental setup step
+    (0. configure/1. enable, in the dashboard's own numbering) is what an operator needs to
+    see first. Raises exactly what :meth:`arm` itself would raise, with the same wording."""
     if not self.enabled or self._client is None:
       raise TxNotAllowed(
         "TX arm refused: the TX panel is not enabled - POST /tx/config then "
@@ -174,6 +181,9 @@ class TxState:
         "running POST /script/run sequence) may arm TX - policy output must never be "
         "transmittable (docs/121 section 10 TX item)."
       )
+
+  def arm(self, mode: str) -> None:
+    self.check_armable(mode)
     self._client.arm()
     self.armed = True
     self.disarm_reason = None

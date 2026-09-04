@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import re
 import time
@@ -58,6 +59,7 @@ from .schema import (
   WIRE_VERSION,
   validate_joint_names,
 )
+from .hw_sync import SYNC_STALE_SKIP_S, HwSyncNotReady
 from .tx import TxNotAllowed
 
 _NOT_YET: dict[str, str] = {}
@@ -478,6 +480,10 @@ def build_app(core, freshness: dict) -> FastAPI:
       )
     except TxNotAllowed as exc:
       raise HTTPException(409, str(exc))
+    # Sync-before-arm gate (hw_sync.py, docs/123 section 10.2): a reconfigure can change which
+    # joints TX will ever send - an old sync computed against a different enable list must not
+    # silently keep covering the new one.
+    core.hw_sync.invalidate("TX reconfigured (POST /tx/config)")
     return core.tx.status()
 
   @app.post("/tx/enable", summary="UI v2 TX stage 1: turn the TX panel on/off (needs POST /tx/config first)")
@@ -488,10 +494,104 @@ def build_app(core, freshness: dict) -> FastAPI:
       raise HTTPException(409, str(exc))
     return core.tx.status()
 
+  def _target_and_real_now() -> tuple[dict[str, float], dict[str, float | None]]:
+    """The current manual target and the current live real value, per actuated joint - the
+    SAME thread-safe read every other endpoint already uses (``core.snapshot()`` /
+    ``core.real.snapshot_joints()``), never the raw ``core.target`` array from this (API)
+    thread. Shared by ``POST /sync_from_real``, ``POST /tx/arm`` and ``GET /tx/status`` so the
+    three never disagree about what "now" means."""
+    s = core.snapshot()
+    target_now = dict(zip(s["act_names"], s["target"]))
+    real_snap = core.real.snapshot_joints()
+    real_now = {n: real_snap[n]["q"] for n in core.act_names}
+    return target_now, real_now
+
+  @app.post(
+    "/sync_from_real",
+    summary="Set every fresh real-telemetry joint's manual target = its live measured value",
+  )
+  def post_sync_from_real():
+    """The fix for a real near-miss (docs/123 section 10.2): a manual target left over far
+    from where the real joint actually sits is exactly what ``POST /tx/arm`` now refuses to
+    send until this has been called - see ``hw_sync.py``'s module docstring for the incident
+    and the full state machine.
+
+    Refuses (409) only when there has NEVER been any real telemetry on this process at all
+    (``core.real.rx_count == 0``) - a genuinely empty stream, not merely "most joints have no
+    data" (the bench today: 1 of 12 joints wired up is a normal, syncable state, not an
+    error). Every OTHER outcome is reported honestly rather than silently smoothed over:
+    a joint with no data, stale data (older than 0.5s) or a non-finite sample is named in
+    ``skipped`` with its reason; a synced value outside the contract's safe_clip is named in
+    ``clipped`` with the raw value, the applied (clamped) value and the range - sim cannot
+    reproduce a real pose outside its own command window, and this must never be hidden.
+    """
+    if not core.real.rx_count:
+      raise HTTPException(
+        409,
+        "no real telemetry has ever been received on this process (rx_count=0) - connect a "
+        "receiver/bridge or bench transmitter over WS /ws/in before syncing",
+      )
+    target_before, _ = _target_and_real_now()
+    real_snap = core.real.snapshot_joints()
+    synced: dict[str, float] = {}
+    clipped: dict[str, dict] = {}
+    skipped: dict[str, str] = {}
+    for n in core.act_names:
+      q = real_snap.get(n, {}).get("q")
+      if q is None:
+        skipped[n] = "no real data"
+        continue
+      if not math.isfinite(q):
+        skipped[n] = "nan"
+        continue
+      age = core.real.joint_age_s(n)
+      if age is None or age > SYNC_STALE_SKIP_S:
+        skipped[n] = "stale"
+        continue
+      lo, hi = core.c.clip(n)
+      applied = min(max(q, lo), hi)
+      if applied != q:
+        clipped[n] = {"real": q, "applied": applied, "range": [lo, hi]}
+      synced[n] = applied
+    max_delta_before = max(
+      (abs(synced[n] - target_before.get(n, synced[n])) for n in synced), default=0.0
+    )
+    if synced:
+      core.submit({"op": "target", "values": synced})
+    sync_token = core.hw_sync.record_sync(synced, core.c.contract_sha)
+    return {
+      "synced": synced,
+      "clipped": clipped,
+      "skipped": skipped,
+      "max_delta_before": max_delta_before,
+      "sync_token": sync_token,
+      "t": time.time(),
+    }
+
   @app.post("/tx/arm", summary="UI v2 TX stage 2: arm hardware transmit - manual mode only")
   def post_tx_arm():
     """Refuses (409) unless stage 1 is enabled AND the sim is in ``manual`` mode (design item
-    2: policy output must never be transmittable)."""
+    2: policy output must never be transmittable), AND (docs/123 section 10.2) a valid
+    ``POST /sync_from_real`` covers every joint TX is configured to send - see
+    ``hw_sync.HwSyncState.check_arm_ready`` for the exact rule and ``hw_sync.py``'s module
+    docstring for why this exists.
+
+    Check order matters: TX's OWN preconditions (configured, enabled, mode) are checked
+    FIRST via ``check_armable`` (no side effects) so "you haven't configured TX yet" always
+    surfaces before "you haven't synced yet" even when both would fail - the more
+    fundamental setup step should be the one an operator sees. Only once those pass is the
+    sync gate checked, and only once THAT passes does this actually arm."""
+    try:
+      core.tx.check_armable(core.mode)
+    except TxNotAllowed as exc:
+      raise HTTPException(409, str(exc))
+    ages = {n: core.real.joint_age_s(n) for n in core.act_names}
+    core.hw_sync.refresh_staleness(ages, core.c.contract_sha)
+    target_now, real_now = _target_and_real_now()
+    try:
+      core.hw_sync.check_arm_ready(core.tx.enabled_motors, target_now, real_now)
+    except HwSyncNotReady as exc:
+      raise HTTPException(409, str(exc))
     try:
       core.tx.arm(core.mode)
     except TxNotAllowed as exc:
@@ -511,9 +611,21 @@ def build_app(core, freshness: dict) -> FastAPI:
       raise HTTPException(409, str(exc))
     return {"ok": True}
 
-  @app.get("/tx/status", summary="UI v2 TX: armed/sending/enable/last_seq/rate/deadman_age/rejected_count")
+  @app.get(
+    "/tx/status",
+    summary="UI v2 TX: armed/sending/enable/last_seq/rate/deadman_age/rejected_count + sync gate",
+  )
   def get_tx_status():
-    return core.tx.status()
+    """``sync`` (hw_sync.HwSyncState.status, docs/123 section 10.2) is refreshed for
+    staleness on every call, so a client polling only this endpoint sees an invalidated sync
+    (e.g. telemetry that quietly went stale) at most one poll late - never has to separately
+    poll ``GET /health`` to notice."""
+    ages = {n: core.real.joint_age_s(n) for n in core.act_names}
+    core.hw_sync.refresh_staleness(ages, core.c.contract_sha)
+    target_now, real_now = _target_and_real_now()
+    st = core.tx.status()
+    st["sync"] = core.hw_sync.status(target_now, real_now)
+    return st
 
   @app.get("/presets", summary="UI v2: gains presets - built-in train/real + custom *.json")
   def get_presets():
