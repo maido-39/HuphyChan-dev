@@ -26,7 +26,8 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .schema import (
@@ -42,6 +43,8 @@ from .schema import (
   ModeIn,
   ObsSourceIn,
   PolicyLoadIn,
+  PresetApplyIn,
+  PresetSaveIn,
   Rates,
   ResetIn,
   ScriptRunIn,
@@ -53,6 +56,29 @@ from .schema import (
 )
 
 _NOT_YET: dict[str, str] = {}
+
+STATIC_DIR = Path(__file__).parent / "static"
+PRESETS_DIR = Path(__file__).parent.parent / "presets"
+_BUILTIN_PRESET_NAMES = ("train", "real")
+
+
+def _read_side_mapping_verified() -> bool | None:
+  """UI v2 top-bar badge: ``bridge/joint_map_huphy.json``'s own flag, read once at process
+  start (it is a static hardware-bringup fact for the life of a run, not a live signal)."""
+  try:
+    p = Path(__file__).parent / "bridge" / "joint_map_huphy.json"
+    return bool(json.loads(p.read_text())["side_mapping_verified"])
+  except Exception:
+    return None
+
+
+def _safe_preset_name(name: str) -> str:
+  safe = "".join(ch for ch in name if ch.isalnum() or ch in "-_")
+  if not safe:
+    raise HTTPException(400, "preset name must contain at least one alphanumeric/-/_ character")
+  if safe in _BUILTIN_PRESET_NAMES:
+    raise HTTPException(400, f"{safe!r} is a built-in preset name (train/real); choose another")
+  return safe
 
 
 def rss_mb() -> float | None:
@@ -74,6 +100,21 @@ def build_app(core, freshness: dict) -> FastAPI:
     ),
   )
   seq = {"n": 0}
+  side_mapping_verified = _read_side_mapping_verified()
+
+  def _sim_imu(s: dict) -> dict | None:
+    """UI v2: the sim's own {gyro_rad_s, gravity_b}, from the same sensors ObsBuilder reads
+    (imu_ang_vel, -imu_upvector) - so the IMU 3D widget and the Obs tab agree with the policy
+    by construction, not by re-deriving the math a second time in this function."""
+    raw = s.get("imu") or {}
+    gyro = raw.get("imu_ang_vel")
+    up = raw.get("imu_upvector")
+    if gyro is None and up is None:
+      return None
+    return dict(
+      gyro_rad_s=gyro,
+      gravity_b=([-float(x) for x in up] if up is not None else None),
+    )
 
   def _status() -> Status:
     s = core.snapshot()
@@ -98,6 +139,8 @@ def build_app(core, freshness: dict) -> FastAPI:
       ),
       warnings=s.get("warnings", []),
       rss_mb=round(rss_mb() or 0.0, 1),
+      imu=_sim_imu(s),
+      side_mapping_verified=side_mapping_verified,
     )
 
   def _joint_state() -> JointState:
@@ -339,8 +382,57 @@ def build_app(core, freshness: dict) -> FastAPI:
   @app.post("/gains", summary="Switch the PD source (train|real) and/or override per joint")
   def post_gains(body: GainsIn):
     try:
-      table = core.set_gains(body.source, body.overrides)
+      table = core.set_gains(body.source, body.overrides, body.clear_overrides)
     except (RuntimeError, KeyError, ValueError) as exc:
+      raise HTTPException(400, str(exc))
+    return {"source": core.gains_source, "gains": table}
+
+  @app.get("/presets", summary="UI v2: gains presets - built-in train/real + custom *.json")
+  def get_presets():
+    PRESETS_DIR.mkdir(parents=True, exist_ok=True)
+    custom = []
+    for p in sorted(PRESETS_DIR.glob("*.json")):
+      try:
+        obj = json.loads(p.read_text())
+        custom.append({"name": obj.get("name", p.stem), "gains": obj.get("gains", {})})
+      except (json.JSONDecodeError, OSError):
+        continue
+    return {
+      "builtin": {
+        "train": "this model contract's own kp/kd - what the policy was optimised against",
+        "real": "HUPHY robot_v1.0.yaml start point, uniform kp=10 kd=1 on every actuated joint",
+      },
+      "custom": custom,
+    }
+
+  @app.post("/presets", summary="UI v2: save a named custom gains preset")
+  def post_presets_save(body: PresetSaveIn):
+    unknown = [n for n in body.gains if n not in core.act_names]
+    if unknown:
+      raise HTTPException(400, f"not actuated joints of {core.c.variant}: {unknown}")
+    safe = _safe_preset_name(body.name)
+    PRESETS_DIR.mkdir(parents=True, exist_ok=True)
+    path = PRESETS_DIR / f"{safe}.json"
+    path.write_text(json.dumps({"name": body.name, "gains": body.gains}, indent=2))
+    return {"ok": True, "path": str(path)}
+
+  @app.post("/presets/apply", summary="UI v2: apply a preset (train|real|custom name) via POST /gains semantics")
+  def post_presets_apply(body: PresetApplyIn):
+    if body.name == "train":
+      table = core.set_gains(source="train", clear_overrides=True)
+      return {"source": core.gains_source, "gains": table}
+    if body.name == "real":
+      overrides = {n: {"kp": 10.0, "kd": 1.0} for n in core.act_names}
+      table = core.set_gains(overrides=overrides)
+      return {"source": core.gains_source, "gains": table}
+    safe = _safe_preset_name(body.name)
+    path = PRESETS_DIR / f"{safe}.json"
+    if not path.exists():
+      raise HTTPException(404, f"no custom preset named {body.name!r} ({path})")
+    obj = json.loads(path.read_text())
+    try:
+      table = core.set_gains(overrides=obj.get("gains", {}))
+    except (KeyError, ValueError) as exc:
       raise HTTPException(400, str(exc))
     return {"source": core.gains_source, "gains": table}
 
@@ -366,12 +458,40 @@ def build_app(core, freshness: dict) -> FastAPI:
       "phases": _NOT_YET,
     }
 
+  def _real_joint_state() -> JointState | None:
+    """UI v2: the RECEIVED (real) side of the same canonical JointState, for the dashboard's
+    plot overlay - only ever sent when something has actually arrived over ``/ws/in`` (a
+    dummy transmitter, a bridge, or a real host), so a disconnected real side costs this
+    endpoint nothing. Reuses the JointState schema as-is (src='real'); it is not a new wire
+    shape, just a second populated instance of the existing one."""
+    if not core.real.rx_count:
+      return None
+    s = core.real.snapshot_joints()
+    names = list(s.keys())
+    seq["n"] += 1
+    return JointState(
+      t_ns=time.monotonic_ns(),
+      seq=seq["n"],
+      src="real",
+      contract_hash=core.c.contract_sha,
+      joint_names=names,
+      q=[s[n]["q"] for n in names],
+      qd=[s[n]["qd"] for n in names],
+      tau_est=[s[n]["tau"] for n in names],
+      target=[s[n]["target"] for n in names],
+      ankle_derived=dict(core.real.ankle_derived) or None,
+    )
+
   @app.websocket("/ws/out")
   async def ws_out(ws: WebSocket):
     """Stream ``JointState`` / ``Status`` / ``PolicyIO``, coalesced to ``?hz=``.
 
     ``types=`` selects which (default ``JointState,Status``); ``hz`` is 1-100, default 30.
-    Latest-only: a slow consumer sees fewer frames, never a backlog."""
+    Latest-only: a slow consumer sees fewer frames, never a backlog. UI v2: whenever
+    ``JointState`` is requested AND real telemetry has arrived at least once, a SECOND
+    ``JointState`` frame (``src='real'``) follows the sim one every tick - the dashboard's
+    plot ring buffer tells sim/real apart by that field, exactly like every other consumer
+    of this schema already does."""
     await ws.accept()
     hz = float(ws.query_params.get("hz", 30))
     hz = max(1.0, min(hz, 100.0))
@@ -380,6 +500,9 @@ def build_app(core, freshness: dict) -> FastAPI:
       while True:
         if "JointState" in types:
           await ws.send_text(_joint_state().model_dump_json())
+          real = _real_joint_state()
+          if real is not None:
+            await ws.send_text(real.model_dump_json())
         if "Status" in types:
           await ws.send_text(_status().model_dump_json())
         if "PolicyIO" in types and core.snapshot().get("policy"):
@@ -387,6 +510,17 @@ def build_app(core, freshness: dict) -> FastAPI:
         await asyncio.sleep(1.0 / hz)
     except (WebSocketDisconnect, RuntimeError):
       return
+
+  # ------------------------------------------------------------- UI v2 dashboard (layout B)
+  app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+  @app.get("/", include_in_schema=False)
+  def get_dashboard():
+    return FileResponse(STATIC_DIR / "dashboard.html")
+
+  @app.get("/dash", include_in_schema=False)
+  def get_dashboard_alias():
+    return FileResponse(STATIC_DIR / "dashboard.html")
 
   @app.websocket("/ws/in")
   async def ws_in(ws: WebSocket):

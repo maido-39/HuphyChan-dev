@@ -595,7 +595,9 @@ class SimCore:
     if self.mode.startswith("policy"):
       self.mode = "manual"
 
-  def set_gains(self, source: str | None = None, overrides: dict | None = None) -> dict:
+  def set_gains(
+    self, source: str | None = None, overrides: dict | None = None, clear_overrides: bool = False
+  ) -> dict:
     """Switch the PD source and/or override per joint.
 
     ``train`` is the contract's own kp/kd - the gains the policy was optimised against.
@@ -603,7 +605,15 @@ class SimCore:
     even in the same encoding on hardware (RS03/RS04 use 0-5000 vs 0-500 registers). A
     response overlay between sim and robot is meaningless until this matches, which is why
     the switch exists at all rather than a single hardcoded set.
+
+    ``clear_overrides`` (UI v2): drop every previously-applied per-joint override BEFORE
+    applying ``source``/``overrides`` this call.  Without it, overrides only ever accumulate
+    (the original P2 behaviour - fine for one-off tweaks, but it means there was no way back
+    to the contract's un-overridden gains short of restarting the process, which the Gains
+    tab's 'train' preset needs).
     """
+    if clear_overrides:
+      self.gains_overrides = {}
     if source is not None:
       if source not in ("train", "real"):
         raise ValueError("gains source must be 'train' or 'real'")
@@ -837,7 +847,7 @@ class SimCore:
     elif op == "cmd":
       self.cmd = np.asarray(cmd["value"], dtype=float).reshape(3)
     elif op == "gains":
-      self.set_gains(cmd.get("source"), cmd.get("overrides"))
+      self.set_gains(cmd.get("source"), cmd.get("overrides"), cmd.get("clear_overrides", False))
     elif op == "obs_source":
       if self.obs_mux is None:
         raise RuntimeError("no policy loaded; there are no observation terms to route")

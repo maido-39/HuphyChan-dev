@@ -235,6 +235,7 @@ class RealState:
         range_violations={n: c for n, c in self.range_violations.items() if c},
         warnings=list(self.warnings),
         have_imu=self.imu is not None,
+        imu=dict(self.imu) if self.imu is not None else None,
         have_policy_io=self.policy_io is not None,
         bridge_errors=self.bridge_errors,
         bridge_last_error=self.bridge_last_error,

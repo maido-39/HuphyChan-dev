@@ -152,6 +152,20 @@ class Status(Header):
   telemetry: dict[str, Any] = Field(default={}, description="P3: rx rate, age, clock offset")
   warnings: list[str] = []
   rss_mb: float | None = None
+  imu: dict[str, Any] | None = Field(
+    default=None,
+    description="UI v2: this SIM's own IMU, {gyro_rad_s, gravity_b} - the same body-frame "
+    "values ObsBuilder feeds the policy, derived from the model's own sensors (imu_ang_vel, "
+    "-imu_upvector). Present once the sim has run one control tick. The RECEIVED real IMU "
+    "(if any) is under telemetry.imu (RealState.imu, unchanged shape) - kept separate so a "
+    "client never confuses 'what the sim computed' with 'what a robot reported'.",
+  )
+  side_mapping_verified: bool | None = Field(
+    default=None,
+    description="UI v2: bridge/joint_map_huphy.json's own side_mapping_verified flag, read "
+    "once at process start - drives the top-bar 'side mapping UNVERIFIED' badge (protocol "
+    "steps 2/3, docs/121 section 5). None if the file could not be read.",
+  )
 
 
 class ContractOut(BaseModel):
@@ -228,6 +242,13 @@ class GainsIn(BaseModel):
 
   source: Literal["train", "real"] = "train"
   overrides: dict[str, dict[str, float]] = {}
+  clear_overrides: bool = Field(
+    default=False,
+    description="UI v2: drop every previously-applied per-joint override before applying "
+    "source/overrides this call - lets a client return to the contract's un-overridden gains "
+    "(e.g. the 'train' preset) without restarting the process. False preserves the old "
+    "behaviour (overrides only ever accumulate).",
+  )
 
 
 class ObsSourceIn(BaseModel):
@@ -251,6 +272,26 @@ class PolicyLoadIn(BaseModel):
   onnx: str | None = None
   pt: str | None = Field(default=None, description="direct .pt: builds an mjlab env, ~11 s, ~1.3 GB")
   allow_uncontracted: bool = False
+
+
+class PresetSaveIn(BaseModel):
+  """UI v2 (Gains tab).  Save a named per-joint kp/kd table to ``tools/pygviewer/presets/``.
+
+  ``train`` and ``real`` are reserved (built-in, not files): ``train`` is the contract's own
+  gains, ``real`` is HUPHY's uniform kp=10/kd=1 start point
+  (``~/external_repos/HUPHY/config/robot_v1.0.yaml``) - see ``GET /presets``.
+  """
+
+  name: str = Field(description="preset name; 'train' and 'real' are reserved")
+  gains: dict[str, dict[str, float]] = Field(description="{joint_name: {kp, kd}}")
+
+
+class PresetApplyIn(BaseModel):
+  """UI v2 (Gains tab).  Apply a preset by name: ``train`` (clears overrides, contract
+  gains), ``real`` (HUPHY kp=10/kd=1 on every actuated joint) or a custom name from
+  ``GET /presets``."""
+
+  name: str
 
 
 class CmdIn(BaseModel):
