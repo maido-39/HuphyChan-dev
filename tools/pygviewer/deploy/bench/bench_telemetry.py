@@ -11,7 +11,22 @@ exact keys HUPHY's ControlLoop telemetry would emit for limb `bench`, joint `kne
 Modes:
     --passive        (default) torque OFF; only reads the motor (spin the rotor by hand)
     --sine A F       torque ON; target = A*sin(2*pi*F*t) [deg], kp/kd from --kp/--kd (default 20/0.5)
-                     ROM clamp +-180 deg, slew <= 20 deg per 100 Hz tick, torque OFF on exit/Ctrl-C.
+                     ROM clamp (see --rom below), slew <= 20 deg per 100 Hz tick, torque OFF
+                     on exit/Ctrl-C.
+
+ROM (--rom, 2026-09-04): the sine target is ALWAYS bounded to q0 +- --rom (RAW multi-turn
+degrees, `q0` = the pose read at startup) - this does not change. `robot.motors[id].
+limits_deg`, HUPHY's own commissioned hard-stop ROM, is read and printed if present, but is
+NOT used to replace or tighten this clip: `limits_deg` is defined in CAL space (HUPHY
+config/schema.py: "각도는 전부 cal 공간임 ... 모터가 보고하는 raw 값이 아님" - "all angles
+are cal-space ... not the raw value the motor reports"), and this script talks to the motor
+directly (`RobStrideBus`/`MitCommand.position_deg`), bypassing HUPHY's Leg/calibration layer
+entirely - there is no offset/sign here to convert a cal-space limit into this script's raw
+space. Applying it as a raw clip would silently bound the WRONG window rather than the real
+one. Once this bench rig goes through `commission sweep` and gets a real offset/zero
+reference, route position commands through HUPHY's calibrated Leg/Motor API instead (or add
+the same offset_rad/sign conversion `bridge/huphy_udp.py` already does for the main robot)
+before ever trusting `limits_deg` as a bound here.
 
     source /home/syaro/Human-Pygmalion/.venv-huphy/bin/activate
     CAN_BITRATE=1000000 python bench_telemetry.py --config bench_rs03_slcan.yaml --host 192.168.20.177
@@ -45,7 +60,10 @@ def main() -> int:
   ap.add_argument("--kp", type=float, default=20.0)
   ap.add_argument("--kd", type=float, default=0.5)
   ap.add_argument("--seconds", type=float, default=0.0, help="0 = run until Ctrl-C")
-  ap.add_argument("--rom", type=float, default=180.0)
+  ap.add_argument("--rom", type=float, default=180.0,
+                  help="deg; RAW-space swing half-width around the startup pose q0. Always "
+                       "in effect - config limits_deg (if set) is CAL-space and only "
+                       "printed, never applied here (see module docstring)")
   ap.add_argument("--slew", type=float, default=20.0, help="deg per tick")
   a = ap.parse_args()
 
@@ -61,6 +79,12 @@ def main() -> int:
   kp, kd = min(a.kp, 30.0), min(a.kd, 2.0)
   print(f"[bench] motor id {mid} {mcfg.model} via {limb.channel}/{limb.interface}; telemetry -> {a.host}:{a.port} "
         f"@ {a.hz:.0f} Hz; mode {'SINE ' + str(a.sine) + f' kp={kp} kd={kd}' if active else 'PASSIVE (torque off)'}", flush=True)
+  if mcfg.limits_deg is not None:
+    print(f"[bench] NOTE: {mcfg.model} has a commissioned limits_deg={mcfg.limits_deg} "
+          f"(CAL space, hard-stop) - NOT applied as a clip here: this script commands raw "
+          f"multi-turn degrees with no cal-space offset/sign conversion (module docstring). "
+          f"--rom={a.rom:g} deg (raw, relative to q0) remains the only ROM bound in effect.",
+          flush=True)
 
   stop = {"flag": False}
   signal.signal(signal.SIGINT, lambda *_: stop.__setitem__("flag", True))
