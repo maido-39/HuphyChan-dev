@@ -115,7 +115,10 @@ def test_ttl_ms_can_trigger_the_deadman_earlier_than_deadman_s():
 
 
 def test_returning_interpolates_linearly_between_hold_pose_and_default_over_return_s():
-  f = DeadmanFilter(default_q={"L_knee_joint": 0.0}, deadman_s=0.2, return_s=3.0)
+  """``hold_s=0`` isolates the ``returning`` phase's own timing from the (now separate,
+  docs/123 section 5) flat-hold phase - the old single-phase "slew starts the instant the
+  deadman trips" behaviour, still available as a special case."""
+  f = DeadmanFilter(default_q={"L_knee_joint": 0.0}, deadman_s=0.2, hold_s=0.0, return_s=3.0)
   msg = _msg(q_target=(0.6,), ttl_ms=1_000_000)
   f.update(msg, age_s=0.0, now=0.0)              # live, hold pose will be 0.6
   f.update(msg, age_s=1.0, now=1.0)              # deadman trips here, hold_since=1.0
@@ -133,6 +136,28 @@ def test_returning_interpolates_linearly_between_hold_pose_and_default_over_retu
   assert after.target["L_knee_joint"] == pytest.approx(0.0, abs=1e-6)
 
 
+def test_hold_phase_is_flat_for_hold_s_before_any_slew_begins():
+  """docs/123 section 5 resolution (2026-09-04): after the deadman trips, the pose is frozen
+  (no motion at all) for a flat ``hold_s`` seconds - only then does the ``return_s`` slew
+  begin. This is what separates the current 3-knob design from the old 2-knob one."""
+  f = DeadmanFilter(default_q={"L_knee_joint": 0.0}, deadman_s=0.2, hold_s=3.0, return_s=2.0)
+  msg = _msg(q_target=(0.6,), ttl_ms=1_000_000)
+  f.update(msg, age_s=0.0, now=0.0)     # live, hold pose will be 0.6
+  f.update(msg, age_s=1.0, now=1.0)     # deadman trips here, hold_since=1.0
+
+  still_holding = f.update(msg, age_s=2.9, now=1.0 + 2.9)  # 2.9s into the 3s flat hold
+  assert still_holding.phase == "hold"
+  assert still_holding.target["L_knee_joint"] == pytest.approx(0.6)  # unchanged, not moving
+
+  just_after_hold = f.update(msg, age_s=3.1, now=1.0 + 3.1)  # 0.1s into the return
+  assert just_after_hold.phase == "returning"
+  assert just_after_hold.target["L_knee_joint"] == pytest.approx(0.6 * (1.0 - 0.1 / 2.0), abs=1e-6)
+
+  done = f.update(msg, age_s=10.0, now=1.0 + 3.0 + 2.0)  # hold_s + return_s later
+  assert done.phase == "default"
+  assert done.target["L_knee_joint"] == pytest.approx(0.0, abs=1e-6)
+
+
 def test_recovering_before_the_deadman_trips_resets_cleanly_with_no_hold_phase():
   f = DeadmanFilter(default_q={"L_knee_joint": 0.0}, deadman_s=0.2, return_s=3.0)
   msg1 = _msg(q_target=(0.5,), seq=1, ttl_ms=1_000_000)
@@ -143,11 +168,23 @@ def test_recovering_before_the_deadman_trips_resets_cleanly_with_no_hold_phase()
   assert state.target["L_knee_joint"] == pytest.approx(0.55)
 
 
-def test_recovering_mid_return_snaps_back_to_live_not_a_blended_value():
-  f = DeadmanFilter(default_q={"L_knee_joint": 0.0}, deadman_s=0.2, return_s=3.0)
+def test_recovering_mid_hold_snaps_back_to_live_not_a_blended_value():
+  f = DeadmanFilter(default_q={"L_knee_joint": 0.0}, deadman_s=0.2, hold_s=3.0, return_s=2.0)
   msg1 = _msg(q_target=(0.5,), seq=1, ttl_ms=1_000_000)
   f.update(msg1, age_s=0.0, now=0.0)
-  f.update(msg1, age_s=1.0, now=1.0)   # deadman trips, starts returning
+  f.update(msg1, age_s=1.0, now=1.0)   # deadman trips, enters flat hold
+  f.update(msg1, age_s=2.0, now=2.0)   # mid-hold
+  msg2 = _msg(q_target=(0.5,), seq=2, ttl_ms=1_000_000)
+  state = f.update(msg2, age_s=0.01, now=2.5)   # fresh packet arrives again
+  assert state.phase == "live"
+  assert state.target["L_knee_joint"] == pytest.approx(0.5)
+
+
+def test_recovering_mid_return_snaps_back_to_live_not_a_blended_value():
+  f = DeadmanFilter(default_q={"L_knee_joint": 0.0}, deadman_s=0.2, hold_s=0.0, return_s=3.0)
+  msg1 = _msg(q_target=(0.5,), seq=1, ttl_ms=1_000_000)
+  f.update(msg1, age_s=0.0, now=0.0)
+  f.update(msg1, age_s=1.0, now=1.0)   # deadman trips, starts returning (hold_s=0)
   f.update(msg1, age_s=2.0, now=2.0)   # mid-return
   msg2 = _msg(q_target=(0.5,), seq=2, ttl_ms=1_000_000)
   state = f.update(msg2, age_s=0.01, now=2.5)   # fresh packet arrives again

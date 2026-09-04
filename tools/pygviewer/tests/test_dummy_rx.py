@@ -118,7 +118,10 @@ def rig():
   rx = DummyRx(
     contract=c, listen_host="127.0.0.1", listen_port=listen_port,
     telemetry_host="127.0.0.1", telemetry_port=tele_port, arm_token=ARM_TOKEN,
-    deadman_s=0.15, return_s=0.3, hz=100.0,
+    # hold_s=0.0: this fixture's tests care about deadman-trip and return-to-default timing,
+    # not the (now separate, docs/123 section 5) flat-hold phase - 0 recovers the old
+    # "slew starts the instant the deadman trips" behaviour these tests were written against.
+    deadman_s=0.15, hold_s=0.0, return_s=0.3, hz=100.0,
   )
   catcher = TelemetryCatcher(tele_port)
   client = TxClient(

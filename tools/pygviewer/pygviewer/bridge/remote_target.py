@@ -5,14 +5,16 @@ seq/arm-token/contract-hash gating.  Factored out of ``dummy_rx.py`` and
 module has NO ``huphy`` import and NO socket, so it is the one place the safety-critical
 timing can be pinned down with a fake clock instead of a real 0.2s sleep in a test.
 
-**Timing interpretation, stated explicitly because the spec sentence is genuinely
-ambiguous and only one CLI knob is offered for it** (``--default-return-s``, no separate
-slew-rate flag): "hold" begins the instant the stream goes stale (age > ``deadman_s`` or the
-message's own ``ttl_ms``, whichever is stricter); the pose is then linearly interpolated from
-that held pose to ``default_q`` over exactly ``return_s`` seconds, arriving at ``default_q``
-and staying there.  This is the reading that fits a single timing parameter; see
-docs/123 section 5 for the alternative reading (hold for a flat 3s grace period, THEN slew at
-some separate rate) that was NOT implemented, and why.
+**Timing interpretation - RESOLVED 2026-09-04 (docs/123 section 5 update, superseding the
+previous "two readings, only (b) implemented" note)**: the spec sentence was genuinely
+ambiguous with only one CLI knob (``--default-return-s``). The user has now picked reading
+(a) explicitly, with its own knob added: the moment the stream goes stale (age >
+``deadman_s`` or the message's own ``ttl_ms``, whichever is stricter), the pose FREEZES at
+whatever it last was ("hold") for a flat ``hold_s`` seconds with NO motion at all; only once
+that flat hold expires does a linear slew from the held pose to ``default_q`` begin, taking
+exactly ``return_s`` seconds. Three independent knobs now exist (``deadman_s``, ``hold_s``,
+``return_s`` - CLI ``--deadman-s``/``--hold-s``/``--return-s``), one per phase, so there is no
+longer a single parameter doing double duty for two different physical meanings.
 """
 
 from __future__ import annotations
@@ -25,7 +27,8 @@ from typing import Mapping
 from ..schema import JointTarget
 
 DEFAULT_DEADMAN_S = 0.2
-DEFAULT_RETURN_S = 3.0
+DEFAULT_HOLD_S = 3.0
+DEFAULT_RETURN_S = 2.0
 
 
 @dataclass
@@ -108,6 +111,12 @@ class DeadmanFilter:
   """Turns ``(message_or_None, age_s)`` into the joint targets that should actually be sent
   to the motors THIS tick, applying the enable list and the hold/return timing.
 
+  Three phases after the stream goes stale, each with its own knob (docs/123 section 5,
+  2026-09-04 resolution): ``hold`` (flat, frozen at the last live pose, for ``hold_s``
+  seconds) -> ``returning`` (linear slew from that pose to ``default_q`` over ``return_s``
+  seconds) -> ``default`` (arrived, stays there). ``hold_s=0`` recovers the OLD single-phase
+  behaviour (slew begins the instant the deadman trips) for a caller that wants that.
+
   ``enable``, if given, restricts which joint names are EVER allowed through - a joint not in
   it never gets a target from this filter, at any phase (docs/123 item 3: a disabled motor
   gets no command at all, so HUPHY's own per-motor hold takes over - never a synthesized
@@ -119,11 +128,13 @@ class DeadmanFilter:
     default_q: Mapping[str, float],
     *,
     deadman_s: float = DEFAULT_DEADMAN_S,
+    hold_s: float = DEFAULT_HOLD_S,
     return_s: float = DEFAULT_RETURN_S,
     enable: set[str] | None = None,
   ):
     self.default_q = dict(default_q)
     self.deadman_s = float(deadman_s)
+    self.hold_s = float(hold_s)
     self.return_s = float(return_s)
     self.enable = set(enable) if enable is not None else None
     self._last_live_target: dict[str, float] | None = None
@@ -154,7 +165,7 @@ class DeadmanFilter:
 
     # Stale (or nothing ever received). Establish the hold pose from the last LIVE target the
     # very first tick this is observed - not before, and not reset on every subsequent stale
-    # tick, or the 3s countdown would never advance.
+    # tick, or the hold_s/return_s countdown would never advance.
     if self._hold_pose is None:
       if self._last_live_target is None:
         # Never had a live message at all - nothing to hold, go straight to default rather
@@ -164,8 +175,13 @@ class DeadmanFilter:
       self._hold_since = now
 
     held_age = now - self._hold_since
-    frac = 0.0 if self.return_s <= 0 else min(max(held_age / self.return_s, 0.0), 1.0)
-    phase = "hold" if frac <= 0.0 else ("returning" if frac < 1.0 else "default")
+    if held_age <= self.hold_s:
+      # Flat hold: frozen at the last live pose, no motion at all yet.
+      return DeadmanState(target=dict(self._hold_pose), phase="hold")
+
+    returning_age = held_age - self.hold_s
+    frac = 0.0 if self.return_s <= 0 else min(max(returning_age / self.return_s, 0.0), 1.0)
+    phase = "returning" if frac < 1.0 else "default"
     target = {
       k: (1.0 - frac) * v + frac * self.default_q.get(k, v) for k, v in self._hold_pose.items()
     }

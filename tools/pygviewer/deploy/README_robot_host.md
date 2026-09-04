@@ -26,8 +26,9 @@ precisely what this README hands off to you.
   them for you; if a joint feels sluggish, that is the point until you have deliberately
   decided otherwise.
 - The safety chain is: sender-side `safe_clip`+slew (`tx_client.py`, already applied before
-  a packet is even sent) -> arm_token/seq/contract_hash gate + 0.2s deadman + hold + 3s
-  return-to-default (`bridge/remote_target.py`, robot-side) -> HUPHY's OWN guards
+  a packet is even sent) -> arm_token/seq/contract_hash gate + 0.2s deadman -> flat 3s hold
+  (frozen, no motion) -> 2s linear return-to-default (`bridge/remote_target.py`, robot-side,
+  `--deadman-s`/`--hold-s`/`--return-s` - docs/123 section 5, resolved 2026-09-04) -> HUPHY's OWN guards
   (`safety/guards.py`: NaN rejection, limit clamp, slew clamp) inside `Leg.build_commands`,
   **unmodified**. Four independent layers; this bridge only adds the first two.
 
@@ -186,7 +187,7 @@ python3 -m pygviewer.bridge.huphy_remote_motion \
   --telemetry <your-viewer-or-dev-machine-ip>:9870 \
   --enable hip_pitch \
   --kp-max 5 --kd-max 0.5 \
-  --deadman-s 0.2 --default-return-s 3
+  --deadman-s 0.2 --hold-s 3 --return-s 2
 ```
 
 Note `--limb left_leg` here (HUPHY's own config key) vs `--limb left` in the dry-run above
@@ -207,8 +208,8 @@ expect.
 
 To test the deadman without touching anything: arm, send a target, then just stop sending
 (kill the sender process, or unplug the network cable between the two hosts) and watch the
-console - you should see the joint hold for ~0.2s then slew back toward the default pose
-over the next few seconds.
+console - after ~0.2s you should see the joint FREEZE (phase `hold`) for ~3s with no motion
+at all, then slew back toward the default pose (phase `returning`) over the following ~2s.
 
 ## 10. Next steps
 

@@ -165,7 +165,8 @@ def test_dry_run_requires_telemetry_flag():
 def test_build_parser_defaults():
   a = build_parser().parse_args(["--limb", "left", "--arm-token", "tok"])
   assert a.deadman_s == pytest.approx(0.2)
-  assert a.default_return_s == pytest.approx(3.0)
+  assert a.hold_s == pytest.approx(3.0)
+  assert a.return_s == pytest.approx(2.0)
   assert a.kp_max == pytest.approx(5.0)
   assert a.kd_max == pytest.approx(0.5)
 

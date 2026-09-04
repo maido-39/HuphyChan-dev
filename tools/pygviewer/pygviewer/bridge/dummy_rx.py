@@ -38,7 +38,13 @@ from dataclasses import dataclass
 from .. import CACHE_DIR, VARIANTS
 from ..contract import load_contract
 from ..schema import from_jsonl
-from .remote_target import DEFAULT_DEADMAN_S, DEFAULT_RETURN_S, DeadmanFilter, LatestOnly
+from .remote_target import (
+  DEFAULT_DEADMAN_S,
+  DEFAULT_HOLD_S,
+  DEFAULT_RETURN_S,
+  DeadmanFilter,
+  LatestOnly,
+)
 from .tx_map import JointTargetMapper, clamp_gain, sim_rad_s_to_cal_deg_s, sim_rad_to_cal_deg
 
 logger = logging.getLogger(__name__)
@@ -90,6 +96,7 @@ class DummyRx:
     kp_max: float = DEFAULT_KP,
     kd_max: float = DEFAULT_KD,
     deadman_s: float = DEFAULT_DEADMAN_S,
+    hold_s: float = DEFAULT_HOLD_S,
     return_s: float = DEFAULT_RETURN_S,
     hz: float = PHYSICS_HZ,
     inertia: float = DEFAULT_INERTIA,
@@ -116,7 +123,8 @@ class DummyRx:
     default_q = {n: contract.default_q(n) for n in known}
     self.latest = LatestOnly(expected_arm_token=arm_token, expected_contract_hash=contract.contract_sha)
     self.deadman = DeadmanFilter(
-      default_q=default_q, deadman_s=deadman_s, return_s=return_s, enable=self.enabled_joints,
+      default_q=default_q, deadman_s=deadman_s, hold_s=hold_s, return_s=return_s,
+      enable=self.enabled_joints,
     )
     self.motors: dict[str, MotorModel] = {
       n: MotorModel(q=default_q[n], inertia=inertia, damping=damping) for n in known
@@ -271,7 +279,10 @@ def main(argv: list[str] | None = None) -> int:
   ap.add_argument("--kp-max", type=float, default=DEFAULT_KP)
   ap.add_argument("--kd-max", type=float, default=DEFAULT_KD)
   ap.add_argument("--deadman-s", type=float, default=DEFAULT_DEADMAN_S)
-  ap.add_argument("--default-return-s", type=float, default=DEFAULT_RETURN_S)
+  ap.add_argument("--hold-s", type=float, default=DEFAULT_HOLD_S,
+                  help="flat hold at the last live pose after the deadman trips, before slewing to default")
+  ap.add_argument("--return-s", type=float, default=DEFAULT_RETURN_S, dest="return_s",
+                  help="slew duration from the held pose to default_q, once --hold-s has elapsed")
   ap.add_argument("--hz", type=float, default=PHYSICS_HZ)
   ap.add_argument("--inertia", type=float, default=DEFAULT_INERTIA)
   ap.add_argument("--damping", type=float, default=DEFAULT_DAMPING)
@@ -289,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
     contract=contract, listen_host=listen_host, listen_port=int(listen_port),
     telemetry_host=tele_host, telemetry_port=int(tele_port), arm_token=a.arm_token,
     enable=enable, kp_max=a.kp_max, kd_max=a.kd_max, deadman_s=a.deadman_s,
-    return_s=a.default_return_s, hz=a.hz, inertia=a.inertia, damping=a.damping,
+    hold_s=a.hold_s, return_s=a.return_s, hz=a.hz, inertia=a.inertia, damping=a.damping,
   )
   rx.start()
   print(

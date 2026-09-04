@@ -55,7 +55,13 @@ from .. import CACHE_DIR, VARIANTS
 from ..contract import load_contract
 from ..schema import from_jsonl
 from .huphy_udp import DEFAULT_MAP_PATH, JointMap
-from .remote_target import DEFAULT_DEADMAN_S, DEFAULT_RETURN_S, DeadmanFilter, LatestOnly
+from .remote_target import (
+  DEFAULT_DEADMAN_S,
+  DEFAULT_HOLD_S,
+  DEFAULT_RETURN_S,
+  DeadmanFilter,
+  LatestOnly,
+)
 from .tx_map import JointTargetMapper, clamp_gain
 
 logger = logging.getLogger(__name__)
@@ -252,7 +258,8 @@ def run_dry(args) -> int:
 
   latest = LatestOnly(expected_arm_token=args.arm_token, expected_contract_hash=contract.contract_sha)
   deadman = DeadmanFilter(
-    default_q=default_q, deadman_s=args.deadman_s, return_s=args.default_return_s, enable=enable,
+    default_q=default_q, deadman_s=args.deadman_s, hold_s=args.hold_s, return_s=args.return_s,
+    enable=enable,
   )
   recv = _Receiver(listen_host, int(listen_port), latest, mapper.known_sim_joints())
   recv.start()
@@ -374,7 +381,8 @@ def run_real(args) -> int:
   listen_host, listen_port = args.listen.rsplit(":", 1)
   latest = LatestOnly(expected_arm_token=args.arm_token, expected_contract_hash=contract.contract_sha)
   deadman = DeadmanFilter(
-    default_q=default_q, deadman_s=args.deadman_s, return_s=args.default_return_s, enable=enable,
+    default_q=default_q, deadman_s=args.deadman_s, hold_s=args.hold_s, return_s=args.return_s,
+    enable=enable,
   )
   recv = _Receiver(listen_host, int(listen_port), latest, mapper.known_sim_joints())
 
@@ -494,7 +502,10 @@ def build_parser() -> argparse.ArgumentParser:
   ap.add_argument("--kp-max", type=float, default=DEFAULT_KP)
   ap.add_argument("--kd-max", type=float, default=DEFAULT_KD)
   ap.add_argument("--deadman-s", type=float, default=DEFAULT_DEADMAN_S)
-  ap.add_argument("--default-return-s", type=float, default=DEFAULT_RETURN_S)
+  ap.add_argument("--hold-s", type=float, default=DEFAULT_HOLD_S,
+                   help="flat hold at the last live pose after the deadman trips, before slewing to default")
+  ap.add_argument("--return-s", type=float, default=DEFAULT_RETURN_S,
+                   help="slew duration from the held pose to default_q, once --hold-s has elapsed")
   ap.add_argument("--hz", type=float, default=DEFAULT_HZ)
   ap.add_argument("--seconds", type=float, default=None, help="run this long then exit; default = until Ctrl-C")
   ap.add_argument("--allow-uncalibrated", action="store_true")
