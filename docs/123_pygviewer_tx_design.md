@@ -213,3 +213,8 @@ before_any_slew_begins`) 추가, 기존 return-interpolation 테스트는 `hold_
 - 09-04 14:00 — **원인 = 모터 전원 미투입**(사용자 확인 후 투입). 재스캔: 전원 직후 모터가 ext-id `0x7FFE`(type 0, src 127) 프레임 1건 송출, private type-0 ID 조회에 **ID 127 응답, MCU UID `835b93c79c90b016`** → 모터·배선·어댑터·1 Mbps 전부 정상. HUPHY MIT 스캔은 여전히 무응답 = **모터가 공장 기본 private 프로토콜** 상태. 배선: H↔H/L↔L 직결, 짧은 버스, 종단 없음(동작함). 다음: private→MIT 전환(영구, 전원 재투입) — HUPHY private 코덱 부재 → 사양 문서 확인 후 raw 프레임 또는 벤더 툴.
 - 09-04 14:40 — **커미셔닝 완료(사용자 실행, 영구 설정은 사용자 몫)**: `commission_private_to_mit.py` — zero_sta 0→1(재읽기 확인), Type22 플래시 저장 ack, Type25 프로토콜→MIT ack; 전원 재투입 후 HUPHY `scan` **m127 응답**(MIT 11-bit 정상). `state`: 위치 63.64°, 속도 3.64, 토크 −0.01 N·m, 온도 27 °C(캘리브 없음 → cal=raw). `fault`: 0x8B4F7FC7(stall_overload·encoder_uncalibrated·undervoltage·driver_ic·overtemperature — 27 °C인데 overtemperature 등 동시 표시 → 디코딩 의심, 확인 중). 다음: clear-fault → nudge 5°(kp 5) 사용자 입회.
 
+## 8. HUPHY 벤치 로봇(관절 1개) — 사용자 결정(09-04 14:50)
+- HUPHY는 다른 관리자의 프로젝트. 영역 구분: **기반 라이브러리(무수정)** / **로봇 설정(config·calibration: 프리셋 복사로 추가)** / **임시 스크립트·로봇 구현체(추가 허용)**. 새 코드는 **HUPHY 안에서, 기존 docs·의도를 분석해 같은 합의로** 작성(포크 브랜치 `bench-single-joint`, PR 가능 형태).
+- 관절명 `knee`(RS03, id 127 유지), 한계 ±180°·margin 3°·슬루 20°/주기, kp 5/kd 0.5, slcan `/dev/ttyACM0`(`CAN_BITRATE` env), 텔레메트리는 HUPHY 내장 UDP(9870) 그대로 → 뷰어 브리지.
+- 구현 중(코더): `robots/single.py` SingleJoint(Robot) + `scripts/bringup.build_robot`(kind 분기) + `config/robot_bench.yaml` + `calibration/bench_v1.0.json` + 테스트 + `docs/bench_single_joint.md` + 버그리포트 `docs/bugreport_2026-09-04.md`.
+
