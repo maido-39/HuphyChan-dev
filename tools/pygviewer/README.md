@@ -1,17 +1,23 @@
 # pygviewer - Pygmalion Sim &harr; Real comparison web viewer
 
 One process that owns one MuJoCo model, runs it at the training rates on the CPU, and serves
-it as a 3D scene with a control panel (viser, **:8094**) plus a REST/WebSocket API
-(FastAPI, **:8095**, OpenAPI at `/docs`).  Built so that a number read here is comparable to
-the same number read in training - not merely similar.
+it two ways: a self-hosted **dashboard** (FastAPI, **:8095**, `GET /` or `GET /dash` - the
+default entry point) that embeds the 3D scene, and the underlying viser scene + debug panel
+directly (**:8094**). Built so that a number read here is comparable to the same number read
+in training - not merely similar.
+
+**Open `http://192.168.20.177:8095/` - that is the whole UI now.** `:8094` still renders (it's
+the iframe the dashboard embeds, and its own control panel still works standalone for
+debugging), it is just not where you start.
 
 Status: **P0 (bake + sim loop + scene + /status), P1 (manual joint control, base fixing,
 ground toggle, plots), P2 (ONNX/`.pt` policy, obs builder, PD gain source, velocity
 command, per-term obs-source switch), P3 (wire schema, `/ws/in`, HUPHY UDP bridge, dummy
-transmitter, record/replay, `real_replay`/`file_replay` drive, Telemetry panel) and P4
+transmitter, record/replay, `real_replay`/`file_replay` drive, Telemetry panel), P4
 (`policy_shadow` per-term obs mux, the same-target-sequence script player, `compare.py`
-offline overlay, the gains diff table, `protocol.py`) are all implemented.** See
-`docs/121_pygviewer_design.md` section 6 for the phase-by-phase verification numbers.
+offline overlay, the gains diff table, `protocol.py`) and **UI v2 (the dashboard above -
+layout B, docs/121 section 10) are all implemented.** See `docs/121_pygviewer_design.md`
+section 6 (phase numbers) and section 10 (UI v2) for the verification detail.
 
 ---
 
@@ -37,7 +43,44 @@ so a free base topples in about 2 s), `--string-z-set METERS` and `--string-foll
 (`--base string` only), `--keyframe home|knees_bent`, `--stale-ok`,
 `--no-api`, `--cache DIR`.  The process refuses to start if 8094 or 8095 is already taken.
 
-LAN: `http://192.168.20.177:8094` and `http://192.168.20.177:8095/docs`.
+LAN: **`http://192.168.20.177:8095/`** (the dashboard - start here), viser directly at
+`http://192.168.20.177:8094`, OpenAPI at `http://192.168.20.177:8095/docs`.
+
+## Dashboard (UI v2, layout B)
+
+A single page (`pygviewer/static/dashboard.{html,js}`, no build step, no CDN - three.js
+r150 and uPlot 1.6.30 are vendored under `pygviewer/static/vendor/` because this LAN has no
+internet access) served by the same FastAPI process. 3-column grid: a 38px top bar
+(variant/mode/base/warning badges/rates), a 250px left column of vertical tabs (**Model**:
+variant - read-only, this process owns one baked model for its life; contract sha; reload.
+**Base link**: free/fixed/pivot/string, height or `z_set` depending on mode, pivot/hook
+offset, ground, string tension, home/knees_bent reset. **Telemetry/Record**: rx rate/age/
+clock offset/jitter, the `side_mapping_verified` UNVERIFIED banner, record/replay. **Script**:
+run/stop the two sample target-q scripts. **Status**: rates/RSS/warnings), the viser scene as
+a center iframe, and a 340px right column of tabs (**Control**: a Joints&harr;Policy
+mutually-exclusive toggle - Joints has one slider+number per actuated joint (range = safe_
+clip, a deg/rad display toggle, a mirrored joint's `travel_sign&times;q` physical angle
+alongside its raw q, AB foot-space pitch/roll sliders, a disabled "TX (HW)" checkbox
+placeholder for the docs/123 hardware-transmit work); Policy has the policy picker (its
+"load" button performs `load -> cmd(0,0,0) -> mode=policy_sim`, cmd sliders, mode/shadow-
+follow, per-term obs source). **Gains**: kp/kd table (edits POST immediately), train/real/
+custom presets. **Obs**: the 45-D observation as bar groups by term, colour-coded by
+effective source, plus a three.js body-frame/gravity/gyro widget). A 320px plot strip spans
+the left+center columns: up to three togglable rows (q+target, tau, qd), one uPlot panel per
+joint KIND with L/R overlaid, a received real value drawn translucent on the same time grid,
+a 5/10/20/60s window and click-to-expand.
+
+Data path: one WebSocket (`/ws/out?hz=50&types=JointState,Status,PolicyIO`) for everything at
+control rate, a 250 ms poll of `/snapshot` (plus `/gains`/`/presets`/`/policy/list` only while
+their tab is open) for slower state - no new wire types, `JointState.src` and `PolicyIO`'s
+existing fields already carry what the dashboard needs.
+
+Verified live by hand (no Chrome extension reachable on this host - tried it, confirmed
+unavailable): `curl` for the page/static assets/preset round trip/policy-load sequence, a
+Python `websockets` client against `/ws/out` to confirm the additive `src="real"` JointState
+frame (see API.md) actually appears once `bridge dummy --imu` sends telemetry. Actual browser
+rendering (CSS layout, uPlot/three.js visual correctness) is **not** verified - a stated gap,
+docs/121 section 10.
 
 ## Bake
 
@@ -351,7 +394,7 @@ cd tools/pygviewer && CUDA_VISIBLE_DEVICES="" \
     ../../mujoco-sim/mjlab/.venv/bin/python3 -m pytest
 ```
 
-210 tests, CPU only:
+231 tests, CPU only:
 
 | file | what it pins |
 |---|---|
@@ -371,6 +414,9 @@ cd tools/pygviewer && CUDA_VISIBLE_DEVICES="" \
 | `test_compare.py` (P4) | R11 contract-hash refusal and `--i-know` override; R9 condition-difference warning; the clock-offset estimator recovers a synthetic 30 ms injected delay to within 15 ms; PNG output; an unknown `--joints` entry is skipped, not fatal |
 | `test_gains_diff.py` (P4/R7) | no `real_*` columns before any telemetry; a deliberately mismatched kp is flagged (kd is not); gains within 5% are not flagged |
 | `test_protocol.py` (P4) | the 8-step runner returns all steps in order; the 4 automated steps (1/4/5/8) PASS; the 4 manual steps (2/3/6/7) never claim PASS; a deliberately tightened budget fails step 1 on demand; the CLI |
+| `test_arm_abduction.py` | both arms flare OUTWARD (never one abducted/one adducted) at the welded default pose, on every baked variant that has arms - the physical acceptance check for the `pygmalion_constants.get_spec()` sign bug fixed 09-04 |
+| `test_target_independence.py` | 2026-09-04 user bug report ("L/R move together"): with base=fixed+ground=off, commanding any one of the 12 actuated joints (or one AB foot-space `/ankle` side) never changes another joint's target (bit-exact) or the OPPOSITE LEG's q beyond 0.01 rad - same-leg q coupling (crank_A/B's shared closed loop, hip/knee inertia) is deliberately excluded, see the file's own docstring for why |
+| `test_dashboard.py` (UI v2) | `GET /`/`/dash` and the four vendored static assets serve; `Status.imu`/`side_mapping_verified`; the full `/presets`+`/presets/apply` surface (save/list/apply/reserved-name+unknown-joint rejection/404); `GainsIn.clear_overrides`; the additive `src="real"` JointState frame on `/ws/out` is absent until telemetry arrives, then present; the Policy tab's `load -> cmd(0,0,0) -> mode=policy_sim` sequence actually lands that state; the Joints tab's deg/rad conversion round-trips (checked by extracting the literal formula from the shipped `dashboard.js` source, since there is no JS runtime on this host to execute it) |
 
 Evidence figure (no OpenGL on this host, so it is matplotlib):
 `mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/make_verification_figure.py` ->
@@ -448,6 +494,10 @@ tools/pygviewer/
     protocol.py              (P4) the 8-step verification protocol, runnable: steps
                              1/4/5/8 automated against synthetic data, 2/3/6/7 print the
                              hardware procedure and are tagged MANUAL
+    static/                  (UI v2) dashboard.html + dashboard.js (no build step) served at
+                             GET / and GET /dash; vendor/ has the local three.js/uPlot bundles
+  presets/                   (UI v2) saved custom gains presets (*.json, {name, gains}),
+                             GET/POST /presets + POST /presets/apply - train/real are built in
   scripts/                   (P4) sample POST /script/run target-q sequences
   tests/
 ```

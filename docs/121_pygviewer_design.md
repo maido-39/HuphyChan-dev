@@ -57,6 +57,7 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
 | P3 | 스키마·WS/REST·HUPHY UDP 어댑터·더미·레코더 | `test_schema` · 더미 sine→real_replay · WS 50 Hz · 10 s 기록 RSS 불증 | ✅ 09-04 (161 tests, WS 49.4 msg/s, RSS +0.3 MB/10s) |
 | P4 | 스크립트 플레이어·compare·obs mux·섀도우 | 지연 주입 더미 오버레이 png · 더미 IMU가 액션 변화 | ✅ 09-04 (offset 32.0ms vs 30ms 주입, Δaction 평균 0.270 rad, pytest 198) |
 | 등록 | dashboard PORTS·start_all·README·launch.json·브리핑 | — | ✅ 22:20 (8094/8095) |
+| UI v2 | 레이아웃 B 대시보드(7항목, §10) | `/` `/dash` 200 · 정적자산 4종 200 · `/presets` 왕복 · policy load→cmd0→policy_sim 시퀀스 · WS src=real 부가 프레임 | ✅ 09-04 (pytest 231, §10) |
 | P1+ string | 안전 테더 base 모드(사용자 요청 09-04 01:20) | 낙하 캐치(z_set±0.02, 장력≈무게 231.8N±10%) · 기립중 슬랙(0N)→PD넘어짐 시 taut 전환·z≥z_set-0.02 유지 · 모드 왕복 NaN 無 · 6변형 계약에 tendon id | ✅ 09-04 (아래 §9, pytest 210) |
 
 ## 7. 재사용 소스
@@ -196,3 +197,84 @@ R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·
   변경 외에는 전부 서식뿐"임을 확인한 뒤 그 파일만, 그리고 신규 테스트 파일만 스테이징해
   커밋 — 나머지 260여 개 파일은 작업트리에 커밋되지 않은 채로 남아 있음(사용자/다음 세션이
   판단해 처리할 것).
+
+## 10. UI v2 — 레이아웃 B 결정·구성 (2026-09-04, 코더)
+
+사용자 요청(09-04): 기존 viser 패널 UI를 7항목(레이아웃·플롯·Joints·Policy·Obs·Gains·좌측탭+상단바)으로
+개선. 3안(A/B/C) 목업(`tools/pygviewer/mockups/layout_{A,B,C}.html`) 중 **B 확정**(코드 리뷰 커밋
+`0bbaa15`의 메시지에 기록).
+
+**구성 = 레이아웃 B(FastAPI 자체 대시보드)**: `GET /`·`GET /dash`가 서빙하는 단일 HTML+JS
+(`pygviewer/static/dashboard.{html,js}`), CDN 없이 로컬 번들(`pygviewer/static/vendor/`에
+three.js r150·uPlot 1.6.30 — 이 LAN은 인터넷이 없음). 3열 그리드: 상단바(38px, variant·mode·base·
+경고배지·rates) / 좌측 세로탭(250px, Model·Base link·Telemetry/Record·Script·Status) / 중앙
+viser iframe(기존 패널 유지, 디버그용) / 우측 탭(340px, Control·Gains·Obs) / 좌+중 하단 플롯
+스트립(320px).
+
+**항목별 구현**(상세 근거·수치는 커밋 `5fc9d22`(백엔드 배선)·`0da1e4c`(대시보드)·`984ef7d`(테스트)):
+1. **레이아웃** — 위 그리드. 모든 패널이 같은 origin(상대 fetch/WS)이라 주소 하나로 전부 동작.
+2. **Joints** — 관절별 슬라이더+숫자(범위=계약 safe_clip), deg/rad 토글(내부·와이어는 항상 rad),
+   미러 관절은 `travel_sign×q` 물리각 병기, AB 발목 foot-space 슬라이더(범위는 계약의
+   `ankle_inverse.pitch_deg/roll_deg`에서 직접 — 신규 엔드포인트 불필요), 향후 실물 송신용
+   "TX (HW)" 비활성 체크박스 자리(docs/123, 이번 범위 밖).
+3. **Obs** — 정책의 45차원 관측을 항목별 막대(gyro3/grav3/q-hist24/last_action12/cmd3, 차원은
+   `POST /policy/load` 응답의 `layout`에서 직접 취함 — obs_terms를 재정의한 정책도 안전),
+   요청/실효 소스로 색분류(초록 sim/주황 real/빨강 "real 요청·sim 폴백"). 아래에 three.js
+   위젯(바디 X/Y/Z축이 `Status.base.quat`로 회전, projected gravity·gyro 벡터, real IMU는
+   `Status.telemetry.imu`가 있으면 반투명 병기).
+4. **Policy** — `GET /policy/list` 드롭다운 + load 버튼이 `load→cmd(0,0,0)→mode=policy_sim`
+   순서를 그대로 수행(이 시퀀스는 `tests/test_dashboard.py::test_policy_load_then_cmd_zero_then_
+   mode_policy_sim`이 실제 API로 고정), vx/vy/wz 슬라이더, policy_sim/policy_shadow 전환,
+   shadow_follow, 항목별 obs source 드롭다운+5칸 스트립, stop/unload. Control 탭의 Joints⇄Policy
+   상호배타 토글은 **JS에서만** 처리(Joints로 가면 mode=manual, Policy로 가면 로드돼 있고
+   idle/manual이면 mode=policy_sim 재개) — `sim_core.py`의 모드 시맨틱은 손대지 않음.
+5. **Gains** — kp/kd 표(편집 즉시 `POST /gains`), train/real/custom 프리셋 선택(신규
+   `GET/POST /presets`+`POST /presets/apply`), "다른 이름으로 저장", real 텔레메트리 수신 시
+   real_kp/real_kd/비율/플래그 열.
+6. **플롯** — 최대 3개 토글 행(q+target/tau/qd), 관절 **종류**당 uPlot 패널 1개(hip_pitch·
+   hip_roll·hip_yaw·knee·crank_A·crank_B — `action_joint_names`에서 일반화 도출이라 RP의
+   ankle_pitch/roll에도 그대로 맞음), 한 패널에 L/R 겹쳐그림(파랑/주황), target 점선, real은
+   같은 sim 시간격자에 반투명 병기(real은 latest-only라 sim JointState 틱마다 "그 순간 가장
+   최근에 본 real 값"을 같이 기록 — uPlot 한 차트에 x축 두 개를 둘 필요가 없어짐). 5/10/20/60s
+   창, 클릭 시 확대 모달.
+7. **좌측 탭+상단바** — Model(변형 read-only — 이 프로세스는 평생 baked 모델 하나만 가짐·contract
+   sha·재로드), Base link(free/fixed/pivot/string, 모드별 height 또는 z_set, pivot/hook 오프셋,
+   지면, string 장력, home/knees_bent 리셋), Telemetry/Record(rx rate/age/clock offset/jitter,
+   `side_mapping_verified` UNVERIFIED 배너, record/replay), Script(샘플 스크립트 2개 run/stop),
+   Status(rates·RSS·경고).
+
+**백엔드는 기존 스키마에 추가만**(214개 기존 테스트 무변경 전제): `Status.imu`(sim
+gyro/gravity, ObsBuilder와 같은 센서에서 유도)·`Status.side_mapping_verified`(joint_map_huphy.json
+플래그)·`GainsIn.clear_overrides`(오버라이드 초기화, 기본 False)·`GET/POST /presets`+
+`POST /presets/apply`(train=계약값/real=HUPHY kp10·kd1 균일/custom=저장 파일)·`WS /ws/out`이
+JointState 요청 시 real 텔레메트리가 한 번이라도 왔으면 `src="real"` 프레임을 하나 더 보냄(기존
+스키마 재사용, 아무것도 안 붙어 있으면 완전히 무변화).
+
+**검증**(브라우저 없는 이 호스트의 대체 경로 — README에 이미 문서화된 방식): 뷰어 재기동 후
+curl로 `GET /`·`/dash`·정적자산 4종 200, `/presets` 저장→적용 왕복, policy load→cmd0→policy_sim
+시퀀스가 `/snapshot.policy.driving=true`로 이어짐을 실측; python `websockets` 클라이언트로
+`/ws/out`이 평소엔 `src=sim`만 보내다가 `bridge dummy --imu`로 3초 텔레메트리를 주입하자
+`src=real` JointState(수신 관절만 값, 나머지 null)와 `Status.telemetry.imu`가 즉시 나타남을
+확인. **크롬 익스텐션이 이 호스트에서 연결되지 않아**(직접 시도해 확인) 실제 브라우저 렌더링·
+uPlot/three.js 시각 결과는 미검증 — 미해결 항목으로 남김(§ 아래).
+
+**의도적 스코프 경계**: 실물(HUPHY) 송신은 이 작업 범위 밖(`docs/123_pygviewer_tx_design.md`가
+별도로 3안 검토 중 — 사용자 결정: HUPHY 코드 비침습, 안 A 1차 벤치 실험). Joints 탭의 TX 체크박스는
+그 작업이 실제로 뭔가를 보낼 수 있게 되기 전까지 자리만 잡아둔 비활성 표시.
+
+**미해결**: (a) 실제 브라우저 렌더 확인 없음(레이아웃 깨짐·CSS 오버플로·uPlot/three.js 렌더 실수는
+코드 리뷰로만 잡음, 스크린샷 없음). (b) 모델 변형 드롭다운은 read-only(런타임 hot-swap은 SimCore가
+프로세스당 모델 하나를 소유하는 현재 아키텍처를 바꿔야 해서 이번 범위 밖으로 명시적으로 남김).
+(c) obs 항목의 실효 소스(`obs_sources_effective`)는 250ms 폴링(`/snapshot`)이라 WS 50Hz보다 느림 —
+플롯/joints 갱신보다 5~10배 느린 배지 하나뿐이라 감수.
+
+### "L/R 관절이 같이 움직인다" 버그 조사 (2026-09-04, 대시보드 작업 중 병행 지시)
+
+사용자가 이전 세션에 겪은 현상. 실제 재현·조치는 커밋 `a9a4a14`(상세 원인·수치는 그 커밋 메시지와
+`tests/test_target_independence.py` 참조). 요지: **`/target`·`/ankle`의 커맨드 라우팅 자체엔
+버그가 없음**(base=fixed·ground=off에서 소수점 6자리까지 완전 독립 재현). 사용자가 본 것은 두 가지
+실제 물리 현상 중 하나였을 가능성이 큼 — (a) base=fixed+ground=on일 때 bent 키프레임 발이 바닥에
+~38.6mm 파묻혀 양다리가 각자 독립적으로(그러나 동시에) 흔들림, (b) base≠fixed(예: free/string)일
+때 한쪽 다리에 큰 목표를 주면 부유 베이스의 반작용으로 반대쪽 다리의 **실제 q**(목표는 아님)가
+실제로 흔들림(뉴턴 3법칙, 버그 아님). 회귀 테스트로 고정(base=fixed+ground=off 조건에서 교차-다리
+q 불변 확인, 같은-다리 결합은 의도적으로 별도 취급).

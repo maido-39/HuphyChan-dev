@@ -1,6 +1,8 @@
 # pygviewer API (wire schema v1) - draft
 
-Base URL `http://192.168.20.177:8095`.  Interactive OpenAPI: `/docs`.  The generated schema
+Base URL `http://192.168.20.177:8095`.  Interactive OpenAPI: `/docs`.  `GET /` (or `/dash`) is
+the UI v2 dashboard (docs/121 section 10, README's "Dashboard" section) - the default way to
+use this API from a browser; everything below is what it talks to. The generated schema
 is authoritative for field types; this file is the *contract in prose* - what the fields
 mean, what is implemented today, and what a hardware-side implementer must copy.
 
@@ -51,7 +53,7 @@ sim and, separately, on the robot produces two recordings `compare.py` can align
 | GET/POST | `/obs_source` | `{"sources": {"projected_gravity": "sim"}}` | per observation TERM, `sim` or `real` (P4: read by `policy_shadow` only - `policy_sim` ignores this); 409 if no policy loaded |
 | POST | **`/policy/shadow_follow`** | `{"enabled": true}` | (P4) `policy_shadow` only: lets the shadow action step the LOCAL sim - never a robot, there is no code path that could |
 | GET | `/gains` | - | `{source: train\|real, gains: {joint: {kp, kd, kp_train, kd_train, effort, overridden, motor, real_kp?, real_kd?, real_ratio_kp?, real_ratio_kd?, real_flag_kp?, real_flag_kd?}}}` - the `real_*`/`motor` fields (P4/R7) appear once any `JointState` telemetry has carried a `gains` field; a ratio off by more than 5% sets its `real_flag_*` |
-| POST | `/gains` | `{"source": "real"}` or `{"overrides": {...}}` | switches PD source; `real` is rejected (400) unless the contract carries a `real_gains` table - the viewer never invents hardware numbers |
+| POST | `/gains` | `{"source": "real"}` or `{"overrides": {...}}` or `{"clear_overrides": true}` | switches PD source; `real` is rejected (400) unless the contract carries a `real_gains` table - the viewer never invents hardware numbers. `clear_overrides` (UI v2, default `false`) drops every previously-applied per-joint override before applying `source`/`overrides` this call - without it overrides only ever accumulate, which is what the Gains tab's `train` preset needs (`POST /presets/apply {"name":"train"}` sets it for you) |
 | POST | **`/script/run`** | `{"path": "scripts/step_knee_5x10deg.json", "run_id": "..."}` | (P4) plays a `{joint_names, rows:[[t_s,q...]], loop}` file in `manual` mode; tags every subsequent `JointState.run_id`; 404 on a missing file, 400 on an un-actuated joint name or while a policy/replay mode is active |
 | POST | **`/script/stop`** | - | (P4) stops the running script; 409 if none is running |
 | POST | **`/record/start`** | `{"path": null}` | starts streaming `JointState` to a `jsonl.gz` (auto path if omitted); 409 if already recording |
@@ -60,7 +62,12 @@ sim and, separately, on the robot produces two recordings `compare.py` can align
 | POST | **`/replay/seek`** | `{"frac": 0.5}` | seek the loaded recording to a fraction `[0,1]` |
 | POST | **`/replay/speed`** | `{"speed": 2.0}` | playback speed multiplier |
 | GET | `/schema/deferred` | - | JSON schemas of the request models whose endpoints are still 501 |
-| WS | `/ws/out?hz=50&types=JointState,Status,PolicyIO` | - | latest-only stream, coalesced at `hz` (1-100, default 30). A slow consumer gets fewer frames; nothing is queued. **Measured live: 49.4 msg/s at `hz=50`** |
+| GET | **`/presets`** | - | (UI v2) `{builtin: {train, real}, custom: [{name, gains}]}` - `train`/`real` are fixed descriptions, not files; `custom` lists `tools/pygviewer/presets/*.json` |
+| POST | **`/presets`** | `{"name": "bench1", "gains": {"L_knee_joint": {"kp": 50, "kd": 2}}}` | (UI v2) saves a named gains table to `tools/pygviewer/presets/<name>.json`; 400 on a reserved name (`train`/`real`) or an un-actuated joint |
+| POST | **`/presets/apply`** | `{"name": "real"}` | (UI v2) applies a preset through the existing `SimCore.set_gains`: `train` clears every override back to the contract's own kp/kd, `real` sets kp=10/kd=1 on every actuated joint (HUPHY `robot_v1.0.yaml`'s uniform start point), any other name loads that custom file; 404 on an unknown custom name |
+| GET | **`/`**, **`/dash`** | - | (UI v2) the dashboard page (`pygviewer/static/dashboard.html`) - the default entry point, see the dashboard section below |
+| GET | **`/static/*`** | - | (UI v2) `pygviewer/static/` mounted as static files: `dashboard.js` and the vendored `vendor/three.min.js` / `vendor/uPlot.iife.min.js` / `vendor/uPlot.min.css` (no CDN - this LAN has no internet access) |
+| WS | `/ws/out?hz=50&types=JointState,Status,PolicyIO` | - | latest-only stream, coalesced at `hz` (1-100, default 30). A slow consumer gets fewer frames; nothing is queued. **Measured live: 49.4 msg/s at `hz=50`**. UI v2: whenever `JointState` is requested AND any real telemetry has been received at least once, a SECOND `JointState` frame (`src="real"`) follows the sim one every tick - same schema, populated from `RealState.snapshot_joints()`; costs nothing when no real side is connected (verified live: absent with nothing connected, present within one tick of `bridge dummy --imu` sending telemetry) |
 | WS | **`/ws/in`** | one `JointState`, `ImuState` or `PolicyIO` object per text frame | ingests into `RealState` (unknown joint names -> `{"error": ...}`, connection stays open); acks `{"ok": true, "seq": ...}` per frame. `PolicyIO` (P4) is a real host's OWN self-reported obs/action/cmd - the only source for the shadow obs mux's `actions`/`command` terms |
 | UDP | **`:9871`** (`bridge/huphy_udp.py`, run separately - see below) | HUPHY line format | adapter -> canonical `JointState`/`ImuState`, fed into the same `RealState` a `/ws/in` client would reach |
 
@@ -150,7 +157,18 @@ returns one shot; `WS /ws/out?types=PolicyIO` streams it while a policy is loade
 `{variant, mode, policy, sim_time_s, rates{phys_hz, ctrl_hz, drops, phys_steps},
 base{mode, pos, quat, rpy, cmd_pos, cmd_quat, pivot_offset, ground},
 string{z_set, length, ten_length, taut, tension_N} | null,
-contract_stale, contract_checks, telemetry, warnings[], rss_mb}`.
+contract_stale, contract_checks, telemetry, warnings[], rss_mb,
+imu{gyro_rad_s, gravity_b} | null, side_mapping_verified: bool | null}`.
+
+`imu`/`side_mapping_verified` are UI v2 additions (both default `None`, so nothing that
+predates them breaks): `imu` is the SIM's own body-frame gyro/gravity, read from the same
+sensors `ObsBuilder` uses (`imu_ang_vel`, `-imu_upvector`) so the dashboard's IMU widget and
+the Obs tab agree with the policy by construction, never a second derivation of the math.
+The RECEIVED real IMU (if any) is a separate field, `telemetry.imu` (`RealState.imu`,
+unchanged shape - `{quat_wxyz, gyro_rad_s, acc_m_s2, gravity_b, age_s}`, all optional) -
+kept apart from `Status.imu` so a client can never confuse "what the sim computed" with
+"what a robot reported". `side_mapping_verified` mirrors `bridge/joint_map_huphy.json`'s own
+flag, read once at process start (drives the top-bar UNVERIFIED badge, docs/121 section 5).
 
 ## Hardware bridge (P3, implemented)
 
