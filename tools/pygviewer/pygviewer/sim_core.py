@@ -37,6 +37,7 @@ import numpy as np
 from .contract import ModelContract
 from .policy import ObsBuilder, ObsSourceMux, action_to_target, check_compatible
 from .telemetry import RealState
+from .tx import TxState
 
 BASE_MODES = ("free", "fixed", "pivot", "string")
 REPLAY_MODES = ("real_replay", "file_replay")
@@ -292,6 +293,9 @@ class SimCore:
     # ---------------------------------------------------------------- script player (P4)
     self.script = None
     self.script_run_id: str | None = None
+
+    # ---------------------------------------------------------------- TX stub (UI v2, 09-04)
+    self.tx = TxState(self.act_names)
 
     self._cmds: deque = deque(maxlen=512)
     self._lock = threading.Lock()
@@ -873,6 +877,10 @@ class SimCore:
     """Everything that happens once per control tick (50 Hz), regardless of which of the
     three loop drivers (realtime loop, headless loop, ``step_n``) called it."""
     self._drain()
+    # UI v2 TX stub (docs/121 section 10 / docs/123): structural enforcement that armed TX
+    # auto-disarms the instant the mode is not "manual" - checked here every control tick,
+    # not only by the API layer that requested the mode change.
+    self.tx.check_mode_gate(self.mode)
     if self.policy is not None and self.mode.startswith("policy"):
       self._policy_tick()
     if self.mode in REPLAY_MODES:

@@ -274,6 +274,21 @@ class PolicyLoadIn(BaseModel):
   allow_uncontracted: bool = False
 
 
+class TxArmIn(BaseModel):
+  """UI v2 TX STUB (docs/121 section 10 / docs/123).  Arm is refused (409) unless the sim
+  mode is exactly ``manual`` - policy output must never be transmittable."""
+
+  host: str = Field(description="intended bridge host - not connected to anything yet, stub")
+  port: int = Field(description="intended bridge port - not connected to anything yet, stub")
+
+
+class TxMotorIn(BaseModel):
+  """UI v2 TX STUB.  Per-motor opt-in; a motor not explicitly enabled is never sent."""
+
+  joint_name: str
+  enabled: bool
+
+
 class PresetSaveIn(BaseModel):
   """UI v2 (Gains tab).  Save a named per-joint kp/kd table to ``tools/pygviewer/presets/``.
 

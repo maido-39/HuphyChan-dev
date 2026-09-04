@@ -51,9 +51,12 @@ from .schema import (
   ShadowFollowIn,
   Status,
   TargetIn,
+  TxArmIn,
+  TxMotorIn,
   WIRE_VERSION,
   validate_joint_names,
 )
+from .tx import TxNotAllowed
 
 _NOT_YET: dict[str, str] = {}
 
@@ -386,6 +389,52 @@ def build_app(core, freshness: dict) -> FastAPI:
     except (RuntimeError, KeyError, ValueError) as exc:
       raise HTTPException(400, str(exc))
     return {"source": core.gains_source, "gains": table}
+
+  @app.post("/tx/arm", summary="UI v2 TX STUB: arm hardware transmit - manual mode only")
+  def post_tx_arm(body: TxArmIn):
+    """Refuses (409) unless the sim is in ``manual`` mode (design item 2: policy output must
+    never be transmittable). STUB - see ``pygviewer/tx.py`` module docstring: no
+    ``bridge/tx_client.py`` exists yet, so a successful arm records intent only."""
+    try:
+      core.tx.arm(core.mode, body.host, body.port)
+    except TxNotAllowed as exc:
+      raise HTTPException(409, str(exc))
+    return core.tx.status()
+
+  @app.post("/tx/disarm", summary="UI v2 TX STUB: disarm")
+  def post_tx_disarm():
+    core.tx.disarm(reason="operator")
+    return core.tx.status()
+
+  @app.post("/tx/heartbeat", summary="UI v2 TX STUB: keyboard dead-man keep-alive")
+  def post_tx_heartbeat():
+    try:
+      core.tx.heartbeat()
+    except TxNotAllowed as exc:
+      raise HTTPException(409, str(exc))
+    return {"ok": True}
+
+  @app.post("/tx/motor", summary="UI v2 TX STUB: per-motor enable/disable")
+  def post_tx_motor(body: TxMotorIn):
+    if body.joint_name not in core.act_names:
+      raise HTTPException(400, f"not actuated joints of {core.c.variant}: {body.joint_name}")
+    core.tx.set_motor(body.joint_name, body.enabled)
+    return core.tx.status()
+
+  @app.post("/tx/send", summary="UI v2 TX STUB: send joint targets (only while armed+active)")
+  def post_tx_send(body: TargetIn):
+    unknown = [n for n in body.values if n not in core.act_names]
+    if unknown:
+      raise HTTPException(400, f"not actuated joints of {core.c.variant}: {unknown}")
+    try:
+      sent = core.tx.send(body.values)
+    except TxNotAllowed as exc:
+      raise HTTPException(409, str(exc))
+    return {"sent": sent, **core.tx.status()}
+
+  @app.get("/tx/status", summary="UI v2 TX STUB: armed/active/enabled-motors/last-sent")
+  def get_tx_status():
+    return core.tx.status()
 
   @app.get("/presets", summary="UI v2: gains presets - built-in train/real + custom *.json")
   def get_presets():
