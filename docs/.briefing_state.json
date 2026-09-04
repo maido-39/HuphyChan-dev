@@ -1,8 +1,8 @@
 {
  "now": {
-  "title": "하체 본학습 2단계 17,849/18,099회(잔여 245, 약 12분) — 보상 최고치 114.0, 넘어짐 0. 완주 직후 모터 사용률·보행 각도 측정. 벤치는 모터 2대 구성이나 상류 코드가 다리에 모터 6개를 요구해 연속 구동은 대기, 모터 단위 시험은 가능",
+  "title": "하체 본학습 완주(18,099회, 점수 114.45, 넘어짐 0) — 측정은 다음 작업. 뷰어 개선 세션은 마감하며 작업 브랜치를 main으로 병합",
   "detail": "",
-  "since": "2026-09-04 22:13"
+  "since": "2026-09-04 22:46"
  },
  "items": {
   "v4model": {
@@ -1173,7 +1173,8 @@
    "finding": "화면 위쪽 빨간 경고가 '26153건 위반' 같은 숫자만 보여주고 어느 관절인지 안 보이던 문제를 고쳤습니다 — 이제 '⚠ 2627 · L_knee_joint (recv) -1.501 rad ∉ [0.000, 2.094]'처럼 관절명·값·허용범위까지 바로 보입니다. 항상 켜져 있는 로그창을 화면 우하단에 추가했고(초당 최대 50건 쏟아지는 위반을 초당 1줄로 묶어 표시), 그래프의 실물 모터 선을 시뮬레이션과 확실히 구분되는 색(마젠타/시안)으로 바꾸고 각 그래프에 '시뮬 값/실물 값' 숫자를 항상 병기했습니다. 범례도 사용자 요청대로 색 점 대신 실제 선 모양(굵기·점선 여부 포함) 뒤에 이름을 붙이는 방식으로 바꿨습니다.",
    "number": "회귀 테스트 20건 신규, 전체 스위트 420 passed, 라이브 실측: 벤치 무릎 관절이 실측 -1.5 rad로 허용범위 [0, 2.09] 밖(초당 약 51건 위반 확인)",
    "section": "done",
-   "changed": "2026-09-04 18:49"
+   "changed": "2026-09-04 18:49",
+   "collapsed": true
   },
   "bench-tx-bringup": {
    "id": "bench-tx-bringup",
@@ -1183,7 +1184,8 @@
    "section": "done",
    "changed": "2026-09-04 19:32",
    "finding": "로봇 호스트에 수신 프로그램 배포 + 누락 라이브러리 설치 + 벤치 전용 관절 이름('bench')을 거부하던 버그 수정. 모터를 건드리지 않는 모의 실행으로 수신·매핑 정상 확인. 실제 모터 구동 전환은 사용자 입회 하에 진행 예정",
-   "number": "테스트 422건 통과"
+   "number": "테스트 422건 통과",
+   "collapsed": true
   },
   "bench-motor-live": {
    "id": "bench-motor-live",
@@ -1266,6 +1268,25 @@
    ],
    "section": "done",
    "changed": "2026-09-04 22:06"
+  },
+  "biped-bridge-rewrite": {
+   "id": "biped-bridge-rewrite",
+   "created": "2026-09-04 22:27",
+   "title": "HUPHY biped 브랜치 대응: pygviewer 브리지 재작성",
+   "why": "HUPHY 리포가 biped 브랜치로 이동, build_leg/build_biped만 남고 build_robot/single kind 삭제; Biped가 모든 관절/액션 이름에 사지 접두어(left_leg/right_leg)를 강제해 우리 쪽 조인트맵·수신기가 옛 left/right 어휘로는 즉시 실패함",
+   "now_": "docs/121 §12, docs/123 §11에 biped 이행 기록; API.md/README.md/deploy 가이드 갱신; 커밋 대기",
+   "section": "done",
+   "changed": "2026-09-04 22:27",
+   "finding": "pygviewer 테스트 스위트 전체 그린(exit 0), --dry-run으로 --limb left/bench가 모두 left_leg로, 없는 이름은 사용가능 목록을 담은 에러로 확인(하드웨어 검증은 하지 않음, 사용자 직접 확인 예정)"
+  },
+  "legonly-ab-v2-done": {
+   "id": "legonly-ab-v2-done",
+   "created": "2026-09-04 22:46",
+   "title": "하체 본학습(양쪽 축 수정판) 완주",
+   "section": "done",
+   "changed": "2026-09-04 22:46",
+   "finding": "18,099회 전 구간 완료. 최종 점수 114.45로 학습 내내 최고치를 갱신하며 마감했고 넘어짐은 0.0000. 34번의 중간 점검에서 모두 '계속' 판정으로 조기 중단 사유가 한 번도 없었음",
+   "needs": "★측정이 아직 안 됐습니다 — 모터 사용률(RMS/p95/peak)과 무릎 스윙 각도(사람 55~65도 대비) 재측정이 다음 작업입니다. 이번 학습의 핵심 가설(좌우 축이 반대인 것을 반영한 수정이 무릎 스윙을 되살렸는가)이 이 측정으로만 검증됩니다"
   }
  },
  "order": [
@@ -1378,7 +1399,9 @@
   "scenario-switch-mockups",
   "tx-sync-gate",
   "biped-motor-commission",
-  "scenario-mockup-b-iteration"
+  "scenario-mockup-b-iteration",
+  "biped-bridge-rewrite",
+  "legonly-ab-v2-done"
  ],
- "updated": "2026-09-04 22:13"
+ "updated": "2026-09-04 22:46"
 }
