@@ -38,6 +38,7 @@ from .contract import ModelContract
 from .policy import ObsBuilder, ObsSourceMux, action_to_target, check_compatible
 from .telemetry import RealState
 from .tx import TxState
+from .violations import ViolationLog
 
 BASE_MODES = ("free", "fixed", "pivot", "string")
 REPLAY_MODES = ("real_replay", "file_replay")
@@ -299,9 +300,19 @@ class SimCore:
     self.gains_overrides: dict[str, dict] = {}
     self._kp_train, self._kd_train = self.kp.copy(), self.kd.copy()
 
+    # ---------------------------------------------------------------- violations (A2, 09-04)
+    # ONE shared record log for every place in this process that clamps/refuses a joint
+    # value against a limit - recv (RealState below), sim_actuator (this class's own
+    # _tn_clamp) and send (TxState below). See violations.py's module docstring.
+    self.violations = ViolationLog()
+
     # ---------------------------------------------------------------- telemetry (P3)
     joint_ranges = {n: tuple(r["joint_contract"][n]["range"]) for n in self.act_names}
-    self.real = RealState(self.act_names, joint_ranges, contract.contract_sha)
+    effort_limits = {n: float(e) for n, e in zip(self.act_names, self.eff)}
+    self.real = RealState(
+      self.act_names, joint_ranges, contract.contract_sha,
+      violations=self.violations, effort_limits=effort_limits,
+    )
     self.replayer = None
     self.recorder = None
     self._replay_direct_now: list[int] = []
@@ -312,7 +323,7 @@ class SimCore:
     self.script_run_id: str | None = None
 
     # ---------------------------------------------------------------- TX (UI v2, 09-04)
-    self.tx = TxState(self.act_names, contract)
+    self.tx = TxState(self.act_names, contract, violations=self.violations)
 
     self._cmds: deque = deque(maxlen=512)
     self._lock = threading.Lock()
@@ -753,6 +764,13 @@ class SimCore:
     self._policy_target = target
 
   # ------------------------------------------------------------------ inner loop
+  SIM_ACTUATOR_RATE_LIMIT_S = 0.1
+  """A2: at most one violation RECORD per joint per 100 ms for the sim_actuator side -
+  ``_tn_clamp`` runs every substep (200 Hz), so an unthrottled joint sitting against its T-N
+  ceiling would otherwise fill the entire 200-record ring buffer with itself in ~1 s. The
+  cumulative count (``ViolationLog.counts_by_joint``) still increments every substep
+  regardless - only the RING gets thinned, never the "how often" total."""
+
   def _tn_clamp(self, tau: np.ndarray, omega: np.ndarray) -> np.ndarray:
     for i in range(tau.shape[0]):
       w = omega[i]
@@ -762,10 +780,19 @@ class SimCore:
       else:
         hi = self._tn_peak[i]
         lo = -float(np.interp(-w, self._tn_w[i], self._tn_t[i]))
-      if tau[i] > hi:
+      raw_i = float(tau[i])
+      if raw_i > hi:
         tau[i] = hi
-      elif tau[i] < lo:
+      elif raw_i < lo:
         tau[i] = lo
+      else:
+        continue
+      self.violations.record(
+        side="sim_actuator", joint=self.act_names[i], value=raw_i, limit_lo=float(lo),
+        limit_hi=float(hi), src="sim",
+        extra={"tau_raw": raw_i, "tau_clamped": float(tau[i]), "omega": float(w)},
+        rate_limit_s=self.SIM_ACTUATOR_RATE_LIMIT_S,
+      )
     return tau
 
   def _substep(self) -> None:
@@ -1030,6 +1057,9 @@ class SimCore:
       clamped_now={n: True for n, v in self.replay_clamped_now.items() if v},
       clamp_count={n: c for n, c in self.replay_clamp_count.items() if c},
     )
+    # A2: summary only (total/by_joint/last) - the full ring buffer is GET /violations, not
+    # something republished into every 50 Hz Status frame.
+    tel["violations"] = self.violations.summary()
     return tel
 
   def _publish(self) -> None:

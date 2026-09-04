@@ -60,6 +60,7 @@ import time
 from collections import deque
 
 from .bridge.tx_client import DEFAULT_KD_MAX, DEFAULT_KP_MAX, DEFAULT_TTL_MS, TxClient
+from .violations import ViolationLog
 
 DEADMAN_TIMEOUT_S = 0.3
 """Keyboard dead-man (Space, held) timeout - independent of the robot-side age-based dead-man
@@ -81,9 +82,13 @@ class TxState:
   """Owns exactly one (possibly ``None``) :class:`bridge.tx_client.TxClient` and the
   enable/arm/heartbeat state machine wrapped around it."""
 
-  def __init__(self, act_names: list[str], contract=None):
+  def __init__(self, act_names: list[str], contract=None, violations: ViolationLog | None = None):
     self.act_names = list(act_names)
     self.contract = contract
+    # A2 (2026-09-04): the SAME shared record log SimCore hands to RealState, so a send-side
+    # safe_clip or a mode-gate refusal lands in the same GET /violations a recv-side ROM
+    # violation does - see violations.py's module docstring.
+    self.violations = violations
     # A shared secret this process makes up once and reports in status() - an operator
     # copies it verbatim into the receiver's own --arm-token (dummy_rx.py /
     # huphy_remote_motion.py both require one; there is deliberately no built-in default so a
@@ -140,6 +145,7 @@ class TxState:
       kp_max=self.kp_max,
       kd_max=self.kd_max,
       ttl_ms=self.ttl_ms,
+      on_violation=self._on_client_violation if self.violations is not None else None,
     )
     self.enabled = False
     self.armed = False
@@ -192,6 +198,16 @@ class TxState:
     if self.armed and mode != "manual":
       self.disarm(reason=f"mode changed to {mode!r} while armed")
 
+  # -------------------------------------------------------------------------- violations (A2)
+  def _on_client_violation(self, info: dict) -> None:
+    """``TxClient``'s ``on_violation`` callback (see ``bridge/tx_client.py``'s
+    ``_clamp_positions``) - a pre-send ``safe_clip`` clamp, forwarded into the shared log
+    under ``side="send"``."""
+    self.violations.record(
+      side="send", joint=info["joint"], value=info["value"],
+      limit_lo=info["limit_lo"], limit_hi=info["limit_hi"], src="send",
+    )
+
   # -------------------------------------------------------------------------------- deadman
   def _heartbeat_fresh(self) -> bool:
     if self._last_heartbeat is None:
@@ -241,6 +257,14 @@ class TxState:
       # BLOCKED_MODES safety net - defense in depth on top of check_mode_gate, which should
       # already have disarmed before `mode` could ever reach here as non-manual.
       self.rejected_count += 1
+      if self.violations is not None:
+        # Not a per-joint ROM/torque number (this is a mode-gate refusal, not a clamp) -
+        # `joint="*"` covers every joint this client was ever configured to send, `value`
+        # stays None (nothing finite to report), the refusal reason is the payload.
+        self.violations.record(
+          side="send", joint="*", value=None, src="send",
+          extra={"reason": str(exc), "mode": mode},
+        )
       self.disarm(reason=f"send refused: {exc}")
       return
     if msg is not None:
@@ -275,4 +299,9 @@ class TxState:
       ttl_ms=self.ttl_ms,
       arm_token=self.arm_token,
       warnings=list(self._client.warnings) if self._client is not None else [],
+      # A2: send-side violation count only, so a client watching only /tx/status still sees
+      # "something is being clamped/refused" without also polling GET /violations.
+      violations_count=(
+        self.violations.total_count(side="send") if self.violations is not None else 0
+      ),
     )

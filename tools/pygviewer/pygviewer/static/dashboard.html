@@ -77,6 +77,19 @@ h3{margin:.2em 0 .4em;font-size:12px;text-transform:uppercase;letter-spacing:.04
 .okbanner{background:#173a22;color:var(--accent);padding:6px 8px;border-radius:4px;font-size:11px;margin-bottom:8px}
 .hr{border:0;border-top:1px solid var(--border);margin:8px 0}
 
+/* A2 (2026-09-04): ROM/torque violation red panel - a fixed overlay so it never needs its
+   own row in the .wrap grid (every other tab's layout stays untouched). */
+#violation-badge{background:#5a1414;color:#f88;border:1px solid #a33;animation:violation-pulse 1.4s ease-in-out infinite}
+@keyframes violation-pulse{0%,100%{opacity:1}50%{opacity:.55}}
+.violation-panel{display:none;position:fixed;top:42px;left:8px;right:8px;max-height:52vh;overflow:auto;
+  background:#210d0d;border:1px solid var(--bad);border-radius:6px;padding:10px;z-index:80;
+  box-shadow:0 6px 20px #000c}
+.violation-panel.on{display:block}
+.violation-panel table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:10px}
+.violation-panel th{text-align:left;color:var(--dim);padding:3px 6px;border-bottom:1px solid #533}
+.violation-panel td{padding:3px 6px;border-bottom:1px dashed #422}
+.violation-panel tbody tr[data-joint]:hover{background:#341515;cursor:pointer}
+
 /* Joints tab */
 .joint-row{display:grid;grid-template-columns:88px 1fr 62px 52px 20px;align-items:center;gap:6px;padding:3px 0}
 .joint-row input[type=range]{width:100%}
@@ -122,6 +135,7 @@ table.gains input{width:56px;text-align:right}
     <span id="topbar-badges"></span>
     <span class="rates" id="topbar-rates"></span>
   </div>
+  <div class="violation-panel" id="violation-panel"></div>
 
   <div class="left">
     <div class="tabs-v" id="left-tabs">

@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -120,7 +121,40 @@ def build_app(core, freshness: dict) -> FastAPI:
     serialize regardless of what triggered the error."""
     detail = [{"loc": list(e.get("loc", [])), "msg": e.get("msg", ""), "type": e.get("type", "")}
               for e in exc.errors()]
+    _record_nonfinite_rejections(_request.url.path, exc.errors())
     return JSONResponse(status_code=422, content={"detail": detail})
+
+  _NONFINITE_JOINTS_RE = re.compile(r"joint\(s\) \[(.*?)\]")
+
+  def _record_nonfinite_rejections(path: str, errors: list[dict]) -> None:
+    """A2 (item 3): a NaN/inf ``POST /target``/``/ankle`` is already rejected with a 422
+    (ROM clip task, 2026-09-04) - this ALSO drops one ``side="send"`` violation record per
+    named joint, since "a caller tried to send a non-finite value" is exactly the kind of
+    thing the red panel should show, not just a one-off HTTP error a caller might not even
+    be looking at. Never re-raises: a bug here must not turn a clean 422 into a 500.
+    ``TargetIn._finite_only`` validates the WHOLE ``values`` dict at once and names the
+    offending joints inside its own message (see schema.py) - the joint names are parsed out
+    of that message rather than re-deriving them, so this stays correct if the validator's
+    wording ever changes shape without silently going wrong; a message that does not match
+    the expected shape falls back to the field's own ``loc`` (works for the ankle case,
+    where pitch/roll validates per-scalar-field)."""
+    if path not in ("/target", "/ankle"):
+      return
+    for e in errors:
+      msg = e.get("msg", "")
+      if "non-finite" not in msg:
+        continue
+      m = _NONFINITE_JOINTS_RE.search(msg)
+      if m:
+        names = [tok.strip(" '\"") for tok in m.group(1).split(",") if tok.strip()]
+      else:
+        loc = e.get("loc", [])
+        names = [str(loc[-1])] if loc else ["?"]
+      for n in names:
+        core.violations.record(
+          side="send", joint=n, value=None, src="send",
+          extra={"rejected": "non-finite (NaN/inf)", "path": path},
+        )
 
   def _sim_imu(s: dict) -> dict | None:
     """UI v2: the sim's own {gyro_rad_s, gravity_b}, from the same sensors ObsBuilder reads
@@ -550,6 +584,33 @@ def build_app(core, freshness: dict) -> FastAPI:
       "wire_version": WIRE_VERSION,
       "phases": _NOT_YET,
     }
+
+  @app.get(
+    "/violations",
+    summary="A2: ROM/torque violation records - recv, recv_torque, sim_actuator, send",
+  )
+  def get_violations(limit: int = 100, side: str | None = None):
+    """``limit`` caps how many of the most recent (optionally ``side``-filtered) records
+    come back; the ring buffer itself holds at most 200 total, across every side (see
+    ``violations.py``). Each record gets an ``age_s`` computed at request time (``t_mono`` is
+    this process's own monotonic clock, not portable to a client on its own)."""
+    now = time.monotonic()
+    recs = core.violations.list(limit=limit, side=side)
+    for r in recs:
+      r["age_s"] = round(now - r["t_mono"], 3)
+    return {
+      "records": recs,
+      "by_joint": core.violations.counts_by_joint(),
+      "total": core.violations.total_count(),
+    }
+
+  @app.post(
+    "/violations/clear",
+    summary="A2: clear the violation ring buffer and every cumulative count",
+  )
+  def post_violations_clear():
+    core.violations.clear()
+    return {"ok": True}
 
   def _real_joint_state() -> JointState | None:
     """UI v2: the RECEIVED (real) side of the same canonical JointState, for the dashboard's

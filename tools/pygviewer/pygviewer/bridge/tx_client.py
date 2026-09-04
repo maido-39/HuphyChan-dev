@@ -36,7 +36,7 @@ import socket
 import threading
 import time
 from collections import deque
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 from ..contract import ModelContract
 from ..schema import JointTarget, to_jsonl
@@ -99,6 +99,7 @@ class TxClient:
     ttl_ms: int = DEFAULT_TTL_MS,
     src: str = "sim",
     frame: str = "model_v30",
+    on_violation: Callable[[dict], None] | None = None,
   ) -> None:
     if origin not in ("manual", "script"):
       raise RuntimeError(
@@ -122,6 +123,11 @@ class TxClient:
     self.src = src
     self.frame = frame
     self.contract_hash = contract.contract_sha if contract is not None else None
+    # A2 (2026-09-04): optional hook, called with {"joint","value","limit_lo","limit_hi"}
+    # every time _clamp_positions actually clips a value against safe_clip - lets a caller
+    # (pygviewer/tx.py's TxState) forward send-side clamps into the shared violation log
+    # without this generic, HUPHY-agnostic client importing anything about that log itself.
+    self._on_violation = on_violation
 
     # safe_clip: explicit dict wins; else derive from the contract (only for joints the
     # contract actually knows). A joint outside that set falls back to `hard_range` (ROM
@@ -261,6 +267,8 @@ class TxClient:
       clipped = min(max(v, lo), hi)
       if clipped != v:
         self.warnings.append(f"{n}: safe_clip {v:.4f} -> {clipped:.4f} rad")
+        if self._on_violation is not None:
+          self._on_violation({"joint": n, "value": v, "limit_lo": lo, "limit_hi": hi})
       delta_cap = self._max_delta.get(n)
       prev = self._prev_sent.get(n, clipped)
       if delta_cap is not None:

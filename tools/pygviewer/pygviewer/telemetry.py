@@ -29,6 +29,7 @@ from collections import deque
 from typing import Any
 
 from .schema import ImuState, JointState, PolicyIO
+from .violations import ViolationLog
 
 MAX_AGE_WARN_S = 0.5
 CLOCK_WINDOW = 200
@@ -42,11 +43,20 @@ class RealState:
   """Everything received from the outside world for one model variant."""
 
   def __init__(self, act_names: list[str], joint_ranges: dict[str, tuple[float, float]],
-               contract_sha: str, range_margin_rad: float = 0.05):
+               contract_sha: str, range_margin_rad: float = 0.05,
+               violations: ViolationLog | None = None,
+               effort_limits: dict[str, float] | None = None):
     self.act_names = list(act_names)
     self.joint_ranges = dict(joint_ranges)
     self.contract_sha = contract_sha
     self.range_margin_rad = float(range_margin_rad)
+    # A2 (2026-09-04): the shared violation record log (see violations.py's module
+    # docstring) - optional so RealState stays constructible on its own (as it always has
+    # been) for a caller/test that has no use for the record side of things; SimCore always
+    # passes one. `effort_limits` (contract `gains[name]["effort"]`, N*m) is what makes a
+    # RECEIVED tau_est checkable at all - RealState otherwise has no notion of a torque limit.
+    self.violations = violations
+    self.effort_limits = dict(effort_limits) if effort_limits else {}
 
     self._lock = threading.Lock()
     self.q: dict[str, float | None] = {n: None for n in act_names}
@@ -116,6 +126,17 @@ class RealState:
           lo, hi = self.joint_ranges[n]
           if q < lo - self.range_margin_rad or q > hi + self.range_margin_rad:
             self.range_violations[n] += 1
+            if self.violations is not None:
+              self.violations.record(
+                side="recv", joint=n, value=q, limit_lo=lo, limit_hi=hi, src=msg.src,
+              )
+        if tau is not None and n in self.effort_limits:
+          limit = self.effort_limits[n]
+          if abs(tau) > limit and self.violations is not None:
+            self.violations.record(
+              side="recv_torque", joint=n, value=tau, limit_lo=-limit, limit_hi=limit,
+              src=msg.src,
+            )
         self.q[n] = q
         self.qd[n] = qd
         self.tau[n] = tau

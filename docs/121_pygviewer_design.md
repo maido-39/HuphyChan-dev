@@ -426,3 +426,49 @@ q 불변 확인, 같은-다리 결합은 의도적으로 별도 취급).
   두 조인트맵 모두 null(실제 커미셔닝 값 없음, 방어층은 배선만 돼 있고 아직 실효 없음). 커밋:
   `678261f`(A1 수신 클립)·`d836a5f`(A3 송신 정직화+NaN)·`f4ba171`(TxClient hard_range)·
   `9115180`(rom_deg 조인트맵)·`ae5a1f3`(bench_telemetry 문서화)·`dce31f6`(test_rom_clip.py).
+
+- 09-04 — **A2: ROM/토크 위반 레코드화 + 대시보드 빨간 패널** (계획 `optimized-leaping-hamster.md`
+  A2). 사용자 요구: "ROM/토크제한 넘는 입력/출력이 발생할경우 빨간색 오류창이 뜨고, 어디서 어떤
+  관절이 어떤값이 들어가는 문제가 발생했는지 보이게". A1/A4가 이미 만들어둔 `range_violations`
+  (관절→카운트)와 `replay_clamp`(클램프 이번틱/누적)는 그대로 두고(다른 항목 범위, 하위호환
+  필요 - 대시보드 Telemetry 탭·여러 테스트가 참조), **새 공유 로그** `pygviewer/violations.py`의
+  `ViolationLog`(스레드세이프, 200건 링버퍼 + `(side,joint)` 누적 카운트, `clear()`)를 신설해
+  네 지점 모두 같은 곳에 기록:
+  - `side="recv"` — `telemetry.py::RealState.ingest_joint_state`(`:115-122`), 수신 q가 조인트
+    range 밖일 때 기존 `range_violations[n]+=1` 옆에 `{joint, value, limit_lo/hi, over_by, src}`
+    레코드 추가.
+  - `side="recv_torque"`(신규 체크) — 같은 함수, 수신 `tau_est`가 계약 `gains[name].effort`를
+    넘으면 기록. `RealState`에 `effort_limits` 딕셔너리 신규 인자로 추가(`SimCore`가
+    `self.eff`에서 만들어 전달).
+  - `side="sim_actuator"` — `sim_core.py::_tn_clamp`(`:756-780`), T-N 곡선이 PD raw 토크를
+    실제로 자르는 순간(`raw_i > hi`/`< lo`)마다 `{tau_raw, tau_clamped, omega}` 포함 기록,
+    **관절당 100ms 레이트리밋**(200Hz 서브스텝이라 무제한이면 링버퍼가 1관절로 도배됨 — 누적
+    카운트는 레이트리밋과 무관하게 매번 증가, 링에 들어가는 개별 레코드만 솎아짐).
+  - `side="send"` — `bridge/tx_client.py::_clamp_positions`(safe_clip 클램프, 신규
+    `on_violation` 콜백 인자로 이 클라이언트 자체는 로그를 import하지 않게 분리), `tx.py`의
+    `rejected_count` 증가 지점(BLOCKED_MODES 거부, joint="*"), `api.py`의 커스텀 422 핸들러
+    (`/target`·`/ankle`의 NaN/inf 거부 — 값 자체는 저장 안 하고 `value:null` +
+    `rejected:"non-finite (NaN/inf)"`만 기록, 관절명은 검증기 메시지에서 정규식 파싱).
+  **API**: `GET /violations?limit=N&side=...` → `{records, by_joint, total}`(`age_s`는 요청
+  시점 계산), `POST /violations/clear`. `Status.telemetry.violations`에는 요약만
+  (`{total, by_joint, last}`, `ViolationLog.summary()`) — 링버퍼 전체는 안 실림.
+  `GET /tx/status`에 `violations_count`(send측만) 추가.
+  **대시보드**(`static/dashboard.js`/`dashboard.html`): `.wrap` 그리드에 새 행을 넣으면 다른 탭
+  레이아웃까지 건드려야 해서(브라우저 렌더 확인 불가 상태에서 위험 판단), 대신 `position:fixed`
+  오버레이(`#violation-panel`, 어느 탭에서도 보임)로 구현. 상단바 배지가 `Status.telemetry.
+  violations.total`을 WS 갱신 속도로 반영(펄스 애니메이션, 위반 0이면 배지 자체가 안 생김 →
+  배너 숨김 요구 충족), 클릭하면 패널 토글(`GET /violations?limit=50`을 그때만/250ms 폴링,
+  닫혀 있으면 요청 안 함). 패널 = 관절별 누적 요약 표 + 최근 레코드 표(시각/쪽/관절/값/한계/
+  초과량) + clear 버튼. 레코드 행 클릭 → `S.plotPanels`(A4)로 해당 관절의 pos/tau 플롯 모달을
+  염(`side`가 sim_actuator/recv_torque면 tau 행, 그 외 pos 행).
+  **라이브 검증**(재기동 후, 벤치 포워더가 실제로 50Hz 스트리밍 중인 프로세스에 대해):
+  `GET /joints`의 sim `L_knee_joint` q=0.0(range [0, 2.0944])인데 실측 real q=**-1.501 rad**로
+  하드 range 훨씬 밖 — `GET /violations?side=recv`가 `{joint:"L_knee_joint", value≈-1.50,
+  limit_lo:0.0, limit_hi:2.0944, over_by≈1.50}`를 그대로 보여줌(아래 §9 라이브 확인 참조).
+  **테스트**: `tests/test_violations.py` 19건 신규(순수 `ViolationLog` 단위 7건 + `SimCore`/API
+  통합 12건 — recv/recv_torque 기록·레이트리밋·`/violations` 필터·clear·NaN 422 레코드·
+  `Status.telemetry`가 요약만 나르는지·A1의 `replay_clamp`와 이 로그가 서로 침범 안 하는지).
+  전체 스위트 357→376, 무실패. **미해결**: (a) 브라우저 실렌더 미확인(레이아웃/오버레이 z-index
+  겹침은 코드 리뷰로만 검증, 다른 UI 세션과 동일한 한계). (b) send측 gain(kp/kd) 클램프는
+  로그에 안 걸림(스코프를 위치 clamp/거부로 한정 — 사용자 요구가 ROM/토크였고 게인 클램프는
+  성격이 다름). (c) `sim_actuator` 레이트리밋 100ms는 하드코딩값, 조정 가능하게 만들진 않음.

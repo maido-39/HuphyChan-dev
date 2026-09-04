@@ -81,6 +81,8 @@ const S = {
                           // joint names from here instead of re-deriving an `L_${kind}_joint`
                           // guess, so a panel's own construction and its data query always
                           // agree (see panelsFor()).
+  violations: null,      // GET /violations, polled only while the panel is open - {records, by_joint, total}
+  violationPanelOpen: false,
   policyLoadedName: null,
   policyLayoutDims: null, // {name,func,dim,offset}[] from POST /policy/load's own response -
                           // authoritative for THIS loaded policy (a policy_contract may
@@ -266,6 +268,80 @@ async function pollSlow() {
   try {
     if (S.controlMode === "policy" && S.rightTab === "control") S.policyList = await api("GET", "/policy/list");
   } catch (e) {}
+  try {
+    // A2: the full record list is only fetched while the panel is actually open - the
+    // topbar badge itself reacts off the WS-delivered Status.telemetry.violations SUMMARY,
+    // not this poll, so a closed panel costs nothing extra.
+    if (S.violationPanelOpen) { S.violations = await api("GET", "/violations?limit=50"); renderViolationPanel(); }
+  } catch (e) {}
+}
+
+/* ------------------------------------------------------------------ A2: violation panel */
+function toggleViolationPanel() {
+  S.violationPanelOpen = !S.violationPanelOpen;
+  if (S.violationPanelOpen) {
+    api("GET", "/violations?limit=50").then((v) => { S.violations = v; renderViolationPanel(); }).catch(() => {});
+  } else {
+    renderViolationPanel();
+  }
+}
+
+function violationSideLabel(side) {
+  return ({
+    recv: "recv (received position)",
+    recv_torque: "recv (received torque)",
+    sim_actuator: "sim actuator (T-N saturated)",
+    send: "send (to hardware)",
+  })[side] || side;
+}
+
+function renderViolationPanel() {
+  const panel = el("violation-panel");
+  if (!panel) return;
+  if (!S.violationPanelOpen) { panel.classList.remove("on"); return; }
+  panel.classList.add("on");
+  const v = S.violations || { records: [], by_joint: {}, total: 0 };
+  const summaryRows = Object.entries(v.by_joint).map(([j, c]) => {
+    const bySide = Object.entries(c).filter(([k]) => k !== "total").map(([k, n]) => `${k}:${n}`).join(" &middot; ");
+    return `<tr><td>${j}</td><td>${c.total}</td><td class="small">${bySide}</td></tr>`;
+  }).join("");
+  const rows = v.records.slice().reverse().map((r) => {
+    const val = (r.value === null || r.value === undefined) ? (r.rejected || "non-finite") : fmt(r.value, 4);
+    const lim = (r.limit_lo === null || r.limit_lo === undefined || r.limit_hi === null || r.limit_hi === undefined)
+      ? "-" : `[${fmt(r.limit_lo, 3)}, ${fmt(r.limit_hi, 3)}]`;
+    const over = (r.over_by === null || r.over_by === undefined) ? "-" : fmt(r.over_by, 4);
+    return `<tr data-joint="${r.joint}" data-side="${r.side}">
+      <td>${fmt(r.age_s, 1)}s ago</td><td>${violationSideLabel(r.side)}</td><td>${r.joint}</td>
+      <td>${val}</td><td>${lim}</td><td>${over}</td></tr>`;
+  }).join("");
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <b style="color:#f88">&#9888; ROM / torque violations - ${v.total} total (all-time)</b>
+      <div class="row" style="border:0;padding:0;gap:6px">
+        <button id="viol-clear">clear</button>
+        <button id="viol-close">close</button>
+      </div>
+    </div>
+    <div class="small" style="margin-bottom:4px">per-joint cumulative (survives the record ring):</div>
+    <table><thead><tr><th>joint</th><th>total</th><th>by side</th></tr></thead>
+      <tbody>${summaryRows || '<tr><td colspan="3" class="small">none</td></tr>'}</tbody></table>
+    <div class="small" style="margin-bottom:4px">most recent ${v.records.length} record(s) - click a row to highlight that joint's plot:</div>
+    <table><thead><tr><th>when</th><th>side</th><th>joint</th><th>value</th><th>limit</th><th>over by</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" class="small">none</td></tr>'}</tbody></table>
+  `;
+  el("viol-clear").onclick = async () => { await apiOk("POST", "/violations/clear"); S.violations = await api("GET", "/violations?limit=50"); renderViolationPanel(); };
+  el("viol-close").onclick = () => { S.violationPanelOpen = false; renderViolationPanel(); };
+  panel.querySelectorAll("tbody tr[data-joint]").forEach((tr) => {
+    tr.addEventListener("click", () => {
+      const joint = tr.dataset.joint;
+      if (!joint || joint === "*" || joint === "?") return;
+      const side = tr.dataset.side;
+      const kind = jointNameParts(joint).kind;
+      const row = (side === "sim_actuator" || side === "recv_torque") ? "tau" : "pos";
+      if (S.plotPanels[kind]) openModal(row, kind);
+      else toast(`no plot panel for ${joint} (${kind})`);
+    });
+  });
 }
 
 /* ------------------------------------------------------------------ tabs */
@@ -309,6 +385,13 @@ function renderTopBar() {
     if (st.warnings && st.warnings.length) badges.push(`<span class="pill bad">${st.warnings.length} warning(s)</span>`);
     const tel = st.telemetry || {};
     if (tel.jitter_grey) badges.push(`<span class="pill warn">jitter &gt;15ms</span>`);
+    // A2: red panel badge - Status.telemetry.violations is a SUMMARY (total/by_joint/last),
+    // arriving at WS rate, so this reacts as fast as any other top-bar badge; the full
+    // record list is only fetched (GET /violations) while the panel itself is open.
+    const tv = tel.violations || {};
+    if (tv.total) {
+      badges.push(`<span class="pill bad" id="violation-badge" title="click for detail">&#9888; ${tv.total} ROM/torque violation(s)</span>`);
+    }
   }
   el("topbar-badges").innerHTML = badges.join(" ");
 
@@ -347,6 +430,12 @@ function boot() {
     })
     .catch((e) => toast("failed to load /contract: " + e.message));
   connectWs();
+  // A2: event delegation, not a per-render listener - #topbar-badges' innerHTML is rebuilt
+  // every renderTick (20 Hz), so a listener attached to the badge span itself would need
+  // re-attaching every tick; the parent element is never replaced.
+  el("topbar-badges").addEventListener("click", (ev) => {
+    if (ev.target.closest("#violation-badge")) toggleViolationPanel();
+  });
   setInterval(pollSlow, 250);
   setInterval(renderTick, 50); // 20 Hz
   pollSlow();
