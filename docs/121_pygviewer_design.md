@@ -268,6 +268,39 @@ uPlot/three.js 시각 결과는 미검증 — 미해결 항목으로 남김(§ �
 (c) obs 항목의 실효 소스(`obs_sources_effective`)는 250ms 폴링(`/snapshot`)이라 WS 50Hz보다 느림 —
 플롯/joints 갱신보다 5~10배 느린 배지 하나뿐이라 감수.
 
+### TX(실물 송신) UI — 안전장치 스텁 (2026-09-04, 대시보드 작업 중 병행 지시)
+
+사용자 확정(`docs/123_pygviewer_tx_design.md` §4): 대시보드에 실물 송신 제어를 추가하되, 다른 코더가
+`bridge/tx_client.py`(50Hz UDP 송신)와 `JointTarget` 실제 구현을 만들고 있었음. 착수 전
+`git log -- tools/pygviewer/pygviewer/bridge` 확인 결과 그 시점엔 미도착(P3 수신측 브리지만
+존재) → 지시대로 **인터페이스 가정 최소화 + 스텁**으로 구현(커밋 `152aad2`). 작업 도중 다른
+코더의 커밋(`c96a15e` JointTarget 실제 구현, `dfdb7b0` `tx_map.py` 부호/단위 역변환)이 같은
+`main`에 도착했으나, `bridge/tx_client.py`(실제 송신기) 자체는 이 문서 작성 시점까지도 미도착 —
+내 스텁은 여전히 유효한 경계 설계(스텁의 `send()`가 하는 일은 "sim-rad 목표값 기록"까지이고, HUPHY
+단위·부호 변환은 이미 브리지 쪽 몫으로 설계돼 있어 재작업 불필요).
+
+**구성**: `pygviewer/tx.py`의 `TxState` — 무장(arm)·해제·하트비트·모터별 활성화·전송의 상태기계이지만
+**아무 바이트도 실제로 내보내지 않음**(모듈 docstring에 명시). 안전 요구(정책 출력 절대 송신 금지)는
+**구조적으로** 강제: `arm(mode,...)`는 `mode != "manual"`이면 거부, `SimCore._on_control_tick`이 매
+제어틱(50Hz)마다 `check_mode_gate(mode)`를 호출해 모드가 manual을 벗어나면 API 호출과 무관하게
+즉시 무장 해제(`modes.SHADOW_MAY_TRANSMIT`와 동일한 "체크박스가 아니라 구조" 패턴). `send()`는
+`active()`(무장 AND 하트비트가 `DEADMAN_TIMEOUT_S=0.3s` 이내)가 아니면 거부, 활성화되지 않은
+모터는 조용히 드롭. 신규 엔드포인트 `POST /tx/{arm,disarm,heartbeat,motor,send}` + `GET /tx/status`.
+
+**대시보드**: Telemetry/Record 탭에 TX 섹션(host:port, 2단 arm — 활성화 토글→ARM 버튼, 상태 배지,
+12개 모터별 체크박스, kp/kd 상한 표시(docs/123 §3 벤치 실험값 5/0.5, 표시 전용)). 키보드 데드맨은
+Space를 누르는 동안만(텍스트 입력 포커스 시 제외) `/tx/heartbeat`+`/tx/send`를 20Hz로 호출, 떼면
+클라이언트에서 즉시 중단(서버 0.3s 타임아웃은 백스톱). 플롯의 q/target 행에 "sent target" 계열(점선,
+자홍/청록) 추가 — 250ms `/tx/status` 폴링 결과를 real 텔레메트리와 같은 방식으로 sim 시간격자에
+병기.
+
+**검증**(라이브 curl): mode=idle에서 arm 409 → `/mode manual` 드레인 후 200 → 두 관절 값을 보냈지만
+한쪽만 활성화 상태라 `sent`에 한 관절만 포함 → mode를 idle로 되돌리자 **한 제어틱 안에** 자동
+무장해제(`disarm_reason: "mode changed to 'idle' while armed"`), 클라이언트 조치 없이. pytest
+13건(대부분 순수 파이썬 TxState 유닛테스트, SimCore 인스턴스는 API/틱-연동 확인용 2건에만 —
+test_dashboard.py에서 SimCore 인스턴스를 많이 만들면 전체 스위트 RSS 상한을 넘긴다는 걸 배워서
+반영). 미검증: 실제 브라우저(키 입력 체감, 레이아웃)는 이번에도 확인 못함.
+
 ### "L/R 관절이 같이 움직인다" 버그 조사 (2026-09-04, 대시보드 작업 중 병행 지시)
 
 사용자가 이전 세션에 겪은 현상. 실제 재현·조치는 커밋 `a9a4a14`(상세 원인·수치는 그 커밋 메시지와

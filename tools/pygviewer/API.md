@@ -62,6 +62,12 @@ sim and, separately, on the robot produces two recordings `compare.py` can align
 | POST | **`/replay/seek`** | `{"frac": 0.5}` | seek the loaded recording to a fraction `[0,1]` |
 | POST | **`/replay/speed`** | `{"speed": 2.0}` | playback speed multiplier |
 | GET | `/schema/deferred` | - | JSON schemas of the request models whose endpoints are still 501 |
+| POST | **`/tx/arm`** | `{"host": "127.0.0.1", "port": 9872}` | (UI v2 TX STUB, docs/121 section 10 / docs/123) refused (409) unless the sim is in `manual` mode - policy output must never be transmittable. No `bridge/tx_client.py` exists yet; a successful arm only starts the dead-man clock |
+| POST | **`/tx/disarm`** | - | disarm |
+| POST | **`/tx/heartbeat`** | - | keyboard dead-man keep-alive; 409 if not armed |
+| POST | **`/tx/motor`** | `{"joint_name": "L_knee_joint", "enabled": true}` | per-motor opt-in; nothing is sent for a joint that has never been enabled |
+| POST | **`/tx/send`** | `{"values": {"L_knee_joint": 0.4}}` (same shape as `/target`) | 409 unless armed AND a heartbeat arrived within 0.3 s; STUB - records `last_sent_target` for the status/plot overlay, transmits nothing |
+| GET | **`/tx/status`** | - | `{armed, active, host, port, enabled_motors, heartbeat_age_s, deadman_timeout_s, disarm_reason, last_sent_target, kp_cap, kd_cap, stub: true, note}` |
 | GET | **`/presets`** | - | (UI v2) `{builtin: {train, real}, custom: [{name, gains}]}` - `train`/`real` are fixed descriptions, not files; `custom` lists `tools/pygviewer/presets/*.json` |
 | POST | **`/presets`** | `{"name": "bench1", "gains": {"L_knee_joint": {"kp": 50, "kd": 2}}}` | (UI v2) saves a named gains table to `tools/pygviewer/presets/<name>.json`; 400 on a reserved name (`train`/`real`) or an un-actuated joint |
 | POST | **`/presets/apply`** | `{"name": "real"}` | (UI v2) applies a preset through the existing `SimCore.set_gains`: `train` clears every override back to the contract's own kp/kd, `real` sets kp=10/kd=1 on every actuated joint (HUPHY `robot_v1.0.yaml`'s uniform start point), any other name loads that custom file; 404 on an unknown custom name |

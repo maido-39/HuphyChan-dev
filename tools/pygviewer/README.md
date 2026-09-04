@@ -75,6 +75,15 @@ control rate, a 250 ms poll of `/snapshot` (plus `/gains`/`/presets`/`/policy/li
 their tab is open) for slower state - no new wire types, `JointState.src` and `PolicyIO`'s
 existing fields already carry what the dashboard needs.
 
+**TX (hardware transmit) - STUB.** The Telemetry/Record tab also has a TX section: host:port,
+a two-stage arm (an "activate" checkbox, then a real `POST /tx/arm` - refused whenever the
+sim mode is not `manual`, since **policy output must never be transmittable**), a keyboard
+dead-man (hold Space to send, release to stop), and one enable checkbox per motor. This is
+built against `pygviewer/tx.py`'s `TxState`, a real safety state machine that **transmits
+nothing anywhere** - `bridge/tx_client.py` (the actual 50 Hz UDP sender another coder is
+building per `docs/123_pygviewer_tx_design.md`) had not landed when this was written. See
+`GET /tx/status`'s own `note` field, always present, for the current stub boundary.
+
 Verified live by hand (no Chrome extension reachable on this host - tried it, confirmed
 unavailable): `curl` for the page/static assets/preset round trip/policy-load sequence, a
 Python `websockets` client against `/ws/out` to confirm the additive `src="real"` JointState
@@ -394,7 +403,12 @@ cd tools/pygviewer && CUDA_VISIBLE_DEVICES="" \
     ../../mujoco-sim/mjlab/.venv/bin/python3 -m pytest
 ```
 
-231 tests, CPU only:
+244 tests added by the "UI v2 dashboard" work below (231 in `test_dashboard.py`/
+`test_target_independence.py`, 13 in `test_dashboard_tx.py`), CPU only. The suite's total
+count is a moving target right now - another coder is concurrently landing
+`tx_map.py`/`JointTarget` work (`test_tx_map.py`/`test_schema_tx.py`, not described in this
+file) on the same tree; run `pytest --collect-only -q` for the current total rather than
+trusting a number written here:
 
 | file | what it pins |
 |---|---|
@@ -417,6 +431,7 @@ cd tools/pygviewer && CUDA_VISIBLE_DEVICES="" \
 | `test_arm_abduction.py` | both arms flare OUTWARD (never one abducted/one adducted) at the welded default pose, on every baked variant that has arms - the physical acceptance check for the `pygmalion_constants.get_spec()` sign bug fixed 09-04 |
 | `test_target_independence.py` | 2026-09-04 user bug report ("L/R move together"): with base=fixed+ground=off, commanding any one of the 12 actuated joints (or one AB foot-space `/ankle` side) never changes another joint's target (bit-exact) or the OPPOSITE LEG's q beyond 0.01 rad - same-leg q coupling (crank_A/B's shared closed loop, hip/knee inertia) is deliberately excluded, see the file's own docstring for why |
 | `test_dashboard.py` (UI v2) | `GET /`/`/dash` and the four vendored static assets serve; `Status.imu`/`side_mapping_verified`; the full `/presets`+`/presets/apply` surface (save/list/apply/reserved-name+unknown-joint rejection/404); `GainsIn.clear_overrides`; the additive `src="real"` JointState frame on `/ws/out` is absent until telemetry arrives, then present; the Policy tab's `load -> cmd(0,0,0) -> mode=policy_sim` sequence actually lands that state; the Joints tab's deg/rad conversion round-trips (checked by extracting the literal formula from the shipped `dashboard.js` source, since there is no JS runtime on this host to execute it) |
+| `test_dashboard_tx.py` (UI v2 TX STUB) | `TxState`: arm refused outside `manual` mode; `send` drops any joint not explicitly enabled; the 0.3 s dead-man timeout stops `send` (both a fast clock-manipulation test and a real `time.sleep` one); a heartbeat keeps it alive; `check_mode_gate` auto-disarms the moment the mode leaves `manual`; plus two API-layer tests (shared `SimCore`) proving `/tx/*` is actually wired to `TxState` and that one `step_n(decimation)` tick disarms it when `core.mode` changes directly, bypassing `POST /mode` entirely |
 
 Evidence figure (no OpenGL on this host, so it is matplotlib):
 `mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/make_verification_figure.py` ->
@@ -481,6 +496,8 @@ tools/pygviewer/
     telemetry.py             RealState: latest-only receive buffer, rx rate/age/seq-gaps/
                              clock-offset, wrap/range flags, sign sanity (P3)
     record.py                Recorder (streaming jsonl.gz) / Replayer (seek, speed) (P3)
+    tx.py                    (UI v2 TX STUB) TxState: arm/disarm/heartbeat/per-motor-enable/
+                             send - transmits nothing, see its own module docstring
     bridge/
       huphy_udp.py           HUPHY UDP -> canonical JointState/ImuState (P3)
       joint_map_huphy.json   explicit 12-row limb/motor -> sim-joint table (P3)
