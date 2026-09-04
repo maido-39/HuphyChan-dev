@@ -263,7 +263,7 @@ base z **0.903 m**(std 0), base vx −0.001±0.000 m/s — 완전 정지.
 
 **P1 학습 곡선** (커리큘럼 최상단 안착까지):
 
-![P1 progress](../mujoco/assets/legonly_ab_v1_p1_progress.png)
+![P1 progress](../mujoco/assets/legonly_ab_v2_p1_progress.png)
 
 - 누적 보행 영상(단계 자막 포함): `docs/mujoco/assets/accum_legonly_ab_v2_p2.mp4` (22.6 MB, P2),
   `accum_legonly_ab_v2_p1.mp4` (6.5 MB, P1). ★영상 용량이 커 GitHub 100 MB 제한과 별개로
