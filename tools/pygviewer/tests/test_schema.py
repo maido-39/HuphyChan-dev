@@ -83,12 +83,18 @@ def test_validate_joint_names_flags_only_the_unknown_ones():
 
 
 def test_joint_target_is_defined_in_the_wire_schema():
-  """The wire schema is complete (JointTarget exists and round-trips) even though no
-  endpoint emits it - the design's explicit "receive only" decision (docs/121 section 1)."""
+  """The wire schema is complete (JointTarget exists and round-trips); docs/123 section 4
+  (plan A, 2026-09-04) superseded docs/121 section 1's "receive only" decision for the
+  MESSAGE ITSELF - ``arm_token``/``origin`` are now required precisely because a transmit
+  path exists (``bridge/tx_client.py``); see ``tests/test_schema_tx.py`` for the safety
+  properties that decision leans on (``origin`` can never be ``"policy"``, etc.)."""
   from pygviewer.schema import JointTarget, MESSAGE_TYPES
 
   assert "JointTarget" in MESSAGE_TYPES
-  msg = JointTarget(t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.35])
+  msg = JointTarget(
+    t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.35],
+    arm_token="x", origin="manual",
+  )
   back = from_jsonl(to_jsonl(msg))
   assert isinstance(back, JointTarget)
   assert back.q_target == [0.35]

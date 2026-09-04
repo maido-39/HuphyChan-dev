@@ -16,16 +16,19 @@ paid for somewhere in this project:
 
 Implementation status is stated per model below.  P0/P1 implement ``Status``, ``ContractOut``,
 ``TargetIn``, ``BaseIn``, ``ModeIn`` and the ``JointState`` that ``WS /ws/out`` emits.
-``JointTarget``, ``ImuState``, ``PolicyIO``, ``GainsIn`` and ``ObsSourceIn`` are DEFINED and
-documented here but their endpoints are P2/P3 - see ``api.py`` and ``API.md``.
+``ImuState``, ``PolicyIO``, ``GainsIn`` and ``ObsSourceIn`` are DEFINED and documented here
+but their endpoints are P2/P3 - see ``api.py`` and ``API.md``. ``JointTarget`` is IMPLEMENTED
+as a wire type and on the ``bridge/`` transmit side (docs/123 "plan A", 2026-09-04) - see its
+own docstring below; ``api.py``/``modes.py`` transmit wiring is separate work, still pending.
 """
 
 from __future__ import annotations
 
 import json
+import math
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 WIRE_VERSION = 1
 
@@ -89,12 +92,32 @@ class ImuState(Header):
 
 
 class JointTarget(Header):
-  """DEFINED AND DOCUMENTED ONLY - **never implemented as an outbound path**.
+  """IMPLEMENTED as a wire format and as the transmit side (docs/123 section 4, "plan A"):
+  ``bridge/tx_client.py`` is the sending library and ``bridge/huphy_remote_motion.py`` /
+  ``bridge/dummy_rx.py`` are the two things that can be on the other end of UDP :9872. There
+  is still NO route in ``api.py`` that emits it and ``modes.py`` still hard-codes the shadow
+  mode to never transmit (``modes.SHADOW_MAY_TRANSMIT``) - policy output never reaches this
+  class's constructor from that path, by construction, not by convention.
 
-  The user's decision (docs/121 section 1) is that the viewer receives from the robot and
-  does not command it.  This model exists so the wire format is complete and a future
-  deployment runtime has an exact contract to implement; ``api.py`` has no route that emits
-  it, and ``modes.py`` hard-codes the shadow mode to never transmit.
+  ``origin`` is the second, independent gate a policy output cannot pass even if some future
+  caller tried: the ``Literal`` type itself makes ``origin="policy"`` a ``pydantic.
+  ValidationError`` at construction time, not a runtime check someone could forget to call.
+  Every field is validated at parse time (``from_jsonl``/``model_validate``) so a corrupt or
+  hostile line never reaches a robot as a half-built ``Action``:
+
+    * ``origin`` - only ``"manual"`` (a person moved a slider/pressed a key) or ``"script"``
+      (``POST /script/run`` style playback) are valid at all; anything else, ``"policy"``
+      included, is rejected by the type before any code of ours runs.
+    * ``arm_token`` - required, non-empty; the receiver additionally checks it MATCHES its
+      own expected token (that check is the receiver's job, this model just refuses to be
+      built without one).
+    * ``q_target``/``kp``/``kd``/``tau_ff`` - NaN in any element is rejected (a NaN target is
+      not "no data", HUPHY already has ``null``/``-1`` for that; a NaN slipping through as a
+      float would hit ``guards.apply``'s clip/slew math wrong instead of failing loudly).
+
+  Unknown joint names are NOT checked here (a name is only "unknown" relative to a specific
+  robot/contract) - callers use ``validate_joint_names`` against their own allowed set, same
+  as every other wire type in this file.
   """
 
   type: Literal["JointTarget"] = "JointTarget"
@@ -102,7 +125,33 @@ class JointTarget(Header):
   q_target: list[float]
   kp: list[float] | None = None
   kd: list[float] | None = None
+  tau_ff: list[float] | None = None
   ttl_ms: int = Field(default=100, description="target expires this long after t_ns")
+  arm_token: str = Field(description="receiver-checked shared secret; empty is refused here")
+  origin: Literal["manual", "script"] = Field(
+    description="never 'policy' - the Literal type itself rejects it at construction, "
+    "which is the point (docs/123 section 4: policy output must never reach the wire)"
+  )
+
+  @field_validator("arm_token")
+  @classmethod
+  def _arm_token_not_empty(cls, v: str) -> str:
+    if not v:
+      raise ValueError("arm_token must be non-empty - an empty token is not 'unarmed', it's "
+                        "a missing safety check")
+    return v
+
+  @field_validator("q_target", "kp", "kd", "tau_ff")
+  @classmethod
+  def _finite_only(cls, v: list[float] | None) -> list[float] | None:
+    if v is None:
+      return v
+    bad = [i for i, x in enumerate(v) if not math.isfinite(x)]
+    if bad:
+      raise ValueError(f"non-finite value (NaN/inf) at index {bad} - a target must always "
+                        "be finite (use a shorter joint_names/value list to omit a joint, "
+                        "never NaN/inf as a sentinel)")
+    return v
 
 
 class PolicyIO(Header):
