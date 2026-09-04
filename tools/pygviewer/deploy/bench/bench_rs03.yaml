@@ -1,0 +1,33 @@
+# bench_rs03.yaml — HUPHY config for the ONE-MOTOR bench (10.8.0.14, CANable gs_usb -> can0).
+#
+# Used with:  huphy-commission --config bench_rs03.yaml --limb bench {scan|state|fault|nudge ...}
+# A brand-new RobStride motor answers on CAN id 127 (0x7F) until `commission can-id` changes it,
+# so the candidate list below covers the factory id plus the ids HUPHY's leg config expects for
+# RS03 (hip_yaw=3, ankle_a=5, ankle_b=6). `scan` only pings ids that are listed here — that is
+# why several candidates are listed; delete the ones that do not answer once you know the id.
+#
+# Gains are deliberately LOW (kp 5, kd 0.5): a free motor on a bench with kp 10+ can whip.
+name: bench_rs03
+safety:
+  command_margin_deg: 3.0
+  max_delta_deg: 20.0        # slew clamp per 100 Hz tick - tighter than the leg default (50)
+  enforce_limits: false      # bench motor has no calibration/limits yet (commissioning mode)
+telemetry:
+  host: 192.168.20.177       # pygviewer host: HUPHY UDP telemetry -> bridge/huphy_udp.py (:9870)
+  port: 9870
+  csv_path: null
+  csv_flush_every: 50
+imus: {}
+limbs:
+  bench:
+    kind: leg
+    side: left
+    channel: can0
+    interface: socketcan
+    control_hz: 100.0
+    motors:
+      m127: {id: 127, model: RS03, kp: 5.0, kd: 0.5}   # factory default id
+      m1:   {id: 1,   model: RS03, kp: 5.0, kd: 0.5}
+      m3:   {id: 3,   model: RS03, kp: 5.0, kd: 0.5}   # left hip_yaw slot
+      m5:   {id: 5,   model: RS03, kp: 5.0, kd: 0.5}   # left ankle_a slot
+      m6:   {id: 6,   model: RS03, kp: 5.0, kd: 0.5}   # left ankle_b slot
