@@ -1,8 +1,8 @@
 {
  "now": {
-  "title": "하체 본학습 진행 중(별도 감시). 뷰어 작업(빨간 경고 패널·모터 신호등) 완료, 다음 지시 대기",
+  "title": "하체 본학습 2단계 15,900/18,099회 진행(넘어짐 0, 최대난도 유지) — 완주 후 모터 사용률 최우선 측정 예정. 웹뷰어는 실물 모터 값이 그래프에 확실히 보이도록 범례(선 샘플+이름)와 관절별 현재값·수신 샘플수 표시를 추가하는 중",
   "detail": "",
-  "since": "2026-09-04 17:54"
+  "since": "2026-09-04 18:34"
  },
  "items": {
   "v4model": {
@@ -1042,7 +1042,8 @@
    "changed": "2026-09-04 13:04",
    "finding": "Enable a joint, arm, and hold a key: the dashboard now sends real network commands (50 times/second) and a test robot simulator moved to within 2 degrees of the requested angle. Letting go of the key stops new commands within 0.3 seconds without disarming (the robot side then safely freezes and eases back to its resting pose on its own). Switching to autonomous-policy mode auto-blocks sending within one control step. A joint not explicitly enabled is never sent, confirmed by the test robot staying at its own resting angle.",
    "number": "343 tests passing (up from 333; old stub-only tests replaced), live 2-degree tracking, 0.3s heartbeat cutoff, 1 control-tick auto-block on mode change",
-   "needs": "Real hardware (motor + CAN bus) still untested - only the physics-model test-double and the safety wiring were verified; a second, previously-reported dashboard bug (Policy panel's Load button being visually hidden) was also fixed in the same pass; a duplicate-viewer-process bug from earlier today was closed with a same-process guard."
+   "needs": "Real hardware (motor + CAN bus) still untested - only the physics-model test-double and the safety wiring were verified; a second, previously-reported dashboard bug (Policy panel's Load button being visually hidden) was also fixed in the same pass; a duplicate-viewer-process bug from earlier today was closed with a same-process guard.",
+   "collapsed": true
   },
   "bench-rs03": {
    "id": "bench-rs03",
@@ -1136,6 +1137,12 @@
    "changed": "2026-09-04 17:54",
    "finding": "지금 실제 화면에서: 연결된 무릎 모터 1개는 초록(정상), 아직 안 붙은 나머지 11개 관절 자리는 전부 빨강(한 번도 응답 없음)으로 정확히 구분됨. 다만 지금 쓰는 무릎 모터 송신 프로그램이 구버전이라 '응답 지연·온도' 같은 세부 진단은 아직 안 보내서, 그 부분은 '수신 자체가 계속되는지'만으로 판정 중임을 화면에 별도 표시함(정보 없음을 있는 척하지 않음). 세부 진단까지 보려면 무릎 모터 송신 프로그램을 새 버전으로 재시작해야 함(코드만 준비, 재시작은 사용자 결정)",
    "number": "실측: 연결모터 1개 초록/미연결 11개 빨강, 초당 약 50회 수신, 자동검사 11건 추가(전체 390건 통과)"
+  },
+  "웹뷰어 화면 멈춤 버그 수정: 오른쪽 탭을 옮겼다 돌아오면 화면 갱신이 예외로 중단돼 그래프가 통째로 얼어붙던 문제(사용자가 '실물 그래프가 안 보인다'고 지적한 원인). 갱신 단계를 서로 격리해 한 패널이 실패해도 그래프는 계속 그리도록 함": {
+   "id": "웹뷰어 화면 멈춤 버그 수정: 오른쪽 탭을 옮겼다 돌아오면 화면 갱신이 예외로 중단돼 그래프가 통째로 얼어붙던 문제(사용자가 '실물 그래프가 안 보인다'고 지적한 원인). 갱신 단계를 서로 격리해 한 패널이 실패해도 그래프는 계속 그리도록 함",
+   "created": "2026-09-04 18:34",
+   "section": "done",
+   "changed": "2026-09-04 18:34"
   }
  },
  "order": [
@@ -1237,7 +1244,8 @@
   "plot-real-fix",
   "rom-clip",
   "violation-panel",
-  "motor-health"
+  "motor-health",
+  "웹뷰어 화면 멈춤 버그 수정: 오른쪽 탭을 옮겼다 돌아오면 화면 갱신이 예외로 중단돼 그래프가 통째로 얼어붙던 문제(사용자가 '실물 그래프가 안 보인다'고 지적한 원인). 갱신 단계를 서로 격리해 한 패널이 실패해도 그래프는 계속 그리도록 함"
  ],
- "updated": "2026-09-04 17:54"
+ "updated": "2026-09-04 18:34"
 }
