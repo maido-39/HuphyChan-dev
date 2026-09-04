@@ -276,3 +276,16 @@ forward.py`, `bridge/dummy_tx.py` 둘 다)이 `ws.send()`만 하고 `ws.recv()`�
 - 09-04 16:10 — **폐루프 토크 미유지 = 해결(모터·전원 정상)**. 게인 스윕: 자유로터 RS03 정지마찰/코깅으로 kp 20/25는 nudge 0°, **kp 30에서 +11.7° 추종**. hold 테스트(목표를 실시간 위치에 앵커)로 kp 20에서 0.3° 오차 유지(τ +0.073)·kp 30 0.14° 확인 → **폐루프 자체는 kp 20부터 정상**. 앞선 사인 실패의 진짜 원인 = 임시 송신기 버그 2건: (a) 표시용 ±180 wrap 값을 명령에도 사용(다회전 raw −305°에 wrap −9.5° 명령), (b) ROM ±180 절대클램프가 감긴 로터를 방해. 수정(명령=raw, 표시만 wrap, ROM은 q0 상대) 후 kp 30 사인 8°@0.15 Hz가 pos−tgt ±1~2°·τ 2.3까지 **정확 추종**. undervoltage는 read_fault 오독으로 확정(코더 재현). ★교훈: 무캘리브 모터의 명령은 raw 다회전 공간에서, wrap은 표시에만.
 - 09-04 16:20 — **정정(사용자): τ≈0은 정상.** 벤치는 **모터만 달린 무부하 자유 로터**라 목표 도달 후 유지 토크가 거의 0이고, 정지마찰만 넘으면 이후 힘이 거의 안 든다. "전원(undervoltage) 의심"은 철회 — undervoltage는 read_fault 오독, τ≈0은 무부하 특성. 초기 미추종의 유일한 실제 원인은 송신기 좌표 버그(표시용 wrap 값을 명령에 사용) + ROM 절대클램프였고 수정됨. PSU 조사 불필요.
 
+- 09-04 (ROM 클립 세션) — **송신·수신 API 엔드포인트 ROM 클립 일관화** (별도 코더, 계획
+  `optimized-leaping-hamster.md` A1/A3). 이 문서와 맞닿는 부분만 요약(상세는 docs/121 §4/§9):
+  `bridge/tx_client.py`가 계약에 없는 관절(예: 이 벤치 조인트 자체가 향후 조인트맵 `rom_deg`로만
+  방어되는 케이스)에 완전 무클램프로 새는 경로에 `hard_range` 폴백 kwarg 추가(현재 배선은 전부
+  계약 관절만 써서 방어적 배선, 유닛테스트 3건). `bridge/joint_map_huphy.json`/
+  `joint_map_bench.json`에 선택적 `rom_deg: [lo, hi]` 필드 추가(오늘은 전부 null — 커미셔닝 전),
+  `HuphyBridge.parse_fast`가 설정되면 HUPHY cal-space 도 단위로 변환 전 클립. `deploy/bench/
+  bench_telemetry.py`(실물 CAN 스크립트, **편집만·미실행**)는 위 16:10 항목이 이미 고친 "명령=raw,
+  ROM은 q0 상대"를 그대로 유지했고, `limits_deg`는 cal-space라 이 raw 전용 스크립트에 안전하게
+  적용할 offset/sign 변환이 없어(HUPHY `config/schema.py` 확인) 클립엔 안 쓰고 시작 시 정보성
+  NOTE로만 출력 — 계획 문구("있으면 절대 클립")와의 의도적 편차, docstring에 사유 명시. 진짜
+  안전보증은 `sim_core.py`의 하드 range 클립(수신측, docs/121 §4/§9)이며 이 절의 항목들은 전부
+  그 앞단 방어층. 커밋: `f4ba171`(TxClient)·`9115180`(rom_deg 조인트맵)·`ae5a1f3`(bench 문서화).

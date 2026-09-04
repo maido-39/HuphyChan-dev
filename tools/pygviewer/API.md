@@ -40,8 +40,8 @@ sim and, separately, on the robot produces two recordings `compare.py` can align
 | GET | `/contract` | - | the whole baked model contract + its freshness verdict |
 | GET | `/snapshot` | - | the raw simulator snapshot: every joint's q/qd, actuated tau/target, base pose, IMU sensors, loop closure |
 | GET | `/joints` | - | one `JointState` (canonical actuated set) |
-| POST | `/target` | `{"values": {"L_knee_joint": 0.9}}` | `{ok, clamped_to}` - values are **clamped** to the contract's `safe_clip`, not rejected; the applied window is echoed |
-| POST | `/ankle` | `{"side": "L", "pitch": -0.30, "roll": 0.10}` | AB only: foot-space command, inverted to a crank pair. 409 on an RP variant |
+| POST | `/target` | `{"values": {"L_knee_joint": 0.9}}` | `{ok, requested, applied, clip_range}` - values out of the contract's `safe_clip` are **clamped**, not rejected (`applied` differs from `requested`, `clip_range` is the window); a NaN/inf value IS rejected, 422 (ROM clip task, 2026-09-04) |
+| POST | `/ankle` | `{"side": "L", "pitch": -0.30, "roll": 0.10}` | AB only: foot-space command, inverted to a crank pair (`{ok, requested, applied, clip_range, note}`, same requested/applied shape as `/target`, keyed by the two crank joint names). 409 on an RP variant; 422 on a NaN/inf pitch/roll |
 | POST | `/base` | `{"mode": "fixed", "pos": [0,0,1.05], "rpy": [0,0.1,0], "pivot_offset": [0,0,0.06], "ground": true}` or `{"mode": "string", "z_set": 0.6, "hook_offset": [0,0,0], "follow_xy": false}` | any subset; omitted fields keep their value. `string` is a safety tether: a tendon LIMIT holds the base no lower than `z_set` (slack above it), horizontal motion always free |
 | POST | `/reset` | `{"keyframe": "knees_bent"}` | restores joints **and** base pose |
 | POST | `/mode` | `{"mode": "manual"}` | `idle`/`manual`/`policy_sim`/`policy_shadow`/`real_replay`/`file_replay`, all six implemented (`policy_sim`/`policy_shadow` 409 without a loaded policy, `file_replay` 409 without a loaded recording) |
@@ -74,7 +74,7 @@ sim and, separately, on the robot produces two recordings `compare.py` can align
 | GET | **`/`**, **`/dash`** | - | (UI v2) the dashboard page (`pygviewer/static/dashboard.html`) - the default entry point, see the dashboard section below |
 | GET | **`/static/*`** | - | (UI v2) `pygviewer/static/` mounted as static files: `dashboard.js` and the vendored `vendor/three.min.js` / `vendor/uPlot.iife.min.js` / `vendor/uPlot.min.css` (no CDN - this LAN has no internet access) |
 | WS | `/ws/out?hz=50&types=JointState,Status,PolicyIO` | - | latest-only stream, coalesced at `hz` (1-100, default 30). A slow consumer gets fewer frames; nothing is queued. **Measured live: 49.4 msg/s at `hz=50`**. UI v2: whenever `JointState` is requested AND any real telemetry has been received at least once, a SECOND `JointState` frame (`src="real"`) follows the sim one every tick - same schema, populated from `RealState.snapshot_joints()`; costs nothing when no real side is connected (verified live: absent with nothing connected, present within one tick of `bridge dummy --imu` sending telemetry) |
-| WS | **`/ws/in`** | one `JointState`, `ImuState` or `PolicyIO` object per text frame | ingests into `RealState` (unknown joint names -> `{"error": ...}`, connection stays open); acks `{"ok": true, "seq": ...}` per frame. `PolicyIO` (P4) is a real host's OWN self-reported obs/action/cmd - the only source for the shadow obs mux's `actions`/`command` terms |
+| WS | **`/ws/in`** | one `JointState`, `ImuState` or `PolicyIO` object per text frame | ingests into `RealState` (unknown joint names -> `{"error": ...}`, connection stays open); acks `{"ok": true, "seq": ...}` per frame. `PolicyIO` (P4) is a real host's OWN self-reported obs/action/cmd - the only source for the shadow obs mux's `actions`/`command` terms. **`JointState.q` is stored verbatim, never clipped here** - see the ROM clip note below for where an out-of-range value actually gets bounded |
 | UDP | **`:9871`** (`bridge/huphy_udp.py`, run separately - see below) | HUPHY line format | adapter -> canonical `JointState`/`ImuState`, fed into the same `RealState` a `/ws/in` client would reach |
 
 Example:
@@ -128,6 +128,20 @@ For AB the canonical actuated set is hips + knees + **cranks**.  The ankle pitch
 *derived*: in the sim they are the model's own passive state, on the robot they are computed
 from the crank encoders through the mechanism.  They are reported separately, never mixed
 into `q`, so a comparison never silently pairs a measured angle with a computed one.
+
+**ROM clip on receive (`real_replay`/`file_replay`, ROM clip task, 2026-09-04)**: `RealState.q`
+(fed by `/ws/in`, the HUPHY bridge, or a file replay) always holds the value exactly as
+received - never clipped, never guessed - so plots and `Status.telemetry.range_violations`
+keep seeing the truth. What actually drives the physics is a separate matter: at the point
+`sim_core.py` snaps a direct-drive joint's (hip/knee/RP-ankle) qpos every control tick, the
+value is clipped to that joint's **hard** MJCF range (`joint_contract.<name>.range`, wider
+than the `safe_clip` window `/target` uses) - a non-finite (NaN/inf) sample is treated as "no
+data this tick" and never snapped at all. The AB crank is never qpos-snapped (it is only ever
+PD-tracked, see the crank note above) and already clips its PD target to the tighter
+`safe_clip`, so it was never exposed to this - both paths now also count a per-joint clamp
+event, surfaced (never in `RealState`/`range_violations` itself) as
+`Status.telemetry.replay_clamp.{clamped_now, clamp_count}`, present only for joints that have
+actually been clamped at least once.
 
 ### `ImuState` (implemented, inbound over `/ws/in` and the HUPHY bridge)
 
@@ -188,10 +202,21 @@ standalone bridge's `RealState` (not implemented; today's bridge CLI is a standa
 diagnostic/verification tool, see docs/121 section 9 for the live test that exercised it).
 
 `bridge/joint_map_huphy.json` is an **explicit 12-row table** - `{limb, motor}` -> `sim_joint`,
-`sign`, `offset_rad`, `motor_model`. No regex, no default: a `(limb, motor)` pair not in the
-table is a hard failure (`KeyError`, counted in `Status.telemetry.bridge_errors`, never a
-guess). A separate 4-row `ankle_joints` table carries the FK-derived `ankle_pitch`/`ankle_roll`
-values (AB only) into `JointState.ankle_derived`, never into the canonical actuated `q`.
+`sign`, `offset_rad`, `motor_model`, plus an optional `rom_deg: [lo, hi] | null` (ROM clip
+task, 2026-09-04; `null` on every row of this file and of `joint_map_bench.json` today, since
+neither rig has been through HUPHY's `commission sweep` yet). No regex, no default: a `(limb,
+motor)` pair not in the table is a hard failure (`KeyError`, counted in
+`Status.telemetry.bridge_errors`, never a guess). A separate 4-row `ankle_joints` table
+carries the FK-derived `ankle_pitch`/`ankle_roll` values (AB only) into
+`JointState.ankle_derived`, never into the canonical actuated `q`; its rows carry the same
+optional `rom_deg`.
+
+When a row's `rom_deg` is set, `HuphyBridge.parse_fast` clips `pos`/`tgt` to it in HUPHY's own
+already-calibrated cal-space degrees, **before** the sim-rad conversion below - a clamp event
+is counted (`HuphyBridge.rom_clamp_count`) and warned once per joint. This is defense in depth
+only, layered in front of the receive-side hard-range clip in `sim_core.py` (see the `q`
+model's ROM clip note above), which stays the actual safety backstop regardless of whether
+any bridge sets `rom_deg`.
 
 Conversion, per motor: `sim_rad = travel_sign(sim_joint) * sign * radians(huphy_deg) +
 offset_rad`. `travel_sign` is looked up from the **model contract** (`joint_contract.<name>.

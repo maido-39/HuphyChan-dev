@@ -44,6 +44,21 @@ R1 부호/영점(joint_contract travel_sign·mirrored + 브리지 명시표 + UI
 R3 rad 고정·null 결측·|Δq|>π 플래그 · R4 속도/토크 부호 보정·유한차분 검사 · R5 t_ns/seq·clock offset 추정·jitter>15 ms 회색 · R6 default 계약 일치·창≥0.2 rad ·
 R7 게인 diff 표·flags 표시·NaN 가드 · R8 IMU 중력 화살표 병행·정지 |Δg|<0.05 · R9 base 모드/높이/지면을 기록 헤더에 · R10 섀도우 전송 금지·소스별 히스토리 · R11 contract_hash 불일치 오버레이 거부.
 
+**[추가, 2026-09-04 ROM 클립 세션]** R6("default 계약 일치")·R3("null 결측·플래그, 값을 지어내지 않음")를
+수신측 구동 지점까지 확장: `real_replay`/`file_replay`가 관절을 qpos로 스냅하기 직전(`sim_core.py
+_update_replay_targets`), 받은 값을 관절의 **하드 MJCF range**(`joint_contract[name]["range"]`, R6가
+말하는 소프트 `safe_clip`보다 넓은 절대 상한)로 클립한다. 이전엔 클립이 전혀 없어 실측
+`range_violations L_knee 1373`(무캘리브/다회전 실물값이 qpos에 그대로 꽂힘)이 실제로 관측됐음.
+원본 텔레메트리 값은 `RealState.q`에 그대로 유지(R3: 값을 지어내거나 지우지 않음, 플롯·위반카운트는
+진실을 봄) — 클립은 오직 물리엔진에 먹이는 구동값에만 적용. NaN/inf는 "이번 틱 데이터 없음"으로
+처리(R3의 null 규약과 동일한 정신: 절대 스냅하지 않음, 추측하지 않음). 폐루프 AB 크랭크는 원래도
+qpos 스냅이 아니라 PD 타깃(소프트 safe_clip, hard range의 부분집합)이라 동작 변화는 없지만 클램프
+집계는 동일하게 적용. 관절별 `replay_clamped_now`(이번 틱)·`replay_clamp_count`(누적)이
+`/status`·`/snapshot`의 `telemetry` 딕셔너리에 별도 키로 노출(§0 R6/R3 관련 항목이지만
+`telemetry.py`의 `range_violations` 자료구조 자체는 건드리지 않음 — 그건 다른 항목(A2)의 범위).
+송신측(`/target`·`/ankle`)은 NaN/inf를 422로 거부, 응답이 `{requested, applied, clip_range}`로
+정직화(이전엔 클립 "범위"만 돌려주고 실제 적용값은 숨겨져 있었음). 상세·테스트·커밋은 §9.
+
 ## 5. 검증 프로토콜 (오버레이 신뢰 전 8단계)
 ① 정지 영점(|Δq|<0.02 rad, |Δg|<0.05) ② 관절별 부호 스윕(→ `motor_sign_convention.json` side_mapping_verified) ③ 발목 FK 교차(25점) ④ 속도 sanity(0.5 Hz sine)
 ⑤ 지연 보정(스텝 5회, jitter<15 ms) ⑥ 동일 목표 응답 오버레이(게인 일치 후만 의미) ⑦ IMU 틸트(±10°, 3° 내) ⑧ 기록 왕복(비트 동일).
@@ -371,3 +386,43 @@ q 불변 확인, 같은-다리 결합은 의도적으로 별도 취급).
   이번에 확인(그래도 qd 누락·비표준 이름 케이스·범례 불명확은 실제 결함이었음). 서버는 재기동
   안 함(`/static/dashboard.js`가 디스크에서 매 요청 재서빙됨을 curl로 확인, 코드 변경이 바로 반영).
   pytest 전체 348 passed(회귀 없음, 다른 코더 작업으로 343→348).
+
+- 09-04 — **A1/A3: 송신·수신 API 엔드포인트 ROM 클립 일관화** (계획 `optimized-leaping-hamster.md`
+  A1/A3, A2·A4는 병행 작업하는 다른 에이전트 범위라 `static/dashboard.js`·`telemetry.py`의
+  `range_violations` 자료구조는 손대지 않음). 배경: `/target` 송신측은 이미 `safe_clip`으로
+  클램프되지만, **수신측**(`sim_core.py _update_replay_targets` → `_substep`의 qpos 스냅)은 클립이
+  전혀 없어 실측 `range_violations L_knee 1373`(무캘리브/다회전 값이 qpos에 그대로 꽂힘, 폐루프 AB
+  모델 solver 불안정 위험)이 나왔음.
+  **(1) 수신측**: direct-drive 관절(hip/knee/RP-ankle)을 qpos 스냅 직전 하드 range로 클립
+  (`sim_core.py:202` 부근 `range_lo/range_hi` 신설, `_update_replay_targets` 재작성). NaN/inf는
+  "이번 틱 데이터 없음"으로 취급해 절대 스냅하지 않음(차분 테스트로 "무텔레메트리와 비트동일"까지
+  확인). 폐루프 AB 크랭크는 기존 소프트 safe_clip 그대로(hard range의 부분집합이라 동작 변화
+  없음)지만 하드 range 기준 클램프 집계는 추가. `replay_clamped_now`/`replay_clamp_count`를
+  `_telemetry_status()`로 감싸 `/status`·`/snapshot`의 `telemetry` 딕셔너리에 별도 키로 노출
+  (`telemetry.py` 자체는 무수정). **(2) 송신측**: `TargetIn`/`AnkleTargetIn`에 NaN/inf 거부
+  validator(`JointTarget._finite_only`와 동일 패턴) 추가 → `POST /target` 실제로 wire bytes까지
+  보내 테스트하다가 2차 버그 발견: FastAPI 기본 422 핸들러가 pydantic 에러의 `ctx["input"]`(NaN 자체)·
+  `ctx["error"]`(raw `ValueError`)를 그대로 돌려주는데 Starlette `JSONResponse`는 `allow_nan=False`라
+  **NaN 거부 응답 자체가 500으로 깨짐** — `loc/msg/type` 문자열만 돌려주는 `RequestValidationError`
+  핸들러를 앱에 추가해 고침. `/target`·`/ankle` 응답을 `{requested, applied, clip_range}`로 정직화
+  (이전 `clamped_to`는 범위만 돌려주고 실제 적용값을 숨겼음). **(3) TxClient**: 계약에 없는 관절이
+  완전 무클램프로 새는 경로에 `hard_range` 폴백 kwarg 추가(현재 호출부는 전부 계약 관절만 써서
+  사실상 방어적 배선, 유닛테스트 3건으로 잠금). **(4) HUPHY 브리지**: `joint_map_huphy.json`/
+  `joint_map_bench.json`에 선택적 `rom_deg: [lo, hi]` 필드 추가(오늘은 전부 null — 두 리그 다
+  커미셔닝 전), `HuphyBridge.parse_fast`가 설정되면 HUPHY cal-space 도(度) 단위로 변환 전 클립
+  (`sim_core.py`의 하드 클립 앞단 방어층, 실제 안전보증은 여전히 (1)). **(5) 벤치 스크립트**
+  (`deploy/bench/bench_telemetry.py`, 실물 CAN 스크립트라 **편집만·실행 안 함**, py_compile
+  문법확인만): 계획은 "config `limits_deg`가 있으면 절대 클립"이었으나, HUPHY 자체 문서
+  (`config/schema.py`, `motors/base.py`)가 "모든 각도는 cal 공간, `limits_deg`는 raw 아님"이라
+  명시하고 이 스크립트는 `RobStrideBus`/`MitCommand.position_deg`로 raw 공간을 직접 다뤄
+  offset/sign 변환이 전혀 없음 — 그대로 적용하면 **좌표계가 다른 값을 클립**하는 실질적 버그가
+  됨. 계획 문구를 그대로 따르지 않고 **의도적으로 편차**: `--rom`(raw, q0 상대)은 그대로 유일한
+  ROM 경계로 남기고, `limits_deg`는 시작 시 정보성 NOTE로만 출력(적용 안 함), 왜인지 docstring에
+  명시. **테스트**: 신규 `tests/test_rom_clip.py`(7건, 직접구동 하드클립·NaN=무데이터·AB크랭크
+  소프트클립+closure 유지·`/target` 정직 응답·NaN/inf 422), `test_tx_client.py`+3, `test_bridge_huphy.py`+2.
+  전체 스위트 345(세션 시작 시점 기준, 다른 에이전트 작업 포함)→357, 3회 연속 무실패 확인. 미해결:
+  ①`limits_deg`를 raw 공간에 안전하게 적용하려면 벤치 스크립트가 HUPHY 계산 Leg/Motor API를
+  타거나 `huphy_udp.py`와 같은 offset/sign 변환을 새로 갖춰야 함(둘 다 이번 범위 밖). ② `rom_deg`는
+  두 조인트맵 모두 null(실제 커미셔닝 값 없음, 방어층은 배선만 돼 있고 아직 실효 없음). 커밋:
+  `678261f`(A1 수신 클립)·`d836a5f`(A3 송신 정직화+NaN)·`f4ba171`(TxClient hard_range)·
+  `9115180`(rom_deg 조인트맵)·`ae5a1f3`(bench_telemetry 문서화)·`dce31f6`(test_rom_clip.py).

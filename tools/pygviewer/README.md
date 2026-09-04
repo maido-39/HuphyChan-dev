@@ -499,7 +499,7 @@ trusting a number written here:
 | `test_obs_order.py` | `ObsBuilder` reproduces the env's own 40-step obs trace term-by-term (order, joint subset, history backfill), for every baked policy |
 | `test_api_policy.py` | the FastAPI layer actually exposes what P2-P4 implement (not a stale allow-list): `/mode` accepts `policy_sim`/`policy_shadow` only once a policy is loaded, accepts `real_replay` and forces the base `fixed`, 409s `file_replay` without a loaded recording; `/policy/load` 409s a foreign contract and 404s an unknown name; `/policy/cmd` + `/policy/io` round-trip; `/obs_source` accepts `real` (P4); `/gains` 400s `real` with no hardware table |
 | `test_schema.py` | `JointState`/`ImuState`/`Status`/`JointTarget`/`PolicyIO` round-trip through `to_jsonl`/`from_jsonl`; required header fields (`t_ns`) and required `PolicyIO` fields raise without them; `from_jsonl` rejects invalid JSON, an empty line and an unknown `type`; `validate_joint_names` flags exactly the unrecognised names |
-| `test_bridge_huphy.py` | the joint map has exactly 12 motor rows and starts `side_mapping_verified: false`; an unlisted `(limb, motor)` raises (hard failure, not a guess); the exact synthetic case from the task brief (+30 deg both knees -> sim `L_knee +0.5236`/`R_knee -0.5236` rad, contract `travel_sign` +1/-1, 1e-6); velocity/torque get the same sign treatment; the -1 sentinel nulls a field and warns on 3-in-a-row; `ankle_derived` stays separate from the canonical `q`; diag/CAN fields are ignored, not hard failures; an IMU packet prefers `grav_*` over reconstructing a quaternion (and does NOT treat `grav_z=-1.0`, a real upright reading, as HUPHY's "missing" sentinel - that only applies to `age`/`sensor_dt`) |
+| `test_bridge_huphy.py` | the joint map has exactly 12 motor rows and starts `side_mapping_verified: false`; an unlisted `(limb, motor)` raises (hard failure, not a guess); the exact synthetic case from the task brief (+30 deg both knees -> sim `L_knee +0.5236`/`R_knee -0.5236` rad, contract `travel_sign` +1/-1, 1e-6); velocity/torque get the same sign treatment; the -1 sentinel nulls a field and warns on 3-in-a-row; `ankle_derived` stays separate from the canonical `q`; diag/CAN fields are ignored, not hard failures; an IMU packet prefers `grav_*` over reconstructing a quaternion (and does NOT treat `grav_z=-1.0`, a real upright reading, as HUPHY's "missing" sentinel - that only applies to `age`/`sensor_dt`); an optional per-row `rom_deg` clips `pos`/`tgt` before conversion and counts the clamp when set (2026-09-04); the shipped maps' `rom_deg: null` everywhere is byte-identical to the pre-`rom_deg` path |
 | `test_record.py` | record -> replay is byte-for-byte identical, including the header (also exercised standalone as protocol step 8); a foreign `contract_hash` is refused; a 10 s recording does not grow RSS (measured: 0.3 MB on the live process); `real_replay` snaps direct-drive joints to 1e-6 and routes a crank's received value into its PD target exactly; with no telemetry received at all, `real_replay` is numerically identical to staying in `manual` (differential test, 1e-9 - the actual regression this file caught); a left-leg command does not move a right-leg joint (differential, base fixed => no physical coupling path) |
 | `test_policy_shadow.py` (P4) | the per-term obs mux: defaults to all-sim; falls back to sim (with a `shadow_warnings` entry) when `real` is requested but missing or older than `max_age_s`; a fresh real IMU correctly overwrites `base_ang_vel`/`projected_gravity` in the built observation; a `PolicyIO` message correctly feeds `actions`/`command`; `shadow_follow=False` never moves `self.target`, `True` does and only locally; a 10 deg dummy IMU tilt changes the policy's raw action by mean 0.270 rad (regression floor 0.02 rad); no transmit path exists structurally |
 | `test_script_player.py` (P4) | `TargetScript` interpolation/looping/end-clamping; the two sample scripts only name actuated joints; `run_script` switches to `manual`, tags `run_id`, refuses over a policy/replay mode or an unknown joint, and clears its own state on natural completion; the two REST endpoints |
@@ -510,6 +510,7 @@ trusting a number written here:
 | `test_target_independence.py` | 2026-09-04 user bug report ("L/R move together"): with base=fixed+ground=off, commanding any one of the 12 actuated joints (or one AB foot-space `/ankle` side) never changes another joint's target (bit-exact) or the OPPOSITE LEG's q beyond 0.01 rad - same-leg q coupling (crank_A/B's shared closed loop, hip/knee inertia) is deliberately excluded, see the file's own docstring for why |
 | `test_dashboard.py` (UI v2) | `GET /`/`/dash` and the four vendored static assets serve; `Status.imu`/`side_mapping_verified`; the full `/presets`+`/presets/apply` surface (save/list/apply/reserved-name+unknown-joint rejection/404); `GainsIn.clear_overrides`; the additive `src="real"` JointState frame on `/ws/out` is absent until telemetry arrives, then present; the Policy tab's `load -> cmd(0,0,0) -> mode=policy_sim` sequence actually lands that state; the Joints tab's deg/rad conversion round-trips (checked by extracting the literal formula from the shipped `dashboard.js` source, since there is no JS runtime on this host to execute it) |
 | `test_dashboard_tx.py` (UI v2 TX STUB) | `TxState`: arm refused outside `manual` mode; `send` drops any joint not explicitly enabled; the 0.3 s dead-man timeout stops `send` (both a fast clock-manipulation test and a real `time.sleep` one); a heartbeat keeps it alive; `check_mode_gate` auto-disarms the moment the mode leaves `manual`; plus two API-layer tests (shared `SimCore`) proving `/tx/*` is actually wired to `TxState` and that one `step_n(decimation)` tick disarms it when `core.mode` changes directly, bypassing `POST /mode` entirely |
+| `test_rom_clip.py` (ROM clip task, 2026-09-04) | `real_replay`'s receive-side hard-range clip: a direct-drive joint (`L_knee`) 5 rad past its range lands in qpos clipped, finite, counted, with the raw telemetry value untouched; a NaN sample produces a bit-identical trajectory to no telemetry at all (differential); an AB crank pair scaled past its hard range stays inside the soft `safe_clip` and the loop stays closed; `POST /target` out-of-range vs in-range report `requested`/`applied` correctly; `POST /target` with a real NaN/Infinity over the wire (built by hand - httpx's own `json=` refuses to send one) is rejected 422, not 500 - all 7 share one module-scoped `SimCore`/`TestClient` after a per-test-instantiation version was measured to push `test_sim_rate.py`'s RSS budget over the cap in the full suite |
 
 Evidence figure (no OpenGL on this host, so it is matplotlib):
 `mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/make_verification_figure.py` ->
@@ -563,7 +564,10 @@ tools/pygviewer/
     __init__.py  __main__.py CLI, port pre-emption check, LAN IP
     bake.py                  the ONLY module that imports mjlab/torch
     contract.py              contract accessor + freshness hashes
-    sim_core.py              200 Hz physics / 50 Hz control, PD+T-N, base modes, snapshots
+    sim_core.py              200 Hz physics / 50 Hz control, PD+T-N, base modes, snapshots;
+                             real_replay/file_replay snap direct-drive joints into qpos
+                             clipped to the HARD model range (never safe_clip), NaN/inf
+                             treated as no-data - ROM clip task, 2026-09-04
     ui.py                    viser panel
     api.py                   FastAPI REST + WS
     schema.py                wire schema v1 (pydantic), including the deferred models
@@ -577,8 +581,10 @@ tools/pygviewer/
     tx.py                    (UI v2 TX, wired 2026-09-04) TxState: config/enable/arm/disarm/
                              heartbeat/on_control_tick, driving a real bridge.tx_client.TxClient
     bridge/
-      huphy_udp.py           HUPHY UDP -> canonical JointState/ImuState (P3)
-      joint_map_huphy.json   explicit 12-row limb/motor -> sim-joint table (P3)
+      huphy_udp.py           HUPHY UDP -> canonical JointState/ImuState (P3); clips pos/tgt
+                             to a row's optional rom_deg before conversion, if set (2026-09-04)
+      joint_map_huphy.json   explicit 12-row limb/motor -> sim-joint table (P3); optional
+                             per-row rom_deg: [lo,hi]|null, null everywhere today (2026-09-04)
       dummy_tx.py            sine/script/jsonl -> /ws/in and/or HUPHY-format UDP (P3)
       tx_map.py              sim-rad -> HUPHY cal-deg (inverse of huphy_udp.py), no huphy
                              import - docs/123 plan A item 2
@@ -592,7 +598,9 @@ tools/pygviewer/
                              run_real() - --dry-run needs neither huphy nor CAN - item 3
       tx_client.py           viewer-side JointTarget sender: arm/mode-gate (blocks
                              policy_sim/policy_shadow)/safe_clip+slew/kp-kd-clamp - item 5.
-                             Driven by tx.py's TxState from SimCore._on_control_tick (2026-09-04)
+                             Driven by tx.py's TxState from SimCore._on_control_tick (2026-09-04).
+                             Optional hard_range kwarg: fallback clip for a joint outside the
+                             loaded contract (defensive, unused by any current caller, 2026-09-04)
     modes.py                 mode reference table + TargetScript (P4, the script player);
                              real_replay/file_replay/policy_shadow themselves live in
                              sim_core.py, dispatched on the plain string SimCore.mode
