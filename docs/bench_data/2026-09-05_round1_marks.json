@@ -1,0 +1,42 @@
+[
+ {
+  "t_s": 0.0075009799911640584,
+  "name": "STEP 10deg up"
+ },
+ {
+  "t_s": 6.017066134954803,
+  "name": "STEP 10deg back"
+ },
+ {
+  "t_s": 12.023597983992659,
+  "name": "STEP 25deg up"
+ },
+ {
+  "t_s": 18.031025336997118,
+  "name": "STEP 25deg back"
+ },
+ {
+  "t_s": 24.039026417944115,
+  "name": "move, then RELEASE the dead-man"
+ },
+ {
+  "t_s": 28.246011404960882,
+  "name": "dead-man released - watching for drift"
+ },
+ {
+  "t_s": 48.749997815000825,
+  "name": "dead-man re-held"
+ },
+ {
+  "t_s": 49.75863319798373,
+  "name": "SINE 0.25Hz 10.0deg"
+ },
+ {
+  "t_s": 64.76820270199096,
+  "name": "SINE 1.0Hz 5.0deg"
+ },
+ {
+  "t_s": 73.78099842299707,
+  "name": "done"
+ }
+]
