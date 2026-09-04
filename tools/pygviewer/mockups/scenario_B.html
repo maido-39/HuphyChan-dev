@@ -73,7 +73,7 @@ code{background:#000;padding:1px 5px;border-radius:3px;font-size:11px}
 .tab-group:first-child{border-top:0}
 .tabs-v .tab.scenario{background:#2a2418;border-left:3px solid var(--accent2)}
 .tabs-v .tab.stub{cursor:default}
-.scChip{max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.scChip{display:inline-block;vertical-align:middle;max-width:220px;overflow:hidden;text-overflow:ellipsis}
 .scChip.ok{background:var(--okbg);color:var(--accent)}
 .scChip.bad{background:var(--badbg);color:var(--bad)}
 .scChip.custom{background:var(--warnbg);color:var(--accent2)}
@@ -111,6 +111,13 @@ code{background:#000;padding:1px 5px;border-radius:3px;font-size:11px}
       <label style="font-size:11px;color:var(--dim);display:block;margin-bottom:8px">
         <input type="checkbox" id="guidedToggle"> 로봇 전환: 안내만 (끄면 자동 SSH, 현재 기본값)
       </label>
+      <div style="font-size:10px;color:var(--dim2);margin-bottom:10px">
+        시연:
+        <button class="failDemo" onclick="simulateHeartbeatMismatch()"
+          title="round 2에서 SSH 실패 데모가 '모름'으로 정정된 뒤, 이 목업엔 '불일치' 상태로 갈 방법이 없었다. 별도 신호(하트비트)로만 도달">
+          하트비트가 다른 프로그램을 감지함 (불일치 시연)
+        </button>
+      </div>
       <div id="modeStateBanner"></div>
       <div id="itemsRoot"></div>
     </div>
@@ -122,10 +129,16 @@ code{background:#000;padding:1px 5px;border-radius:3px;font-size:11px}
       <div>전환은 액션(동사) 항목을 눌러 시작하고, 펼치면 그 조합에 필요한 3개 축(뷰어 모드/TX/로봇 프로그램)을
       하나씩 개별적으로 충족시키는 체크리스트가 나온다. 상단의 "현재" 표시는 여전히 실제 상태에서 계산되며,
       체크리스트를 다 채웠다고 해서 자동으로 "선택됨"이 되는 게 아니라 실제로 세 축이 맞아떨어져야 이름이 뜬다.</div>
-      <details open>
-        <summary>개선 이력 — 라운드별 발견 5개 + 조치 (펼치기)</summary>
+      <!-- Round 4 fix: the outer history block was force-open by default and, by
+      Round 3, held ~30 bullets in one flat scroll — a first-time viewer's very first
+      impression of the page was a wall of retrospective text, not the mockup. Nesting
+      each round in its own collapsed <details> (only the newest expanded) keeps the
+      first paint compact while still letting anyone drill into an older round. -->
+      <details>
+        <summary>개선 이력 — 4라운드, 발견 19건 + 조치 19건 (펼치기, 라운드별로 개별 접힘)</summary>
 
-        <div style="margin-top:8px"><b>Round 1</b> — 클릭수·정직성·재기동가정·탭계층·위험경로 이원화</div>
+      <details>
+        <summary style="margin-top:8px"><b>Round 1</b> — 클릭수·정직성·재기동가정·탭계층·위험경로 이원화</summary>
         <div style="color:var(--dim);font-size:11px;margin:2px 0 4px">발견 (벤치 시나리오에 대입):</div>
         <ul>
           <li><b>반복 전환 클릭수</b> — S3→S1 전환 1회에 최소 6클릭(탭은 이미 열려 있다 쳐도: 펼치기 →
@@ -159,9 +172,11 @@ code{background:#000;padding:1px 5px;border-radius:3px;font-size:11px}
           로봇 확인이 "확인됨"이 아니면 모달에 <b>동의 체크박스</b>가 추가로 나타나고, 체크 전에는
           확인 버튼이 비활성 — 위험이 겹치는 경우에만 클릭 한 번을 더 요구한다(비례 마찰).</li>
         </ul>
+      </details>
 
-        <div style="margin-top:14px"><b>Round 2</b> — Round 1이 새로 만든 문제 위주 (일괄진행 은폐 에스컬레이션·
-        전역 대기슬롯·실패 상태의 과장)</div>
+      <details>
+        <summary style="margin-top:14px"><b>Round 2</b> — Round 1이 새로 만든 문제 위주 (일괄진행 은폐 에스컬레이션·
+        전역 대기슬롯·실패 상태의 과장)</summary>
         <div style="color:var(--dim);font-size:11px;margin:2px 0 4px">발견:</div>
         <ul>
           <li><b>"일괄 진행" 버튼이 클릭마다 다른 일을 하는데 겉모습은 똑같았다</b> — 1번째 클릭(모드
@@ -197,6 +212,85 @@ code{background:#000;padding:1px 5px;border-radius:3px;font-size:11px}
           "일괄 진행 불가 — 안내 모드: 로봇 확인 직접 하기"로 바꿔, 반복 클릭이 아무 것도 안 한다는
           사실 자체를 숨기지 않는다.</li>
         </ul>
+      </details>
+
+      <details>
+        <summary style="margin-top:14px"><b>Round 3</b> — 라벨-동작 불일치·시각 일관성·시연 가능성</summary>
+        <div style="color:var(--dim);font-size:11px;margin:2px 0 4px">발견:</div>
+        <ul>
+          <li><b>"일괄 진행 → 먼저 뷰어 모드 전환" 라벨이 실제 동작보다 적게 말하고 있었다</b> —
+          클릭하면 라벨대로 모드만 바뀌는 게 아니라, 로봇 축도 아직 안 맞으면 <i>같은 클릭 안에서</i>
+          SSH 전환까지 조용히 시작됐다(Round 2가 "다음 클릭이 할 일을 라벨에 반영"하려 했는데, 정작
+          한 클릭이 여러 단계를 몰래 이어 하고 있었다).</li>
+          <li><b>Round 2가 위험 색을 준 건 새로 만든 "일괄 진행" 버튼뿐</b> — 원래부터 있던 개별 축의
+          "TX 무장" 버튼(더 먼저 배우는, 더 자주 쓰이는 경로)은 여전히 다른 버튼과 똑같은 회색이라
+          같은 위험이 경로에 따라 다르게 보였다.</li>
+          <li><b>'불일치' 상태를 시연할 방법이 사라졌다</b> — Round 2가 SSH 실패 데모를 '모름'으로
+          정정한 건 옳았지만, 그 결과 이 목업 전체에 '불일치'로 가는 길이 하나도 안 남았다.
+          확인됨/모름/불일치 3상태가 이 설계의 핵심 주장인데, 사용자가 셋 중 하나를 눌러볼 수조차
+          없었다.</li>
+          <li><b>"모름 (huphy_remote_motion)" 표기가 거짓 정밀도로 읽힌다</b> — "모름"이라면서 바로
+          옆 괄호 안에 구체적 프로그램명이 나오면 "그게 지금 실행 중"으로 오독하기 쉽다. Round 1이
+          초기상태를, Round 2가 실패 데모를 둘 다 '모름'으로 만들면서 이 표기를 보게 될 확률이
+          훨씬 커졌다.</li>
+          <li><b>상단바 시나리오 칩이 <code>&lt;span&gt;</code>(인라인)에 <code>text-overflow:ellipsis</code>를
+          걸어놓아, 브라우저에 따라 말줄임이 실제로 안 먹을 수 있다</b> — custom 사유가 길어지면
+          상단바가 옆 항목을 밀어내거나 줄바꿈될 위험(§10에서 이미 알려진 "상단바 혼잡" 재현).</li>
+        </ul>
+        <div style="color:var(--dim);font-size:11px;margin:6px 0 4px">조치:</div>
+        <ul>
+          <li>모드 전환 뒤 <b>매번 return</b> — 한 클릭 = 라벨이 말한 딱 그 일 하나. 다음 단계는
+          다음 클릭에서 새로 계산된 라벨로.</li>
+          <li>개별 "TX 무장" 버튼도 배치 버튼과 <b>같은 위험 스타일(빨강 배경, ⚠)</b>을 쓰도록 통일.</li>
+          <li>왼쪽 패널에 <b>"하트비트가 다른 프로그램을 감지함 (불일치 시연)"</b> 버튼을 별도로
+          추가 — SSH 실패와는 다른, 독립 신호가 실제로 어긋남을 감지했다는 시나리오로 '불일치'
+          상태에 도달하는 유일한 길을 복원.</li>
+          <li>로봇 상태 문구를 상태별로 다시 씀 — 모름은 "마지막 확인값 참고: X, 신뢰 금지",
+          불일치는 "실제로 보이는 것: X"로 값의 신뢰 수준을 문장 안에 명시.</li>
+          <li><code>.scChip</code>에 <code>display:inline-block</code> 추가로 말줄임이 실제로
+          적용되도록 보정.</li>
+        </ul>
+      </details>
+
+      <details open>
+        <summary style="margin-top:14px"><b>Round 4</b> — 로봇쪽 토크 위험 무표시·TX무장 중 로봇전환·이력 블록 비대화</summary>
+        <div style="color:var(--dim);font-size:11px;margin:2px 0 4px">발견:</div>
+        <ul>
+          <li><b>로봇 프로그램 전환 자체가 실물 토크를 켤 수 있는데 표시가 없었다</b> — 공유 데이터
+          (<code>ROBOT_PROGRAMS</code>)에 이미 <code>huphy_remote_motion</code>(S1)뿐 아니라
+          <code>policy_exec_obs_stream</code>(S2, 로봇이 자기 정책을 돌림)도 <code>torque:'ON'</code>으로
+          기록돼 있다. 이 SSH 명령은 뷰어의 TX 무장 여부와 무관하게 로봇 자체를 토크 ON으로 만드는데,
+          "자동 전환 실행"/"완료함, 확인"/"일괄 진행"의 로봇 단계는 S1이든 S3(토크 OFF)이든 전부 똑같이
+          무채색이었다. "위험은 한 곳(TX 무장)에서만 보인다"는 전제가 데이터 자체와 어긋났다.</li>
+          <li><b>TX가 무장된 채로 로봇 프로그램을 SSH로 바꿀 수 있었다</b> — 명령을 계속 받고 있는
+          서비스를 재시작하는 셈이라, 뷰어 쪽 위험(토크 무장)과 별개로 그 자체가 위험한 순서다. 어떤
+          축도 이를 막거나 경고하지 않았다.</li>
+          <li><b>"하트비트가 다른 프로그램을 감지함(불일치 시연)" 버튼(Round 3에서 추가)이 Round 2가
+          만든 "다른 축 전환 중이면 새 전환을 거부"라는 안전장치를 완전히 우회했다</b> — 이 버튼은
+          <code>fixRobot()</code>을 거치지 않고 상태를 직접 바꾸므로, 진행 중이던 자동 SSH 전환을
+          로그 한 줄 없이 조용히 지울 수 있었다. Round 2가 고친 문제 그대로가 Round 3이 만든 새 문
+          으로 재발한 것.</li>
+          <li><b>개선 이력 블록이 라운드를 거듭할수록 커져 첫 인상이 회고 텍스트 벽이 됐다</b> —
+          3라운드 만에 약 30개 항목이 하나의 펼침 블록 안에 몰려, 목업을 처음 여는 사람이 실제
+          체크리스트보다 이력을 먼저 마주하게 된다.</li>
+          <li>(부수 확인) <b>"일괄 진행"의 안전한 순서(모드→로봇→TX)가 "이미 무장된 상태에서
+          벗어나는" 방향은 다루지 않았다</b> — 로봇 전환에 TX-무장 가드를 추가하면, S1→S2/S3처럼
+          무장된 상태에서 출발하는 전환은 로봇 단계에서 매번 거부당해 멈춰 버린다.</li>
+        </ul>
+        <div style="color:var(--dim);font-size:11px;margin:6px 0 4px">조치:</div>
+        <ul>
+          <li>로봇 전환 대상이 <code>torque:'ON'</code>이면 "자동 전환 실행"/"완료함, 확인"/일괄 진행의
+          로봇 단계 라벨을 전부 같은 위험색(⚠, 빨강)으로 통일하고, 체크리스트에 "이 프로그램은 실행되는
+          순간 로봇 쪽 토크가 켜집니다" 배너를 추가.</li>
+          <li>TX가 무장된 동안 자동 SSH 로봇 전환을 거부(사유를 로그로 명시); 안내 모드의 명령 <i>표시</i>
+          자체는 막지 않되 "TX 무장 중 실행 금지" 경고를 덧붙임(표시는 무해, 실행이 위험).</li>
+          <li>일괄 진행에 <b>"TX가 켜져 있고 목표가 꺼짐이면 무조건 먼저 해제"</b> 단계를 맨 앞에 추가 —
+          안전한 방향이라 모달 없이 즉시 적용, 이후 로봇 전환 가드와 충돌하지 않음.</li>
+          <li>하트비트 시연 버튼이 다른 축 전환을 지울 때 <b>취소 사실을 로그에 남기도록</b> 수정.</li>
+          <li>이력 블록을 라운드별 <code>&lt;details&gt;</code>로 중첩(최신 라운드만 기본 펼침, 바깥
+          블록도 기본은 접힘) — 첫 화면은 다시 짧아지고, 과거 라운드는 원하면 각각 펼쳐볼 수 있음.</li>
+        </ul>
+      </details>
       </details>
     </div>
 
@@ -285,6 +379,30 @@ function stubTab(name){
   log('[탭 클릭] "' + name + '"은(는) 이 목업에서 시연되지 않음 (Scenario 탭만 동작)');
 }
 
+// Round 3 fix: Round 2 correctly changed the SSH-failure demo to leave robotConfirm
+// at 'unknown' (a failed switch attempt is not evidence of anything specific) — but
+// that also removed the ONLY way this mockup could ever reach 'mismatch', one of the
+// three states the whole design is built around. 'mismatch' means something more
+// specific than "our attempt failed": an INDEPENDENT signal actively contradicts what
+// we believed (e.g. a periodic heartbeat/status poll). Give it its own trigger.
+function simulateHeartbeatMismatch(){
+  // Round 4 fix: this button bypasses fixRobot() entirely, so it also bypassed the
+  // "refuse to silently cancel another axis's in-flight SSH switch" guard Round 2
+  // built in — it could null out robotSwitchPending with no trace, reintroducing the
+  // exact silent-cancellation bug class Round 2 fixed, just through a new door.
+  if (robotSwitchPending !== null){
+    log('[시연] 하트비트 이벤트가 진행 중이던 ' + robotSwitchPending + ' 자동 전환을 취소시킴 (완료 로그는 뜨지 않음)');
+  }
+  var keys = Object.keys(SM.ROBOT_PROGRAMS);
+  var other = keys.filter(function(p){ return p !== st.robotProgram; })[0];
+  st.robotProgram = other;
+  st.robotConfirm = 'mismatch';
+  robotSwitchPending = null;
+  log('[시연] 하트비트: 로봇이 실제로 실행 중인 것으로 보이는 프로그램 = ' +
+    SM.ROBOT_PROGRAMS[other].label + ' — 마지막 확인과 불일치');
+  renderAll();
+}
+
 function renderModeStateBanner(){
   var el = document.getElementById('modeStateBanner');
   var key = SM.deriveScenario(st);
@@ -332,8 +450,14 @@ function renderItems(){
     html += '<div class="body">';
     html += '<div class="check"><span>뷰어 모드: 필요 <code>' + sc.mode + '</code> · 현재 <code>' + st.mode + '</code></span>' +
       (modeOk ? markFor(true) : '<button onclick="fixMode(\'' + key + '\')">이 모드로 전환</button>') + '</div>';
+    // Round 3 fix: round 2 gave the *batch* button a danger style for the arming
+    // click, but the original per-axis "TX 무장" button — the one people actually
+    // reach for first, since it predates the batch feature — still looked exactly
+    // like every other neutral button. Same danger, inconsistent warning.
+    var willArm = !txOk && sc.tx && !st.tx;
     html += '<div class="check"><span>TX: 필요 ' + (sc.tx?'무장':'해제') + ' · 현재 ' + (st.tx?'무장':'해제') + '</span>' +
-      (txOk ? markFor(true) : '<button onclick="fixTx(\'' + key + '\')">TX ' + (sc.tx?'무장':'해제') + '</button>') + '</div>';
+      (txOk ? markFor(true) : '<button' + (willArm ? ' style="background:#5a2020;border-color:#a44"' : '') +
+        ' onclick="fixTx(\'' + key + '\')">' + (willArm ? '⚠ TX 무장' : 'TX 해제') + '</button>') + '</div>';
     var guided = document.getElementById('guidedToggle').checked;
     var pendingHere = (robotSwitchPending === key);
     // Round 2 fix: robotSwitchPending is one global slot (one bench, one SSH session
@@ -341,8 +465,27 @@ function renderItems(){
     // the one mid-switch" case; a switch pending on a DIFFERENT item used to look
     // clickable here with no hint that starting it would silently cancel the other.
     var otherPending = (robotSwitchPending !== null && robotSwitchPending !== key);
+    // Round 3 fix: "모름 (huphy_remote_motion)" reads like the parenthesised name IS
+    // the current program, contradicting the "모름" right in front of it — false
+    // precision. This got far more visible once Round 1/2 made 'unknown' the common
+    // starting/failure state instead of a rare corner case. Say plainly that the name
+    // is a stale last-known value, not a live fact, for 'unknown' and 'mismatch'.
+    var robotStatusText = (
+      st.robotConfirm === 'confirmed' ? '확인됨 (' + SM.ROBOT_PROGRAMS[st.robotProgram].label + ')' :
+      st.robotConfirm === 'mismatch' ? '불일치 — 실제로 보이는 것: ' + SM.ROBOT_PROGRAMS[st.robotProgram].label :
+      '모름 (마지막 확인값 참고: ' + SM.ROBOT_PROGRAMS[st.robotProgram].label + ', 신뢰 금지)'
+    );
+    // Round 4 fix: the robot-side program switch itself is NOT safety-neutral — the
+    // shared data (SM.ROBOT_PROGRAMS) already records that huphy_remote_motion (S1)
+    // AND policy_exec_obs_stream (S2) both carry torque:'ON'. The SSH command that
+    // starts a torque-ON program on the bench runs the same regardless of the
+    // viewer's own TX arm state, yet until now every robot-switch control (button,
+    // self-report, batch label) looked identical whether the target was torque-ON or
+    // torque-OFF — undercutting "risk lives visibly in one place."
+    var targetTorqueOn = SM.ROBOT_PROGRAMS[sc.robotProgram].torque === 'ON';
+    var dangerStyle = ' style="background:#5a2020;border-color:#a44"';
     html += '<div class="check"><span>로봇 프로그램: 필요 <code>' + SM.ROBOT_PROGRAMS[sc.robotProgram].label + '</code> · ' +
-      '현재 ' + ({confirmed:'확인됨',unknown:'모름',mismatch:'불일치'})[st.robotConfirm] + ' (' + SM.ROBOT_PROGRAMS[st.robotProgram].label + ')</span>';
+      '현재 ' + robotStatusText + '</span>';
     if (robotOk){
       html += markFor(true, 'robot');
     } else if (pendingHere){
@@ -351,16 +494,22 @@ function renderItems(){
       html += '<span class="pendingRow" title="벤치는 SSH 세션이 하나뿐 — 다른 축 전환이 끝난 뒤 시도하세요">' +
         SM.SCENARIOS[robotSwitchPending].tag + ' 전환 진행 중이라 대기</span>';
     } else {
-      html += '<button onclick="fixRobot(\'' + key + '\')">' + (guided ? '안내 명령 보기' : '자동 전환 실행') + '</button>';
+      html += '<button' + (targetTorqueOn ? dangerStyle : '') + ' onclick="fixRobot(\'' + key + '\')">' +
+        (targetTorqueOn ? '⚠ ' : '') + (guided ? '안내 명령 보기' : '자동 전환 실행') + '</button>';
       if (!guided){
         html += '<button class="failDemo" onclick="failRobotDemo(\'' + key + '\')" title="실측 리드백이 없다는 것을 보여주기 위한 모의 실패 버튼">실패로 표시 (모의)</button>';
       }
     }
     html += '</div>';
+    if (targetTorqueOn && !robotOk && !pendingHere && !otherPending){
+      html += '<div class="brokenbanner" style="background:#3a2812;color:var(--accent2)">⚠ 이 프로그램은 실행되는 순간 로봇 쪽 토크가 켜집니다 ' +
+        '(뷰어 TX 무장 여부와 무관) — S1만이 아니라 이 축 전환 자체가 위험합니다.</div>';
+    }
     if (!robotOk && guided && !otherPending){
       html += '<div class="copybox"><code id="cmd_' + key + '">' + sc.sshCmd + '</code>' +
         '<button onclick="copyCmd(\'' + key + '\')">복사</button>' +
-        '<button onclick="confirmManual(\'' + key + '\')">완료함, 확인 (자기신고)</button></div>';
+        '<button' + (targetTorqueOn ? dangerStyle : '') + ' onclick="confirmManual(\'' + key + '\')">' +
+        (targetTorqueOn ? '⚠ ' : '') + '완료함, 확인 (자기신고)</button></div>';
     }
     if (sc.broken){
       html += '<div class="brokenbanner">' + sc.brokenReason + (modeOk && txOk && robotOk ? ' (조건은 모두 일치하지만 여전히 불가)' : '') + '</div>';
@@ -390,7 +539,13 @@ function batchButtonHtml(key, sc, modeOk, txOk, robotOk, guided, otherPending){
     if (guided){
       return '<button disabled title="안내 모드에서는 로봇 확인을 대신 눌러줄 수 없음 — 위 SSH 명령을 직접 실행하고 \'완료함, 확인\'을 누르세요">일괄 진행 불가 — 안내 모드: 로봇 확인 직접 하기</button>';
     }
-    return '<button onclick="batchAdvance(\'' + key + '\')">일괄 진행 → 로봇 자동 전환 시작 (수 초 걸림)</button>';
+    // Round 4 fix: the batch path used to describe the robot-switch step as plain
+    // "수 초 걸림" regardless of target, even though this same click can start a
+    // torque-ON program on the bench (see the per-axis button fix above) — the batch
+    // shortcut must not read as calmer than the direct control for the identical action.
+    var targetTorqueOn = SM.ROBOT_PROGRAMS[sc.robotProgram].torque === 'ON';
+    return '<button onclick="batchAdvance(\'' + key + '\')"' + (targetTorqueOn ? ' style="background:#5a2020;border-color:#a44"' : '') + '>' +
+      '일괄 진행 → ' + (targetTorqueOn ? '⚠ ' : '') + '로봇 자동 전환 시작 (수 초 걸림' + (targetTorqueOn ? ', 토크 ON' : '') + ')</button>';
   }
   // only TX left, and TX going true is the only risky direction
   if (!txOk && sc.tx){
@@ -434,8 +589,21 @@ function fixTx(key){
 function fixRobot(key){
   var guided = document.getElementById('guidedToggle').checked;
   if (guided){
+    // Showing the command text is harmless by itself, so this stays available even
+    // while TX is armed — but say so, since RUNNING it while armed is the hazard
+    // (see the non-guided branch below and confirmManual()).
     var res = SM.performRobotSwitch(st, key, true);
-    log('[체크리스트] ' + key + ' 안내 명령 표시: ' + res.cmd);
+    log('[체크리스트] ' + key + ' 안내 명령 표시: ' + res.cmd + (st.tx ? ' (경고: TX가 무장된 채 실행하지 말 것 — 먼저 해제)' : ''));
+    renderAll();
+    return;
+  }
+  // Round 4 fix: nothing stopped the AUTO path from switching the robot's own
+  // control program via SSH while the viewer's TX is armed and actively streaming
+  // targets — restarting the service that's supposed to be receiving those targets,
+  // mid-stream, is a real transient hazard on its own, independent of which
+  // scenario is the destination.
+  if (st.tx){
+    log('[체크리스트] ' + key + ' 자동 전환 거부 — TX가 무장된 채로 로봇 프로그램을 바꾸면 전환 중인 서비스로 명령이 계속 들어감. 먼저 TX를 해제하세요.');
     renderAll();
     return;
   }
@@ -475,16 +643,37 @@ function failRobotDemo(key){
 // Round 1 fix: cuts the repeated-switch click count. Applies the safe axes
 // (mode, then robot-program) automatically in order, but NEVER auto-arms TX —
 // arming always stops at the same risk-confirm modal used everywhere else.
+// Round 3 fix: this used to fix the mode AND (in the same click, same function call)
+// immediately fall through into starting the robot SSH switch — so a button labelled
+// "먼저 뷰어 모드 전환" (as if that's all this click does) silently also kicked off a
+// several-second background action. The label now matches reality: one click, one
+// visible step, then return — the next click's label is recomputed from the new state.
 function batchAdvance(key){
   var sc = SM.SCENARIOS[key];
   var guided = document.getElementById('guidedToggle').checked;
+  // Round 4 fix: fixRobot() now refuses to touch the robot axis while TX is armed
+  // (see its own comment). The batch order was mode -> robot -> TX, which silently
+  // assumed TX only ever gets armed at the very end of a from-scratch switch — it
+  // never accounted for leaving an ALREADY-armed scenario (e.g. S1 -> S2/S3), where
+  // TX has to come DOWN before the robot step can run at all, or the batch button
+  // would just get stuck re-showing the same refusal forever. Disarm first whenever
+  // the target wants TX off and it's currently on — always the safe direction, so it
+  // applies immediately with no modal, same as the direct per-axis "TX 해제" button.
+  if (st.tx && !sc.tx){
+    st.tx = false;
+    log('[일괄 진행] ' + key + ' TX 먼저 해제 (로봇/모드 전환 전에 안전한 방향부터)');
+    renderAll();
+    return;
+  }
   if (st.mode !== sc.mode){
     st.mode = sc.mode;
-    log('[일괄 진행] ' + key + ' 뷰어 모드 -> ' + st.mode);
+    log('[일괄 진행] ' + key + ' 뷰어 모드 -> ' + st.mode + ' (이 클릭은 모드만 바꿈)');
+    renderAll();
+    return;
   }
   var robotOk = st.robotConfirm === 'confirmed' && st.robotProgram === sc.robotProgram;
   if (!robotOk && !guided && robotSwitchPending !== key){
-    fixRobot(key); // starts the timed SSH simulation; batch stops here for this click
+    fixRobot(key); // starts the timed SSH simulation; this click's whole job
     return;
   }
   if (!robotOk && guided){
