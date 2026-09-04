@@ -1695,7 +1695,7 @@
    "id": "e_smoke2_v2",
    "fromNode": "n_legonly_v2_smoke",
    "toNode": "n_legonly_v2",
-   "label": "smoke PASS (knee window open) -> 16384-env launch; P1 graduated @4100 -> P2 (DR+push ramp), no transition dip; P2 @6312 reward 105, DR 0.22, thermal 2.80 watch"
+   "label": "smoke PASS (knee window open) -> 16384-env launch; P1 graduated @4100 -> P2 (DR+push ramp), no transition dip; P2 @11565 (64%) reward 108, DR 0.75, fall 0, thermal 2.85 < 3.0"
   }
  ]
 }
