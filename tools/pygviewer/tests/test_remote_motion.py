@@ -340,7 +340,8 @@ class _FakeLeg:
 
 
 def _remote_motion(mapper, *, side="left_leg", action_prefix="left_leg", arm_token="tok",
-                    enable=None, default_q=None, idle_refresh=True):
+                    enable=None, default_q=None, idle_refresh=True, fault_query_fn=None,
+                    telemetry_addr=None):
   fake_leg = _FakeLeg(["hip_pitch", "hip_roll", "hip_yaw", "knee", "ankle_a", "ankle_b"])
   latest = LatestOnly(expected_arm_token=arm_token)
   deadman = DeadmanFilter(
@@ -349,7 +350,7 @@ def _remote_motion(mapper, *, side="left_leg", action_prefix="left_leg", arm_tok
   motion = RemoteMotion(
     leg=fake_leg, side=side, action_prefix=action_prefix, mapper=mapper, deadman=deadman,
     latest=latest, gains_cls=_FakeGains, kp_max=5.0, kd_max=0.5, default_kp=5.0, default_kd=0.5,
-    idle_refresh=idle_refresh,
+    idle_refresh=idle_refresh, fault_query_fn=fault_query_fn, telemetry_addr=telemetry_addr,
   )
   return motion, latest
 
@@ -579,3 +580,136 @@ def test_resolve_side_keeps_the_historical_aliases_and_names_the_map_limbs_when_
   assert resolve_side("left") == "left"  # still works with no map at all
   with pytest.raises(ValueError, match="bench"):
     resolve_side("nosuchlimb", jmap)
+
+
+# ---------------------------------------------------------------- fault visibility (2026-09-05)
+# docs/121 section 12c / docs/124: the bench incident where two motors cut their own torque
+# and the dashboard kept reading "normal" the whole time. RemoteMotion.__call__ now runs
+# StuckDetector/FaultPoller every tick (bridge/motor_fault.py owns the actual judgement logic
+# and is unit-tested on its own, tests/test_motor_fault.py) - these tests only prove the
+# WIRING: the right observation keys are read, the right things land in .warnings/.last_fault,
+# and the supplementary UDP telemetry actually goes out.
+def test_remote_motion_flags_a_frozen_joint_as_stuck_after_the_hold_duration():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  motion, latest = _remote_motion(mapper, enable={"L_knee_joint"})
+  latest.put(JointTarget(
+    t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.4], arm_token="tok",
+    origin="manual", ttl_ms=5000,
+  ))
+  target_deg = mapper.to_motor_targets(["L_knee_joint"], [0.4])["left_leg"]["knee"]
+  frozen_pos = target_deg + 50.0  # far outside STUCK_ERR_DEG=3.0deg
+  obs = {"left_leg/knee.pos": frozen_pos, "left_leg/knee.tau": 0.0}
+
+  t = 0.0
+  for _ in range(12):  # 12 * 0.1s > STUCK_HOLD_S (1.0s)
+    motion(t, observation=obs)
+    t += 0.1
+
+  assert any("명령을 따르지 않음" in w and "knee" in w for w in motion.warnings)
+
+
+def test_remote_motion_never_flags_stuck_while_tracking_normally():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  motion, latest = _remote_motion(mapper, enable={"L_knee_joint"})
+  latest.put(JointTarget(
+    t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.4], arm_token="tok",
+    origin="manual", ttl_ms=5000,
+  ))
+  target_deg = mapper.to_motor_targets(["L_knee_joint"], [0.4])["left_leg"]["knee"]
+  obs = {"left_leg/knee.pos": target_deg, "left_leg/knee.tau": 1.0}  # tracking fine, real torque
+
+  t = 0.0
+  for _ in range(30):
+    motion(t, observation=obs)
+    t += 0.1
+
+  assert not any("명령을 따르지 않음" in w for w in motion.warnings)
+
+
+def test_remote_motion_queries_fault_once_while_idle_and_reports_it():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  calls = []
+
+  def fake_query():
+    calls.append(1)
+    return {"knee": bytes([0x08, 0x00, 0x00, 0x00])}  # little-endian 0x00000008 = overvoltage
+
+  motion, latest = _remote_motion(mapper, enable={"L_knee_joint"}, fault_query_fn=fake_query)
+  motion(0.0, observation={})  # never armed -> idle phase, first-ever tick queries immediately
+
+  assert len(calls) == 1
+  assert "knee" in motion.last_fault
+  assert motion.last_fault["knee"].little == 0x00000008
+  assert any("과전압" in w for w in motion.warnings)
+
+
+def test_remote_motion_never_queries_fault_while_live():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  calls = []
+
+  def fake_query():
+    calls.append(1)
+    return {}
+
+  motion, latest = _remote_motion(mapper, enable={"L_knee_joint"}, fault_query_fn=fake_query)
+  latest.put(JointTarget(
+    t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.1], arm_token="tok",
+    origin="manual", ttl_ms=5000,
+  ))
+  motion(0.0, observation={})
+
+  assert calls == []
+
+
+def test_remote_motion_survives_a_fault_query_that_raises():
+  """A query failure must never take the control loop down - just a warning."""
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+
+  def broken_query():
+    raise RuntimeError("bus gone")
+
+  motion, latest = _remote_motion(mapper, enable={"L_knee_joint"}, fault_query_fn=broken_query)
+  action = motion(0.0, observation={})  # must not raise
+
+  assert action is not None  # idle refresh still worked
+  assert any("fault query failed" in w for w in motion.warnings)
+
+
+def test_remote_motion_sends_supplementary_stuck_telemetry_over_udp():
+  sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+  sock.bind(("127.0.0.1", 0))
+  sock.settimeout(1.0)
+  addr = ("127.0.0.1", sock.getsockname()[1])
+  try:
+    c = _contract()
+    from pygviewer.bridge.tx_map import JointTargetMapper
+
+    mapper = JointTargetMapper(c)
+    motion, latest = _remote_motion(mapper, enable={"L_knee_joint"}, telemetry_addr=addr)
+    latest.put(JointTarget(
+      t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.4], arm_token="tok",
+      origin="manual", ttl_ms=5000,
+    ))
+    target_deg = mapper.to_motor_targets(["L_knee_joint"], [0.4])["left_leg"]["knee"]
+    motion(0.0, observation={"left_leg/knee.pos": target_deg, "left_leg/knee.tau": 1.0})
+
+    data, _from = sock.recvfrom(4096)
+    pkt = json.loads(data.decode("utf-8"))
+    assert pkt["left_leg/knee/stuck"] == 0.0
+  finally:
+    sock.close()

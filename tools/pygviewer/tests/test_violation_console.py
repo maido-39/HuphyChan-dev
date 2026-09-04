@@ -55,6 +55,8 @@ def violation_badge_text(tv):
 
 
 def violation_line_text(rec):
+  if rec.get("reason"):
+    return rec["reason"]
   value = rec.get("value")
   val = f"{value:.3f}" if value is not None else (rec.get("rejected") or "non-finite")
   lo, hi = rec.get("limit_lo"), rec.get("limit_hi")
@@ -213,6 +215,24 @@ def test_coalesce_keeps_different_joints_independent():
 def test_violation_line_text_format():
   rec = {"side": "recv", "joint": "L_knee_joint", "value": -1.5007, "limit_lo": 0.0, "limit_hi": 2.094, "over_by": 1.5007}
   assert violation_line_text(rec) == "[recv] L_knee_joint  value=-1.501  limit=[0.000, 2.094]  over=1.501"
+
+
+def test_violation_line_text_uses_the_plain_language_reason_when_present():
+  """Fault visibility (2026-09-05, docs/121/docs/124): a "stuck"/"fault" record's own
+  `reason` string (telemetry.py) takes over the whole line - the numeric value/limit/over
+  format does not fit "the motor stopped tracking"."""
+  rec = {
+    "side": "stuck", "joint": "L_knee_joint", "value": 2.468, "limit_lo": None, "limit_hi": None,
+    "reason": "L_knee_joint: 명령을 따르지 않음 (고장 의심) — 목표 114.0 (deg), 실측 141.4 (deg), 토크 0.00 N*m, 12초째",
+  }
+  assert violation_line_text(rec) == rec["reason"]
+
+
+def test_dashboard_js_violation_line_text_also_checks_reason_first():
+  src = _dashboard_js_text()
+  m = re.search(r"function violationLineText\(rec\) \{(.*?)\n\}", src, re.S)
+  assert m
+  assert "if (rec.reason) return rec.reason;" in m.group(1)
 
 
 # ============================================================================ plot readout

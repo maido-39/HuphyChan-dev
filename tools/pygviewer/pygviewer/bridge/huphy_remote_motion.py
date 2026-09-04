@@ -81,6 +81,15 @@ from .. import CACHE_DIR, VARIANTS
 from ..contract import load_contract
 from ..schema import from_jsonl
 from .huphy_udp import DEFAULT_MAP_PATH, JointMap
+from .motor_fault import (
+  FaultPoller,
+  FaultReading,
+  StuckDetector,
+  decode_fault_word,
+  describe_fault_simple,
+  describe_stuck_simple,
+  query_fault_raw,
+)
 from .remote_target import (
   DEFAULT_DEADMAN_S,
   DEFAULT_HOLD_S,
@@ -103,6 +112,21 @@ MOTOR_ALIASES = {"ankle": ANKLE_MOTOR_NAMES}
 """``--enable ankle`` is shorthand for both crank motors together - HUPHY's ankle command is
 atomic (both loads or neither, ``Leg._motor_targets``'s "통째로 버림" rule), so it never makes
 sense to enable exactly one of them."""
+
+OBS_POS_SUFFIX = ".pos"
+OBS_TAU_SUFFIX = ".tau"
+"""Observation dict key suffixes (2026-09-05, fault visibility task, docs/121/docs/124).
+``OBS_POS_SUFFIX`` is the ONE confirmed key this file already reads (``_idle_refresh_action``,
+``f"{action_prefix}/{j}.pos"``, docs/123 section "6c"). ``OBS_TAU_SUFFIX`` is inferred by the
+same naming convention and by this bridge's own parallel wire vocabulary
+(``bench_telemetry.py``/``huphy_udp.py``'s ``FAST_MOTOR_FIELDS`` short field names -
+``pos``/``vel``/``tau``) but is NOT independently verified against a live HUPHY install - this
+machine has neither HUPHY nor a CAN bus (module docstring), and hardware verification is the
+human operator's job, not this session's (project rule). If ``get_observation()`` actually
+names this field something else, ``StuckDetector.update`` simply never sees a torque value
+(``obs.get(...)`` returns ``None``) and reports "not stuck" for every tick, exactly as it does
+for any other missing reading - a wrong key name fails SAFE (no stuck reports at all), never
+a false positive. Confirm this key on the bench before relying on layer (a)'s torque gate."""
 
 
 # =========================================================================== pure helpers
@@ -479,6 +503,74 @@ def run_dry(args) -> int:
 
 
 # =========================================================================== real run (huphy)
+def _make_can_fault_query_fn(limb_cfg, leg):
+  """Best-effort layer (b) wiring (docs/124 section 1/2): an INDEPENDENT ``python-can`` bus
+  handle on this leg's OWN CAN channel, used ONLY to read a fault-query reply's RAW bytes
+  ourselves - never through ``bus.read_fault()``'s own decode (this robot's HUPHY checkout
+  may or may not have the byte-order bug docs/124 section 1 found fixed yet, and there is no
+  way to tell from here which one is checked out). SocketCAN allows multiple simultaneous
+  listeners on one interface (the same reason ``candump`` can run alongside real traffic
+  without stealing it), so this does not compete with HUPHY's own bus handle for exclusive
+  access - it only ADDS one low-rate (``FAULT_POLL_INTERVAL_S``) query frame while idle.
+
+  UNVERIFIED against real hardware: motors are off for this change and hardware verification
+  is explicitly reserved for the human operator (project rule), not this session. Every
+  failure mode below returns ``None`` rather than raising, so a wrong assumption here
+  degrades to layer (a) [freeze detection] only, never crashes a live run. A
+  ``fault code reading unavailable`` warning at startup means layer (b) did NOT activate -
+  confirm on the bench that it does before relying on it.
+  """
+  try:
+    import can
+  except ImportError as e:
+    logger.warning("remote_motion: fault code reading unavailable (no python-can): %s", e)
+    return None
+  try:
+    bus = can.interface.Bus(channel=limb_cfg.channel, interface=limb_cfg.interface)
+  except Exception as e:
+    logger.warning(
+      "remote_motion: fault code reading unavailable (could not open %s/%s): %s",
+      limb_cfg.channel, limb_cfg.interface, e,
+    )
+    return None
+
+  # id -> motor name, by OBJECT IDENTITY against leg.config.motors - never a guessed
+  # attribute name on HUPHY's own MotorConfig/id type (see this function's own docstring).
+  cfg_to_name = {id(cfg): name for name, cfg in leg.config.motors.items()}
+  try:
+    motors_by_id = limb_cfg.motors_by_id()
+  except Exception as e:
+    logger.warning("remote_motion: fault code reading unavailable (motors_by_id failed): %s", e)
+    return None
+  name_by_id = {mid: cfg_to_name.get(id(cfg)) for mid, cfg in motors_by_id.items()}
+  name_by_id = {mid: name for mid, name in name_by_id.items() if name is not None}
+  if not name_by_id:
+    logger.warning("remote_motion: fault code reading unavailable (no motor id/name match)")
+    return None
+
+  def send_fn(motor_id: int, data: bytes) -> None:
+    bus.send(can.Message(arbitration_id=int(motor_id), is_extended_id=False, data=data))
+
+  def recv_fn(timeout_s: float):
+    m = bus.recv(timeout=max(0.0, timeout_s))
+    return bytes(m.data) if m is not None else None
+
+  def query_fn() -> dict[str, bytes | None]:
+    raw = query_fault_raw(list(name_by_id), send_fn, recv_fn)
+    out: dict[str, bytes | None] = {}
+    for mid, data in raw.items():
+      # byte0 = motor id (this robot's 11-bit wiring, docs/124 section 1); bytes[1:5] = the
+      # 4-byte fault word, same slice read_fault_raw.py's own reference tool uses.
+      out[name_by_id[mid]] = None if data is None or len(data) < 5 else bytes(data[1:5])
+    return out
+
+  logger.info(
+    "remote_motion: fault code reading enabled on %s/%s for %s",
+    limb_cfg.channel, limb_cfg.interface, sorted(name_by_id.values()),
+  )
+  return query_fn
+
+
 def run_real(args) -> int:
   """The real thing. Imports huphy HERE, not at module scope, so this file stays importable
   (and its pure helpers testable) on a machine without HUPHY installed."""
@@ -588,11 +680,17 @@ def run_real(args) -> int:
     telemetry_cfg = dataclasses.replace(telemetry_cfg, host=tele_host, port=int(tele_port))
   telemetry = tele.Telemetry.from_config(biped, telemetry_cfg)
 
+  # Fault visibility (2026-09-05, docs/121/docs/124) layer (b): best-effort, never fatal - see
+  # _make_can_fault_query_fn's own docstring for exactly what is and is not verified here.
+  fault_query_fn = _make_can_fault_query_fn(limb_cfg, leg)
+
   motion = RemoteMotion(
     leg=leg, side=side, action_prefix=limb_cfg.name, mapper=mapper, deadman=deadman,
     latest=latest, gains_cls=Gains,
     kp_max=args.kp_max, kd_max=args.kd_max, default_kp=args.kp_max, default_kd=args.kd_max,
     idle_refresh=args.idle_refresh,
+    fault_query_fn=fault_query_fn,
+    telemetry_addr=(telemetry_cfg.host, int(telemetry_cfg.port)),
   )
   # constructed after `motion` so the ticker's periodic line can report the running
   # idle-refresh-tick count alongside the receive counters (docs/123 section 11b) - a
@@ -666,7 +764,9 @@ class RemoteMotion:
 
   def __init__(self, *, leg, side: str, action_prefix: str, mapper: JointTargetMapper,
                deadman: DeadmanFilter, latest: LatestOnly, gains_cls, kp_max: float,
-               kd_max: float, default_kp: float, default_kd: float, idle_refresh: bool = True):
+               kd_max: float, default_kp: float, default_kd: float, idle_refresh: bool = True,
+               fault_query_fn: Callable[[], dict[str, bytes | None]] | None = None,
+               telemetry_addr: tuple[str, int] | None = None):
     self.leg = leg
     self.side = side
     self.action_prefix = action_prefix
@@ -683,9 +783,39 @@ class RemoteMotion:
     self._ankle_guess = (0.0, 0.0)
     self.warnings: deque[str] = deque(maxlen=200)
 
+    # Fault visibility (2026-09-05, docs/121 section 12c / docs/124) - see
+    # bridge/motor_fault.py's module docstring for the two layers this implements.
+    self.stuck_detector = StuckDetector()
+    self.fault_poller = FaultPoller()
+    self.fault_query_fn = fault_query_fn
+    """``() -> {motor_name: raw_fault_bytes|None}``, called ONLY while ``FaultPoller`` says
+    transmission is idle - ``None`` disables layer (b) entirely (layer (a), ``StuckDetector``,
+    is unconditional and needs no CAN access at all, so it is unaffected). ``None`` in every
+    unit test and in ``--dry-run``; ``run_real()``'s ``_make_can_fault_query_fn`` builds the
+    real one, best-effort (see that function's own docstring)."""
+    self.last_fault: dict[str, FaultReading] = {}
+    self._stuck_active: dict[str, bool] = {}
+    self.telemetry_addr = telemetry_addr
+    self._telemetry_sock = (
+      socket.socket(socket.AF_INET, socket.SOCK_DGRAM) if telemetry_addr is not None else None
+    )
+    """A SEPARATE, small UDP sender for the new numeric fields this task adds (``stuck``/
+    ``fault_le``/``fault_be``): HUPHY's own telemetry (``run_real()``'s
+    ``tele.Telemetry.from_config``) is a HUPHY class this project never edits (hard
+    constraint) and has no extension point for a field it does not know about, so this sends
+    its OWN datagram to the SAME destination, in the SAME flat ``{limb}/{motor}/{field}`` wire
+    shape ``bench_telemetry.py``/``run_dry()`` already use - the viewer's ``HuphyBridge``
+    parses each UDP datagram independently, so this coexists with HUPHY's own stream without
+    ever touching it."""
+
   def __call__(self, t: float, observation):
     msg, age = self.latest.get()
     state = self.deadman.update(msg, age)
+
+    # Fault visibility (2026-09-05): runs EVERY tick, independent of phase/idle - the whole
+    # point of the docs/124 incident is that a stuck joint must never look normal just
+    # because nothing is currently commanding it.
+    self._update_fault_visibility(t, observation, state)
 
     # "idle" - never armed yet (docs/123 section 11b's class docstring above). `not
     # state.target` is kept as a second, defensive trigger for the same branch: it is
@@ -744,6 +874,79 @@ class RemoteMotion:
     # everywhere else (mapper, deadman, gain plan) stays in bare-name / `self.side` (the
     # joint map's own vocabulary) terms, same as pre-biped.
     return {f"{self.action_prefix}/{k}": v for k, v in action.items()}
+
+  # ------------------------------------------------------------ fault visibility (2026-09-05)
+  def _update_fault_visibility(self, t: float, observation, state) -> None:
+    """Layer (a) (:class:`StuckDetector`, unconditional, no extra CAN traffic) + layer (b)
+    (:class:`FaultPoller`-gated raw fault query, only while transmission is idle) - see
+    ``bridge/motor_fault.py``'s module docstring. Restricted to the four
+    ``SINGLE_MOTOR_NAMES``: the ankle pair's action-space names (``ankle_pitch``/
+    ``ankle_roll``) are FK-DERIVED, not raw motor telemetry, and this bridge has no confirmed
+    per-crank torque observation in that space - NOT extended to the ankle pair here, a
+    stated limitation, not a silent omission (see this task's own report)."""
+    obs = observation or {}
+    stuck_flags: dict[str, float] = {}
+    if state.target:
+      motor_targets = self.mapper.to_motor_targets(
+        list(state.target), list(state.target.values())
+      ).get(self.side, {})
+      single, _ = split_motor_targets_into_action(motor_targets)
+      for motor_name, target_deg in single.items():
+        pos = obs.get(f"{self.action_prefix}/{motor_name}{OBS_POS_SUFFIX}")
+        tau = obs.get(f"{self.action_prefix}/{motor_name}{OBS_TAU_SUFFIX}")
+        result = self.stuck_detector.update(motor_name, t, target_deg, pos, tau)
+        now_stuck = result is not None
+        stuck_flags[motor_name] = 1.0 if now_stuck else 0.0
+        if now_stuck and not self._stuck_active.get(motor_name, False):
+          # Log only on the transition INTO stuck (not every tick while it persists) - the
+          # telemetry flag above still stays 1.0 for the whole duration, so the dashboard
+          # shows it continuously even though the log/warnings deque gets one line, not a
+          # flood at the control loop's own 100 Hz.
+          line = describe_stuck_simple(motor_name, result)
+          logger.warning("remote_motion: %s", line)
+          self.warnings.append(line)
+        self._stuck_active[motor_name] = now_stuck
+
+    should_query = self.fault_poller.update(t, state.phase)
+    fault_now: dict[str, FaultReading] = {}
+    if should_query and self.fault_query_fn is not None:
+      try:
+        raw = self.fault_query_fn()
+      except Exception as e:  # a fault QUERY must never take the control loop down
+        self.warnings.append(f"fault query failed: {e}")
+        raw = {}
+      for motor_name, data in raw.items():
+        if data is None:
+          continue
+        reading = decode_fault_word(data)
+        self.last_fault[motor_name] = reading
+        fault_now[motor_name] = reading
+        line = describe_fault_simple(motor_name, reading)
+        logger.warning(
+          "remote_motion: %s (little/correct 0x%08X %s, big/HUPHY-order 0x%08X %s)",
+          line, reading.little, reading.little_names, reading.big, reading.big_names,
+        )
+        self.warnings.append(line)
+
+    self._send_fault_telemetry(stuck_flags, fault_now)
+
+  def _send_fault_telemetry(
+    self, stuck_flags: dict[str, float], fault_now: dict[str, FaultReading],
+  ) -> None:
+    if self._telemetry_sock is None or self.telemetry_addr is None:
+      return
+    pkt: dict[str, float] = {}
+    for motor_name, flag in stuck_flags.items():
+      pkt[f"{self.action_prefix}/{motor_name}/stuck"] = flag
+    for motor_name, reading in fault_now.items():
+      pkt[f"{self.action_prefix}/{motor_name}/fault_le"] = float(reading.little)
+      pkt[f"{self.action_prefix}/{motor_name}/fault_be"] = float(reading.big)
+    if not pkt:
+      return
+    try:
+      self._telemetry_sock.sendto(json.dumps(pkt).encode("utf-8"), self.telemetry_addr)
+    except OSError as e:
+      self.warnings.append(f"fault telemetry send failed: {e}")
 
   def _enabled_sim_joints(self) -> list[str]:
     """Sim joint names enabled for THIS side. ``self.deadman.enable`` verbatim when it is a

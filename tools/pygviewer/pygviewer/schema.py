@@ -95,6 +95,29 @@ class JointState(Header):
   ankle_derived: dict[str, dict[str, float]] | None = Field(
     default=None, description="{'L': {'pitch':rad,'roll':rad}, 'R': ...} - AB only"
   )
+  stuck: list[float | None] | None = Field(
+    default=None,
+    description="Fault visibility (2026-09-05, docs/121/docs/124): 1.0 = this joint's "
+    "commanded-vs-measured pose has been frozen with near-zero reported torque for "
+    "STUCK_HOLD_S seconds (fault suspected - see bridge/motor_fault.py StuckDetector). "
+    "0.0 = evaluated, tracking fine. null = not evaluated this tick (e.g. ankle joints, "
+    "which this detector does not cover - see that module's docstring).",
+  )
+  fault_le: list[float | None] | None = Field(
+    default=None,
+    description="Little-endian (CORRECT, per the manufacturer SDK/manual - docs/124 section "
+    "1) 32-bit fault word from a low-rate bus.read_fault() query issued only while this "
+    "joint's TX was idle (never while armed - a fault reply shares its CAN id with a state "
+    "reply, so the control loop could mistake one for the other). null = not queried this "
+    "tick; the last known value should be treated as still current until a new one arrives.",
+  )
+  fault_be: list[float | None] | None = Field(
+    default=None,
+    description="The SAME fault-word bytes reinterpreted big-endian - what HUPHY's own "
+    "(possibly still-unfixed, docs/124 section 1) read_fault()/decode_fault gives at this "
+    "robot's checkout. Shown alongside fault_le so an operator is never silently shown only "
+    "one, possibly-wrong, interpretation.",
+  )
 
 
 class ImuState(Header):

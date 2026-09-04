@@ -28,6 +28,11 @@ import time
 from collections import deque
 from typing import Any
 
+from .bridge.motor_fault import (
+  FAULT_BIT_NAMES,
+  FAULT_BIT_SIMPLE_KO,
+  named_fault_bits,
+)
 from .schema import ImuState, JointState, PolicyIO
 from .violations import ViolationLog
 
@@ -87,6 +92,15 @@ class RealState:
     self.ack: dict[str, float | None] = {n: None for n in act_names}
     self.miss: dict[str, float | None] = {n: None for n in act_names}
     self._has_diag: dict[str, bool] = {n: False for n in act_names}
+    # Fault visibility (2026-09-05, docs/121/docs/124): a NEW, orthogonal signal from
+    # everything above - a joint can be "stuck"/faulted while comm/ack/miss all still look
+    # perfectly healthy (that is the whole point of the docs/124 incident this exists to fix),
+    # so these are deliberately kept OUT of `_has_diag`/the ok/warn/dead verdict and surfaced
+    # as their own `fault_reason` string instead (see `_joint_fault_reason` / `health()`).
+    self.stuck: dict[str, float | None] = {n: None for n in act_names}
+    self.fault_le: dict[str, float | None] = {n: None for n in act_names}
+    self.fault_be: dict[str, float | None] = {n: None for n in act_names}
+    self._stuck_since_mono: dict[str, float] = {}
     # This process's OWN reception clock, per joint - the last time ingest_joint_state saw
     # ANY field (fast or diag) not None for that specific joint name. Unlike `_last_rx_mono`
     # (one clock for "any message arrived at all"), this lets one joint go silent while
@@ -148,8 +162,12 @@ class RealState:
       age_list = msg.motor_age_ms or [None] * len(msg.joint_names)
       ack_list = msg.ack or [None] * len(msg.joint_names)
       miss_list = msg.miss or [None] * len(msg.joint_names)
-      for n, q, qd, tau, tgt, temp, age, ack, miss in zip(
-        msg.joint_names, msg.q, qd_list, tau_list, tgt_list, temp_list, age_list, ack_list, miss_list,
+      stuck_list = msg.stuck or [None] * len(msg.joint_names)
+      fault_le_list = msg.fault_le or [None] * len(msg.joint_names)
+      fault_be_list = msg.fault_be or [None] * len(msg.joint_names)
+      for n, q, qd, tau, tgt, temp, age, ack, miss, stuck, fault_le, fault_be in zip(
+        msg.joint_names, msg.q, qd_list, tau_list, tgt_list, temp_list, age_list, ack_list,
+        miss_list, stuck_list, fault_le_list, fault_be_list,
       ):
         if n not in self.q:
           continue  # the ws/in route already rejected unknown names; defensive only
@@ -171,6 +189,48 @@ class RealState:
         if miss is not None:
           self.miss[n] = miss
           self._has_diag[n] = True
+        # Fault visibility (2026-09-05, docs/121/docs/124) - see this class's own module
+        # docstring note above `self.stuck`: deliberately NOT folded into `_has_diag`/the
+        # ok-warn-dead verdict (a stuck joint can have comm/ack looking perfectly fine - that
+        # is exactly the incident this exists to catch). `_stuck_since_mono` is this
+        # PROCESS's own duration clock (independent of whatever duration the robot-side log
+        # already reported) so a viewer watching only the dashboard, with no terminal access
+        # to the robot's own log, still gets a meaningful "how long" in the violation record.
+        if stuck is not None:
+          was_stuck = bool(self.stuck.get(n))
+          self.stuck[n] = stuck
+          now_stuck = stuck >= 1.0
+          if now_stuck and not was_stuck:
+            self._stuck_since_mono[n] = now
+          if not now_stuck:
+            self._stuck_since_mono.pop(n, None)
+          if now_stuck and self.violations is not None:
+            since = self._stuck_since_mono.get(n, now)
+            duration_s = now - since
+            reason = (
+              f"{n}: 명령을 따르지 않음 (고장 의심) — 목표 {math.degrees(tgt) if tgt is not None else float('nan'):.1f} (deg), "
+              f"실측 {math.degrees(q) if q is not None else float('nan'):.1f} (deg), "
+              f"토크 {tau if tau is not None else float('nan'):.2f} N*m, {duration_s:.0f}초째"
+            )
+            self.violations.record(
+              side="stuck", joint=n, value=q, limit_lo=None, limit_hi=None, src=msg.src,
+              extra=dict(reason=reason, duration_s=round(duration_s, 1)),
+              rate_limit_s=2.0,
+            )
+        if fault_le is not None:
+          self.fault_le[n] = fault_le
+          self.fault_be[n] = fault_be
+          if fault_le != 0 and self.violations is not None:
+            bits = named_fault_bits(int(fault_le))
+            simple = "/".join(FAULT_BIT_SIMPLE_KO[b] for b in FAULT_BIT_NAMES if int(fault_le) >> b & 1)
+            reason = (
+              f"{n}: 모터가 {simple}(으)로 힘을 끊었습니다 (코드 0x{int(fault_le):08X})" if simple
+              else f"{n}: 정의되지 않은 고장 코드 0x{int(fault_le):08X}"
+            )
+            self.violations.record(
+              side="fault", joint=n, value=float(fault_le), limit_lo=0.0, limit_hi=0.0,
+              src=msg.src, extra=dict(reason=reason, fault_be=fault_be), rate_limit_s=5.0,
+            )
         prev = self.q[n]
         if q is not None and prev is not None and abs(q - prev) > math.pi:
           self.wrap_events += 1
@@ -362,6 +422,20 @@ class RealState:
     warn = warn or (temp_c is not None and temp_c > temp_limit_c)
     return "warn" if warn else "ok"
 
+  def _joint_fault_reason(self, stuck: float | None, fault_le: float | None) -> str | None:
+    """Plain-language reason this joint should show RED regardless of its ok/warn/dead
+    connectivity verdict above (docs/124: comm/ack/miss can look perfectly healthy while the
+    joint itself is stuck or has cut its own torque - see this class's module docstring note
+    above ``self.stuck``). ``None`` means neither condition is currently active."""
+    parts = []
+    if stuck is not None and stuck >= 1.0:
+      parts.append("명령을 따르지 않음 (고장 의심)")
+    if fault_le is not None and fault_le != 0:
+      code = int(fault_le)
+      simple = "/".join(FAULT_BIT_SIMPLE_KO[b] for b in FAULT_BIT_NAMES if code >> b & 1)
+      parts.append(f"고장 코드 0x{code:08X}" + (f" ({simple})" if simple else " (정의되지 않음)"))
+    return " · ".join(parts) if parts else None
+
   def health(
     self, expected_period_s: float | None = None, temp_limit_c: float = HEALTH_DEFAULT_TEMP_LIMIT_C,
   ) -> dict:
@@ -378,6 +452,8 @@ class RealState:
       miss = dict(self.miss)
       has_diag = dict(self._has_diag)
       qs = dict(self.q)
+      stuck = dict(self.stuck)
+      fault_le = dict(self.fault_le)
     joints: dict[str, dict] = {}
     summary = {"ok": 0, "warn": 0, "dead": 0}
     for n in self.act_names:
@@ -397,6 +473,9 @@ class RealState:
         temp_c=temp_c.get(n),
         q=qs.get(n),
         diag=has_diag.get(n, False),
+        # Fault visibility (2026-09-05, docs/121/docs/124): NEVER folds into `state` above -
+        # see `_joint_fault_reason`'s own docstring for why. `None` when neither is active.
+        fault_reason=self._joint_fault_reason(stuck.get(n), fault_le.get(n)),
       )
     return dict(joints=joints, summary=summary)
 

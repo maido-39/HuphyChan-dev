@@ -338,7 +338,11 @@ function violationSideLabel(side) {
  * it can be reimplemented in Python and checked against fixed input/output pairs without a JS
  * runtime on this host - see tests/test_violation_console.py. */
 function violationSideShort(side) {
-  return { recv: "recv", recv_torque: "recv-torque", sim_actuator: "sim", send: "send" }[side] || side;
+  return {
+    recv: "recv", recv_torque: "recv-torque", sim_actuator: "sim", send: "send",
+    // Fault visibility (2026-09-05, docs/121/docs/124):
+    stuck: "stuck", fault: "fault",
+  }[side] || side;
 }
 
 function violationBadgeText(tv) {
@@ -355,6 +359,11 @@ function violationBadgeText(tv) {
 }
 
 function violationLineText(rec) {
+  // Fault visibility (2026-09-05, docs/121/docs/124): "stuck"/"fault" records carry their
+  // own plain-language `reason` string (telemetry.py's RealState.ingest_joint_state) - show
+  // that verbatim instead of the numeric value/limit/over format, which does not fit a
+  // "the motor stopped tracking" or "the motor cut its own torque" statement.
+  if (rec.reason) return rec.reason;
   const val = (rec.value === null || rec.value === undefined) ? (rec.rejected || "non-finite") : Number(rec.value).toFixed(3);
   const hasLim = rec.limit_lo !== null && rec.limit_lo !== undefined && rec.limit_hi !== null && rec.limit_hi !== undefined;
   const lim = hasLim ? `[${Number(rec.limit_lo).toFixed(3)}, ${Number(rec.limit_hi).toFixed(3)}]` : "-";
@@ -898,8 +907,16 @@ function renderHealthGrid() {
       bits.push("no diag data (reception recency only)");
     }
     bits.push(`q ${j.q === null || j.q === undefined ? "-" : fmt(displayVal(j.q), 1) + unitSuffix()}`);
-    const title = `${n}: ${j.state}\n${bits.join("\n")}`;
-    return `<div class="health-cell health-${j.state}" title="${title}">${n.replace(/_joint$/, "")}</div>`;
+    // Fault visibility (2026-09-05, docs/121/docs/124): `fault_reason` overrides the cell's
+    // color to a DISTINCT red (never just re-using health-dead's red) regardless of `state` -
+    // the whole point of the incident this fixes is that comm/ack/miss (what `state` tracks)
+    // looked perfectly fine while the joint was genuinely stuck; showing it as plain "ok"
+    // (or even indistinguishably from a comm-dead joint) would repeat that exact failure.
+    const cssState = j.fault_reason ? "fault" : j.state;
+    const title = j.fault_reason
+      ? `${n}: ${j.fault_reason}\n(link: ${j.state})\n${bits.join("\n")}`
+      : `${n}: ${j.state}\n${bits.join("\n")}`;
+    return `<div class="health-cell health-${cssState}" title="${title}">${n.replace(/_joint$/, "")}</div>`;
   }).join("");
 }
 

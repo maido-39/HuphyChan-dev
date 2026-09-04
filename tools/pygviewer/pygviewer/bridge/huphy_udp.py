@@ -72,7 +72,18 @@ KNOWN_ANKLE_JOINTS = ("ankle_pitch", "ankle_roll")
 # diag-only packet (real HUPHY) or a combined one (bench) both set `touched=True` and
 # refresh whichever of temp/age/ack/miss it carries in the SAME persistent per-joint buffer
 # FAST already accumulates into - see the class docstring.
-DIAG_MOTOR_FIELDS = ("temp", "age", "ack", "miss")
+DIAG_MOTOR_FIELDS = ("temp", "age", "ack", "miss", "stuck", "fault_le", "fault_be")
+"""Fault visibility (2026-09-05, docs/121/docs/124) added `stuck`/`fault_le`/`fault_be` to the
+original temp/age/ack/miss set - handled the SAME way (never travel-sign/offset corrected,
+since none of these is a joint ANGLE; a negative value is treated as "no data" the same as any
+other DIAG field, though none of these three is ever legitimately negative in practice).
+Unlike temp/age/ack/miss (which come from HUPHY's own Telemetry, split into the slower DIAG
+packet), these three are sent by huphy_remote_motion.py's OWN small supplementary UDP sender
+(RemoteMotion._send_fault_telemetry) - a SEPARATE datagram to the same destination, since
+HUPHY's Telemetry class (never edited, hard project constraint) has no extension point for a
+field it does not know about. Both shapes land in the SAME per-field dispatch loop below
+either way, so it makes no difference to this bridge which sender a given tick's payload
+came from."""
 
 
 class JointMap:
@@ -141,7 +152,10 @@ class HuphyBridge:
       n: float(contract.raw["joint_contract"][n]["travel_sign"]) for n in self.act_names
     }
     self._buf = {
-      n: dict(q=None, target=None, qd=None, tau=None, temp=None, age=None, ack=None, miss=None)
+      n: dict(
+        q=None, target=None, qd=None, tau=None, temp=None, age=None, ack=None, miss=None,
+        stuck=None, fault_le=None, fault_be=None,
+      )
       for n in self.act_names
     }
     self._ankle_buf: dict[str, dict[str, float]] = {}
@@ -247,6 +261,9 @@ class HuphyBridge:
       ack=[self._buf[n]["ack"] for n in self.act_names],
       miss=[self._buf[n]["miss"] for n in self.act_names],
       ankle_derived=({s: dict(v) for s, v in self._ankle_buf.items() if v} or None),
+      stuck=[self._buf[n]["stuck"] for n in self.act_names],
+      fault_le=[self._buf[n]["fault_le"] for n in self.act_names],
+      fault_be=[self._buf[n]["fault_be"] for n in self.act_names],
     )
 
   # ---------------------------------------------------------------------- imu
