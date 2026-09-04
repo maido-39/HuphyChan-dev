@@ -81,15 +81,20 @@ const S = {
                           // joint names from here instead of re-deriving an `L_${kind}_joint`
                           // guess, so a panel's own construction and its data query always
                           // agree (see panelsFor()).
-  violations: null,      // GET /violations, polled only while the panel is open - {records, by_joint, total}
+  plotCells: {},         // A5: "row:kind" -> the grid cell DOM node, so renderPlots() can
+                          // write each panel's current-value readout (plotReadoutText) into
+                          // its own `.pv` span without re-querying the DOM every tick.
+  violations: null,      // GET /violations, polled every pollSlow tick (see A5 note there) - {records, by_joint, total}
   violationPanelOpen: false,
-  // A6 (2026-09-04 crash fix): one always-visible, collapsible console strip (#op-console)
-  // that streams any exception caught out of the render loop (renderTick's per-stage
-  // try/catch), so a caught bug is visible on screen instead of only in a devtools console
-  // the operator may not have open - same-key events inside a 1s window coalesce into one
-  // growing "(x N)" line (see coalesceLines) instead of flooding the screen every tick.
-  // `state` holds still-growing (open) lines keyed by a caller-chosen string; `lines` is the
-  // ring of lines that finished growing (capped 200).
+  violLastSeenSeq: 0,    // A5: highest violations.py `seq` already fed into #op-console -
+                          // avoids re-counting a record still sitting in the ring on the next poll
+  // A5/A6 (2026-09-04): one always-visible, collapsible console strip (#op-console) that
+  // streams BOTH (a) ROM/torque violation lines - coalesced to <=1 line/s per (side,joint)
+  // since the recv side can record at the full 50 Hz telemetry rate (see coalesceLines) -
+  // and (b) any exception caught out of the render loop (renderTick's per-stage try/catch,
+  // A6's crash fix), so a caught bug is visible on screen instead of only in a devtools
+  // console the operator may not have open. `state` holds still-growing (open) lines keyed by
+  // a caller-chosen string; `lines` is the ring of lines that finished growing (capped 200).
   opConsole: { state: {}, lines: [], collapsed: false, autoScroll: true },
   health: null,          // GET /health, polled only while the Telemetry tab is open - {link, joints, summary}
   lastHealthRxCount: undefined, // drives the topbar heartbeat dot's flicker (renderTopBar)
@@ -279,10 +284,15 @@ async function pollSlow() {
     if (S.controlMode === "policy" && S.rightTab === "control") S.policyList = await api("GET", "/policy/list");
   } catch (e) {}
   try {
-    // A2: the full record list is only fetched while the panel is actually open - the
-    // topbar badge itself reacts off the WS-delivered Status.telemetry.violations SUMMARY,
-    // not this poll, so a closed panel costs nothing extra.
-    if (S.violationPanelOpen) { S.violations = await api("GET", "/violations?limit=50"); renderViolationPanel(); }
+    // A5 (2026-09-04, user: "실제 모터 Plot이... console log 같은거에서 띄우던지"): the full
+    // record list now polls UNCONDITIONALLY (previously gated on the detail panel being
+    // open) - the always-visible #op-console needs a live stream of records regardless of
+    // which tab is open, not just when someone has clicked the badge. Cheap at this poll's
+    // existing 4 Hz cadence with limit=100. The topbar badge's own text still comes from the
+    // WS-delivered Status.telemetry.violations SUMMARY (renderTopBar), not this fetch.
+    S.violations = await api("GET", "/violations?limit=100");
+    ingestViolationsForConsole(S.violations.records || []);
+    if (S.violationPanelOpen) renderViolationPanel();
   } catch (e) {}
   try {
     // Motor health: the per-joint grid only needs the Telemetry tab's own poll cadence -
@@ -310,13 +320,55 @@ function violationSideLabel(side) {
   })[side] || side;
 }
 
+/* ------------------------------------------------------------------ A5: violation console
+ * User feedback (2026-09-04): the red topbar badge said only "26153 ROM/torque violation(s)"
+ * - no joint name, and finding one meant clicking to open the detail panel. Fix, in two
+ * parts:
+ *   1. violationBadgeText() puts the joint name + latest value straight into the badge text,
+ *      fed by the WS-delivered Status.telemetry.violations SUMMARY (renderTopBar) - no extra
+ *      network cost, since that summary already arrives at WS rate.
+ *   2. ingestViolationsForConsole() feeds one line per violation record into the SAME
+ *      #op-console the A6 crash fix built for caught render errors (see that fix's commit) -
+ *      a real recv-side violation records at the bench's full telemetry rate (50 Hz), so a
+ *      literal one-line-per-record console would print >1000 lines in the time it takes to
+ *      read one; coalesceLines() (defined below, generic, from the A6 fix) merges same-(side,
+ *      joint) records inside a 1s window into one growing "(x N)" line instead.
+ *
+ * Every function below is PURE (no DOM, no internal Date.now()/wall-clock read) precisely so
+ * it can be reimplemented in Python and checked against fixed input/output pairs without a JS
+ * runtime on this host - see tests/test_violation_console.py. */
+function violationSideShort(side) {
+  return { recv: "recv", recv_torque: "recv-torque", sim_actuator: "sim", send: "send" }[side] || side;
+}
+
+function violationBadgeText(tv) {
+  if (!tv || !tv.total) return null;
+  const byJoint = tv.by_joint || {};
+  const nJoints = Object.keys(byJoint).length;
+  const last = tv.last;
+  if (!last) return `⚠ ${tv.total} ROM/torque violation(s)`;
+  const val = (last.value === null || last.value === undefined) ? (last.rejected || "non-finite") : Number(last.value).toFixed(3);
+  const hasLim = last.limit_lo !== null && last.limit_lo !== undefined && last.limit_hi !== null && last.limit_hi !== undefined;
+  const lim = hasLim ? ` ∉ [${Number(last.limit_lo).toFixed(3)}, ${Number(last.limit_hi).toFixed(3)}]` : "";
+  const extra = nJoints > 1 ? ` 외 ${nJoints - 1}개` : ""; // "and N more" joints
+  return `⚠ ${tv.total} · ${last.joint} (${violationSideShort(last.side)}) ${val} rad${lim}${extra}`;
+}
+
+function violationLineText(rec) {
+  const val = (rec.value === null || rec.value === undefined) ? (rec.rejected || "non-finite") : Number(rec.value).toFixed(3);
+  const hasLim = rec.limit_lo !== null && rec.limit_lo !== undefined && rec.limit_hi !== null && rec.limit_hi !== undefined;
+  const lim = hasLim ? `[${Number(rec.limit_lo).toFixed(3)}, ${Number(rec.limit_hi).toFixed(3)}]` : "-";
+  const over = (rec.over_by === null || rec.over_by === undefined) ? "-" : Number(rec.over_by).toFixed(3);
+  return `[${rec.side}] ${rec.joint}  value=${val}  limit=${lim}  over=${over}`;
+}
+
 /* ------------------------------------------------------------------ A6: operator console
- * (engine only, for now - A6 crash fix): renderTick's per-stage try/catch (below) needs
- * somewhere on-screen to put a caught exception, since "silent freeze" is the exact bug this
- * fix is for. This is a generic, always-visible, collapsible console strip (#op-console) that
+ * (engine, from the crash-fix commit): renderTick's per-stage try/catch needs somewhere
+ * on-screen to put a caught exception, since "silent freeze" is the exact bug that fix is
+ * for. This is a generic, always-visible, collapsible console strip (#op-console) that
  * coalesces same-key events inside a 1s window into one growing "(x N)" line instead of
- * flooding the screen with a repeat message every render tick. A later change (docs/121 sec
- * 10 "violation console") feeds ROM/torque violation lines into this same engine.
+ * flooding the screen with a repeat message every render tick. ingestViolationsForConsole()
+ * above feeds the same engine.
  *
  * Every function below is PURE (no DOM, no internal Date.now()/wall-clock read) precisely so
  * it can be reimplemented in Python and checked against fixed input/output pairs without a JS
@@ -379,6 +431,13 @@ function ingestConsoleItems(items) {
   }
 }
 
+function ingestViolationsForConsole(records) {
+  const fresh = (records || []).filter((r) => r.seq > S.violLastSeenSeq);
+  if (fresh.length) S.violLastSeenSeq = Math.max(S.violLastSeenSeq, ...fresh.map((r) => r.seq));
+  ingestConsoleItems(fresh.map((r) => ({ key: `viol|${r.side}|${r.joint}`, text: violationLineText(r) })));
+  renderOpConsole();
+}
+
 // A6: renderTick's per-stage try/catch feeds a caught exception in here instead of only
 // `console.error`-ing it, per the "조용한 실패는 이번 버그의 본질" note in that fix - see
 // tests/test_tab_build_flags.py for the crash this specifically guards against.
@@ -402,7 +461,7 @@ function renderOpConsole() {
   box.classList.toggle("collapsed", cons.collapsed);
   const entries = opConsoleEntries();
   const countEl = el("op-console-count");
-  if (countEl) countEl.textContent = `${entries.length} line(s) shown`;
+  if (countEl) countEl.textContent = `${entries.length} line(s) shown · ${S.violations ? S.violations.total : 0} violation(s) total (all-time)`;
   if (cons.collapsed) return; // body stays un-rendered while collapsed - nothing else to sync
   const body = el("op-console-body");
   if (!body) return;
@@ -556,12 +615,16 @@ function renderTopBar() {
     if (st.warnings && st.warnings.length) badges.push(`<span class="pill bad">${st.warnings.length} warning(s)</span>`);
     const tel = st.telemetry || {};
     if (tel.jitter_grey) badges.push(`<span class="pill warn">jitter &gt;15ms</span>`);
-    // A2: red panel badge - Status.telemetry.violations is a SUMMARY (total/by_joint/last),
-    // arriving at WS rate, so this reacts as fast as any other top-bar badge; the full
-    // record list is only fetched (GET /violations) while the panel itself is open.
+    // A2/A5: red panel badge - Status.telemetry.violations is a SUMMARY (total/by_joint/
+    // last), arriving at WS rate, so this reacts as fast as any other top-bar badge; the
+    // full record list feeds the detail panel + #op-console instead (see pollSlow). A5 fix
+    // (2026-09-04, user: "어디 모터가 초과한건지가 안 보여") - the badge text itself now names
+    // the joint that most recently violated (violationBadgeText, pure - see
+    // tests/test_violation_console.py) instead of a bare count that needs a click to explain.
     const tv = tel.violations || {};
-    if (tv.total) {
-      badges.push(`<span class="pill bad" id="violation-badge" title="click for detail">&#9888; ${tv.total} ROM/torque violation(s)</span>`);
+    const badgeTxt = violationBadgeText(tv);
+    if (badgeTxt) {
+      badges.push(`<span class="pill bad" id="violation-badge" title="click for full detail table">${badgeTxt}</span>`);
     }
   }
   el("topbar-badges").innerHTML = badges.join(" ");
@@ -1491,16 +1554,32 @@ function updateImu3D() {
 }
 
 /* ================================================================== Plot grid (item 6) */
+// A5 (2026-09-04, user: "실제 모터 Plot이 겹쳐서 보여야 하는데 안 보여"): labels now spell out
+// "(real)" explicitly (used both for the legend text AND as the isReal test in
+// makeSeriesFor - previously "L real"/"R real", styled as a thin, low-opacity SAME-hue copy
+// of the sim line's own hex color plus a transparency suffix (same hue, just faded), which
+// is exactly why it read as "not there" rather than "overlapping": a viewer cannot
+// visually separate two lines that differ only in alpha at a glance. See makeSeriesFor for
+// the actual color/width fix.
 const ROW_META = {
   pos: {
-    title: "position [rad] (solid=q, dashed=target, dotted=sent-to-hardware)",
-    labels: ["L q sim", "R q sim", "L target", "R target", "L real", "R real", "L sent", "R sent"],
+    title: "position [rad] (solid=q, dashed=target, bold=real, dotted=sent-to-hardware)",
+    labels: ["L q sim", "R q sim", "L target", "R target", "L q (real)", "R q (real)", "L sent", "R sent"],
   },
-  tau: { title: "torque [N·m]", labels: ["L tau sim", "R tau sim", "L real", "R real"] },
+  tau: { title: "torque [N·m] (bold=real)", labels: ["L tau sim", "R tau sim", "L tau (real)", "R tau (real)"] },
   // A4 fix: qd used to have no real-side series at all (S.ring already carried realQd -
   // onJointState/pollSlow filled it - seriesArraysFor's qd branch just never read it), so
   // real velocity was invisible regardless of the panel-naming bug below. Added here.
-  qd: { title: "velocity [rad/s]", labels: ["L qd sim", "R qd sim", "L real", "R real"] },
+  qd: { title: "velocity [rad/s] (bold=real)", labels: ["L qd sim", "R qd sim", "L qd (real)", "R qd (real)"] },
+};
+
+// A5: index of each series within the arrays seriesArraysFor()/plotReadoutText() build - [0]
+// is always the shared x-axis, so series indices start at 1. Kept in one place so a future
+// ROW_META reshuffle cannot silently desync the readout from the actual data.
+const ROW_IDX = {
+  pos: { simL: 1, simR: 2, realL: 5, realR: 6 },
+  tau: { simL: 1, simR: 2, realL: 3, realR: 4 },
+  qd: { simL: 1, simR: 2, realL: 3, realR: 4 },
 };
 
 function initPlotsToolbar() {
@@ -1515,7 +1594,7 @@ function initPlotsToolbar() {
     <span class="seg" id="plot-window-seg">
       <span data-w="5">5s</span><span data-w="10" class="on">10s</span><span data-w="20">20s</span><span data-w="60">60s</span>
     </span>
-    <span class="small">L=blue R=orange &middot; solid=sim dashed=target light=real &middot; click a panel to expand</span>
+    <span class="small">click a panel to expand (colors/dash key is the legend on each row below)</span>
     <span class="small" id="plots-real-status" style="margin-left:auto"></span>
   `;
   tb.querySelector("#plot-rows-seg").addEventListener("click", (ev) => {
@@ -1542,26 +1621,99 @@ function makeSeriesFor(row) {
   ROW_META[row].labels.forEach((label) => {
     const isR = label.startsWith("R");
     const isTarget = label.includes("target");
-    const isReal = label.includes("real");
+    const isReal = label.includes("(real)");
     const isSent = label.includes("sent"); // TX item 3: what was actually sent to hardware
     let stroke = isR ? "#e08a3c" : "#5b9bd5";
-    const s = { label, stroke, width: isReal || isSent ? 1 : 1.5 };
+    const s = { label, stroke, width: 1.5 };
     if (isTarget) s.dash = [6, 4];
-    if (isReal) { s.stroke = isR ? "#e08a3c88" : "#5b9bd588"; s.width = 1; }
+    if (isReal) {
+      // A5 fix: real used to be a thin, low-opacity copy of sim's OWN hue - literally the
+      // same hex color with an alpha suffix appended - indistinguishable from "the sim line,
+      // but fainter" at a glance, which is exactly the "안 보여" report.
+      // Bold, solid, and a hue family sim/target/sent never use - magenta/cyan, matching the
+      // IMU widget's own cyan gyro color for visual consistency across the dashboard.
+      s.stroke = isR ? "#00e5ff" : "#ff3fa4";
+      s.width = 2.4;
+      s.dash = null;
+    }
     if (isSent) { s.stroke = isR ? "#c060e0" : "#60e0c0"; s.dash = [1, 3]; s.width = 1.5; }
     base.push(s);
   });
   return base;
 }
 
-function makeUplot(row, kind, container) {
+// A5 fix (user, round 2: "legend는 실제 예시선 뒤에 그게 무슨 label이다 달으라고" - a short
+// LINE SAMPLE reproducing that series' actual color/width/dash, THEN its label, not a plain
+// color dot). Built once per ROW_META row (not per panel - every panel in a row shares the
+// same series styling) straight from makeSeriesFor(row), so this can never drift out of sync
+// with what a panel's lines actually look like: change a color/width/dash in makeSeriesFor
+// and the legend updates with it automatically. Rendered as a real DOM element in the row's
+// OWN header (buildPlotGrid), outside any fixed-height/overflow:hidden `.plot-cell` - so
+// unlike an uPlot-internal legend measured/laid out against an already-fixed container
+// height, this can never be clipped or steal canvas space from the chart itself.
+function legendSwatchStyle(s) {
+  const kind = s.dash ? (s.dash[0] <= 1 ? "dotted" : "dashed") : "solid";
+  const width = Math.max(1, Math.round(s.width || 1.5));
+  return `border-top:${width}px ${kind} ${s.stroke}`;
+}
+
+function legendSwatchHtml(row) {
+  return makeSeriesFor(row).slice(1) // [0] is the {} x-axis placeholder, not a drawn series
+    .map((s) => `<span class="legend-item"><span class="legend-swatch" style="${legendSwatchStyle(s)}"></span>${s.label}</span>`)
+    .join("");
+}
+
+// A5: last non-null value in a series array, and a count of its non-null samples - both pure,
+// used by plotReadoutText() so the readout works from the exact same arrays uPlot is fed
+// (seriesArraysFor's output), never a second, independently-derived reading of S.ring.
+function lastNonNull(arr) {
+  if (!arr) return null;
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (arr[i] !== null && arr[i] !== undefined) return arr[i];
+  }
+  return null;
+}
+
+function countNonNull(arr) {
+  if (!arr) return 0;
+  let n = 0;
+  for (const v of arr) if (v !== null && v !== undefined) n++;
+  return n;
+}
+
+// A5 item 2 ("각 패널 제목 옆에 현재값 리드아웃... 선이 안 보여도 숫자로 확인 가능하게" /
+// "패널마다 real 샘플 수를 작게 표기"): pure - `arrs` is exactly what seriesArraysFor(row,
+// kind) returns (index 0 is the shared x-axis, so ROW_IDX's indices start at 1), so this can
+// never disagree with what is actually plotted. Also reports how many of the real samples in
+// the current window are non-null, so "no line visible" can be read as either "no real data"
+// (n=0) or "data present, something else is wrong" (n>0) without opening devtools.
+function plotReadoutText(row, arrs) {
+  const idx = ROW_IDX[row];
+  const dp = row === "tau" ? 1 : 3;
+  const f = (v) => (v === null || v === undefined) ? "—" : Number(v).toFixed(dp);
+  const Lsim = lastNonNull(arrs[idx.simL]), Rsim = lastNonNull(arrs[idx.simR]);
+  const Lreal = lastNonNull(arrs[idx.realL]), Rreal = lastNonNull(arrs[idx.realR]);
+  const n = countNonNull(arrs[idx.realL]) + countNonNull(arrs[idx.realR]);
+  return `L sim ${f(Lsim)} real ${f(Lreal)} · R sim ${f(Rsim)} real ${f(Rreal)} · real n=${n}`;
+}
+
+function makeUplot(row, kind, container, opts) {
+  opts = opts || {};
   const w = Math.max(container.clientWidth || 180, 60);
   const h = Math.max(container.clientHeight || 118, 60);
   const nSeries = ROW_META[row].labels.length;
-  const opts = {
+  // A5 item 2 ("범례를 항상 표시"): the compact 144px grid cells get the hand-rolled,
+  // deterministic per-ROW legend instead (see legendSwatchHtml() + buildPlotGrid's row
+  // header) - a real DOM element outside the fixed-height/overflow:hidden `.plot-cell`, so
+  // it can never be clipped or steal canvas height the way an uPlot-internal legend sized
+  // AFTER the container's height is already measured (see `h` above) could. uPlot's OWN
+  // legend is reserved for the modal (openModal passes {legend:true}), which has generous,
+  // unclipped space (80vw x 70vh) - see dashboard.html's `.u-legend .u-marker` override for
+  // the "line sample, not a dot" styling the modal's legend uses.
+  const uOpts = {
     width: w, height: h,
     padding: [4, 4, 0, 0],
-    legend: { show: false },
+    legend: { show: !!opts.legend, live: false },
     cursor: { show: false },
     scales: { x: { time: false } },
     axes: [{ show: false }, { show: true, size: 32, stroke: "#777", grid: { stroke: "#262626" } }],
@@ -1572,7 +1724,7 @@ function makeUplot(row, kind, container) {
   container.appendChild(wrap);
   const data = [[]];
   for (let i = 0; i < nSeries; i++) data.push([]);
-  return new uPlot(opts, data, wrap);
+  return new uPlot(uOpts, data, wrap);
 }
 
 function buildPlotGrid() {
@@ -1587,6 +1739,7 @@ function buildPlotGrid() {
   const panels = panelsFor(S.contract.action_joint_names, S.realJointNames);
   S.plotPanels = {};
   panels.forEach((p) => { S.plotPanels[p.kind] = p; });
+  S.plotCells = {};
   S.lastPanelRealCount = S.realJointNames.length;
   const cellsToInit = []; // [row, kind, cellEl] - uPlot needs real layout, so build the
                           // whole DOM tree and attach it to `root` FIRST, then measure
@@ -1602,14 +1755,20 @@ function buildPlotGrid() {
       // action set (e.g. an unmapped bridge name) - tag it instead of letting it pass for
       // an ordinary sim panel, per item 3 of the A4 fix.
       const tag = p.realOnly ? ` <span class="pill warn" style="font-size:9px;padding:0 4px">real only</span>` : "";
-      cell.innerHTML = `<span class="pt">${p.kind}${tag}</span>`;
+      // A5 item 2: `.pv` is the always-on "sim X / real Y (n=N)" readout - filled in by
+      // renderPlots() every tick from plotReadoutText(), so the numbers stay right even if
+      // the line itself is hard to see (or a future style change makes it hard to see again).
+      cell.innerHTML = `<span class="pt">${p.kind}${tag}</span><span class="pv"></span>`;
       cell.addEventListener("click", () => openModal(row, p.kind));
       rowDiv.appendChild(cell);
       cellsToInit.push([row, p.kind, cell]);
+      S.plotCells[row + ":" + p.kind] = cell;
     });
     const hdr = document.createElement("div");
-    hdr.className = "small"; hdr.style.margin = "2px 4px";
-    hdr.textContent = ROW_META[row].title;
+    hdr.className = "small plots-row-hdr"; hdr.style.margin = "2px 4px";
+    // A5: title + a hand-rolled, always-visible legend (line sample -> label) for this row -
+    // see legendSwatchHtml()'s comment for why this is not uPlot's own per-panel legend.
+    hdr.innerHTML = `<span>${ROW_META[row].title}</span><span class="row-legend">${legendSwatchHtml(row)}</span>`;
     root.appendChild(hdr);
     root.appendChild(rowDiv);
   });
@@ -1661,7 +1820,15 @@ function renderPlots() {
   }
   Object.entries(S.plotInstances).forEach(([key, u]) => {
     const [row, kind] = key.split(":");
-    u.setData(seriesArraysFor(row, kind));
+    const arrs = seriesArraysFor(row, kind);
+    u.setData(arrs);
+    // A5 item 2: keep the panel's numeric readout in lockstep with exactly what was just
+    // plotted (same `arrs`), not a second independent read of S.ring.
+    const cell = S.plotCells[key];
+    if (cell) {
+      const pv = cell.querySelector(".pv");
+      if (pv) pv.textContent = plotReadoutText(row, arrs);
+    }
   });
 }
 
@@ -1679,7 +1846,7 @@ function openModal(row, kind) {
   el("modal").classList.add("on");
   const container = el("modal-chart");
   container.innerHTML = "";
-  S.modalInstance = makeUplot(row, kind, container);
+  S.modalInstance = makeUplot(row, kind, container, { legend: true });
 }
 
 function closeModal() {
@@ -1865,6 +2032,6 @@ document.addEventListener("DOMContentLoaded", boot);
 window.__pygdash = {
   S, api, apiOk, toast, el, fmt, clamp, displayVal, internalVal, unitSuffix, obsTermDims, RAD2DEG, DEG2RAD,
   policyLoadErrorText, loadAndRunPolicy, loadAndRunPolicyByPath,
-  tabNeedsBuild, coalesceLines, fmtHms,
+  tabNeedsBuild, coalesceLines, fmtHms, violationLineText, violationBadgeText, violationSideShort,
 };
 })();

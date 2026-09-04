@@ -520,3 +520,56 @@ q 불변 확인, 같은-다리 결합은 의도적으로 별도 취급).
   스크립트를 재시작해야 함(이 코더는 실물 모터 구동 스크립트를 직접 실행하지 않음). (c)
   `HEALTH_DEAD_MISS=5`/온도임계 60°C 기본값은 코더 판단(브리핑에 숫자 없음), 실측 후 조정
   필요할 수 있음.
+
+- 09-04 — **A6: 렌더 루프 크래시 수정 + A5: 위반 배지/콘솔 로그 + 플롯 real 가시성** (사용자
+  피드백 2건 + 코디네이터가 확정한 크래시 원인, `static/dashboard.{js,html}`만). **A6(별도
+  커밋 `9b51b40`, 먼저)**: 브라우저 콘솔에 반복되던 `TypeError: can't access property
+  'dataset', sub is null`(renderJointsPanel←renderTabControl←renderRightTab←renderTick).
+  원인: Model/Base/Telemetry/Script/Status(`#left-body`)·Control/Gains/Obs(`#right-body`) 6개
+  탭 렌더러가 **공유 body 엘리먼트의 dataset**에 탭별 "이미 빌드됨" 불boolean을 찍었는데
+  Base/Telemetry/Script 셋은 같은 `dataset.built` 키를 공유, Control/Gains/Obs 셋은 각자
+  다른 이름(`builtControl`/`builtGains`/`builtObs`)을 썼지만 서로의 플래그를 지우지 않음 —
+  `innerHTML=...`는 자식만 교체하고 엘리먼트 자신의 속성은 남으므로 Control→Gains→Control
+  이동 시 `builtControl`이 "1"로 남은 채 실제 DOM은 Gains 표, `el("control-sub")`가 null →
+  `renderJointsPanel(null)`이 매 틱 크래시 → **try/catch가 없던 `renderTick`이 그 뒤 단계
+  (`renderPlots` 포함)를 전부 정지** — 별도로 보고된 "real 모터 플롯이 안 보인다"의 실제
+  메커니즘이 색/굵기가 아니라 이 크래시였음. 수정: 6곳 전부 `body.dataset.builtTab`(어느
+  탭이 빌드됐는지 이름 하나) + `tabNeedsBuild(currentBuiltTab, tabName, force)`(순수함수)로
+  통일, `renderJointsPanel`/`renderPolicyPanel`에 `if (!sub) return;` 널가드,
+  `renderTick`의 5단계 각각 개별 try/catch(캐치된 예외는 `console.error` + 신설
+  `#op-console`에 1줄로 표시 — 조용한 실패 재발 방지). `tests/test_tab_build_flags.py` 10건
+  (탭전환 시퀀스 Control→Gains→Control·Base→Telemetry→Script→Base를 순수함수로 재현,
+  소스텍스트 잠금).
+  **A5(2건, 크래시 수정 다음 커밋)**: (1) 배지 텍스트 자체에 가장 최근 위반 관절명·값·한계를
+  박음(`violationBadgeText`, WS `Status.telemetry.violations` 요약만 읽어 추가 요청 없음) —
+  예 `⚠ 2627 · L_knee_joint (recv) -1.501 rad ∉ [0.000, 2.094]`(라이브 확인, 관절 2개 이상이면
+  ` 외 N개` 접미). (2) 항상 보이는 접이식 콘솔(`#op-console`, 화면 우하단 고정) — 위반은
+  50Hz(벤치 실측: 1초당 delta=51건)로 쏟아지므로 `coalesceLines`(순수, side|joint 키로 1초
+  창 안 병합, 창 경과 시 새 레코드 없이도 강제 마감)로 초당 1줄 `HH:MM:SS.mmm [recv]
+  L_knee_joint value=-1.501 limit=[0.000, 2.094] over=1.501 (x50)` 형태로 합침, clear/copy/
+  autoscroll/collapse 버튼. (3) real 시리즈 색 버그: 기존 real은 **sim과 같은 hex에 알파
+  접미만 붙인 것**(`#5b9bd588` 등) — "안 보인다"가 아니라 "sim과 구분 안 됨"이었음. sim과
+  무관한 색(L=마젠타 `#ff3fa4`/R=시안 `#00e5ff`, width 2.4 실선, IMU 위젯 자이로색과 통일)로
+  교체, 라벨에 `(real)` 명시. (4) 패널마다 항상-보임 리드아웃 `.pv`(`plotReadoutText`, uPlot에
+  먹인 배열을 그대로 재사용 — 별도 추측 없음): `L sim 1.369 real -1.501 · R sim — real — ·
+  real n=3` 형태, 선이 안 보여도 숫자로 확인 가능. (5) 범례: 사용자가 "실제 예시선(선 샘플)
+  뒤에 라벨"을 요구 — uPlot 기본 범례(점/사각형 마커)는 그 요구에 부족해 **각 ROW 헤더에
+  직접 그린 범례**(`legendSwatchHtml`, `makeSeriesFor(row)`에서 그대로 뽑아 stroke/width/dash를
+  `border-top` 짧은 선분으로 재현 후 라벨 — 스타일 변경 시 자동 동기화, 고정 높이 헤더라
+  `.plot-cell`의 `overflow:hidden`에 클립될 위험 없음)로 교체, 컴팩트 그리드에서는 uPlot
+  자체 범례를 OFF(클리핑 위험 회피), 모달(확대뷰, 80vw×70vh 여유공간)에서는 ON +
+  `.u-marker`를 점→짧은 선(`width:16px;height:3px`)으로 CSS 오버라이드. 낡은 캡션
+  문구("light=real")는 제거하고 "click a panel to expand"만 남김. (6) tau 필드명 의심
+  조사: **버그 없음** — `schema.py JointState.tau_est`가 표준 필드명이고 `api.py`의 sim/real
+  두 생성자·`bridge/huphy_udp.py`가 모두 `tau_est=`로 채우며 `dashboard.js`도 `msg.tau_est`를
+  읽음(회귀 테스트로 잠금); 사용자가 본 tau non-null=0은 그 순간 실제로 토크가 0에 가까웠던
+  데이터 문제로 판단, 배선 문제 아님. **테스트**: `tests/test_violation_console.py` 20건
+  (배지/콘솔 병합/플롯 리드아웃 순수함수를 Python으로 라인 단위 재구현+검증, tau 필드명
+  스키마·발신자 일치, 소스텍스트 잠금). 전체 스위트 390→**420**(무실패). **라이브 확인**
+  (뷰어 재기동, pid 갱신 확인): `/ws/out` sim/real 프레임 동시 수신(`L_knee_joint` sim
+  q≈0.42/0.42, real q=-1.5007 — 큰 격차 실측), `/status`·`/violations` 총계 일치(재기동 후
+  1초당 +51 확인), `curl`로 새 `dashboard.js`/`dashboard.html`(op-console·violationBadgeText·
+  legendSwatchHtml 포함) 서빙 확인. **미결**: 이 호스트에 브라우저/Node가 없어(esprima
+  4.0.1로 전체 파싱만 확인, `??`는 esprima probe에서만 `||`로 중립화) 배지·콘솔·범례·리드아웃이
+  실제 화면에서 어떻게 보이는지는 여전히 미검증 — 서버 데이터·순수함수 로직·서빙 파일까지만
+  이 코더가 확인 가능한 한계.
