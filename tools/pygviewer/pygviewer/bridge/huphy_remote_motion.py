@@ -347,7 +347,13 @@ def run_real(args) -> int:
   from huphy import telemetry as tele
   from huphy.motors.base import Gains
   from huphy.robots.leg import ANKLE_POSITION
-  from huphy.scripts.bringup import build_leg
+  # build_robot, not build_leg (2026-09-04): `build_leg` hard-requires all six leg motors
+  # (hip_pitch/hip_roll/hip_yaw/knee/ankle_a/ankle_b) and dies with "다리에 필요한 모터가 없음"
+  # on the one-motor bench. HUPHY's own `build_robot` dispatches on `limb.kind` ("leg" ->
+  # build_leg, "single" -> build_single_joint) and both builders take the SAME keyword
+  # signature on purpose, so this is a drop-in that also keeps every existing leg config
+  # working unchanged.
+  from huphy.scripts.bringup import build_robot
   from huphy.scripts.commission import CONFIG_NAME, _find_config
 
   contract = load_contract(args.cache, args.variant)
@@ -380,7 +386,7 @@ def run_real(args) -> int:
       raise SystemExit(f"no limb in {path} has side={side!r} (--limb {args.limb!r})")
     limb_cfg = matches[0]
 
-  leg = build_leg(
+  leg = build_robot(
     robot, limb_cfg,
     allow_uncalibrated=args.allow_uncalibrated,
     gains=Gains(kp=args.kp_max, kd=args.kd_max),  # conservative uniform start; per-joint
@@ -397,6 +403,18 @@ def run_real(args) -> int:
     raise SystemExit(
       f"{e}\nis the channel up?\n  sudo ip link set {limb_cfg.channel} up type can bitrate 1000000"
     ) from e
+
+  # Clear a latched fault BEFORE ControlLoop._enter() calls robot.enable() (2026-09-04).
+  # `deploy/bench/bench_telemetry.py` already had to learn this the hard way: a latched fault
+  # from a previous run blocks torque, `enable_torque` then silently does nothing, and the
+  # symptom is a command stream that looks perfectly healthy - target exactly `max_delta_deg`
+  # ahead of the measured pose (clamp_jump doing its job), telemetry at full rate - while the
+  # motor sits at tau ~= 0 and never moves. Guarded by hasattr so a robot whose bus has no
+  # clear_fault (or a test double) is unaffected.
+  bus_obj = getattr(leg, "bus", None)
+  if bus_obj is not None and hasattr(bus_obj, "clear_fault"):
+    bus_obj.clear_fault()
+    print("[remote_motion] cleared any latched motor fault before enabling torque", flush=True)
 
   listen_host, listen_port = args.listen.rsplit(":", 1)
   latest = LatestOnly(expected_arm_token=args.arm_token, expected_contract_hash=contract.contract_sha)
