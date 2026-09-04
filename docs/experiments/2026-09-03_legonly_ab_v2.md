@@ -255,6 +255,20 @@ base z **0.903 m**(std 0), base vx −0.001±0.000 m/s — 완전 정지.
 
 게이트 판정은 34회 전부 §2c에 기록했고 모두 "계속"이었다. 보수적 중단 사유는 한 번도 성립하지 않았다.
 
+### 2a-1. 산출물
+
+**P2 학습 곡선** (DR 램프 4,100~14,100 구간에서 보상이 내려갔다 최고치로 회복하는 것이 보인다):
+
+![P2 progress](../mujoco/assets/legonly_ab_v2_p2_progress.png)
+
+**P1 학습 곡선** (커리큘럼 최상단 안착까지):
+
+![P1 progress](../mujoco/assets/legonly_ab_v1_p1_progress.png)
+
+- 누적 보행 영상(단계 자막 포함): `docs/mujoco/assets/accum_legonly_ab_v2_p2.mp4` (22.6 MB, P2),
+  `accum_legonly_ab_v2_p1.mp4` (6.5 MB, P1). ★영상 용량이 커 GitHub 100 MB 제한과 별개로
+  저장소가 무거워지므로, 푸시 전 LFS 여부를 확인할 것(기존 미해결 이슈).
+
 ### 2b. 미완 — 완주 후 측정 (다음 세션 인계)
 
 ★ 런처가 학습만 마쳤고 **측정 단계는 실행되지 않았다**. 다음 순서로 진행할 것:
