@@ -79,6 +79,15 @@ class HwSyncState:
     self.valid = False
     self.reason: str | None = "no sync yet - POST /sync_from_real first"
     self.synced: dict[str, float] = {}  # joint -> value applied at sync time (post-clip)
+    # 2026-09-04 bench fix: the RAW measured value at sync time, BEFORE any safe_clip clamp -
+    # see :meth:`check_arm_ready`'s docstring for the bug this exists to fix (the drift check
+    # used to compare live real telemetry against `synced`, the CLIPPED/applied value, which
+    # made every joint sitting outside the model's range - the bench's actual normal state -
+    # permanently unarmable even with zero real movement).
+    self.real_at_sync: dict[str, float] = {}
+    # The contract's safe_clip range per synced joint, stored only so :meth:`clip_warnings`
+    # can report a joint's model range without a second round trip to the contract.
+    self.clip_ranges: dict[str, tuple[float, float]] = {}
     self.sync_time_mono: float | None = None
     self.sync_time_wall: float | None = None
     self.sync_token: str | None = None
@@ -86,13 +95,25 @@ class HwSyncState:
     self._last_mode: str | None = None
 
   # -------------------------------------------------------------------------------- sync
-  def record_sync(self, synced: dict[str, float], contract_sha: str) -> str:
+  def record_sync(
+    self,
+    synced: dict[str, float],
+    real_at_sync: dict[str, float],
+    clip_ranges: dict[str, tuple[float, float]],
+    contract_sha: str,
+  ) -> str:
     """Called once by ``POST /sync_from_real`` after it has computed the per-joint
     synced/clipped/skipped split - this method only records the outcome and (re)validates.
     An empty ``synced`` dict (every joint skipped) is still a "successful sync attempt" as far
     as this state machine is concerned; whether that is good enough to arm is
-    :meth:`check_arm_ready`'s question (it will name whichever enabled joints are missing)."""
+    :meth:`check_arm_ready`'s question (it will name whichever enabled joints are missing).
+
+    ``real_at_sync`` must carry the SAME keys as ``synced`` - the raw (pre-clip) measured
+    value for each - and ``clip_ranges`` the contract's ``(lo, hi)`` safe_clip for each, used
+    by :meth:`clip_warnings`."""
     self.synced = dict(synced)
+    self.real_at_sync = dict(real_at_sync)
+    self.clip_ranges = dict(clip_ranges)
     self.sync_time_mono = time.monotonic()
     self.sync_time_wall = time.time()
     self.sync_token = secrets.token_hex(6)
@@ -166,7 +187,18 @@ class HwSyncState:
     already made a deliberate decision about this joint since sync" and is skipped from the
     drift check entirely, matching the design brief verbatim ("차이 자체는 허용하되... 무장은
     막지 않음"). The drift check only ever fires for a joint the operator has NOT touched -
-    there, a large real-vs-synced gap can only mean the REAL joint moved on its own.
+    there, a large real-vs-real gap can only mean the REAL joint moved on its own.
+
+    **2026-09-04 bench-verified bug fix**: the drift baseline is ``real_at_sync`` (the RAW
+    measured value at sync time), never ``self.synced`` (the CLIPPED/applied value). The
+    first bench run of this gate compared live real telemetry against ``self.synced`` and
+    found every joint whose real pose sits outside the model's safe_clip range - the bench's
+    ACTUAL default state, e.g. real L_knee_joint at 171.2 deg against a model range capped at
+    114 deg - permanently unarmable: the clip delta (57.2 deg) is structurally always bigger
+    than ``arm_drift_limit_rad`` (5 deg) even with the real joint sitting perfectly still,
+    and the 409 said "hardware moved" when it had not moved at all. A clipped joint's
+    real-vs-model-range gap is :meth:`clip_warnings`' job to report (non-blocking); this
+    method only ever blocks on real-vs-real movement.
     """
     if not self.valid:
       base_reason = self.reason or "sync is not valid"
@@ -187,21 +219,62 @@ class HwSyncState:
       tgt = target_now.get(j, synced_v)
       if abs(tgt - synced_v) > 1e-9:
         continue  # operator moved this joint's target since sync - a deliberate command, never blocked
+      real_at_sync_v = self.real_at_sync.get(j)
+      if real_at_sync_v is None:
+        continue  # no raw baseline recorded (defensive only - should not happen once j in self.synced)
       real_v = real_now.get(j)
       if real_v is None or not math.isfinite(real_v):
         continue  # nothing live to compare against; sustained silence is refresh_staleness's job
-      if abs(real_v - synced_v) > self.arm_drift_limit_rad:
-        moved_real.append((j, synced_v, real_v))
+      if abs(real_v - real_at_sync_v) > self.arm_drift_limit_rad:
+        moved_real.append((j, real_at_sync_v, real_v))
     if moved_real:
       details = ", ".join(
-        f"{j} moved {math.degrees(abs(rv - sv)):.1f} deg since sync "
-        f"({math.degrees(sv):.1f} -> {math.degrees(rv):.1f} deg)"
+        f"{j} moved {math.degrees(abs(rv - sv)):.1f} (deg) since sync "
+        f"({math.degrees(sv):.1f} (deg) -> {math.degrees(rv):.1f} (deg))"
         for j, sv, rv in moved_real
       )
       raise HwSyncNotReady(
         f"real hardware moved without a matching operator command since sync: {details} - "
         "press '0. sync from hardware' again before arming"
       )
+
+  # -------------------------------------------------------------------------------- clip warnings
+  def clip_warnings(self, real_now: dict[str, float | None]) -> list[dict]:
+    """Non-blocking companion to :meth:`check_arm_ready`'s drift check (2026-09-04 bench fix,
+    see that method's docstring for the bug this half addresses): for every synced joint
+    whose applied target differs from its raw real-at-sync value - i.e. the real joint sat
+    outside the model's safe_clip range at sync time, so the value actually written to the
+    manual target was clamped - report what arming WILL do instead of letting an operator
+    find out only from the robot itself. Uses ``real_now`` (not the frozen ``real_at_sync``
+    snapshot) for the reported current position and travel distance, so the number stays
+    accurate even if time passed between sync and arm.
+
+    Never blocks arming, unlike :meth:`check_arm_ready` - a real pose outside the model's
+    command window is the bench's own default state for any joint whose physical range
+    exceeds sim's clip window, not an error condition to refuse."""
+    out: list[dict] = []
+    for j, applied in self.synced.items():
+      raw = self.real_at_sync.get(j)
+      if raw is None or applied == raw:
+        continue  # this joint was never clipped - nothing to warn about
+      lo, hi = self.clip_ranges.get(j, (applied, applied))
+      cur = real_now.get(j)
+      if cur is None or not math.isfinite(cur):
+        cur = raw  # no fresher live value - fall back to what was measured at sync time
+      travel = abs(applied - cur)
+      out.append(dict(
+        joint=j,
+        real=cur,
+        applied=applied,
+        range=[lo, hi],
+        travel=travel,
+        message=(
+          f"{j}: real {math.degrees(cur):.1f} (deg) is outside the model range "
+          f"[{math.degrees(lo):.1f}, {math.degrees(hi):.1f}] (deg); arming will move it to "
+          f"{math.degrees(applied):.1f} (deg) ({math.degrees(travel):.1f} (deg) of travel)"
+        ),
+      ))
+    return out
 
   # -------------------------------------------------------------------------------- status
   def status(self, target_now: dict[str, float], real_now: dict[str, float | None]) -> dict:
@@ -229,4 +302,8 @@ class HwSyncState:
       target_drift_joint=drift_joint,
       arm_drift_limit_rad=self.arm_drift_limit_rad,
       arm_drift_limit_deg=round(math.degrees(self.arm_drift_limit_rad), 3),
+      # 2026-09-04 bench fix: non-blocking - see clip_warnings' own docstring. Recomputed on
+      # every status() call (like everything else here) so a client polling only this
+      # endpoint sees the current travel distance, not a stale one from sync time.
+      clip_warnings=self.clip_warnings(real_now),
     )

@@ -528,6 +528,17 @@ def build_app(core, freshness: dict) -> FastAPI:
     ``skipped`` with its reason; a synced value outside the contract's safe_clip is named in
     ``clipped`` with the raw value, the applied (clamped) value and the range - sim cannot
     reproduce a real pose outside its own command window, and this must never be hidden.
+
+    A joint that HAS carried at least one HUPHY diag field (temp/age/ack/miss) but whose
+    ``GET /health`` verdict is currently ``"dead"`` while its position field is still fresh
+    (age <= 0.5s) is skipped as ``"no real data (motor not responding)"`` rather than synced -
+    2026-09-04 bench finding: a physically disconnected motor still occupies a slot in every
+    50 Hz JointState frame and reports ``q=0.0``, indistinguishable from a real value by
+    itself; only the robot's own diag fields (ack/miss/motor_age_ms) say the motor never
+    answered. Syncing that phantom 0.0 as a real target would arm TX with a command to a
+    joint that was never actually measured. A joint that has NEVER carried any field at all
+    (this process's own reception, not just diag) still gets the plain ``"no real data"``
+    reason, unchanged - that case has nothing diag-based to distinguish it by.
     """
     if not core.real.rx_count:
       raise HTTPException(
@@ -537,10 +548,18 @@ def build_app(core, freshness: dict) -> FastAPI:
       )
     target_before, _ = _target_and_real_now()
     real_snap = core.real.snapshot_joints()
+    joints_health = core.real.health(expected_period_s=core.dt * core.decimation)["joints"]
     synced: dict[str, float] = {}
+    real_at_sync: dict[str, float] = {}
+    clip_ranges: dict[str, tuple[float, float]] = {}
     clipped: dict[str, dict] = {}
     skipped: dict[str, str] = {}
     for n in core.act_names:
+      age = core.real.joint_age_s(n)
+      jh = joints_health.get(n, {})
+      if jh.get("diag") and jh.get("state") == "dead" and age is not None and age <= SYNC_STALE_SKIP_S:
+        skipped[n] = "no real data (motor not responding)"
+        continue
       q = real_snap.get(n, {}).get("q")
       if q is None:
         skipped[n] = "no real data"
@@ -548,7 +567,6 @@ def build_app(core, freshness: dict) -> FastAPI:
       if not math.isfinite(q):
         skipped[n] = "nan"
         continue
-      age = core.real.joint_age_s(n)
       if age is None or age > SYNC_STALE_SKIP_S:
         skipped[n] = "stale"
         continue
@@ -557,12 +575,14 @@ def build_app(core, freshness: dict) -> FastAPI:
       if applied != q:
         clipped[n] = {"real": q, "applied": applied, "range": [lo, hi]}
       synced[n] = applied
+      real_at_sync[n] = q
+      clip_ranges[n] = (lo, hi)
     max_delta_before = max(
       (abs(synced[n] - target_before.get(n, synced[n])) for n in synced), default=0.0
     )
     if synced:
       core.submit({"op": "target", "values": synced})
-    sync_token = core.hw_sync.record_sync(synced, core.c.contract_sha)
+    sync_token = core.hw_sync.record_sync(synced, real_at_sync, clip_ranges, core.c.contract_sha)
     return {
       "synced": synced,
       "clipped": clipped,
@@ -584,7 +604,13 @@ def build_app(core, freshness: dict) -> FastAPI:
     FIRST via ``check_armable`` (no side effects) so "you haven't configured TX yet" always
     surfaces before "you haven't synced yet" even when both would fail - the more
     fundamental setup step should be the one an operator sees. Only once those pass is the
-    sync gate checked, and only once THAT passes does this actually arm."""
+    sync gate checked, and only once THAT passes does this actually arm.
+
+    The response's ``sync.clip_warnings`` (2026-09-04 bench fix) lists every synced joint
+    whose real pose sat outside the model's safe_clip range at sync time - arming moves it,
+    and the warning names the real position, the model range, and the exact travel distance
+    BEFORE the packet goes out, rather than an operator discovering it from the robot. This
+    never blocks the arm (see ``hw_sync.HwSyncState.clip_warnings``'s docstring)."""
     try:
       core.tx.check_armable(core.mode)
     except TxNotAllowed as exc:
@@ -600,7 +626,9 @@ def build_app(core, freshness: dict) -> FastAPI:
       core.tx.arm(core.mode)
     except TxNotAllowed as exc:
       raise HTTPException(409, str(exc))
-    return core.tx.status()
+    result = core.tx.status()
+    result["sync"] = core.hw_sync.status(target_now, real_now)
+    return result
 
   @app.post("/tx/disarm", summary="UI v2 TX: disarm")
   def post_tx_disarm():

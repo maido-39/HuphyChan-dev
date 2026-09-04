@@ -135,10 +135,29 @@ invalidated by telemetry for a synced joint going stale (>1s), a `POST /tx/confi
 the sim mode leaving `manual`, or a model contract change; moving the manual target yourself
 AFTER syncing is never blocked (that is a deliberate operator command, shown only as "drift" in
 `GET /tx/status`) - what IS blocked is the real joint itself drifting more than 5&deg; away from
-an UN-touched synced target. While real telemetry is connected but not yet synced, the Joints
-tab's sliders/inputs and the "3. ARM" button are disabled in the dashboard (never for a pure-sim
-session with no real telemetry at all). See `pygviewer/hw_sync.py`'s module docstring for the
-full state machine and `tests/test_sync_from_real.py` for the six covered scenarios.
+its RAW real-at-sync reading (never the clipped/applied target - see the 2026-09-04 bench fix
+below) while its manual target sits untouched. While real telemetry is connected but not yet
+synced, the Joints tab's sliders/inputs and the "3. ARM" button are disabled in the dashboard
+(never for a pure-sim session with no real telemetry at all). See `pygviewer/hw_sync.py`'s
+module docstring for the full state machine and `tests/test_sync_from_real.py` for the ten
+covered scenarios.
+
+**2026-09-04 bench fix: clip-vs-drift and phantom-zero motors (docs/123 section 10.2b).** The
+first live-bench run of this gate found it structurally unarmable: the drift check above
+compared live telemetry against the CLIPPED/applied target, so any joint sitting outside the
+model's `safe_clip` range (the bench's actual default pose - real L_knee_joint at 171.2&deg;
+against a model ceiling of 114&deg;) permanently read as "moved 57&deg; since sync" even
+standing perfectly still. Fixed by comparing real-vs-real only (`HwSyncState.real_at_sync`,
+the RAW value at sync time, never the clipped one); the clip gap itself is now reported
+separately and non-blockingly via `HwSyncState.clip_warnings()` - `GET /tx/status`'s and a
+successful `POST /tx/arm`'s `sync.clip_warnings` name the real position, the model range, and
+the exact travel arming will cause (e.g. `L_knee_joint: real 171.2 (deg) is outside the model
+range [6.0, 114.0] (deg); arming will move it to 114.0 (deg) (57.2 (deg) of travel)`). A second
+bug from the same session: HUPHY fills a physically disconnected motor's slot with `q=0.0`
+every frame, indistinguishable from a real reading by value alone - `POST /sync_from_real` now
+excludes a joint whose `GET /health` diag verdict is `dead` (via ack/miss/motor_age_ms) even
+while its position field stays fresh, skipping it as `"no real data (motor not responding)"`
+rather than syncing a false zero target.
 
 On top of arm/disarm sits a THIRD, independent keyboard dead-man: holding **Space** (not while typing in a text field)
 calls `POST /tx/heartbeat` every ~100ms; letting go does **not** disarm - the dashboard just
@@ -531,7 +550,7 @@ trusting a number written here:
 | `test_rom_clip.py` (ROM clip task, 2026-09-04) | `real_replay`'s receive-side hard-range clip: a direct-drive joint (`L_knee`) 5 rad past its range lands in qpos clipped, finite, counted, with the raw telemetry value untouched; a NaN sample produces a bit-identical trajectory to no telemetry at all (differential); an AB crank pair scaled past its hard range stays inside the soft `safe_clip` and the loop stays closed; `POST /target` out-of-range vs in-range report `requested`/`applied` correctly; `POST /target` with a real NaN/Infinity over the wire (built by hand - httpx's own `json=` refuses to send one) is rejected 422, not 500 - all 7 share one module-scoped `SimCore`/`TestClient` after a per-test-instantiation version was measured to push `test_sim_rate.py`'s RSS budget over the cap in the full suite |
 | `test_violations.py` (A2, 2026-09-04) | pure `ViolationLog` unit tests (ring cap, cumulative counts surviving eviction, rate-limit suppresses ring entries but not counts, `clear()` never lets `seq` go backwards, `side` filtering); `RealState.ingest_joint_state` drops a `side="recv"` record (value/limit/`over_by`/`src`) on an out-of-range `q` and a `side="recv_torque"` record on a `tau_est` over the contract's effort limit, while the pre-existing `range_violations` counter stays intact; `SimCore._tn_clamp` drops a `side="sim_actuator"` record (`tau_raw`/`tau_clamped`) when a torque this large no motor could produce is clamped, rate-limited to one ring entry per 100 ms per joint (cumulative count still bumps every call); `GET /violations` (empty/`side=`-filtered/`age_s`) and `POST /violations/clear`; a NaN `POST /target` is both 422-rejected AND recorded as a `side="send"` violation naming the joint; `Status.telemetry.violations` carries the summary shape only, never the ring; `GET /tx/status` carries `violations_count`; A1's `replay_clamp` counter and this log agree on "something happened" without either silently staying quiet |
 | `test_health.py` (motor health task, 2026-09-04) | fresh HUPHY DIAG fields (temp/age/ack/miss) verdict `ok`; a fake-clock unit test (no real `time.sleep`) proves 1.5 s of silence for one joint verdicts `dead` while a never-touched joint stays `dead` with `age_s: null`; `ack=0` alone is `warn` (not `dead`); `miss>=1` is `warn`, `miss>=HEALTH_DEAD_MISS` is `dead`; diag present but `motor_age_ms` never reported is `dead`; a sender that never carries ANY diag field is judged on reception recency alone and flagged `diag: false` (never scored as if a missing ack/miss meant something); `GET /health` response shape (`link`/`joints`/`summary`); `Status.telemetry.health` carries the summary only, never the per-joint grid; a bench-style single-joint feed shows exactly one `ok` and the other 11 (never touched by this module) `dead` - the live shape this task actually measured against the running bench rig |
-| `test_sync_from_real.py` (R12, docs/123 section 10.2, 2026-09-04) | `POST /sync_from_real` 409s only when NO real telemetry has EVER arrived (`rx_count==0`), never merely "most joints have no data" (a bench-shaped 1-of-12 feed syncs fine, `synced`/`skipped` split correctly with named reasons); a real value outside `safe_clip` lands in `clipped` with `{real, applied, range}` AND the sim's own manual target actually stays inside the safe window; `POST /tx/arm` 409s naming the joint(s) with no synced value; sync then arm succeeds; a synced joint's telemetry going stale (>1s, no further packets) invalidates the sync and a later arm is refused again with nothing else having changed; plus text-presence checks that `dashboard.js` wires the "0. sync from hardware" button and never locks the Joints tab when no real telemetry is connected at all |
+| `test_sync_from_real.py` (R12, docs/123 section 10.2/10.2b, 2026-09-04) | `POST /sync_from_real` 409s only when NO real telemetry has EVER arrived (`rx_count==0`), never merely "most joints have no data" (a bench-shaped 1-of-12 feed syncs fine, `synced`/`skipped` split correctly with named reasons); a real value outside `safe_clip` lands in `clipped` with `{real, applied, range}` AND the sim's own manual target actually stays inside the safe window; `POST /tx/arm` 409s naming the joint(s) with no synced value; sync then arm succeeds; a synced joint's telemetry going stale (>1s, no further packets) invalidates the sync and a later arm is refused again with nothing else having changed; plus text-presence checks that `dashboard.js` wires the "0. sync from hardware" button and never locks the Joints tab when no real telemetry is connected at all. **2026-09-04 bench fix (scenarios h-k)**: a clipped joint whose real hardware sits perfectly still now arms successfully (was a structural 409 before the fix) and the arm response's `sync.clip_warnings` names the real position/model range/travel in deg; a joint that ACTUALLY moves after sync still blocks, using the RAW real-at-sync/real-now values (never the clipped target); a joint carrying diag fields that verdict `dead` (ack/miss/motor_age_ms) with a fresh position field is skipped as "no real data (motor not responding)", never synced to a phantom 0; a joint with no data at all keeps the plain "no real data" reason unchanged |
 
 Evidence figure (no OpenGL on this host, so it is matplotlib):
 `mujoco-sim/mjlab/.venv/bin/python3 tools/pygviewer/make_verification_figure.py` ->

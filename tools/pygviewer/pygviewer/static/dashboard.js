@@ -2056,7 +2056,15 @@ function wireTxSection() {
   });
   el("btn-tx-arm").onclick = async () => {
     const r = await apiOk("POST", "/tx/arm");
-    if (r) { S.txStatus = r; toast("TX armed - hold Space to send"); }
+    if (r) {
+      S.txStatus = r;
+      toast("TX armed - hold Space to send");
+      // 2026-09-04 bench fix (hw_sync.py clip_warnings): a joint whose real pose sat outside
+      // the model's safe_clip range at sync time is about to move - name it, the model
+      // range, and the exact travel distance BEFORE the packet goes out. Non-blocking.
+      const clipWarnings = (r.sync && r.sync.clip_warnings) || [];
+      clipWarnings.forEach((w) => toast(w.message));
+    }
   };
   el("btn-tx-disarm").onclick = async () => {
     stopTxDeadman();

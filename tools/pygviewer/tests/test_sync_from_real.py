@@ -17,10 +17,41 @@ Six scenarios (task item 5):
   (e) sync, then arm -> succeeds.
   (f) sync, then the synced joint's telemetry goes stale -> the sync is invalidated -> a
       later arm is refused again, even though nothing else changed.
+
+**2026-09-04 bench-verified bug fix** (scenarios (h)-(k) below): the FIRST live bench run of
+this gate found it structurally unarmable. The real bench sat at L_hip_yaw_joint=54.0 deg and
+L_knee_joint=171.2 deg, both outside this model's safe_clip range (L_hip_yaw [-40.5, 40.5],
+L_knee [6.0, 114.0] deg) - the bench's actual default pose, not an edge case. ``POST
+/sync_from_real`` clipped both honestly (applied 40.5/114.0 deg). But the VERY NEXT ``POST
+/tx/arm`` was refused 409 "real hardware moved ... 57.2 deg since sync" - **the hardware had
+not moved at all**; it sat at 171.2 deg both before and after. The drift check compared live
+real telemetry against ``self.synced`` (the CLIPPED/applied value, 114.0), not the real value
+that was actually measured (171.2) - a permanent, structural gap for any out-of-range joint
+that has nothing to do with the hardware moving. Fixed by storing the RAW real value at sync
+time (``HwSyncState.real_at_sync``) and comparing real-vs-real, never real-vs-clipped-target
+(see ``hw_sync.py``'s :meth:`HwSyncState.check_arm_ready` docstring). A second, related bug in
+the same bench run: dead (physically disconnected) motors still occupy a slot in every HUPHY
+JointState frame and report ``q=0.0`` - indistinguishable from a real reading by value alone -
+so four unconnected joints got synced to a false "0 deg" target; fixed by consulting the same
+``GET /health`` ack/miss/motor_age_ms verdict ``POST /sync_from_real`` already has access to.
+
+  (h) a clipped joint whose real hardware sits perfectly still -> arm now SUCCEEDS (was a
+      structural 409 before the fix), and the response's ``sync.clip_warnings`` names the
+      real position, the model range, and the travel arming will cause, in deg.
+  (i) a joint that ACTUALLY moves on the real hardware after sync (clipped or not) -> arm is
+      still refused, and the message's before/after values are the RAW real readings, never
+      the clipped target.
+  (j) a joint with diag fields (ack/miss/motor_age_ms) verdicting ``dead`` while its position
+      field is still fresh (the phantom-0.0 case) -> skipped as "no real data (motor not
+      responding)", never synced.
+  (k) a joint genuinely never touched by any message at all keeps the plain "no real data"
+      reason unchanged - the dead-motor distinction never fires for it.
 """
 
 from __future__ import annotations
 
+import math
+import re
 import time
 from pathlib import Path
 
@@ -75,6 +106,45 @@ def _ingest(core: SimCore, values: dict[str, float], seq: int = 1) -> None:
       q=[values[n] for n in names],
     )
   )
+
+
+def _ingest_diag(
+  core: SimCore, joint: str, *, q: float,
+  ack: float | None = None, miss: float | None = None, motor_age_ms: float | None = None,
+  seq: int = 1,
+) -> None:
+  """Like :func:`_ingest` but for a single joint carrying HUPHY diag fields - the shape a
+  bench-verified "dead motor reporting a phantom position" scenario needs (scenarios (j)/(k)
+  below), matching ``test_health.py``'s own ``_feed`` helper's field convention."""
+  core.real.ingest_joint_state(
+    JointState(
+      t_ns=time.monotonic_ns(), seq=seq, src="dummy", joint_names=[joint],
+      q=[q],
+      ack=([ack] if ack is not None else None),
+      miss=([miss] if miss is not None else None),
+      motor_age_ms=([motor_age_ms] if motor_age_ms is not None else None),
+    )
+  )
+
+
+def _fresh_core_client() -> tuple[SimCore, TestClient]:
+  """An isolated core+client pair (unlike the module-scoped ``core``/``client`` fixtures
+  scenarios (a)-(g) above share) - scenarios (h)-(k) below need precise control over exactly
+  which joints have carried which fields, which is easiest to reason about starting from a
+  guaranteed-empty ``RealState``."""
+  core = _fresh_core()
+  return core, TestClient(build_app(core, core.c.freshness()))
+
+
+def _configure_tx(client: TestClient, enable: list[str]) -> None:
+  """Mode -> config -> enable, in that order (docs/123 section 10.2's own numbering: TX must
+  be configured BEFORE a sync is computed against its enable list, or ``POST /tx/config``'s
+  own reconfigure-invalidates-any-earlier-sync rule would immediately undo a sync done
+  first)."""
+  assert client.post("/mode", json={"mode": "manual"}).status_code == 200
+  r = client.post("/tx/config", json={"host": "127.0.0.1", "port": 9, "enable": enable})
+  assert r.status_code == 200, r.text
+  assert client.post("/tx/enable", json={"on": True}).status_code == 200
 
 
 # ------------------------------------------------------------------------------------- (a)
@@ -219,6 +289,116 @@ def test_sync_in_idle_then_switch_to_manual_stays_valid(core, client):
   core.step_n(core.decimation)
 
 
+# ---------------------------------------------------------- 2026-09-04 bench bug fix (h)-(k)
+# ------------------------------------------------------------------------------------- (h)
+def test_clipped_joint_with_stationary_hardware_arms_successfully():
+  """The bench-verified bug, exactly as it happened: L_knee_joint's real pose (171.2 deg) sat
+  outside the model's safe_clip ceiling (114.0 deg / ~1.99 rad), so ``POST /sync_from_real``
+  correctly clipped it. Before the fix, ``POST /tx/arm`` then refused (409) EVERY time,
+  because the drift check compared live telemetry against the CLIPPED target (114.0 deg) -
+  permanently ~57 deg away from the real 171.2 deg reading, with or without the hardware
+  moving at all. The hardware here does not move between sync and arm - arm must succeed."""
+  core, client = _fresh_core_client()
+  try:
+    _configure_tx(client, ["L_knee_joint"])
+    lo, hi = core.c.clip("L_knee_joint")
+    real_value = hi + math.radians(57.2)  # the bench's own out-of-range reading
+    _ingest(core, {"L_knee_joint": real_value})
+    r = client.post("/sync_from_real")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["clipped"]["L_knee_joint"]["applied"] == pytest.approx(hi)
+    assert body["synced"]["L_knee_joint"] == pytest.approx(hi)
+    core.step_n(core.decimation)  # let the queued /target-equivalent command actually apply
+    # (test_out_of_rom_real_value_is_clipped_and_target_stays_in_range's own pattern) - the
+    # arm gate's "did the operator move the target since sync" check reads the LIVE applied
+    # target, not the just-submitted op still sitting in the queue.
+
+    r = client.post("/tx/arm")
+    assert r.status_code == 200, r.text  # was a structural 409 before the fix
+    assert r.json()["armed"] is True
+    warnings = r.json()["sync"]["clip_warnings"]
+    assert len(warnings) == 1
+    w = warnings[0]
+    assert w["joint"] == "L_knee_joint"
+    assert w["real"] == pytest.approx(real_value, abs=1e-6)
+    assert w["applied"] == pytest.approx(hi, abs=1e-6)
+    assert w["travel"] == pytest.approx(real_value - hi, abs=1e-6)
+    assert "(deg)" in w["message"]
+    assert "outside the model range" in w["message"]
+    assert "57.2" in w["message"]  # the actual travel distance, not a placeholder
+  finally:
+    core.stop()
+
+
+# ------------------------------------------------------------------------------------- (i)
+def test_real_hardware_movement_after_sync_still_blocks_using_raw_values():
+  """The other half of the fix must not regress: a joint that ACTUALLY moves on the real
+  hardware after sync still blocks arm, and the reported before/after values are the RAW real
+  readings (real-at-sync -> now) - this test uses an IN-RANGE joint (no clip involved) so it
+  isolates "did the fix accidentally stop detecting real movement" from scenario (h)'s
+  clip-vs-drift distinction."""
+  core, client = _fresh_core_client()
+  try:
+    _configure_tx(client, ["L_knee_joint"])
+    lo, hi = core.c.clip("L_knee_joint")
+    real_at_sync = (lo + hi) / 2.0  # comfortably in range - never clipped
+    _ingest(core, {"L_knee_joint": real_at_sync}, seq=1)
+    r = client.post("/sync_from_real")
+    assert r.status_code == 200, r.text
+    assert r.json()["clipped"] == {}
+    core.step_n(core.decimation)  # let the queued /target-equivalent command actually apply
+
+    moved = real_at_sync + math.radians(6.0)  # > DEFAULT_ARM_DRIFT_LIMIT_RAD (5 deg)
+    _ingest(core, {"L_knee_joint": moved}, seq=2)
+
+    r = client.post("/tx/arm")
+    assert r.status_code == 409, r.text
+    detail = r.json()["detail"]
+    assert "real hardware moved" in detail
+    assert f"{math.degrees(real_at_sync):.1f}" in detail
+    assert f"{math.degrees(moved):.1f}" in detail
+  finally:
+    core.stop()
+
+
+# ------------------------------------------------------------------------------------- (j)
+def test_dead_motor_phantom_zero_is_skipped_not_synced():
+  """HUPHY fills a physically disconnected motor's position with 0.0 in every frame -
+  indistinguishable from a real 0 deg reading by value alone (the second bench-verified bug).
+  Only the robot's own diag fields say the motor never actually answered: ``ack=0``,
+  ``miss>=HEALTH_DEAD_MISS`` verdicts the SAME ``GET /health`` state "dead" that the motor
+  health grid already uses. A joint verdicting dead this way, with fresh (non-stale)
+  reception, must be excluded from sync rather than handed a false target."""
+  from pygviewer.telemetry import HEALTH_DEAD_MISS
+
+  core, client = _fresh_core_client()
+  try:
+    _ingest_diag(core, "L_hip_pitch_joint", q=0.0, ack=0.0, miss=HEALTH_DEAD_MISS, motor_age_ms=20.0)
+    r = client.post("/sync_from_real")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "L_hip_pitch_joint" not in body["synced"]
+    assert body["skipped"]["L_hip_pitch_joint"] == "no real data (motor not responding)"
+  finally:
+    core.stop()
+
+
+# ------------------------------------------------------------------------------------- (k)
+def test_never_touched_joint_keeps_plain_no_real_data_reason():
+  """A joint that has never carried ANY field (not even a diag one, unlike scenario (j)) must
+  keep the pre-existing plain "no real data" reason - the dead-motor distinction requires
+  ``diag: true`` in ``GET /health`` and must never fire for a joint with no data at all."""
+  core, client = _fresh_core_client()
+  try:
+    _ingest(core, {"L_knee_joint": 0.5})  # something must sync, or this hits the 409 (rx_count)
+    r = client.post("/sync_from_real")
+    assert r.status_code == 200, r.text
+    assert r.json()["skipped"]["L_hip_pitch_joint"] == "no real data"
+  finally:
+    core.stop()
+
+
 # --------------------------------------------------------------- dashboard.js wiring (text)
 # No JS test runner in this repo (test_policy_ui_contract.py's docstring already established
 # this - checked again here: no package.json/jest.config under tools/pygviewer) - these check
@@ -249,4 +429,17 @@ def test_dashboard_js_joints_lock_never_fires_without_real_telemetry():
 def test_dashboard_js_arm_button_disabled_considers_sync_valid():
   src = _dashboard_js_text()
   assert "!syncOk" in src
+
+
+def test_dashboard_js_arm_shows_clip_warnings():
+  """2026-09-04 bench fix: a successful arm's response carries ``sync.clip_warnings`` (see
+  ``hw_sync.HwSyncState.clip_warnings``) - the dashboard must surface each one, not just the
+  bare "TX armed" toast, or an operator has no way to see "this is about to move 57 deg"
+  before it happens."""
+  src = _dashboard_js_text()
+  m = re.search(r'el\("btn-tx-arm"\)\.onclick = async \(\) => \{(.*?)\n  \};', src, re.S)
+  assert m, "btn-tx-arm onclick handler not found"
+  body = m.group(1)
+  assert "r.sync" in body and "clip_warnings" in body
+  assert "forEach" in body
   assert 'el("btn-tx-arm").disabled' in src

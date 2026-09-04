@@ -367,6 +367,52 @@ test_sync_in_idle_then_switch_to_manual_stays_valid`가 이 시나리오를 회�
 **라이브 확인**(벤치 100 Hz 수신, 무릎 1관절만 실물): `/sync_from_real` → `synced 1
 (L_knee_joint)`, `skipped 11 (no real data)`, `clipped 0` 확인.
 
+### §10.2b 실기 검증 중 발견한 게이트 자체의 논리 결함 — "클립이 자신을 막는다" (2026-09-04)
+
+§10.2 게이트를 실제 두 모터(L_hip_yaw_joint, L_knee_joint) 벤치에 붙여 검증하던 중 사용자가
+발견: `sync_from_real`은 정직하게 동작했다(`L_hip_yaw_joint` 실측 54.0°를 [-40.5, 40.5]로,
+`L_knee_joint` 실측 171.2°를 [6.0, 114.0]로 클립). 그런데 바로 이어진 `POST /tx/arm`이
+"`real hardware moved ... L_knee_joint moved 57.2 deg since sync`"로 409 거부됐다 — **실물은
+1도도 움직이지 않았다.** 원인: 드리프트 검사(`HwSyncState.check_arm_ready`)가 "sync가 실제로
+적용한 목표값"(즉 클립 후 값, `self.synced[j]`)을 기준선으로 실물 현재값과 비교하고 있었다.
+그런데 클립된 관절은 **애초에** `synced[j] != 실측값`이 정상이므로, 실물이 조금도 움직이지
+않아도 그 구조적 차이(위 예: 57.2°)가 매번 `arm_drift_limit_rad`(5°)를 넘어 항상 거부된다.
+즉, "모델 범위 밖 실물"이 벤치의 기본 상태인 이상 **영원히 무장 불가**였던 것 — 정직하게
+클립을 보고하려던 기능이 그 클립 때문에 스스로를 막는 자기모순.
+
+**고친 것** (`pygviewer/hw_sync.py`):
+- `record_sync`가 이제 클립 **전** 원시 실측값(`real_at_sync`)과 모델 range(`clip_ranges`)를
+  함께 받아 저장한다. `check_arm_ready`의 드리프트 검사는 `real_at_sync[j]` vs 지금의 실측값을
+  비교하도록 수정 — **실물 대 실물**만 비교하고, 클립된 목표값은 더 이상 기준선에 등장하지
+  않는다. 결과: 클립된 관절이라도 실물이 가만히 있으면 무장이 통과한다.
+- 새 메서드 `clip_warnings(real_now)`: 클립이 발생한 관절마다 "실물이 지금 어디 있고, 모델
+  range가 무엇이고, 무장하면 얼마나 이동하는지"를 deg 단위 문자열로 **막지 않고** 보고한다
+  (예: `L_knee_joint: real 171.2 (deg) is outside the model range [6.0, 114.0] (deg); arming
+  will move it to 114.0 (deg) (57.2 (deg) of travel)`). `GET /tx/status`의 `sync.clip_warnings`
+  와 `POST /tx/arm` 성공 응답의 `sync.clip_warnings` 양쪽에 노출되고, 대시보드는 무장 성공
+  토스트 뒤에 각 경고를 이어서 띄운다(`dashboard.js` `btn-tx-arm` 핸들러).
+- 거부 문구도 "hardware moved"가 실제로 사실인 경우에만 나오도록 정정 — before/after 값이
+  이제 `real_at_sync`→현재 실측값(둘 다 원시 실물 값)이라 클립된 관절이라도 실제로 안 움직이면
+  절대 이 문구가 뜨지 않는다.
+
+**두 번째 결함(같은 세션, 실기 발견)**: 물리적으로 연결되지 않은 4개 관절
+(`L_hip_pitch_joint`, `L_hip_roll_joint`, `L_crank_A_joint`, `L_crank_B_joint`)이 `0.0`으로
+sync됐다. HUPHY는 응답 없는 모터도 매 50 Hz 프레임의 해당 슬롯에 `null`이 아니라 `0.0`을
+채워 보내므로, 값만으로는 "진짜 0°"와 "응답 없음"을 구분할 수 없다. 고친 것: `POST
+/sync_from_real`이 이제 각 관절에 대해 `GET /health`와 같은 `ack`/`miss`/`motor_age_ms`
+헬스 판정을 먼저 확인하고, diag 필드를 한 번이라도 실어온 적이 있는 관절이 현재 `dead`
+판정이면서 수신 자체는 신선한(≤0.5s) 경우 — 즉 "프레임은 오는데 그 안의 모터가 응답이
+없다" — `skipped["...] = "no real data (motor not responding)"`로 빼고 sync하지 않는다.
+diag를 한 번도 실어온 적 없는(순수 무수신) 관절은 기존 `"no real data"` 사유 그대로 유지
+(`test_never_touched_joint_keeps_plain_no_real_data_reason`로 회귀 고정).
+
+테스트: `tests/test_sync_from_real.py`에 시나리오 (h)-(k) 4건(클립+정지 실물 → 무장 성공 +
+경고 내용 검증, 실제 이동 → 여전히 거부되되 raw 값 사용 검증, dead 모터 phantom-0 제외,
+무수신 관절은 기존 사유 유지) + dashboard.js 배선 텍스트 1건 추가. 전체 스위트 451개 무실패
+(`CUDA_VISIBLE_DEVICES="" mujoco-sim/mjlab/.venv/bin/python3 -m pytest` from
+`tools/pygviewer`). **실기 미검증**: 이 수정 자체는 벤치에 다시 붙여 확인해야 하나(사용자가
+직접 진행), 이 세션은 하드웨어를 건드리지 않았다 — 코드·순수 함수·서버 응답으로만 검증.
+
 ## §11. `biped` 브랜치 이행 — 로봇측 텔레메트리 변환 레이어 재작성 (2026-09-04, 코더)
 
 HUPHY 체크아웃(`~/external_repos/HUPHY`, `~/Human-Pygmalion/HUPHY` 벤치 배포본 동일)이 `biped`
