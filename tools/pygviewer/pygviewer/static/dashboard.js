@@ -902,10 +902,17 @@ function initImu3D(container) {
   container.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(38, w / h, 0.01, 100);
-  camera.position.set(1.5, 1.1, 1.7);
+  // Robot/world frame is Z-UP (X forward, Y left) - the same frame the IMU quaternion,
+  // projected gravity and gyro are expressed in. three.js defaults to Y-up, so we only
+  // re-orient the CAMERA and the GROUND GRID (proper rotations, det +1) and feed the data
+  // through untouched. Never swap data axes here: the EBIMU web viewer once did exactly
+  // that and produced a mirror image (det -1) that reversed every rotation on screen.
+  camera.up.set(0, 0, 1);
+  camera.position.set(1.6, -1.3, 1.1);   // front-right-above, looking at the origin
   camera.lookAt(0, 0, 0);
   scene.add(new THREE.AmbientLight(0xffffff, 1.0));
   const grid = new THREE.GridHelper(2, 8, 0x445566, 0x2a2a30);
+  grid.rotation.x = Math.PI / 2;          // GridHelper lies in XZ; rotate it into the XY ground plane (Z-up)
   scene.add(grid);
 
   function mkAxes(opacity) {
