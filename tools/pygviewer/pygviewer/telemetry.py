@@ -38,6 +38,19 @@ SIGN_WINDOW_S = 2.0
 SIGN_DEADBAND_RAD = 0.05
 SIGN_RED_FRACTION = 0.5
 
+# Motor health task (2026-09-04): per-joint ok/warn/dead thresholds. "our age" is this
+# process's own reception clock (time since RealState last saw ANY field for that specific
+# joint, updated in ingest_joint_state below) - the one signal available even when a sender
+# carries no DIAG fields at all (today's bench_telemetry.py). HEALTH_DEAD_MISS turns HUPHY's
+# own "miss" counter (consecutive no-response cycles) into the dead threshold: the task
+# brief's "ack=0 연속" (consecutive ack=0) IS exactly what `miss` already counts, so a single
+# missed cycle is a WARN (see RealState.health()) and only a sustained run of them is DEAD -
+# a documented judgement call, not a value HUPHY or the task brief pins down as a number.
+HEALTH_OK_AGE_S = 0.2
+HEALTH_DEAD_AGE_S = 1.0
+HEALTH_DEAD_MISS = 5
+HEALTH_DEFAULT_TEMP_LIMIT_C = 60.0
+
 
 class RealState:
   """Everything received from the outside world for one model variant."""
@@ -63,6 +76,22 @@ class RealState:
     self.qd: dict[str, float | None] = {n: None for n in act_names}
     self.tau: dict[str, float | None] = {n: None for n in act_names}
     self.target: dict[str, float | None] = {n: None for n in act_names}
+    # Motor health task (2026-09-04): the robot's OWN self-reported diagnostics, per joint -
+    # None means "never reported", not "zero". `_has_diag` is sticky-True the first time ANY
+    # of temp/age/ack/miss arrives non-None for that joint - it is what tells health() to
+    # trust the diag-based verdict instead of falling back to reception-recency-only (a
+    # sender that never carries these fields at all, e.g. today's bench_telemetry.py, must
+    # never be silently scored as if it were reporting ack=1/miss=0).
+    self.temp_c: dict[str, float | None] = {n: None for n in act_names}
+    self.motor_age_ms: dict[str, float | None] = {n: None for n in act_names}
+    self.ack: dict[str, float | None] = {n: None for n in act_names}
+    self.miss: dict[str, float | None] = {n: None for n in act_names}
+    self._has_diag: dict[str, bool] = {n: False for n in act_names}
+    # This process's OWN reception clock, per joint - the last time ingest_joint_state saw
+    # ANY field (fast or diag) not None for that specific joint name. Unlike `_last_rx_mono`
+    # (one clock for "any message arrived at all"), this lets one joint go silent while
+    # others keep reporting without the silent one hiding behind the others' traffic.
+    self._joint_last_update_mono: dict[str, float] = {}
     # P4/R7: the hardware's OWN reported PD gains, when a JointState carries them - kept
     # separately from q/qd/tau/target because unlike those, a gains report is expected to be
     # nearly static (it changes on a config reload, not every packet), so "last received" is
@@ -115,9 +144,33 @@ class RealState:
       qd_list = msg.qd or [None] * len(msg.joint_names)
       tau_list = msg.tau_est or [None] * len(msg.joint_names)
       tgt_list = msg.target or [None] * len(msg.joint_names)
-      for n, q, qd, tau, tgt in zip(msg.joint_names, msg.q, qd_list, tau_list, tgt_list):
+      temp_list = msg.temp_c or [None] * len(msg.joint_names)
+      age_list = msg.motor_age_ms or [None] * len(msg.joint_names)
+      ack_list = msg.ack or [None] * len(msg.joint_names)
+      miss_list = msg.miss or [None] * len(msg.joint_names)
+      for n, q, qd, tau, tgt, temp, age, ack, miss in zip(
+        msg.joint_names, msg.q, qd_list, tau_list, tgt_list, temp_list, age_list, ack_list, miss_list,
+      ):
         if n not in self.q:
           continue  # the ws/in route already rejected unknown names; defensive only
+        # Motor health task: "this joint was actually named with real data in THIS message"
+        # is the per-joint reception clock - any field, fast or diag, counts. A joint this
+        # message never touched at all keeps whatever clock it already had (or none, if it
+        # has genuinely never been seen).
+        if any(v is not None for v in (q, qd, tau, tgt, temp, age, ack, miss)):
+          self._joint_last_update_mono[n] = now
+        if temp is not None:
+          self.temp_c[n] = temp
+          self._has_diag[n] = True
+        if age is not None:
+          self.motor_age_ms[n] = age
+          self._has_diag[n] = True
+        if ack is not None:
+          self.ack[n] = ack
+          self._has_diag[n] = True
+        if miss is not None:
+          self.miss[n] = miss
+          self._has_diag[n] = True
         prev = self.q[n]
         if q is not None and prev is not None and abs(q - prev) > math.pi:
           self.wrap_events += 1
@@ -268,6 +321,73 @@ class RealState:
         n: dict(q=self.q[n], qd=self.qd[n], tau=self.tau[n], target=self.target[n])
         for n in self.act_names
       }
+
+  # -------------------------------------------------------------------- motor health
+  def _joint_health_state(
+    self, has_diag: bool, our_age: float | None, motor_age_ms: float | None,
+    ack: float | None, miss: float | None, temp_c: float | None, temp_limit_c: float,
+    expected_period_s: float | None,
+  ) -> str:
+    """One joint's ok/warn/dead verdict. Reception recency (``our_age``) is checked FIRST
+    and unconditionally - a source that has gone silent for this joint is dead regardless of
+    whatever diag value it last reported (a stale "ack=1" from 10 minutes ago must never
+    read as healthy). Only once recency passes does a diag-aware verdict apply, and ONLY if
+    this joint has EVER carried a diag field at all (``has_diag``) - a sender that never
+    sends temp/age/ack/miss (today's bench_telemetry.py) is judged on reception recency
+    alone, exactly as the task brief specifies, never scored as if diag values of 0/None
+    meant something."""
+    if our_age is None or our_age > HEALTH_DEAD_AGE_S:
+      return "dead"
+    if not has_diag:
+      return "ok" if our_age < HEALTH_OK_AGE_S else "warn"
+    if motor_age_ms is None:
+      return "dead"  # the robot itself has never heard back from this motor, ever
+    if miss is not None and miss >= HEALTH_DEAD_MISS:
+      return "dead"  # a sustained run of consecutive no-response cycles, not just one
+    warn = our_age >= HEALTH_OK_AGE_S
+    warn = warn or (miss is not None and miss >= 1)
+    warn = warn or (ack is not None and ack == 0.0)
+    warn = warn or (expected_period_s and motor_age_ms > 3.0 * expected_period_s * 1e3)
+    warn = warn or (temp_c is not None and temp_c > temp_limit_c)
+    return "warn" if warn else "ok"
+
+  def health(
+    self, expected_period_s: float | None = None, temp_limit_c: float = HEALTH_DEFAULT_TEMP_LIMIT_C,
+  ) -> dict:
+    """``{joints: {name: {state, age_s, motor_age_ms, ack, miss, temp_c, q, diag}},
+    summary: {ok, warn, dead}}`` - ``GET /health``'s payload minus the link-level fields
+    (rx rate/age/seq-gaps), which come from :meth:`status` instead (this method only knows
+    about individual joints)."""
+    now = time.monotonic()
+    with self._lock:
+      last_update = dict(self._joint_last_update_mono)
+      temp_c = dict(self.temp_c)
+      age_ms = dict(self.motor_age_ms)
+      ack = dict(self.ack)
+      miss = dict(self.miss)
+      has_diag = dict(self._has_diag)
+      qs = dict(self.q)
+    joints: dict[str, dict] = {}
+    summary = {"ok": 0, "warn": 0, "dead": 0}
+    for n in self.act_names:
+      lu = last_update.get(n)
+      our_age = (now - lu) if lu is not None else None
+      state = self._joint_health_state(
+        has_diag.get(n, False), our_age, age_ms.get(n), ack.get(n), miss.get(n),
+        temp_c.get(n), temp_limit_c, expected_period_s,
+      )
+      summary[state] += 1
+      joints[n] = dict(
+        state=state,
+        age_s=(round(our_age, 3) if our_age is not None else None),
+        motor_age_ms=age_ms.get(n),
+        ack=ack.get(n),
+        miss=miss.get(n),
+        temp_c=temp_c.get(n),
+        q=qs.get(n),
+        diag=has_diag.get(n, False),
+      )
+    return dict(joints=joints, summary=summary)
 
   # -------------------------------------------------------------------- sign sanity
   def sign_sanity_update(self, t: float, sim_q: dict[str, float], default_q: dict[str, float]) -> None:

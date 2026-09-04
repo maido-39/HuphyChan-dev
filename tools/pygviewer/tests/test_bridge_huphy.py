@@ -140,12 +140,68 @@ def test_ankle_derived_is_separate_from_the_canonical_actuated_joints():
   assert all(v is None for v in msg.q)  # the FAST packet only carried ankle-joint fields
 
 
-def test_diag_and_can_fields_are_ignored_not_hard_failures():
+def test_guard_and_can_fields_are_still_ignored_not_hard_failures():
+  """``guard/*``/``can/*`` (and the flat ``missing`` global) are not per-motor DIAG fields
+  either - genuinely nothing this bridge interprets. Motor health task (2026-09-04): a
+  DIAG_MOTOR_FIELDS key (``temp`` here) is now recognised - see
+  test_diag_motor_fields_are_parsed_into_the_joint_state below - so this test narrows to
+  only the fields that remain untouched."""
   c = _contract()
   bridge = HuphyBridge(c)
-  payload = {"t": 0.0, "left/knee/temp": 42.0, "left/guard/clip_limit": 1.0,
-             "left/can/tx_errors": 0.0, "missing": 0.0}
-  assert bridge.parse_fast(payload) is None  # nothing recognised as a fast joint field
+  payload = {"t": 0.0, "left/guard/clip_limit": 1.0, "left/can/tx_errors": 0.0, "missing": 0.0}
+  assert bridge.parse_fast(payload) is None  # nothing recognised as a fast/diag joint field
+
+
+def test_diag_motor_fields_are_parsed_into_the_joint_state():
+  """Motor health task (2026-09-04): DIAG_MOTOR_FIELDS (temp/age/ack/miss) are now parsed
+  the SAME way FAST fields are - accumulated into the persistent per-joint buffer, emitted
+  on JointState.temp_c/motor_age_ms/ack/miss (never sign/offset-corrected, they are not
+  angles). A negative value (HUPHY's -1 "no data"/"not commanded" sentinel) becomes None,
+  same as every other field on this wire, but WITHOUT the 3-in-a-row warning tracking
+  ``_sentinel`` applies to pos/tgt/vel/tau (an idle motor legitimately reports age=-1/
+  ack=-1 forever - that is not a flapping-connection warning)."""
+  c = _contract()
+  bridge = HuphyBridge(c)
+  payload = {
+    "t": 0.0,
+    "left/knee/temp": 42.0, "left/knee/age": 3.5, "left/knee/ack": 1.0, "left/knee/miss": 0.0,
+  }
+  msg = bridge.parse_fast(payload)
+  assert msg is not None
+  i = msg.joint_names.index("L_knee_joint")
+  assert msg.temp_c[i] == pytest.approx(42.0)
+  assert msg.motor_age_ms[i] == pytest.approx(3.5)
+  assert msg.ack[i] == pytest.approx(1.0)
+  assert msg.miss[i] == pytest.approx(0.0)
+  # every other joint's diag fields stay None - only L_knee_joint's row was in the payload
+  j = msg.joint_names.index("R_knee_joint")
+  assert msg.temp_c[j] is None
+  assert msg.motor_age_ms[j] is None
+
+
+def test_diag_negative_sentinel_becomes_none_without_a_warning():
+  c = _contract()
+  bridge = HuphyBridge(c)
+  msg = bridge.parse_fast({"t": 0.0, "left/knee/age": -1.0, "left/knee/ack": -1.0})
+  assert msg is not None
+  i = msg.joint_names.index("L_knee_joint")
+  assert msg.motor_age_ms[i] is None
+  assert msg.ack[i] is None
+  assert not bridge.warnings, "an idle motor's -1 age/ack is a normal steady state, not a warning"
+
+
+def test_diag_only_packet_still_emits_last_known_fast_values():
+  """A diag-only payload (real HUPHY's split-packet design) must still emit a full
+  JointState - the persistent per-joint buffer means the LAST fast reading rides along
+  with the freshly-updated diag fields, exactly as FAST-only accumulation already worked."""
+  c = _contract()
+  bridge = HuphyBridge(c)
+  bridge.parse_fast({"t": 0.0, "left/knee/pos": 30.0})
+  msg = bridge.parse_fast({"t": 0.1, "left/knee/temp": 41.0})
+  assert msg is not None
+  i = msg.joint_names.index("L_knee_joint")
+  assert msg.temp_c[i] == pytest.approx(41.0)
+  assert msg.q[i] is not None, "the earlier fast pos reading must still be carried"
 
 
 def test_imu_packet_prefers_gravity_over_reconstructing_a_quaternion():

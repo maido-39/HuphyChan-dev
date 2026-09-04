@@ -90,6 +90,21 @@ h3{margin:.2em 0 .4em;font-size:12px;text-transform:uppercase;letter-spacing:.04
 .violation-panel td{padding:3px 6px;border-bottom:1px dashed #422}
 .violation-panel tbody tr[data-joint]:hover{background:#341515;cursor:pointer}
 
+/* Motor health (2026-09-04): a status LIGHT, deliberately unlike the violation panel's red
+   warning-banner look (green/yellow/grey, no pulsing red, no click-to-open overlay). */
+.led{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:2px;vertical-align:middle}
+.led-none{background:#555}
+.led-ok{background:var(--accent);box-shadow:0 0 4px var(--accent)}
+.led-dead{background:var(--bad)}
+.heartbeat-dot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:4px;vertical-align:middle;background:#333}
+.heartbeat-dot.heartbeat-on{background:var(--accent2)}
+.health-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:4px 0}
+.health-cell{padding:4px 2px;text-align:center;border-radius:3px;font-size:10px;font-family:ui-monospace,Menlo,Consolas,monospace;
+  background:#222;border:1px solid var(--border2);cursor:default}
+.health-ok{background:#173a22;border-color:#2a5a38;color:var(--accent)}
+.health-warn{background:#4a3a12;border-color:#6a5620;color:var(--accent2)}
+.health-dead{background:#4a1414;border-color:#6a2222;color:#f88}
+
 /* Joints tab */
 .joint-row{display:grid;grid-template-columns:88px 1fr 62px 52px 20px;align-items:center;gap:6px;padding:3px 0}
 .joint-row input[type=range]{width:100%}
@@ -133,6 +148,7 @@ table.gains input{width:56px;text-align:right}
     <span class="pill" id="pill-base">-</span>
     <span class="pill" id="pill-control">-</span>
     <span id="topbar-badges"></span>
+    <span class="rates" id="topbar-health"></span>
     <span class="rates" id="topbar-rates"></span>
   </div>
   <div class="violation-panel" id="violation-panel"></div>

@@ -83,6 +83,8 @@ const S = {
                           // agree (see panelsFor()).
   violations: null,      // GET /violations, polled only while the panel is open - {records, by_joint, total}
   violationPanelOpen: false,
+  health: null,          // GET /health, polled only while the Telemetry tab is open - {link, joints, summary}
+  lastHealthRxCount: undefined, // drives the topbar heartbeat dot's flicker (renderTopBar)
   policyLoadedName: null,
   policyLayoutDims: null, // {name,func,dim,offset}[] from POST /policy/load's own response -
                           // authoritative for THIS loaded policy (a policy_contract may
@@ -274,6 +276,11 @@ async function pollSlow() {
     // not this poll, so a closed panel costs nothing extra.
     if (S.violationPanelOpen) { S.violations = await api("GET", "/violations?limit=50"); renderViolationPanel(); }
   } catch (e) {}
+  try {
+    // Motor health: the per-joint grid only needs the Telemetry tab's own poll cadence -
+    // the topbar LED/heartbeat react off the WS-delivered Status.telemetry.health SUMMARY.
+    if (S.leftTab === "telemetry") { S.health = await api("GET", "/health"); renderHealthGrid(); }
+  } catch (e) {}
 }
 
 /* ------------------------------------------------------------------ A2: violation panel */
@@ -394,6 +401,31 @@ function renderTopBar() {
     }
   }
   el("topbar-badges").innerHTML = badges.join(" ");
+
+  // Motor health: link LED (grey=never connected, red=stale, green=live) + a heartbeat dot
+  // that flickers on every NEW rx_count since the last render - visually distinct from the
+  // violations badge above (that one is a static red pill+table; this is a status LIGHT,
+  // per item 5 of the task: "A2의 빨간 위반 패널과 시각적으로 구분").
+  const healthEl = el("topbar-health");
+  if (healthEl) {
+    if (!st) {
+      healthEl.innerHTML = "";
+    } else {
+      const tel = st.telemetry || {};
+      const health = tel.health || {};
+      const link = health.link || {};
+      const summary = health.summary || {};
+      const ledClass = !link.connected ? "led-none" : (tel.stale ? "led-dead" : "led-ok");
+      const beat = (tel.rx_count !== undefined && tel.rx_count !== S.lastHealthRxCount);
+      S.lastHealthRxCount = tel.rx_count;
+      const beatClass = beat ? "heartbeat-on" : "heartbeat-off";
+      const summaryTxt = link.connected
+        ? `motors ${summary.ok || 0} ok / ${summary.warn || 0} warn / ${summary.dead || 0} dead`
+        : "no real motor connected";
+      healthEl.innerHTML =
+        `<span class="led ${ledClass}"></span><span class="heartbeat-dot ${beatClass}"></span> ${summaryTxt}`;
+    }
+  }
 
   if (st) {
     const tel = st.telemetry || {};
@@ -561,6 +593,10 @@ function renderTabTelemetry(body) {
       <div class="row"><label>seq gaps</label><span class="mono" id="tel-gaps">-</span></div>
       <div class="row"><label>wrap/range/contract errs</label><span class="mono" id="tel-errs">-</span></div>
       <hr class="hr">
+      <h3>Motor health</h3>
+      <div class="row"><label>link</label><span class="mono" id="health-link">-</span></div>
+      <div id="health-grid" class="health-grid"></div>
+      <hr class="hr">
       <h3>Record</h3>
       <div class="row"><button id="btn-rec-start" style="flex:1">start</button>
         <button id="btn-rec-stop" style="flex:1">stop</button></div>
@@ -595,6 +631,42 @@ function renderTabTelemetry(body) {
     ? `${fmt(tel.clock_offset_ms, 1)}ms +/- ${fmt(tel.clock_jitter_ms, 1)}ms ${tel.jitter_grey ? "(jitter high)" : ""}` : "-";
   el("tel-gaps").textContent = tel.seq_gaps !== undefined ? tel.seq_gaps : "-";
   el("tel-errs").textContent = `wrap ${tel.wrap_events || 0} / range ${Object.keys(tel.range_violations || {}).length} / contract ${tel.contract_mismatches || 0}`;
+  renderHealthGrid();
+}
+
+/* ---------------------------------------------------------------- motor health grid */
+function renderHealthGrid() {
+  const linkEl = el("health-link");
+  const gridEl = el("health-grid");
+  if (!linkEl || !gridEl) return;
+  const h = S.health;
+  if (!h) {
+    linkEl.textContent = "-";
+    gridEl.innerHTML = `<div class="small">waiting for /health...</div>`;
+    return;
+  }
+  const link = h.link || {};
+  linkEl.textContent = link.connected
+    ? `connected - rx ${fmt(link.rx_hz, 1)}/s, age ${fmt(link.age_s, 2)}s, seq_gaps ${link.seq_gaps || 0}`
+    : "no real telemetry ever received";
+  const joints = h.joints || {};
+  const names = S.contract ? S.contract.action_joint_names : Object.keys(joints);
+  gridEl.innerHTML = names.map((n) => {
+    const j = joints[n] || { state: "dead", diag: false };
+    const bits = [];
+    bits.push(`age ${j.age_s === null || j.age_s === undefined ? "never" : fmt(j.age_s, 2) + "s"}`);
+    if (j.diag) {
+      bits.push(`motor_age ${j.motor_age_ms === null || j.motor_age_ms === undefined ? "-" : fmt(j.motor_age_ms, 0) + "ms"}`);
+      bits.push(`ack ${j.ack === null || j.ack === undefined ? "-" : j.ack}`);
+      bits.push(`miss ${j.miss === null || j.miss === undefined ? "-" : j.miss}`);
+      bits.push(`temp ${j.temp_c === null || j.temp_c === undefined ? "-" : fmt(j.temp_c, 1) + "C"}`);
+    } else {
+      bits.push("no diag data (reception recency only)");
+    }
+    bits.push(`q ${j.q === null || j.q === undefined ? "-" : fmt(displayVal(j.q), 1) + unitSuffix()}`);
+    const title = `${n}: ${j.state}\n${bits.join("\n")}`;
+    return `<div class="health-cell health-${j.state}" title="${title}">${n.replace(/_joint$/, "")}</div>`;
+  }).join("");
 }
 
 function renderTabScript(body) {

@@ -99,10 +99,19 @@ def main() -> int:
     bus.clear_fault([mid])   # a latched stall fault from a previous run blocks torque
     bus.enable_torque([mid])
   n = 0
+  # Motor health task (2026-09-04): send the SAME DIAG_MOTOR_FIELDS keys HUPHY's own
+  # telemetry/snapshot.py build_diag() would (age/ack/miss - temp was already sent above),
+  # derived from `MotorState.stamp`/`is_valid`/`age()` (motors/base.py) that this bus
+  # already maintains - no new CAN traffic, just reading what refresh_states/collect above
+  # already populated. `miss_count` is this script's own consecutive-no-response counter
+  # (HUPHY's own `miss` is the same concept, kept per-Leg there; here there is exactly one
+  # motor so one counter suffices) - reset to 0 the instant a response actually lands.
+  miss_count = 0
   try:
     while not stop["flag"] and (a.seconds <= 0 or time.perf_counter() - t0 < a.seconds):
       tick = time.perf_counter()
       t = tick - t0
+      prev_stamp = bus.state(mid).stamp  # before this tick's request, to detect a fresh reply
       if active:
         osc = max(-a.rom, min(a.rom, a.sine[0] * math.sin(2 * math.pi * a.sine[1] * t)))
         want = q0 + osc          # centered on the startup pose; --rom limits the swing, not the absolute angle
@@ -115,17 +124,28 @@ def main() -> int:
       raw = st.position_deg                 # command/error stay in RAW space (firmware convention)
       # wrap ONLY the number we DISPLAY/emit; never feed a wrapped value back into a command.
       pos = ((raw + 180.0) % 360.0) - 180.0
+      now_mono = time.perf_counter()
+      # `st.stamp` only advances when a REAL response frame lands (MotorState's own
+      # docstring) - unchanged since `prev_stamp` means this tick's request/query timed out
+      # with no reply, exactly HUPHY's own "ack" definition ("MIT 모드는 명령을 받으면 반드시
+      # 상태 프레임으로 답하므로, 안 오면 그 모터가 명령을 처리하지 않은 것임").
+      got_reply = st.stamp > prev_stamp
+      ack = 1.0 if got_reply else 0.0
+      miss_count = 0 if got_reply else miss_count + 1
+      age_ms = (st.age(now_mono) * 1e3) if st.is_valid else -1.0
       snap = {
         "t": round(t, 4), "loop_dt": round((time.perf_counter() - tick) * 1e3, 3),
         f"{LIMB}/{JOINT}/pos": pos, f"{LIMB}/{JOINT}/tgt": tgt if active else pos,
         f"{LIMB}/{JOINT}/err": (tgt - raw) if active else 0.0,
         f"{LIMB}/{JOINT}/vel": st.velocity_deg_s, f"{LIMB}/{JOINT}/tau": st.torque_nm,
         f"{LIMB}/{JOINT}/temp": st.temp_c,
+        f"{LIMB}/{JOINT}/age": round(age_ms, 2), f"{LIMB}/{JOINT}/ack": ack,
+        f"{LIMB}/{JOINT}/miss": float(miss_count),
       }
       sink.send(snap)
       n += 1
       if n % int(a.hz) == 0:
-        print(f"[bench] t={t:6.1f}s pos={pos:8.2f} tgt={tgt:8.2f} vel={st.velocity_deg_s:8.2f} tau={st.torque_nm:6.2f} T={st.temp_c:4.1f}", flush=True)
+        print(f"[bench] t={t:6.1f}s pos={pos:8.2f} tgt={tgt:8.2f} vel={st.velocity_deg_s:8.2f} tau={st.torque_nm:6.2f} T={st.temp_c:4.1f} age={age_ms:6.1f}ms ack={ack:.0f} miss={miss_count}", flush=True)
       rest = dt - (time.perf_counter() - tick)
       if rest > 0:
         time.sleep(rest)

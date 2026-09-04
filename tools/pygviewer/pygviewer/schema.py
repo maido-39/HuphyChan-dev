@@ -71,6 +71,24 @@ class JointState(Header):
   )
   target: list[float | None] | None = None
   temp_c: list[float | None] | None = None
+  motor_age_ms: list[float | None] | None = Field(
+    default=None,
+    description="Motor health (2026-09-04): ms since this motor's last CAN response, per "
+    "the robot's OWN report (HUPHY DIAG 'age' - null/never sent means no diagnostic data "
+    "for this joint at all, NOT 'the motor is fine'). All-optional, all-default-None - a "
+    "sender that never carries this field (today's bench_telemetry.py) is unaffected.",
+  )
+  ack: list[float | None] | None = Field(
+    default=None,
+    description="Motor health: 1.0 responded / 0.0 no response / null not commanded this "
+    "cycle, per motor (HUPHY DIAG 'ack' - HUPHY's own note: this is the single most "
+    "reliable per-cycle signal that a motor is actually listening).",
+  )
+  miss: list[float | None] | None = Field(
+    default=None,
+    description="Motor health: consecutive no-response cycle count, per motor (HUPHY DIAG "
+    "'miss').",
+  )
   gains: dict[str, Any] | None = Field(
     default=None, description="{joint: {kp, kd, tau_ff, kp_enc_range}} when the source knows them"
   )

@@ -612,6 +612,33 @@ def build_app(core, freshness: dict) -> FastAPI:
     core.violations.clear()
     return {"ok": True}
 
+  @app.get(
+    "/health",
+    summary="Motor health (2026-09-04): is the real robot actually responding, per motor",
+  )
+  def get_health():
+    """``link`` mirrors the same rx-rate/age/seq-gap numbers ``GET /status``'s
+    ``telemetry`` already carries (this is not a second source of truth, just a
+    convenience so a caller watching only motor health does not also have to poll
+    ``/status``). ``joints`` is per-actuated-joint: ``state`` (ok/warn/dead - see
+    ``telemetry.RealState.health``), this process's own reception age, the robot's
+    self-reported ``motor_age_ms``/``ack``/``miss``/``temp_c`` (``None`` when this joint has
+    never carried a diag field at all - ``diag`` says so explicitly, never silently treated
+    as healthy), and the last position received."""
+    rs = core.real.status()
+    h = core.real.health(expected_period_s=core.dt * core.decimation)
+    return {
+      "link": dict(
+        connected=bool(rs["rx_count"]),
+        rx_hz=rs["rx_hz"],
+        age_s=rs["age_s"],
+        seq_gaps=rs["seq_gaps"],
+        last_seq=core.real.last_seq,
+      ),
+      "joints": h["joints"],
+      "summary": h["summary"],
+    }
+
   def _real_joint_state() -> JointState | None:
     """UI v2: the RECEIVED (real) side of the same canonical JointState, for the dashboard's
     plot overlay - only ever sent when something has actually arrived over ``/ws/in`` (a

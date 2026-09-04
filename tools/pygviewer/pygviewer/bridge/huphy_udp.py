@@ -48,6 +48,16 @@ ANKLE_JOINT_FIELDS = ("pos", "tgt", "err", "vel")
 KNOWN_MOTORS = ("hip_pitch", "hip_roll", "hip_yaw", "knee", "ankle_a", "ankle_b")
 KNOWN_ANKLE_JOINTS = ("ankle_pitch", "ankle_roll")
 
+# Motor health task (2026-09-04): HUPHY's own DIAG fields (telemetry/snapshot.py
+# DIAG_MOTOR_FIELDS - temp/age/ack/miss) - split into their own, slower UDP packet on real
+# HUPHY (module docstring), but a simple single-packet sender (today's bench_telemetry.py)
+# may fold them into the SAME payload as the FAST fields. Both shapes work unchanged here:
+# they are handled in the SAME per-field dispatch loop as FAST_MOTOR_FIELDS below, so a
+# diag-only packet (real HUPHY) or a combined one (bench) both set `touched=True` and
+# refresh whichever of temp/age/ack/miss it carries in the SAME persistent per-joint buffer
+# FAST already accumulates into - see the class docstring.
+DIAG_MOTOR_FIELDS = ("temp", "age", "ack", "miss")
+
 
 class JointMap:
   """The explicit limb/motor -> sim-joint table.  No fallback: an unlisted pair raises."""
@@ -101,9 +111,12 @@ def huphy_torque_to_sim(nm: float, sign: int, travel_sign: float) -> float:
 
 
 class HuphyBridge:
-  """Stateful packet parser: accumulates FAST fields across packets into a persistent
-  per-joint buffer (HUPHY sends one packet per limb, and fast/diag/imu are split further),
-  and emits a full 12-joint ``JointState`` whenever a FAST packet updates anything."""
+  """Stateful packet parser: accumulates FAST fields AND DIAG motor-health fields (temp/age/
+  ack/miss, 2026-09-04) across packets into a persistent per-joint buffer (HUPHY sends one
+  packet per limb, and fast/diag/imu are split further), and emits a full 12-joint
+  ``JointState`` whenever a FAST-or-DIAG packet updates anything - a diag-only packet still
+  triggers an emission, carrying the LAST KNOWN pos/tgt/vel/tau for a joint alongside its
+  freshly-updated temp/age/ack/miss, same accumulation spirit as FAST always had."""
 
   def __init__(self, contract, jmap: JointMap | None = None):
     self.jmap = jmap or JointMap()
@@ -111,7 +124,10 @@ class HuphyBridge:
     self.travel_sign = {
       n: float(contract.raw["joint_contract"][n]["travel_sign"]) for n in self.act_names
     }
-    self._buf = {n: dict(q=None, target=None, qd=None, tau=None) for n in self.act_names}
+    self._buf = {
+      n: dict(q=None, target=None, qd=None, tau=None, temp=None, age=None, ack=None, miss=None)
+      for n in self.act_names
+    }
     self._ankle_buf: dict[str, dict[str, float]] = {}
     self._seq = 0
     self._minus_one_streak: dict[str, int] = {}
@@ -149,8 +165,23 @@ class HuphyBridge:
         continue
       limb, motor, field = parts
       if motor in KNOWN_MOTORS:
-        if field not in FAST_MOTOR_FIELDS or field == "err":
+        if field == "err":
           continue  # err is target-minus-pos, derivable; not carried on the canonical wire
+        if field in DIAG_MOTOR_FIELDS:
+          row = self.jmap.sim_joint(limb, motor)  # KeyError propagates: hard failure, not a guess
+          sim_joint = row["sim_joint"]
+          touched = True
+          # Motor health (2026-09-04): temp/age/ack/miss are NEVER travel-sign/offset
+          # corrected (they are not joint ANGLES) and never routed through `_sentinel`'s
+          # 3-in-a-row WARNING tracking - unlike a missing pos/tgt sample, "age=-1" (never
+          # responded) or "ack=-1" (not commanded) are legitimate, common steady states for
+          # an idle/unconnected motor, not evidence of a flapping connection worth a warning
+          # log line every time. Just the uniform "-1 (or any negative) means null" wire
+          # convention (schema.py's rule), silently.
+          self._buf[sim_joint][field] = None if value is None or value < 0 else float(value)
+          continue
+        if field not in FAST_MOTOR_FIELDS:
+          continue  # guard/*, can/* etc - genuinely not interpreted here
         row = self.jmap.sim_joint(limb, motor)  # KeyError propagates: hard failure, not a guess
         sim_joint = row["sim_joint"]
         touched = True
@@ -195,6 +226,10 @@ class HuphyBridge:
       qd=[self._buf[n]["qd"] for n in self.act_names],
       tau_est=[self._buf[n]["tau"] for n in self.act_names],
       target=[self._buf[n]["target"] for n in self.act_names],
+      temp_c=[self._buf[n]["temp"] for n in self.act_names],
+      motor_age_ms=[self._buf[n]["age"] for n in self.act_names],
+      ack=[self._buf[n]["ack"] for n in self.act_names],
+      miss=[self._buf[n]["miss"] for n in self.act_names],
       ankle_derived=({s: dict(v) for s, v in self._ankle_buf.items() if v} or None),
     )
 

@@ -472,3 +472,51 @@ q 불변 확인, 같은-다리 결합은 의도적으로 별도 취급).
   겹침은 코드 리뷰로만 검증, 다른 UI 세션과 동일한 한계). (b) send측 gain(kp/kd) 클램프는
   로그에 안 걸림(스코프를 위치 clamp/거부로 한정 — 사용자 요구가 ROM/토크였고 게인 클램프는
   성격이 다름). (c) `sim_actuator` 레이트리밋 100ms는 하드코딩값, 조정 가능하게 만들진 않음.
+
+- 09-04 — **모터 Health Check: 연결 여부 실시간 인디케이터** (A2 바로 다음, 별도 커밋).
+  사용자 요구: "웹 뷰어에서 실제 모터와 연결됐는지가 투명하지 않다. 모터 Health Check를
+  실시간으로 보고 싶고, 데이터가 들어오는지 인디케이터로 보고 싶다". 조사 결과: HUPHY는
+  모터별 진단(`temp/age/ack/miss`, `telemetry/snapshot.py DIAG_MOTOR_FIELDS` — `age`=마지막
+  CAN 응답 후 ms(-1=한번도 없음), `ack`=1응답/0씹힘/-1미명령, `miss`=연속무응답, HUPHY 자신의
+  주석이 "ack가 핵심"이라 명시)를 이미 정의하지만 **우리 브리지가 버리고 있었음**
+  (`bridge/huphy_udp.py`의 `parse_fast`가 `FAST_MOTOR_FIELDS`(pos/tgt/vel/tau)만 받아들이고
+  DIAG는 명시적으로 무시 — 주석 "diag/CAN fields are ignored, not hard failures"). 벤치
+  송신기(`deploy/bench/bench_telemetry.py`)도 pos/tgt/err/vel/tau/temp만 보내고 있었음.
+  **구현**: (1) `HuphyBridge`가 DIAG_MOTOR_FIELDS를 FAST와 같은 영속 버퍼에 누적하도록 확장
+  (부호/영점 보정 없음 — 각도가 아님; `-1`(음수)은 `_sentinel`의 3연속 경고 없이 조용히
+  `null`로 — 미명령 모터가 영구적으로 age=-1을 보내는 건 정상 상태지 경고감이 아님). DIAG만
+  들어온 패킷도 이전 FAST 값을 들고 JointState를 emit(실물 HUPHY의 분리패킷 설계와 호환).
+  (2) `JointState`에 `motor_age_ms/ack/miss` 3개 선택필드 추가(전부 기본 None, 하위호환 —
+  `temp_c`는 이미 있었으나 이번까지 아무도 채우지 않고 있었음). (3) `RealState`에 관절별
+  진단 저장 + **관절별 자체 수신시각**(`_joint_last_update_mono` — 기존엔 프로세스 전체
+  하나의 수신시각만 있어 "한 관절만 조용해짐"을 못 잡았음) + 판정기(`health()`): 진단이
+  한 번이라도 온 관절만 ack/miss/age_ms 기반 판정, **진단이 아예 없는 송신자(현재 벤치)는
+  우리 수신 신선도(<0.2s ok, 0.2~1s warn, >1s dead)만으로 판정**하고 `diag:false`로
+  명시(정보 없음을 숨기지 않음). "ack=0 연속"은 HUPHY의 `miss` 카운터로 등급화(1회
+  놓침=warn, `miss>=5`=dead — 이 임계값은 브리핑에 숫자로 안 박혀 있어 코더가 정한 값,
+  §9에 명시). (4) `GET /health` 신설(`{link, joints, summary}`), `Status.telemetry.health`는
+  요약만(ok/warn/dead 개수+링크상태). (5) 대시보드: 상단바에 링크 LED(회색=한번도 연결
+  안됨/초록=수신중/빨강=stale)+하트비트 점(패킷마다 rx_count 변화로 깜빡임, A2의 빨간 위반
+  배지와 시각적으로 구분되게 색·모양 다르게), Telemetry 탭에 관절별 12칸 상태그리드
+  (초록/노랑/빨강, hover로 age/motor_age/ack/miss/temp/마지막 q). (6) 벤치 송신기 **편집만
+  (실행 안 함)**: `bus.state(mid).stamp`가 응답때만 갱신되는 것을 이용해 매 틱
+  prev_stamp와 비교해 `ack`(응답왔나)·`miss`(연속누적, 로컬카운터)·`age`(`st.age(now)*1000`,
+  `is_valid` 아니면 -1)를 HUPHY와 같은 키로 추가 전송 — 새 CAN 트래픽 없음, 기존
+  refresh_states/collect 결과에서 파생만. **라이브 확인**(재기동 후, 현재 실행 중인 구버전
+  벤치 프로세스는 그대로 두고 — 이 코더가 직접 벤치를 끊지 않음, 지시대로): `GET /health`가
+  링크 `connected:true, rx_hz≈49.7`, `L_knee_joint: state=ok, diag:false`(현재 벤치가 구버전
+  스크립트라 diag 필드가 아직 안 옴 — 편집만 하고 재가동은 안 했으므로 예상된 결과), **나머지
+  11관절은 전부 `state=dead, age_s=null`**(한 번도 연결된 적 없음, 올바른 판정). summary
+  `{ok:1, warn:0, dead:11}`. dead 전이 자체는 진짜 단선 대신 순수 `RealState` 유닛테스트에서
+  가짜 시계로 1.5초를 "흘려" 확인(벤치를 실제로 끊지 않음). **테스트**
+  `tests/test_health.py` 11건(ok/dead-by-age(가짜시계)/미연결-dead/ack=0-warn/miss1-warn/
+  miss>=5-dead/diag있는데 age null=dead/diag전혀없음=수신신선도만+diag:false/`/health`
+  스키마/`Status.telemetry.health`가 요약만/벤치형 단일관절 라이브 회귀). 기존
+  `test_bridge_huphy.py`의 "diag는 전부 무시" 전제 테스트 1건을 이번 설계 변경에 맞게
+  분리(guard/can은 여전히 무시, DIAG_MOTOR_FIELDS는 이제 파싱됨 — 신규 3건으로 교체).
+  전체 스위트 376→390, 무실패. **미결**: (a) `source_addr`(송신자 IP) 필드는 구현 안 함
+  (`RealState`가 UDP 주소를 모름 — 스레딩하려면 `HuphyUdpReceiver`까지 관통해야 해서 이번
+  범위 밖). (b) 벤치가 실제로 새 진단 필드를 보내는 걸 라이브로 보려면 사용자가 벤치
+  스크립트를 재시작해야 함(이 코더는 실물 모터 구동 스크립트를 직접 실행하지 않음). (c)
+  `HEALTH_DEAD_MISS=5`/온도임계 60°C 기본값은 코더 판단(브리핑에 숫자 없음), 실측 후 조정
+  필요할 수 있음.

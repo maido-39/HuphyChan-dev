@@ -1060,6 +1060,13 @@ class SimCore:
     # A2: summary only (total/by_joint/last) - the full ring buffer is GET /violations, not
     # something republished into every 50 Hz Status frame.
     tel["violations"] = self.violations.summary()
+    # Motor health task (2026-09-04): summary only (ok/warn/dead counts + link state) - the
+    # per-joint grid with age/ack/miss/temp is GET /health, not republished here every tick.
+    health = self.real.health(expected_period_s=self.dt * self.decimation)
+    tel["health"] = dict(
+      summary=health["summary"],
+      link=dict(connected=bool(self.real.rx_count), rx_hz=tel.get("rx_hz"), age_s=tel.get("age_s")),
+    )
     return tel
 
   def _publish(self) -> None:

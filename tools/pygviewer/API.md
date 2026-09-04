@@ -36,7 +36,7 @@ sim and, separately, on the robot produces two recordings `compare.py` can align
 
 | method | path | body | returns |
 |---|---|---|---|
-| GET | `/status` | - | `Status`: variant, mode, sim time, rates (`phys_hz`, `ctrl_hz`, `drops`), base state, **`string`** (base mode `string` only: `{z_set, length, ten_length, taut, tension_N}`), contract freshness, **`telemetry`** (P3: rx rate/age/seq-gaps/clock-offset/jitter/contract-mismatches/wrap-events/range-violations/bridge-errors/sign-sanity/replay-progress, plus A2's `violations`: `{total, by_joint, last}` SUMMARY only - see `GET /violations` for the full record list), warnings, RSS |
+| GET | `/status` | - | `Status`: variant, mode, sim time, rates (`phys_hz`, `ctrl_hz`, `drops`), base state, **`string`** (base mode `string` only: `{z_set, length, ten_length, taut, tension_N}`), contract freshness, **`telemetry`** (P3: rx rate/age/seq-gaps/clock-offset/jitter/contract-mismatches/wrap-events/range-violations/bridge-errors/sign-sanity/replay-progress, plus A2's `violations`: `{total, by_joint, last}` SUMMARY only - see `GET /violations` for the full record list, and the motor health task's `health`: `{summary: {ok,warn,dead}, link: {connected,rx_hz,age_s}}` SUMMARY only - see `GET /health` for the per-joint grid), warnings, RSS |
 | GET | `/contract` | - | the whole baked model contract + its freshness verdict |
 | GET | `/snapshot` | - | the raw simulator snapshot: every joint's q/qd, actuated tau/target, base pose, IMU sensors, loop closure |
 | GET | `/joints` | - | one `JointState` (canonical actuated set) |
@@ -64,6 +64,7 @@ sim and, separately, on the robot produces two recordings `compare.py` can align
 | GET | `/schema/deferred` | - | JSON schemas of the request models whose endpoints are still 501 |
 | GET | **`/violations`** | query: `limit` (default 100), `side` (`recv`\|`recv_torque`\|`sim_actuator`\|`send`) | (A2, 2026-09-04) `{records, by_joint, total}` - the shared ROM/torque violation ring buffer (`pygviewer/violations.py`, max 200 records across every side). `records[i]` is `{seq, t_mono, age_s, side, joint, value, limit_lo, limit_hi, over_by, src, ...}` - `age_s` is computed at request time; a rejected NaN/inf send has `value: null` and a `rejected` key instead of `over_by`. `by_joint` is `{joint: {side: count, ..., total: n}}` and survives eviction from the ring (cumulative, never thinned) |
 | POST | **`/violations/clear`** | - | clears the ring buffer AND every cumulative count (`seq` itself never resets) |
+| GET | **`/health`** | - | (motor health task, 2026-09-04) `{link, joints, summary}` - "is the real robot actually responding", per motor. `link` = `{connected, rx_hz, age_s, seq_gaps, last_seq}` (same numbers `GET /status`'s `telemetry` already carries). `joints` = `{joint_name: {state, age_s, motor_age_ms, ack, miss, temp_c, q, diag}}` - `state` is `ok`/`warn`/`dead` (`telemetry.RealState.health`); `age_s` is THIS PROCESS's own reception recency for that specific joint (never `null` once anything has arrived for it); `motor_age_ms`/`ack`/`miss`/`temp_c` are the ROBOT's own self-reported diagnostics (HUPHY DIAG fields) and stay `null` when `diag: false` - a sender that never carries these (today's bench) is judged on reception recency alone, never silently scored as if a missing diag value meant something. `summary` = `{ok, warn, dead}` counts across every actuated joint |
 | POST | **`/tx/config`** | `{"host":"127.0.0.1","port":9872,"enable":["L_knee_joint"],"kp_max":5.0,"kd_max":0.5,"ttl_ms":250}` | (UI v2 TX, docs/121 section 10 / docs/123, wired 2026-09-04) (re)builds the real `bridge.tx_client.TxClient` that sends this - `enable` becomes that client's own hard joint allow-list (anything else is never sendable, not just filtered). 400 on an un-actuated joint name; 409 while armed (`POST /tx/disarm` first, so the wire format never changes mid-stream) |
 | POST | **`/tx/enable`** | `{"on": true}` | stage 1: turns the TX panel itself on; requires a prior `/tx/config` (409 otherwise). `{"on": false}` also disarms |
 | POST | **`/tx/arm`** | - | stage 2: refused (409) unless stage 1 is enabled AND the sim is in `manual` mode - policy output must never be transmittable |
@@ -121,7 +122,13 @@ q[]             rad
 qd[]            rad/s, or null
 tau_est[]       N*m; from hardware this is a CURRENT ESTIMATE
 target[]        rad, or null
-temp_c[]        or null
+temp_c[]        C, or null (motor winding temperature - HUPHY DIAG "temp")
+motor_age_ms[]  ms since this motor's own last CAN response, or null (HUPHY DIAG "age";
+                motor health task, 2026-09-04 - null means no diag data for this joint at
+                all, NOT "the motor is fine")
+ack[]           1.0 responded / 0.0 no response / null not commanded, this cycle (HUPHY
+                DIAG "ack" - HUPHY's own note: the single most reliable per-cycle signal)
+miss[]          consecutive no-response cycle count, or null (HUPHY DIAG "miss")
 gains           {joint: {kp, kd, tau_ff, kp_enc_range}} when the source knows them
 ankle_derived   {"L": {"pitch": rad, "roll": rad}, "R": ...}   AB only
 ```
@@ -144,6 +151,15 @@ PD-tracked, see the crank note above) and already clips its PD target to the tig
 event, surfaced (never in `RealState`/`range_violations` itself) as
 `Status.telemetry.replay_clamp.{clamped_now, clamp_count}`, present only for joints that have
 actually been clamped at least once.
+
+**Motor health (2026-09-04)**: `temp_c`/`motor_age_ms`/`ack`/`miss` are HUPHY's own DIAG
+fields (`telemetry/snapshot.py DIAG_MOTOR_FIELDS`), parsed by `bridge/huphy_udp.py`'s
+`HuphyBridge` the same way FAST fields are - accumulated into a persistent per-joint buffer,
+never sign/offset-corrected (they are not joint angles), and a negative wire value (HUPHY's
+"-1 = no data"/"not commanded" sentinel) becomes `null` WITHOUT the 3-in-a-row warning
+`_sentinel` applies to pos/tgt/vel/tau (an idle, uncommanded motor legitimately reports
+age=-1/ack=-1 forever - not a flapping-connection warning). See `GET /health` below for the
+derived ok/warn/dead verdict.
 
 ### `ImuState` (implemented, inbound over `/ws/in` and the HUPHY bridge)
 
