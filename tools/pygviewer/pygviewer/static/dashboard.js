@@ -56,7 +56,11 @@ const S = {
   presets: null,        // GET /presets, polled
   policyList: [],       // GET /policy/list, polled while Policy tab open
   latestReal: { t: null, q: {}, qd: {}, tau: {}, target: {} },
-  ring: [],             // [{t, q:{}, target:{}, tau:{}, qd:{}, realQ:{}, realTau:{}, realQd:{}, realAgeS}]
+  latestTxSent: {},      // {joint_name: rad} - from polling /tx/status().last_sent_target
+  ring: [],             // [{t, q:{}, target:{}, tau:{}, qd:{}, realQ:{}, realTau:{}, realQd:{}, realAgeS, sentTarget:{}}]
+  txStatus: null,        // GET /tx/status, polled
+  txEnabled: false,      // stage-1 "activate" toggle - purely client-side, arms nothing itself
+  txDeadmanTimer: null,
   leftTab: "model",
   rightTab: "control",
   controlMode: "joints", // "joints" | "policy" - mutually exclusive sub-view of the Control tab
@@ -165,6 +169,7 @@ function onJointState(msg) {
     t, q, qd, tau, target,
     realQ: S.latestReal.q, realQd: S.latestReal.qd, realTau: S.latestReal.tau, realTarget: S.latestReal.target,
     realAgeS,
+    sentTarget: S.latestTxSent, // latest-only, from the 250ms /tx/status poll - see pollSlow
   });
   const cutoff = t - RING_MAX_S;
   while (S.ring.length && S.ring[0].t < cutoff) S.ring.shift();
@@ -173,6 +178,10 @@ function onJointState(msg) {
 /* ------------------------------------------------------------------ slow poll */
 async function pollSlow() {
   try { S.snapshot = await api("GET", "/snapshot"); } catch (e) { /* transient */ }
+  try {
+    S.txStatus = await api("GET", "/tx/status");
+    S.latestTxSent = S.txStatus.last_sent_target || {};
+  } catch (e) { /* transient */ }
   try {
     if (S.rightTab === "gains") S.gains = await api("GET", "/gains");
   } catch (e) {}
@@ -398,6 +407,8 @@ function renderTabTelemetry(body) {
       <div class="row"><button id="btn-replay-load" style="flex:1">load</button>
         <button id="btn-replay-go" style="flex:1">mode: file_replay</button></div>
       <div class="row"><label>speed</label><input id="replay-speed" type="number" value="1.0" step="0.1" style="width:70px"></div>
+      <hr class="hr">
+      ${renderTxSectionHtml()}
     `;
     body.dataset.built = "1";
     el("btn-rec-start").onclick = async () => { const r = await apiOk("POST", "/record/start", {}); if (r) el("rec-status").textContent = "recording -> " + r.path; };
@@ -405,7 +416,9 @@ function renderTabTelemetry(body) {
     el("btn-replay-load").onclick = async () => { const r = await apiOk("POST", "/replay/load", { path: el("replay-path").value }); if (r) toast(`loaded ${r.n_rows} rows, ${fmt(r.duration_s, 1)}s`); };
     el("btn-replay-go").onclick = () => apiOk("POST", "/mode", { mode: "file_replay" });
     el("replay-speed").addEventListener("change", (ev) => apiOk("POST", "/replay/speed", { speed: parseFloat(ev.target.value) || 1.0 }));
+    wireTxSection();
   }
+  renderTxStatusLive();
   const banner = el("tel-banner");
   if (st && st.side_mapping_verified === false) {
     banner.innerHTML = `<div class="warnbanner">side mapping UNVERIFIED (protocol steps 2/3 not run on hardware yet) - see docs/121 section 5</div>`;
@@ -970,7 +983,10 @@ function updateImu3D() {
 
 /* ================================================================== Plot grid (item 6) */
 const ROW_META = {
-  pos: { title: "position [rad] (solid=q, dashed=target)", labels: ["L q", "R q", "L target", "R target", "L real", "R real"] },
+  pos: {
+    title: "position [rad] (solid=q, dashed=target, dotted=sent-to-hardware)",
+    labels: ["L q", "R q", "L target", "R target", "L real", "R real", "L sent", "R sent"],
+  },
   tau: { title: "torque [N·m]", labels: ["L tau", "R tau", "L real", "R real"] },
   qd: { title: "velocity [rad/s]", labels: ["L qd", "R qd"] },
 };
@@ -1010,14 +1026,16 @@ function destroyPlotInstances() {
 
 function makeSeriesFor(row) {
   const base = [{}];
-  ROW_META[row].labels.forEach((label, i) => {
+  ROW_META[row].labels.forEach((label) => {
     const isR = label.startsWith("R");
     const isTarget = label.includes("target");
     const isReal = label.includes("real");
+    const isSent = label.includes("sent"); // TX item 3: what was actually sent to hardware
     let stroke = isR ? "#e08a3c" : "#5b9bd5";
-    const s = { label, stroke, width: isReal ? 1 : 1.5 };
+    const s = { label, stroke, width: isReal || isSent ? 1 : 1.5 };
     if (isTarget) s.dash = [6, 4];
     if (isReal) { s.stroke = isR ? "#e08a3c88" : "#5b9bd588"; s.width = 1; }
+    if (isSent) { s.stroke = isR ? "#c060e0" : "#60e0c0"; s.dash = [1, 3]; s.width = 1.5; }
     base.push(s);
   });
   return base;
@@ -1084,7 +1102,12 @@ function seriesArraysFor(row, kind) {
   const rows = S.ring.filter((r) => r.t >= cutoff);
   const xs = rows.map((r) => r.t - now);
   const get = (field, name) => rows.map((r) => (r[field] && r[field][name] !== undefined && r[field][name] !== null) ? r[field][name] : null);
-  if (row === "pos") return [xs, get("q", Lname), get("q", Rname), get("target", Lname), get("target", Rname), get("realQ", Lname), get("realQ", Rname)];
+  if (row === "pos") {
+    return [
+      xs, get("q", Lname), get("q", Rname), get("target", Lname), get("target", Rname),
+      get("realQ", Lname), get("realQ", Rname), get("sentTarget", Lname), get("sentTarget", Rname),
+    ];
+  }
   if (row === "tau") return [xs, get("tau", Lname), get("tau", Rname), get("realTau", Lname), get("realTau", Rname)];
   return [xs, get("qd", Lname), get("qd", Rname)];
 }
@@ -1126,6 +1149,131 @@ window.addEventListener("resize", () => {
   clearTimeout(window.__resizeT);
   window.__resizeT = setTimeout(buildPlotGrid, 200);
 });
+
+/* ================================================================== TX (viewer->hardware) STUB
+ * docs/121 section 10 TX item / docs/123. Backed by pygviewer/tx.py's TxState - a real safety
+ * state machine (arm/disarm/heartbeat/per-motor-enable) that transmits NOTHING anywhere yet
+ * (no bridge/tx_client.py exists in this tree - checked before writing this). "Enable TX
+ * controls" below is a stage-1, CLIENT-ONLY toggle (arms nothing by itself); "ARM" is the
+ * real POST /tx/arm call, refused (409) unless the sim is in `manual` mode - never while a
+ * policy is driving. Once armed, holding the dead-man key (Space, only when not typing in a
+ * text field) sends a heartbeat + the current joint targets ~20/s; releasing it stops
+ * immediately, client-side - the server's own DEADMAN_TIMEOUT_S=0.3s is the backstop. */
+function renderTxSectionHtml() {
+  const c = S.contract;
+  const motorRows = c.action_joint_names.map((n) => `
+    <label style="display:inline-flex;align-items:center;gap:3px;margin:2px 6px 2px 0;font-size:11px">
+      <input type="checkbox" class="tx-motor-cb" data-n="${n}"> ${n.replace("_joint", "")}
+    </label>`).join("");
+  return `
+    <h3>TX (hardware transmit) - STUB, docs/123</h3>
+    <div class="small" style="margin-bottom:4px">No bridge is connected yet - arming and
+      sending only exercise the safety state machine (arm/dead-man/per-motor-enable) and are
+      recorded for display, nothing reaches a robot. Only allowed while mode is
+      <b>manual</b> (Joints tab, or a running script) - never while a policy drives.</div>
+    <div class="row tight"><label>host</label><input id="tx-host" value="127.0.0.1" style="width:110px">
+      <label>port</label><input id="tx-port" type="number" value="9872" style="width:70px"></div>
+    <div class="row tight"><label>1. activate TX panel</label><input type="checkbox" id="tx-enable"></div>
+    <div class="row tight"><button id="btn-tx-arm" style="flex:1">2. ARM</button>
+      <button id="btn-tx-disarm" style="flex:1">disarm</button></div>
+    <div class="row tight"><span id="tx-badge" class="pill">DISARMED</span>
+      <span class="small" id="tx-heartbeat-age"></span></div>
+    <div class="small" style="margin:4px 0">Hold <b>Space</b> to send (keyboard dead-man) -
+      only works while armed and the panel is active. kp cap <span id="tx-kpcap">-</span>,
+      kd cap <span id="tx-kdcap">-</span> (docs/123 section 3 bench limits, display only).</div>
+    <div>${motorRows}</div>
+  `;
+}
+
+function currentManualTargets() {
+  // whatever the Joints tab is currently commanding (S.joints.target, sim's own echo) -
+  // sending the SAME values TX would push keeps "what you see" and "what you'd send" in sync.
+  if (!S.joints) return {};
+  return zipNamed2(S.joints.joint_names, S.joints.target);
+}
+
+function txDeadmanTick() {
+  if (!S.txStatus || !S.txStatus.armed) return;
+  apiOk("POST", "/tx/heartbeat");
+  apiOk("POST", "/tx/send", { values: currentManualTargets() });
+}
+
+function startTxDeadman() {
+  if (S.txDeadmanTimer) return;
+  txDeadmanTick();
+  S.txDeadmanTimer = setInterval(txDeadmanTick, 50); // ~20 Hz, well inside the 0.3s timeout
+}
+
+function stopTxDeadman() {
+  if (S.txDeadmanTimer) { clearInterval(S.txDeadmanTimer); S.txDeadmanTimer = null; }
+}
+
+function isTypingTarget(ev) {
+  const t = ev.target;
+  return t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName);
+}
+
+function wireTxSection() {
+  el("tx-enable").addEventListener("change", (ev) => {
+    S.txEnabled = ev.target.checked;
+    if (!S.txEnabled) stopTxDeadman();
+  });
+  el("btn-tx-arm").onclick = async () => {
+    const host = el("tx-host").value, port = parseInt(el("tx-port").value, 10) || 0;
+    const r = await apiOk("POST", "/tx/arm", { host, port });
+    if (r) { S.txStatus = r; toast("TX armed (stub - nothing transmits yet)"); }
+  };
+  el("btn-tx-disarm").onclick = async () => {
+    stopTxDeadman();
+    const r = await apiOk("POST", "/tx/disarm");
+    if (r) S.txStatus = r;
+  };
+  document.querySelectorAll(".tx-motor-cb").forEach((cb) => {
+    cb.addEventListener("change", () => apiOk("POST", "/tx/motor", { joint_name: cb.dataset.n, enabled: cb.checked }));
+  });
+  // keyboard dead-man - document-level so it works regardless of which element has focus,
+  // but never hijacks Space while the operator is typing into a text field.
+  if (!window.__txKeyWired) {
+    window.__txKeyWired = true;
+    document.addEventListener("keydown", (ev) => {
+      if (ev.code !== "Space" || ev.repeat || isTypingTarget(ev)) return;
+      if (!S.txEnabled || !S.txStatus || !S.txStatus.armed) return;
+      ev.preventDefault();
+      startTxDeadman();
+    });
+    document.addEventListener("keyup", (ev) => {
+      if (ev.code !== "Space") return;
+      stopTxDeadman();
+    });
+    window.addEventListener("blur", stopTxDeadman); // losing window focus must stop it too
+  }
+}
+
+function renderTxStatusLive() {
+  const badge = el("tx-badge");
+  if (!badge) return;
+  const tx = S.txStatus;
+  const st = S.status;
+  const modeOk = st && st.mode === "manual";
+  el("btn-tx-arm").disabled = !modeOk || (tx && tx.armed);
+  el("btn-tx-arm").title = modeOk ? "" : `blocked: mode is ${st ? st.mode : "?"}, TX only allowed in 'manual'`;
+  if (!tx) { badge.textContent = "-"; badge.className = "pill"; return; }
+  if (tx.active) { badge.textContent = "ACTIVE (sending)"; badge.className = "pill ok"; }
+  else if (tx.armed) { badge.textContent = "ARMED (hold Space)"; badge.className = "pill warn"; }
+  else { badge.textContent = "DISARMED" + (tx.disarm_reason ? ` (${tx.disarm_reason})` : ""); badge.className = "pill"; }
+  const ageEl = el("tx-heartbeat-age");
+  if (ageEl) ageEl.textContent = tx.heartbeat_age_s !== null && tx.heartbeat_age_s !== undefined ? `heartbeat ${fmt(tx.heartbeat_age_s, 2)}s ago` : "";
+  const kpEl = el("tx-kpcap"), kdEl = el("tx-kdcap");
+  if (kpEl) kpEl.textContent = fmt(tx.kp_cap, 1);
+  if (kdEl) kdEl.textContent = fmt(tx.kd_cap, 1);
+  document.querySelectorAll(".tx-motor-cb").forEach((cb) => {
+    if (document.activeElement !== cb) cb.checked = tx.enabled_motors.includes(cb.dataset.n);
+  });
+  // structural safety net mirrored in the UI: mode left 'manual' while armed -> the server
+  // already auto-disarmed (SimCore._on_control_tick -> TxState.check_mode_gate); stop the
+  // local dead-man loop too so it does not keep calling a now-refused /tx/send.
+  if (!modeOk) stopTxDeadman();
+}
 
 document.addEventListener("DOMContentLoaded", boot);
 
