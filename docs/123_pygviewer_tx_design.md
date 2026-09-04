@@ -102,3 +102,40 @@
 - **★정책 출력은 절대 로봇으로 보내지 않는다** — "Policy 출력은 항상 로봇에서만 돈다"(향후 C). 뷰어 송신은 **manual/script 모드의 관절 목표만**; policy_sim/policy_shadow 모드에서는 송신 경로가 코드 수준에서 차단(arm 불가).
 - 벤치 환경: 로봇 호스트에 **HUPHY 설치부터 필요**, 호스트는 **원격지일 수 있음** → 배포 절차(HUPHY GitHub 설치·의존성·CAN 설정·스크립트 배치·실행)를 README에 단계별로, 로컬에서는 더미 수신기(huphy 없이)로 스키마·데드맨 검증.
 - 안전(§3): 2단 arm + 하트비트 데드맨 + 키보드 데드맨 + 모터별 enable 토글 + 뷰어 측 사전 클램프(safe_clip·슬루·kp/kd 상한 kp≤5 기본).
+
+## 5. 구현 결과 (2026-09-04, 코더)
+
+**범위**: `tools/pygviewer/pygviewer/bridge/`(신규 5파일) + `schema.py`(JointTarget 필드 추가) +
+`tools/pygviewer/deploy/README_robot_host.md`. 대시보드/`api.py`/`ui.py`는 다른 코더가 동시 편집
+중이라 손대지 않음 — 뷰어 UI에서 이 `tx_client.py`를 실제로 연결하는 배선은 별도 작업.
+
+### 파일
+- `pygviewer/schema.py` — `JointTarget`에 `arm_token`(필수, 빈 문자열 거부) · `origin: Literal["manual","script"]`(타입 자체가 `"policy"`를 생성 시점에 거부) · `tau_ff` 추가, `q_target`/`kp`/`kd`/`tau_ff`의 NaN/inf 거부 검증기.
+- `bridge/tx_map.py` — sim rad → HUPHY cal-deg 역변환(`huphy_udp.py` 정변환의 정확한 역), `JointTargetMapper`(같은 `joint_map_huphy.json`·contract travel_sign 재사용, AB 크랭크 A/B→ankle_a/b 직접 테이블 매핑), `clamp_gain` 공용 헬퍼. huphy import 없음.
+- `bridge/remote_target.py` — `LatestOnly`(seq 역행/중복 무시, arm_token 불일치, contract_hash 불일치 각각 카운트+거부) + `DeadmanFilter`(0.2s 데드맨→hold→3s 선형 슬루 복귀, enable 목록으로 모든 단계 제한). huphy import 없음, 가짜 시계로 결정론적 테스트.
+- `bridge/dummy_rx.py` — huphy 없이 동작하는 로컬 왕복 대상: UDP:9872 수신 → 1차 PD 모터 모델(관성·감쇠) → HUPHY UDP 텔레메트리 포맷(:9870)으로 재전송.
+- `bridge/huphy_remote_motion.py` — 로봇 측 스크립트. 순수 헬퍼(관절명 변환·enable 파싱·게인 계획)는 huphy 없이 임포트·테스트 가능; `run_real()`만 huphy를 함수 내부에서 지연 임포트. `--dry-run`은 huphy도 CAN도 안 씀(순간추종 가정 텔레메트리 에코).
+- `bridge/tx_client.py` — 뷰어 측 송신 라이브러리(50 Hz, arm/disarm, `mode=` 인자로 policy_sim/policy_shadow 차단, safe_clip+슬루+kp/kd 상한 사전클램프, `ttl_ms` 노출·기본 250ms).
+- `deploy/README_robot_host.md` — SSH→Python 확인→HUPHY clone→`pip install -e .[imu]`+python-can→CAN 인터페이스→`huphy-commission`(캘리브 null=제어차단은 정상)→스크립트 배치(`rsync`)→`--dry-run`→벤치 1모터 arm/정지 절차.
+
+### 검증 수치
+- pytest: 이번 작업으로 **89개 신규 테스트**(`test_schema_tx.py` 12·`test_tx_map.py` 12·`test_tx_client.py` 22·`test_remote_target.py` 17·`test_dummy_rx.py` 5·`test_remote_motion.py` 17·`test_bridge_roundtrip.py` 4) 추가, 기존 스위트 전체 **333 passed, ~30s**(`tools/pygviewer` 전체, mjlab venv).
+- 부호·단위 순수 변환 왕복: **1e-9**(`test_tx_map.py`, 양무릎 +30°→L +0.5236/-0.5236 rad→역변환 30.0°/30.0° 확인).
+- **★정밀도 정정**: 과제 문구의 "왕복 1e-6"은 순수 변환식 기준(위 1e-9로 이미 충족)이고, **실제 UDP 와이어를 통한 왕복**은 HUPHY 자체 텔레메트리 관례(cal-deg 소수 둘째 자리 반올림, `huphy_udp.py` 모듈독스트링)에 막혀 **~1.75e-4 rad**(0.01°) 이하로는 못 내려감. `test_bridge_roundtrip.py`는 이 한계의 3배 마진(~5.2e-4 rad)으로 검증 — 1e-6을 조용히 낮춰 잡지 않고 이 문서에 그 이유를 남김.
+- 데드맨 발동 시각: 가짜 시계 유닛테스트로 경계(0.2s 직전/직후) 정확히 확정(`test_remote_target.py`) + **실제 벽시계**로 재측정(`test_bridge_roundtrip.py::test_deadman_trigger_timing_is_0_2s_plus_minus_0_05s`) — 마지막 송신 후 0.15~0.25s 범위 내 트리거 확인.
+- enable 밖 모터: 명령을 아예 안 받고 자기 default를 유지(`test_dummy_rx.py`/`test_bridge_roundtrip.py`).
+- `origin="policy"`: `JointTarget` 생성 시점(pydantic `ValidationError`) + `TxClient` 생성 시점(`RuntimeError`) 이중 거부 확인.
+
+### 작업 중 발견·수정한 버그(내 코드, HUPHY 아님)
+1. **테스트 하네스 라이브레이스**: dummy_rx는 ~200 pkt/s로 무한 스트리밍하는데, 수신측 "큐가 빌 때까지 드레인"(`while True`) 패턴은 절대 안 비어서 라이브록; "최대 64개 드레인"(유한 루프였지만 캡이 큼)은 살아있는 스트림을 상대로 "64개가 더 도착할 때까지 기다림"이 되어 **호출당 ~300ms** 소모 — 호출부(테스트 자신의 송신 루프) 틱 간격을 100ms ttl_ms보다 크게 벌려 데드맨을 오발동시킴. 캡을 8, 타임아웃을 10ms로 낮춰 해결(`test_dummy_rx.py`, `test_bridge_roundtrip.py`).
+2. **`TxClient`에 `ttl_ms` 노출 누락**: 스키마 기본값(100ms)이 표준 데드맨 기본값(200ms)보다 타이트해서, `deadman_s=0.2`로 설정해도 실제로는 `min(0.2, 0.1)=0.1s`에서 발동(로직 자체는 맞음, 사용자 기대와 어긋남). `ttl_ms` 생성자 인자 추가, 기본 250ms.
+3. **테스트 어서션 취약점**: LegOnly-AB의 default_q가 0이 아니라 무릎 약 20°(bent-knee 키프레임)라서 "pos > 5°"류 임계값이 커맨드 이전부터 참 — 실제 목표각 대비 비교로 교체.
+
+### HUPHY 인터페이스 갭 (버그가 아니라 "이렇게 생겼음" 기록 — 코드 수정 없음)
+- **`Leg.build_commands`는 발목을 pitch/roll(IK)로만 받고, 모터 레벨(a1/a2 = ankle_a/ankle_b)을 직접 받는 경로가 없다.** 우리 sim의 canonical 표현은 크랭크 각(모터와 1:1)이라, `huphy_remote_motion.py`는 크랭크 목표를 `AnkleKinematics.solve_fk`로 pitch/roll로 바꾼 뒤 `build_commands`에 넘기고, 그 안에서 다시 `solve_ik`로 a1/a2를 복원한다 — FK(뉴턴 반복)→IK(닫힌해) 왕복이 매 틱 발생. 실측(벤치)에서 이 왕복의 수치오차가 실사용에 문제되는지는 미확인(로컬에 CAN이 없어 실행 자체를 못 해봄). **제안**: `Leg`에 "모터 레벨 목표(ankle_a_deg, ankle_b_deg)를 가드까지 통과시키는" 저수준 경로가 있으면 원격/재생 브리지처럼 pitch/roll 의미가 필요 없는 호출자에게 더 정확하고 간단함.
+- **게인은 `LimbConfig`(생성자 시점에 고정)에서만 읽고, `action` 딕셔너리로는 못 준다.** 메시지별 kp/kd를 실제로 반영하려면 매 틱 `leg.config`를 `dataclasses.replace`로 재구성해야 했음(`bringup.build_leg`가 생성 시점에 쓰는 것과 같은 패턴을 틱 단위로 확장) — 동작은 하지만 `Leg`가 원래 "설정은 시작할 때 한 번 읽고 안 바뀐다"고 명시한 불변식(설정 파일 docstring)을 어기는 사용법이라 조심스럽다. **제안**: `build_commands(action, gains_override=None)`처럼 틱 단위 게인 오버라이드를 1급으로 지원하면 이런 우회가 필요 없어짐.
+- **§3의 "0.2s 데드맨 → hold → 3s 후 default로 슬루 복귀" 문구는 두 가지로 읽힌다**: (a) 0.2s간 고정 유지 후 (별도 속도로) 슬루 시작, (b) 0.2s에 데드맨이 걸리고 그 순간부터 3s에 걸쳐 선형 보간. CLI에 타이밍 노브가 `--default-return-s` 하나뿐이라 (b)로 구현(`remote_target.py` 모듈 독스트링에 근거 명시). 사용자가 (a)를 의도했다면 `--hold-s`류 별도 플래그가 필요.
+- **로컬 검증 한계**: `huphy_remote_motion.py`의 `run_real()`/`RemoteMotion`(huphy 임포트가 실제로 일어나는 유일한 경로)은 이 개발 머신에 huphy 미설치·CAN 미연결이라 **한 번도 실행되지 않았다** — 순수 헬퍼(관절명 변환·게인 계획·CLI 파싱)와 `--dry-run` 경로만 검증됨. 배포 README §9의 벤치 1모터 단계가 이 파일에 대한 첫 실제 실행이 된다.
+
+### 브리핑
+`docs/000.Real-time Brefing.md`에 `add pygviewer-tx`→`done` 기록(수치·용어 동일하게 반영, 손편집 아님).

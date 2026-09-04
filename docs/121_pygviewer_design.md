@@ -311,3 +311,13 @@ test_dashboard.py에서 SimCore 인스턴스를 많이 만들면 전체 스위�
 때 한쪽 다리에 큰 목표를 주면 부유 베이스의 반작용으로 반대쪽 다리의 **실제 q**(목표는 아님)가
 실제로 흔들림(뉴턴 3법칙, 버그 아님). 회귀 테스트로 고정(base=fixed+ground=off 조건에서 교차-다리
 q 불변 확인, 같은-다리 결합은 의도적으로 별도 취급).
+
+- 09-04 — **송신 경로(안 A) 구현** (다른 코더, docs/123 병행 문서). `tools/pygviewer/pygviewer/bridge/`에
+  `tx_map.py`(sim rad→HUPHY cal-deg 역변환)·`remote_target.py`(arm/seq/데드맨 상태기계)·`dummy_rx.py`
+  (huphy 없는 로컬 왕복 대상, 1차 PD 모터모델)·`huphy_remote_motion.py`(로봇측 스크립트, huphy는
+  `run_real()` 내부에서만 지연 임포트)·`tx_client.py`(뷰어측 송신 라이브러리) 신규, `schema.py`의
+  `JointTarget`에 `arm_token`/`origin`(Literal, "policy" 생성 자체를 거부)/`tau_ff` 추가. 이 문서의
+  §1("수신 전용") 결정은 **메시지 자체**에는 더 이상 유효하지 않음(§3의 "receive only" 설계 의도 —
+  뷰어가 명령하지 않는다 — 는 여전히 유효: 송신은 `origin=manual/script`로만, `api.py`/`ui.py`는
+  이 세션에서 손대지 않았고 실제 UI 연결은 별도 작업). 상세·검증 수치·HUPHY 인터페이스 갭은
+  docs/123 §5. pytest 89건 신규, 전체 333 passed(~30s). `api.py`/`ui.py`/대시보드는 건드리지 않음.

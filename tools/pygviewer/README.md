@@ -80,9 +80,13 @@ a two-stage arm (an "activate" checkbox, then a real `POST /tx/arm` - refused wh
 sim mode is not `manual`, since **policy output must never be transmittable**), a keyboard
 dead-man (hold Space to send, release to stop), and one enable checkbox per motor. This is
 built against `pygviewer/tx.py`'s `TxState`, a real safety state machine that **transmits
-nothing anywhere** - `bridge/tx_client.py` (the actual 50 Hz UDP sender another coder is
-building per `docs/123_pygviewer_tx_design.md`) had not landed when this was written. See
-`GET /tx/status`'s own `note` field, always present, for the current stub boundary.
+nothing anywhere** - `bridge/tx_client.py` (the actual 50 Hz UDP sender, built per
+`docs/123_pygviewer_tx_design.md` section 4/5) has now landed with its own arm/mode-gate/
+safe_clip+slew/gain-clamp logic and tests, but `TxState`/the UI have not been wired to call
+it yet - that wiring, plus the matching robot-side pieces (`bridge/huphy_remote_motion.py`,
+`bridge/dummy_rx.py`, `bridge/remote_target.py`, `bridge/tx_map.py`, `deploy/
+README_robot_host.md`), are docs/123 section 5. See `GET /tx/status`'s own `note` field,
+always present, for the current stub boundary.
 
 Verified live by hand (no Chrome extension reachable on this host - tried it, confirmed
 unavailable): `curl` for the page/static assets/preset round trip/policy-load sequence, a
@@ -502,6 +506,18 @@ tools/pygviewer/
       huphy_udp.py           HUPHY UDP -> canonical JointState/ImuState (P3)
       joint_map_huphy.json   explicit 12-row limb/motor -> sim-joint table (P3)
       dummy_tx.py            sine/script/jsonl -> /ws/in and/or HUPHY-format UDP (P3)
+      tx_map.py              sim-rad -> HUPHY cal-deg (inverse of huphy_udp.py), no huphy
+                             import - docs/123 plan A item 2
+      remote_target.py       LatestOnly (seq/arm_token/contract_hash gate) + DeadmanFilter
+                             (0.2s deadman -> hold -> 3s linear return), shared by dummy_rx.py
+                             and huphy_remote_motion.py - docs/123 plan A item 3
+      dummy_rx.py            huphy-free local round-trip target: UDP:9872 in -> 1st-order PD
+                             motor model -> HUPHY-format UDP:9870 out - docs/123 item 4
+      huphy_remote_motion.py robot-side HUPHY Motion; huphy imported lazily, only inside
+                             run_real() - --dry-run needs neither huphy nor CAN - item 3
+      tx_client.py           viewer-side JointTarget sender: arm/mode-gate (blocks
+                             policy_sim/policy_shadow)/safe_clip+slew/kp-kd-clamp - item 5.
+                             NOT yet wired to tx.py's TxState/the UI (see "TX" section above)
     modes.py                 mode reference table + TargetScript (P4, the script player);
                              real_replay/file_replay/policy_shadow themselves live in
                              sim_core.py, dispatched on the plain string SimCore.mode
