@@ -98,13 +98,16 @@ def test_mapper_known_sim_joints_has_all_twelve_motor_rows():
 
 
 def test_mapper_to_motor_targets_both_knees_plus_30_deg():
+  """Biped structure migration (2026-09-04): ``JointTargetMapper()`` with no explicit ``jmap``
+  uses ``DEFAULT_MAP_PATH``, which is now ``joint_map_biped.json`` - so the limb keys this
+  groups by are ``left_leg``/``right_leg``, matching HUPHY biped's own ``Leg.id`` vocabulary."""
   c = _contract()
   mapper = JointTargetMapper(c)
   out = mapper.to_motor_targets(
     ["L_knee_joint", "R_knee_joint"], [0.5235988, -0.5235988]
   )
-  assert out["left"]["knee"] == pytest.approx(30.0, abs=1e-4)
-  assert out["right"]["knee"] == pytest.approx(30.0, abs=1e-4)
+  assert out["left_leg"]["knee"] == pytest.approx(30.0, abs=1e-4)
+  assert out["right_leg"]["knee"] == pytest.approx(30.0, abs=1e-4)
 
 
 def test_mapper_groups_multiple_motors_per_limb():
@@ -113,15 +116,15 @@ def test_mapper_groups_multiple_motors_per_limb():
   out = mapper.to_motor_targets(
     ["L_hip_pitch_joint", "L_knee_joint"], [0.1, 0.2]
   )
-  assert set(out.keys()) == {"left"}
-  assert set(out["left"].keys()) == {"hip_pitch", "knee"}
+  assert set(out.keys()) == {"left_leg"}
+  assert set(out["left_leg"].keys()) == {"hip_pitch", "knee"}
 
 
 def test_mapper_crank_ab_maps_to_ankle_a_ankle_b_motor_names():
   c = _contract()
   mapper = JointTargetMapper(c)
   out = mapper.to_motor_targets(["L_crank_A_joint", "L_crank_B_joint"], [0.0, 0.0])
-  assert set(out["left"].keys()) == {"ankle_a", "ankle_b"}
+  assert set(out["left_leg"].keys()) == {"ankle_a", "ankle_b"}
 
 
 def test_mapper_rejects_unknown_joint_name_hard_not_a_guess():
@@ -136,3 +139,15 @@ def test_mapper_uses_the_same_map_file_as_the_receive_side():
   jmap = JointMap(DEFAULT_MAP_PATH)
   mapper = JointTargetMapper(c, jmap=jmap)
   assert mapper.jmap is jmap
+
+
+def test_mapper_still_works_against_the_legacy_left_right_map():
+  """``joint_map_huphy.json`` (pre-biped, bare left/right) is not the default any more but
+  must keep grouping correctly when passed explicitly - the mapper hardcodes no vocabulary,
+  it reads whatever the map file says."""
+  from pygviewer.bridge.huphy_udp import LEGACY_MAP_PATH
+
+  c = _contract()
+  mapper = JointTargetMapper(c, jmap=JointMap(LEGACY_MAP_PATH))
+  out = mapper.to_motor_targets(["L_knee_joint"], [0.5235988])
+  assert out["left"]["knee"] == pytest.approx(30.0, abs=1e-4)

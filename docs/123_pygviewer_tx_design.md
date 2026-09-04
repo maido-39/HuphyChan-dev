@@ -366,3 +366,53 @@ test_sync_in_idle_then_switch_to_manual_stays_valid`가 이 시나리오를 회�
 `test_tx_wiring.py`의 arm 라운드트립 4건을 sync 선행하도록 갱신. 전체 스위트 422→432(무실패).
 **라이브 확인**(벤치 100 Hz 수신, 무릎 1관절만 실물): `/sync_from_real` → `synced 1
 (L_knee_joint)`, `skipped 11 (no real data)`, `clipped 0` 확인.
+
+## §11. `biped` 브랜치 이행 — 로봇측 텔레메트리 변환 레이어 재작성 (2026-09-04, 코더)
+
+HUPHY 체크아웃(`~/external_repos/HUPHY`, `~/Human-Pygmalion/HUPHY` 벤치 배포본 동일)이 `biped`
+브랜치로 넘어가면서 §5·§7~§10에서 전제했던 API 표면이 바뀌었다 — HUPHY 소스는 무수정, 이쪽
+(`tools/pygviewer/pygviewer/bridge/`, `pygviewer/api.py`)만 재작성. 상세 배경·확인된 구조 사실은
+docs/121 §12에 정리, 여기는 이 문서(§4/§5/§6/§10)가 전제했던 부분과의 차이만 짚는다.
+
+- **§4/§5가 가정한 `RemoteTargetMotion`/`huphy-run --motion remote`(HUPHY 내부에 원격 수신을
+  넣는 안)와 §5의 `build_robot`(kind 분기)/`robots/single.py`(HUPHY 소스에 단일-조인트 로봇을
+  추가하는 안)는 모두 "안 A를 HUPHY 쪽에 얹는" 방향이었다. `biped` 브랜치는 이 방향 대신 HUPHY
+  **자신이** `robots/biped.py`(`Biped` — 사지 합성)를 갖췄고, `build_robot`/`kind:"single"`은
+  이 체크아웃에 없다 — 즉 우리가 만들 필요가 없어졌을 뿐 아니라, 예전에 만들려던 인터페이스와
+  다른 모양(단일-조인트 전용 클래스가 아니라 "1개 이상의 `Leg`를 합성"하는 범용 클래스)으로
+  상위에서 먼저 해결됐다. 벤치(모터 1~2개)는 여전히 `Leg`(6모터 강제) 자체를 우회하지 못하고,
+  대신 `robot_bench.yaml`에 6개 모터 행을 전부 선언해 두는 쪽으로 대응한다(`allow_uncalibrated=
+  True`로 조립은 성공, 실물 없는 4모터는 `link_loss_cycles: 0`이 아니면 무응답 카운트만 쌓임).
+- **§6의 대시보드 배선**은 텔레메트리 와이어 포맷(`{limb}/{motor}/{field}`) 자체가 그대로라
+  영향 없음 — `limb` 자리의 값 어휘만 바뀌었다(아래).
+- **`bridge/huphy_remote_motion.py`**: `build_biped(robot_cfg, limbs=[하나], ...)`로 재작성
+  (`build_robot` 대신) — `Biped.connect()`/`enable()`은 보유한 사지 전부에 대해 all-or-nothing
+  이라, 항상 커맨드 대상 사지 하나만 조립한다. `--limb`는 이제 "조인트맵/robot.yaml의 어느
+  사지 이름으로 해소되는가"이고, `resolve_side()`가 맵 자신의 어휘 → (맵 없음일 때) 구
+  `left`/`right`/`left_leg`/`right_leg` 그대로 → 역사적 별칭(`left`/`left_leg`/`leftleg`/
+  `bench` ↔ `right`/`right_leg`/`rightleg`) 순으로 해소, 실패 시 그 맵의 실제 limb 목록을
+  에러에 담는다.
+- **액션 계약이 바뀐 유일한 지점**: `Biped`는 모든 관절/액션 이름에 소유 사지의 `Leg.id`를
+  `/`로 접두하고(`right_leg/knee`), `Biped.split_action`은 접두어 없는 이름을 하드 에러로 낸다.
+  `RemoteMotion.__call__`은 여전히 맨몸 관절 이름으로 액션을 구성(`Leg.build_commands` 자체는
+  안 바뀜 — `hip_pitch`.../`ankle_pitch`/`ankle_roll`, §4 item 2가 이미 관찰한 대로 발목은
+  pitch/roll)하고, **반환 직전 한 줄**에서만 `f"{action_prefix}/{k}"`로 접두어를 붙인다
+  (`huphy_remote_motion.py`, `RemoteMotion.__call__` 끝부분). 이 접두어(`action_prefix` = 실제
+  biped 사지 이름)와 매퍼/데드맨이 쓰는 `side`(조인트맵 자신의 limb 키)를 별개 값으로 분리했다
+  — 보통 같은 문자열이지만, 구 맵을 신 robot.yaml에 대고 쓰면 실제로 갈리는 경우를 테스트로
+  고정(`test_remote_motion.py::test_remote_motion_uses_a_different_action_prefix_than_the_
+  mapper_side_when_they_differ`).
+- **새 진단**: `clear_fault()`를 이제 `biped.parts`(사지 여러 개가 될 미래 대비) 전체에 대해
+  호출. 수신 통계를 `--stats-interval-s`(기본 5초)마다 실행 중에도 출력 — 종료 시에만 찍혀서
+  "TX는 50Hz로 보내는데 모터가 안 움직임"의 원인(§10.1 `clear_fault()` 버그와 별개로, 토큰
+  불일치 같은 더 흔한 원인)을 찾는 데 시간이 걸렸던 문제의 재발 방지.
+- **테스트**: 새 맵(`joint_map_biped.json`, `left_leg`/`right_leg`, 12+4행 불변식)·구 맵
+  (`joint_map_huphy.json`, `LEGACY_MAP_PATH`로 계속 로드 가능) 양쪽 파서 검증, `resolve_side`
+  별칭 해소, 액션 키 접두어(가짜 `Leg` 객체로 huphy 없이 `RemoteMotion.__call__` 직접 구동, 3건)
+  신규. `test_dummy_rx.py`/`test_tx_wiring.py`는 `DummyRx`가 맵을 명시하지 않아 기본 맵을 그대로
+  따라가므로(`left/knee/`→`left_leg/knee/`) 텔레메트리 키 리터럴만 갱신, 로직 변경 없음.
+  `pygviewer` 전체 스위트 그린.
+- **의심스러운 점**: §5의 "구현 중" 항목(`build_robot`/`robots/single.py`를 HUPHY 소스에 직접
+  추가, "HUPHY 전체 995 passed")이 `biped` 브랜치와 같은 갈래에서 나온 것인지, 아니면 그 이후
+  `biped`가 별도로 설계돼 그 작업이 폐기/미병합된 것인지는 이번 조사로 확정하지 못했다 — HUPHY
+  리포 히스토리 비교는 "리포 자체는 절대 수정 금지"와 별개로 이번 작업 범위 밖이라 하지 않았다.

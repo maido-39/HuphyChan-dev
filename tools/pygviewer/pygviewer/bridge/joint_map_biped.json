@@ -1,0 +1,152 @@
+{
+  "_comment": "Explicit HUPHY biped-branch limb/motor -> sim joint map (docs/121 section 12, docs/123 section 11: biped structure migration). Supersedes joint_map_huphy.json as the bridge DEFAULT - joint_map_huphy.json is kept on disk unchanged for the legacy left/right vocabulary (still loadable explicitly, still read by some tests). limb names here are `left_leg`/`right_leg` - HUPHY biped's own `Leg.id` (`robots/biped.py`: 'limb name is Leg.id - robot.yaml's limbs key comes through verbatim'), NOT the bare 'left'/'right' the pre-biped fork used. NO regex, no default fallback: a (limb, motor) pair the bridge sees on the wire that is not one of the 12 rows below is a HARD FAILURE, logged and counted, never guessed. sign/offset_rad are user-calibratable per the verification protocol (docs/121 section 5, step 2); until then side_mapping_verified stays false and the UI shows the UNVERIFIED banner (user-asserted L=left, docs/121 section 1).",
+  "side_mapping_verified": false,
+  "motors": [
+    {
+      "limb": "left_leg",
+      "motor": "hip_pitch",
+      "sim_joint": "L_hip_pitch_joint",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "motor_model": "RS03",
+      "rom_deg": null
+    },
+    {
+      "limb": "left_leg",
+      "motor": "hip_roll",
+      "sim_joint": "L_hip_roll_joint",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "motor_model": "RS03",
+      "rom_deg": null
+    },
+    {
+      "limb": "left_leg",
+      "motor": "hip_yaw",
+      "sim_joint": "L_hip_yaw_joint",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "motor_model": "RS03",
+      "rom_deg": null
+    },
+    {
+      "limb": "left_leg",
+      "motor": "knee",
+      "sim_joint": "L_knee_joint",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "motor_model": "RS03",
+      "rom_deg": null
+    },
+    {
+      "limb": "left_leg",
+      "motor": "ankle_a",
+      "sim_joint": "L_crank_A_joint",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "motor_model": "RS03",
+      "rom_deg": null
+    },
+    {
+      "limb": "left_leg",
+      "motor": "ankle_b",
+      "sim_joint": "L_crank_B_joint",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "motor_model": "RS03",
+      "rom_deg": null
+    },
+    {
+      "limb": "right_leg",
+      "motor": "hip_pitch",
+      "sim_joint": "R_hip_pitch_joint",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "motor_model": "RS03",
+      "rom_deg": null
+    },
+    {
+      "limb": "right_leg",
+      "motor": "hip_roll",
+      "sim_joint": "R_hip_roll_joint",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "motor_model": "RS03",
+      "rom_deg": null
+    },
+    {
+      "limb": "right_leg",
+      "motor": "hip_yaw",
+      "sim_joint": "R_hip_yaw_joint",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "motor_model": "RS03",
+      "rom_deg": null
+    },
+    {
+      "limb": "right_leg",
+      "motor": "knee",
+      "sim_joint": "R_knee_joint",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "motor_model": "RS03",
+      "rom_deg": null
+    },
+    {
+      "limb": "right_leg",
+      "motor": "ankle_a",
+      "sim_joint": "R_crank_A_joint",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "motor_model": "RS03",
+      "rom_deg": null
+    },
+    {
+      "limb": "right_leg",
+      "motor": "ankle_b",
+      "sim_joint": "R_crank_B_joint",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "motor_model": "RS03",
+      "rom_deg": null
+    }
+  ],
+  "ankle_joints": [
+    {
+      "limb": "left_leg",
+      "joint": "ankle_pitch",
+      "side": "L",
+      "field": "pitch",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "rom_deg": null
+    },
+    {
+      "limb": "left_leg",
+      "joint": "ankle_roll",
+      "side": "L",
+      "field": "roll",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "rom_deg": null
+    },
+    {
+      "limb": "right_leg",
+      "joint": "ankle_pitch",
+      "side": "R",
+      "field": "pitch",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "rom_deg": null
+    },
+    {
+      "limb": "right_leg",
+      "joint": "ankle_roll",
+      "side": "R",
+      "field": "roll",
+      "sign": 1,
+      "offset_rad": 0.0,
+      "rom_deg": null
+    }
+  ]
+}

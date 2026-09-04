@@ -71,11 +71,15 @@ _BUILTIN_PRESET_NAMES = ("train", "real")
 
 
 def _read_side_mapping_verified() -> bool | None:
-  """UI v2 top-bar badge: ``bridge/joint_map_huphy.json``'s own flag, read once at process
-  start (it is a static hardware-bringup fact for the life of a run, not a live signal)."""
+  """UI v2 top-bar badge: the bridge's DEFAULT joint map's own flag, read once at process
+  start (it is a static hardware-bringup fact for the life of a run, not a live signal).
+  Imports ``DEFAULT_MAP_PATH`` from the bridge rather than hardcoding a filename here, so this
+  always tracks whichever map ``bridge/huphy_udp.py`` actually defaults to - biped's
+  ``joint_map_biped.json`` since 2026-09-04 (docs/121 section 12), not the legacy
+  ``joint_map_huphy.json`` this used to point at directly."""
   try:
-    p = Path(__file__).parent / "bridge" / "joint_map_huphy.json"
-    return bool(json.loads(p.read_text())["side_mapping_verified"])
+    from .bridge.huphy_udp import DEFAULT_MAP_PATH
+    return bool(json.loads(DEFAULT_MAP_PATH.read_text())["side_mapping_verified"])
   except Exception:
     return None
 

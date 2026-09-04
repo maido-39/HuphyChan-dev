@@ -14,10 +14,22 @@ applies from the joint map must be applied to vel and tau too, not only to pos. 
 HUPHY's "no data" sentinel on every field; it becomes ``null``, and three of the same field
 in a row raises a warning (docs/121 section 3).
 
-The mapping table (``joint_map_huphy.json``) has exactly 12 rows (2 legs x 6 motors) plus 4
-ankle-joint rows (2 legs x pitch/roll, the FK-derived values HUPHY reports alongside the
-crank motors).  A ``(limb, motor)`` pair on the wire that is not one of those rows is a HARD
-FAILURE - counted, logged, surfaced in ``Status`` - never a regex match or a silent default.
+The mapping table (default: ``joint_map_biped.json``) has exactly 12 rows (2 legs x 6 motors)
+plus 4 ankle-joint rows (2 legs x pitch/roll, the FK-derived values HUPHY reports alongside
+the crank motors).  A ``(limb, motor)`` pair on the wire that is not one of those rows is a
+HARD FAILURE - counted, logged, surfaced in ``Status`` - never a regex match or a silent
+default.
+
+Biped structure migration (2026-09-04, docs/121 section 12 / docs/123 section 11): HUPHY's
+``biped`` branch prefixes every joint/motor name with the OWNING LIMB's ``Leg.id`` (``robots/
+biped.py``: "관절 이름에 팔다리 이름이 붙음" - "right_leg/knee" not "right/knee"), and that
+``Leg.id`` comes straight from ``robot.yaml``'s ``limbs`` key. ``joint_map_biped.json`` uses
+that vocabulary (``left_leg``/``right_leg``) and is now ``DEFAULT_MAP_PATH``.  Nothing in this
+module hardcodes a limb name anywhere - ``JointMap`` reads whatever vocabulary the map FILE
+uses, so the wire-format parsing below is unchanged either way.  ``joint_map_huphy.json`` (the
+pre-biped fork's bare ``left``/``right`` vocabulary) is kept on disk unchanged and stays
+loadable - explicitly, via ``--map`` or ``LEGACY_MAP_PATH`` - because it is still what some
+tests and ``joint_map_bench.json`` (its ``bench``-limb variant) reference.
 
 ROM clip task (2026-09-04): each row MAY also carry an optional ``rom_deg: [lo, hi]`` field -
 the real hardware's own calibrated ROM (HUPHY ``Motor.limits_deg``), in the same
@@ -41,7 +53,11 @@ from typing import Callable
 from ..schema import ImuState, JointState
 
 DEFAULT_PORT = 9871
-DEFAULT_MAP_PATH = Path(__file__).with_name("joint_map_huphy.json")
+DEFAULT_MAP_PATH = Path(__file__).with_name("joint_map_biped.json")
+LEGACY_MAP_PATH = Path(__file__).with_name("joint_map_huphy.json")
+"""The pre-biped fork's map: same 12+4 rows, bare ``left``/``right`` limb vocabulary. Kept for
+anything that still names it explicitly (``joint_map_bench.json``'s own ``bench``-limb variant
+predates biped too, and is unaffected by this DEFAULT_MAP_PATH switch either way)."""
 
 FAST_MOTOR_FIELDS = ("pos", "tgt", "err", "vel", "tau")
 ANKLE_JOINT_FIELDS = ("pos", "tgt", "err", "vel")

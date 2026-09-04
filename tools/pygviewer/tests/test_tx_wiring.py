@@ -368,13 +368,13 @@ def test_live_enable_arm_heartbeat_target_tracks_over_real_udp(live_rig):
   _drive(core, client, seconds=1.5, heartbeat=True)
 
   def _settled():
-    pkt = catcher.latest("left/knee/")
+    pkt = catcher.latest("left_leg/knee/")
     if pkt is None:
       return None
-    return pkt if abs(pkt.get("left/knee/pos", 1e9) - target_deg) < 2.0 else None
+    return pkt if abs(pkt.get("left_leg/knee/pos", 1e9) - target_deg) < 2.0 else None
 
   pkt = _wait_until(_settled, timeout=2.0)
-  assert abs(pkt["left/knee/pos"] - target_deg) < 2.0
+  assert abs(pkt["left_leg/knee/pos"] - target_deg) < 2.0
   st = client.get("/tx/status").json()
   assert st["last_seq"] is not None and st["last_seq"] >= 0
   assert st["rate_hz"] > 0
@@ -448,13 +448,13 @@ def test_live_joint_outside_enable_list_is_never_transmitted(live_rig):
   knee_deg = _target_deg(c, "L_knee_joint", 0.3)
 
   def _knee_moved():
-    pkt = catcher.latest("left/knee/")
-    return pkt if pkt and abs(pkt.get("left/knee/pos", 1e9) - knee_deg) < 2.0 else None
+    pkt = catcher.latest("left_leg/knee/")
+    return pkt if pkt and abs(pkt.get("left_leg/knee/pos", 1e9) - knee_deg) < 2.0 else None
 
   _wait_until(_knee_moved, timeout=2.0)
-  hip_pkt = catcher.latest("left/hip_pitch/")
+  hip_pkt = catcher.latest("left_leg/hip_pitch/")
   hip_default_deg = _target_deg(c, "L_hip_pitch_joint", c.default_q("L_hip_pitch_joint"))
   # never commanded (not in --enable / TxClient.joint_names) - stayed at dummy_rx's own
   # default, not driven toward the 0.35 rad the (never-sent) message would have asked for.
   assert hip_pkt is not None
-  assert abs(hip_pkt["left/hip_pitch/pos"] - hip_default_deg) < 1.0
+  assert abs(hip_pkt["left_leg/hip_pitch/pos"] - hip_default_deg) < 1.0

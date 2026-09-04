@@ -1,12 +1,15 @@
 """Sim -> HUPHY direction: canonical sim-joint radians -> HUPHY limb/motor cal-space degrees.
 
 This is the EXACT inverse of ``huphy_udp.py``'s telemetry conversion, and deliberately reuses
-its ``JointMap`` (same ``joint_map_huphy.json``, same 12-row hard-failure-on-unknown table) so
-the two directions of the bridge can never independently drift.  It has NO import of
+its ``JointMap`` (same map file, same 12-row hard-failure-on-unknown table, same
+``DEFAULT_MAP_PATH`` - biped's ``joint_map_biped.json`` since 2026-09-04, docs/123 section 11)
+so the two directions of the bridge can never independently drift.  It has NO import of
 ``huphy`` and never touches a socket - it is pure conversion math plus the joint table, so it
 is unit-testable on any machine, including this one, without HUPHY installed (docs/123
 section 4: the robot host is remote and this module has to be provably correct before it ever
-runs there).
+runs there).  Nothing here hardcodes a limb name - ``limb`` is whatever the map file's own
+``motors[i]["limb"]`` says (``left_leg``/``right_leg`` for the biped default, ``left``/
+``right``/``bench`` for the legacy maps).
 
 Units, once more because getting this wrong is exactly how a sim2real project loses a day:
 sim side is ALWAYS rad / rad-s / N*m (schema.py's rule).  HUPHY side is ALWAYS degrees / deg-s
@@ -85,7 +88,7 @@ def clamp_gain(value: float, cap: float, *, name: str = "gain") -> tuple[float, 
 
 
 class UnknownSimJointError(KeyError):
-  """A ``JointTarget.joint_names`` entry is not one of the 12 rows in ``joint_map_huphy.json``.
+  """A ``JointTarget.joint_names`` entry is not one of the 12 rows in the joint map (default: ``joint_map_biped.json``).
 
   Hard failure, never a guess - same policy as ``JointMap.sim_joint`` on the receive side."""
 
@@ -96,7 +99,7 @@ class JointTargetMapper:
   side, built from the SAME ``JointMap`` and the SAME contract ``travel_sign`` table.
 
   For the AB (loop-ankle) build, ``L_crank_A_joint``/``L_crank_B_joint`` map straight to the
-  ``ankle_a``/``ankle_b`` MOTOR rows in ``joint_map_huphy.json`` - no kinematics here, because
+  ``ankle_a``/``ankle_b`` MOTOR rows in the joint map (default: ``joint_map_biped.json``) - no kinematics here, because
   at this table's level a crank angle already IS the thing the motor reports 1:1 (same as
   ``huphy_udp.py``'s receive side, docs/123 section 4 item 2).  Turning those two motor
   targets into the ``ankle_pitch``/``ankle_roll`` action HUPHY's ``Leg.build_commands``
@@ -132,7 +135,7 @@ class JointTargetMapper:
     self, joint_names: list[str], q_target: list[float]
   ) -> dict[str, dict[str, float]]:
     """``{limb: {motor_name: cal_deg}}``, grouped by limb.  Raises ``UnknownSimJointError``
-    for any name not in ``joint_map_huphy.json``'s 12 motor rows - a caller that wants to
+    for any name not in the joint map's 12 motor rows - a caller that wants to
     accept a partial, filtered set should pre-filter with ``known_sim_joints()`` first
     (exactly what ``huphy_remote_motion.py``'s ``--enable`` list does)."""
     unknown = [n for n in joint_names if n not in self._by_sim_joint]

@@ -169,9 +169,11 @@ cd tools/pygviewer
 #       reads "SENDING" while held, "ARMED (hold Space)" the instant it is released (still
 #       armed - not disarmed)
 # 4. verify: terminal A's own telemetry (or a HUPHY-format UDP reader on :9870) shows
-#    left/knee/pos tracking left/knee/tgt within the wire's own rounding (~0.01 deg); release
-#    Space and confirm the receiver's own log crosses hold -> returning -> default over
-#    hold_s + return_s (3s + 2s by default) after 0.2s of silence.
+#    left_leg/knee/pos tracking left_leg/knee/tgt within the wire's own rounding (~0.01 deg) -
+#    "left_leg" is HUPHY biped's own Leg.id, not the pre-biped fork's bare "left"
+#    (docs/121 section 12); release Space and confirm the receiver's own log crosses
+#    hold -> returning -> default over hold_s + return_s (3s + 2s by default) after 0.2s of
+#    silence.
 ```
 
 `tests/test_tx_wiring.py` automates the same sequence over real loopback UDP against
@@ -606,8 +608,12 @@ tools/pygviewer/
     bridge/
       huphy_udp.py           HUPHY UDP -> canonical JointState/ImuState (P3); clips pos/tgt
                              to a row's optional rom_deg before conversion, if set (2026-09-04)
-      joint_map_huphy.json   explicit 12-row limb/motor -> sim-joint table (P3); optional
-                             per-row rom_deg: [lo,hi]|null, null everywhere today (2026-09-04)
+      joint_map_biped.json   DEFAULT since 2026-09-04 (biped structure migration, docs/121
+                             section 12): explicit 12-row left_leg/right_leg-motor ->
+                             sim-joint table; optional per-row rom_deg: [lo,hi]|null, null
+                             everywhere today
+      joint_map_huphy.json   legacy (pre-biped) bare left/right vocabulary, unchanged, still
+                             loadable via --map - no longer the default
       dummy_tx.py            sine/script/jsonl -> /ws/in and/or HUPHY-format UDP (P3)
       tx_map.py              sim-rad -> HUPHY cal-deg (inverse of huphy_udp.py), no huphy
                              import - docs/123 plan A item 2
@@ -618,7 +624,14 @@ tools/pygviewer/
       dummy_rx.py            huphy-free local round-trip target: UDP:9872 in -> 1st-order PD
                              motor model -> HUPHY-format UDP:9870 out - docs/123 item 4
       huphy_remote_motion.py robot-side HUPHY Motion; huphy imported lazily, only inside
-                             run_real() - --dry-run needs neither huphy nor CAN - item 3
+                             run_real() - --dry-run needs neither huphy nor CAN - item 3.
+                             Biped structure migration (2026-09-04): builds via build_biped()
+                             (build_robot/kind:"single" never existed on this HUPHY checkout;
+                             the only builders are build_leg and build_biped), --limb resolves
+                             through the joint map's own limb keys + historical aliases
+                             (resolve_side), and RemoteMotion prefixes every outgoing action
+                             key with the resolved biped limb id ("left_leg/knee", not bare
+                             "knee") since Biped.split_action hard-fails on an unprefixed name
       tx_client.py           viewer-side JointTarget sender: arm/mode-gate (blocks
                              policy_sim/policy_shadow)/safe_clip+slew/kp-kd-clamp - item 5.
                              Driven by tx.py's TxState from SimCore._on_control_tick (2026-09-04).

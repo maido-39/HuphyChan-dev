@@ -2,11 +2,18 @@
 
 Plan A (docs/123 section 4): the robot host runs **its own copy of HUPHY** plus two small
 scripts copied from this repo (`bridge/huphy_remote_motion.py`, `bridge/tx_map.py`,
-`bridge/remote_target.py`, `bridge/huphy_udp.py`, `bridge/joint_map_huphy.json`, and
+`bridge/remote_target.py`, `bridge/huphy_udp.py`, `bridge/joint_map_biped.json`, and
 `schema.py`/`contract.py` for the pieces they import from `pygviewer`). **HUPHY itself is
 never edited** - if something in HUPHY looks wrong while you go through this, write it down
 (what you ran, what you expected, what happened) and add it to docs/123 section 5 as a bug
 report instead of patching HUPHY's source.
+
+**Biped structure migration (2026-09-04, docs/121 section 12 / docs/123 section 11):** if your
+HUPHY checkout is on the `biped` branch, its own `robot.yaml` names limbs `left_leg`/
+`right_leg` (`Leg.id`, matching what `--limb`/telemetry keys use below) and the bridge builds
+via `build_biped()`, not the old `build_robot()` - this README already reflects that. If you
+are instead deploying against a pre-biped HUPHY checkout, use `bridge/joint_map_huphy.json`
+(the legacy `left`/`right` map, unchanged, still on disk) in step 7 and pass it via `--map`.
 
 The robot host can be a **remote machine** - everything below assumes that (SSH steps
 included). If you are already on the robot host, skip the SSH step.
@@ -120,7 +127,7 @@ scp tools/pygviewer/pygviewer/bridge/huphy_remote_motion.py \
     tools/pygviewer/pygviewer/bridge/tx_map.py \
     tools/pygviewer/pygviewer/bridge/remote_target.py \
     tools/pygviewer/pygviewer/bridge/huphy_udp.py \
-    tools/pygviewer/pygviewer/bridge/joint_map_huphy.json \
+    tools/pygviewer/pygviewer/bridge/joint_map_biped.json \
     tools/pygviewer/pygviewer/contract.py \
     tools/pygviewer/pygviewer/schema.py \
     <user>@<robot-host>:~/pygviewer_bridge/pygviewer/bridge/
@@ -157,7 +164,7 @@ On the robot host, from the directory containing `pygviewer/`:
 cd ~/pygviewer_bridge
 python3 -m pygviewer.bridge.huphy_remote_motion \
   --cache ./cache --variant LegOnly-AB \
-  --limb left --arm-token bench-test-1 \
+  --limb left_leg --arm-token bench-test-1 \
   --listen 0.0.0.0:9872 \
   --telemetry <your-viewer-or-dev-machine-ip>:9870 \
   --enable hip_pitch \
@@ -170,7 +177,9 @@ parses `--enable`, and can bind :9872. From the **development machine** (or wher
 viewer runs), send it a target with `tx_client.py` (see `tools/pygviewer/tests/
 test_remote_motion.py::test_run_dry_echoes_instant_tracking_telemetry_for_a_live_target` for
 a runnable example of exactly this) and confirm the `--telemetry` destination receives
-`left/hip_pitch/pos` packets. If nothing arrives, check firewalls between the two hosts
+`left_leg/hip_pitch/pos` packets (`left_leg` - the biped default map's own limb key, HUPHY's
+`Leg.id`; `--limb left` also works, `resolve_side()` resolves the historical alias to
+`left_leg` against this map). If nothing arrives, check firewalls between the two hosts
 before anything else - UDP has no handshake to fail loudly.
 
 ## 9. Real bench test: ONE motor, arm procedure
@@ -190,21 +199,25 @@ python3 -m pygviewer.bridge.huphy_remote_motion \
   --deadman-s 0.2 --hold-s 3 --return-s 2
 ```
 
-Note `--limb left_leg` here (HUPHY's own config key) vs `--limb left` in the dry-run above
-(the joint map's vocabulary) - `resolve_side()` accepts either, use whichever matches your
-`robot.yaml`.
+`--limb left_leg` here is both HUPHY's own `robot.yaml` config key AND the biped default
+joint map's own limb key, so it is unambiguous either way - `resolve_side()` also accepts the
+historical `--limb left` alias and resolves it to whichever of the map's own limbs is the left
+side (`left_leg` for the biped default), so either spelling reaches the same leg.
 
 From the sender side, arm and send a SMALL target for `hip_pitch` only (the one joint in
 `--enable`) - a few degrees, not the full range. Watch the console this script prints to: it
-logs every gain clamp and every ankle-FK failure, and HUPHY's own `logger.warning` calls
-(overrun, clip, reject) go to the same stream.
+logs every gain clamp and every ankle-FK failure, HUPHY's own `logger.warning` calls (overrun,
+clip, reject) go to the same stream, and every `--stats-interval-s` seconds (5s by default)
+it prints the accepted/rejected_*/parse_errors counters even while still running - if the
+motor is not moving, check THIS line first (a nonzero `rejected_arm_token` almost always means
+a token mismatch between this script and the sender, not a hardware problem).
 
-**To stop**: `Ctrl-C`. This script's `finally` block calls `leg.disconnect()`
-(HUPHY's own settle-then-disable sequence, `ControlLoop._exit`/`_settle` - holds the current
-pose for a few cycles, THEN cuts torque, so a standing joint does not suddenly go limp). If
-you need to stop FASTER than that (something looks wrong), cut power at the CAN/motor supply
-directly - do not wait for a clean shutdown if the joint is doing something you did not
-expect.
+**To stop**: `Ctrl-C`. This script's `finally` block calls `biped.disconnect()`
+(HUPHY's own settle-then-disable sequence per leg, `ControlLoop._exit`/`_settle` - holds the
+current pose for a few cycles, THEN cuts torque, so a standing joint does not suddenly go
+limp). If you need to stop FASTER than that (something looks wrong), cut power at the
+CAN/motor supply directly - do not wait for a clean shutdown if the joint is doing something
+you did not expect.
 
 To test the deadman without touching anything: arm, send a target, then just stop sending
 (kill the sender process, or unplug the network cable between the two hosts) and watch the

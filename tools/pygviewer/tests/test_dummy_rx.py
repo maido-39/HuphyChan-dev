@@ -5,6 +5,13 @@ stub), so this exercises the actual wire format both ends will use with a real r
 Timing note: the physics/telemetry loop runs at 100 Hz by default; these tests poll with a
 generous timeout rather than sleeping a fixed guess, so they are not flaky on a loaded CI box
 but still fail fast when the behaviour is actually wrong.
+
+Biped structure migration (2026-09-04): ``DummyRx`` builds its ``JointTargetMapper`` with no
+explicit joint map, so it picks up whichever ``DEFAULT_MAP_PATH`` the bridge defaults to - now
+``joint_map_biped.json`` (``left_leg``/``right_leg``), not the pre-biped ``left``/``right``.
+The telemetry key prefixes these tests match against were updated accordingly; nothing in
+``dummy_rx.py`` itself needed to change, since it already reads the limb name from the map
+rather than hardcoding one.
 """
 
 import json
@@ -150,13 +157,13 @@ def test_live_target_moves_the_motor_toward_it(rig):
   # LegOnly-AB's default pose is already a nonzero bent-knee angle, so ">5 deg" alone would
   # pass even for an untouched joint - compare against the actual COMMANDED degrees instead.
   def _moved():
-    pkt = catcher.latest("left/knee/")
+    pkt = catcher.latest("left_leg/knee/")
     if pkt is None:
       return None
-    return pkt if abs(pkt.get("left/knee/pos", 1e9) - target_deg) < 2.0 else None
+    return pkt if abs(pkt.get("left_leg/knee/pos", 1e9) - target_deg) < 2.0 else None
 
   pkt = _wait_until(_moved, timeout=3.0)
-  assert abs(pkt["left/knee/pos"] - target_deg) < 2.0
+  assert abs(pkt["left_leg/knee/pos"] - target_deg) < 2.0
 
 
 def test_deadman_then_return_to_default(rig):
@@ -182,13 +189,13 @@ def test_deadman_then_return_to_default(rig):
   # ALSO requires `rx.last_phase` to have actually left "live", which only becomes true once
   # the catcher has caught up to now.
   def _back_near_default():
-    pkt = catcher.latest("left/knee/")
+    pkt = catcher.latest("left_leg/knee/")
     if pkt is None or rx.last_phase == "live":
       return None
-    return pkt if abs(pkt.get("left/knee/pos", 1e9) - default_deg) < 2.0 else None
+    return pkt if abs(pkt.get("left_leg/knee/pos", 1e9) - default_deg) < 2.0 else None
 
   pkt = _wait_until(_back_near_default, timeout=2.0)
-  assert abs(pkt["left/knee/pos"] - default_deg) < 2.0
+  assert abs(pkt["left_leg/knee/pos"] - default_deg) < 2.0
   assert rx.last_phase in ("returning", "default", "hold")
 
 
@@ -211,16 +218,16 @@ def test_disabled_joint_never_moves(rig):
       time.sleep(0.02)
 
     def _knee_moved():
-      pkt = catcher.latest("left/knee/")
-      return pkt if pkt and abs(pkt.get("left/knee/pos", 1e9) - knee_target_deg) < 2.0 else None
+      pkt = catcher.latest("left_leg/knee/")
+      return pkt if pkt and abs(pkt.get("left_leg/knee/pos", 1e9) - knee_target_deg) < 2.0 else None
 
     _wait_until(_knee_moved, timeout=3.0)
-    hip_pkt = catcher.latest("left/hip_pitch/")
+    hip_pkt = catcher.latest("left_leg/hip_pitch/")
     assert hip_pkt is not None
     hip_default_deg = _default_deg(c, "L_hip_pitch_joint")
     # never commanded (not in --enable) - stayed at its own default, not driven toward the
     # 0.4 rad the message asked for.
-    assert abs(hip_pkt["left/hip_pitch/pos"] - hip_default_deg) < 1.0
+    assert abs(hip_pkt["left_leg/hip_pitch/pos"] - hip_default_deg) < 1.0
   finally:
     rx2.stop()
 
@@ -240,8 +247,8 @@ def test_wrong_arm_token_is_rejected_and_does_not_move_the_motor(rig):
     time.sleep(0.2)
     assert rx.latest.stats.rejected_arm_token >= 1
     knee_default_deg = _default_deg(c, "L_knee_joint")
-    pkt = catcher.latest("left/knee/")
-    assert pkt is None or abs(pkt.get("left/knee/pos", knee_default_deg) - knee_default_deg) < 1.0
+    pkt = catcher.latest("left_leg/knee/")
+    assert pkt is None or abs(pkt.get("left_leg/knee/pos", knee_default_deg) - knee_default_deg) < 1.0
   finally:
     bad_client.stop()
 

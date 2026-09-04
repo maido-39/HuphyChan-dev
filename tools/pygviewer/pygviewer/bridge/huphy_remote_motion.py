@@ -38,6 +38,31 @@ guards) - it has no path that accepts a raw motor-level ``ankle_a``/``ankle_b`` 
 before handing them to ``build_commands``, which promptly IK's them back to ``a1``/``a2``.
 That round trip is numerical (Newton FK, closed-form IK) and is flagged as a HUPHY interface
 gap in docs/123 section 5, not worked around here - see that section for the bug-report text.
+
+Biped structure migration (2026-09-04, docs/121 section 12 / docs/123 section 11): HUPHY's
+``biped`` branch dropped ``build_robot``/``LimbConfig.kind == "single"`` (both never existed
+here upstream at all, in fact - a prior version of this file assumed a "single" kind that
+this repo's HUPHY checkout never had).  The only builders now are ``build_leg`` (still hard-
+requires all 6 leg motors, ``robots/leg.py`` ``REQUIRED_MOTORS``) and ``build_biped`` (composes
+one or more ``Leg``s into a ``Biped``, which fills the ``Robot`` contract ``ControlLoop`` runs
+against).  This file now calls ``build_biped`` with ``limbs=[the one LimbConfig --limb
+resolved to]`` - deliberately ONE leg, not "every kind:leg limb in robot.yaml" (build_biped's
+own default when ``limbs`` is omitted) - because ``Biped.connect()``/``enable()`` are
+all-or-nothing across every part it holds (``robots/biped.py``: "하나라도 실패하면 전부 끊고
+올림"), and this tool has always driven exactly one side per invocation; building a second,
+physically-absent leg here would make every run fail on that leg's CAN bus instead of driving
+the one that exists.  A ``Biped`` is still needed (not a bare ``Leg``) because ``ControlLoop``
+needs a ``Robot``, and going through the biped layer is what buys the correct action-name
+contract below.
+
+``Biped`` also changes the ACTION contract: every joint/motor name gets the owning limb's
+``Leg.id`` prefixed with ``/`` (``"left_leg/knee"``, not bare ``"knee"``), and
+``Biped.split_action`` HARD-FAILS on an unprefixed name (``robots/biped.py``: "모르는 이름은
+에러임").  ``RemoteMotion.__call__`` builds its action dict in bare per-leg names exactly as
+before (unchanged - ``Leg.build_commands`` itself still takes bare ``hip_pitch``/.../
+``ankle_pitch``/``ankle_roll``, per-leg, since ``Leg`` did not change) and prefixes the WHOLE
+dict with ``f"{side}/"`` as the very last step before returning it - the one place in this
+file that has to know about the biped naming convention at all.
 """
 
 from __future__ import annotations
@@ -113,39 +138,84 @@ def split_motor_targets_into_action(
   return single, ankle
 
 
+_LEFT_ALIASES = ("left", "left_leg", "leftleg", "bench")
+"""Historical spellings that all mean "the left-side leg". ``bench`` is here because the
+single-motor bench rig's own map (``joint_map_bench.json``) has always put its one leg on the
+left ((limb='left') for the 5 real joints, (limb='bench') only for the re-patched knee row) -
+so an operator typing the old ``--limb bench`` habit against a map that has NO literal
+``bench`` row (e.g. the biped default) should still land on that map's left-side leg, not a
+hard error over a spelling that used to work."""
+_RIGHT_ALIASES = ("right", "right_leg", "rightleg")
+
+
 def resolve_side(limb_arg: str, jmap: JointMap | None = None) -> str:
   """Resolve ``--limb`` to the key the JOINT MAP uses for that limb.
 
   The returned value is not merely "left"/"right": every downstream use treats it as the
   map's own limb key (``row["limb"] == side`` in :func:`sim_joints_for_limb`, the lookup in
-  :func:`enable_motor_names_to_sim_joints`, and the ``f"{side}/{motor}/{field}"`` telemetry
-  keys that must match HUPHY's own wire format). So a map that names a limb something other
-  than left/right - ``joint_map_bench.json`` labels the single bench RS03's row
-  ``limb: "bench"``, matching ``bench_rs03_slcan.yaml``'s own limb key and the
-  ``bench/knee/...`` keys `deploy/bench/bench_telemetry.py` emits - must resolve to THAT
-  name, or nothing matches and the receiver silently drives nothing.
+  :func:`enable_motor_names_to_sim_joints`, the ``f"{side}/{motor}/{field}"`` telemetry keys
+  that must match HUPHY's own wire format, AND - biped structure migration, 2026-09-04 - the
+  ``f"{side}/"`` prefix :class:`RemoteMotion` puts on every outgoing action key, which must
+  equal the actual ``Leg.id`` HUPHY's ``robot.yaml`` gave that limb or ``Biped.split_action``
+  hard-fails the whole command).  So resolution must land on whatever THIS map calls that
+  limb, whatever vocabulary that happens to be - ``left_leg``/``right_leg`` (the biped
+  default, ``joint_map_biped.json``, matching HUPHY's own ``robot.yaml`` ``limbs`` keys),
+  ``left``/``right`` (the legacy ``joint_map_huphy.json``), or a one-off name like
+  ``joint_map_bench.json``'s ``bench``.
 
-  Accepted, in order: the map's own limb keys verbatim (when ``jmap`` is given), then the
-  historical aliases - the map vocabulary ``left``/``right`` (docs/123 section 3b's example
-  CLI) and HUPHY ``robot.yaml``'s config keys ``left_leg``/``right_leg``
-  (``config/robot_v1.0.yaml``) - since both spellings were already in use and picking one
-  would make the other fail to match without saying why.
+  Resolution order:
+
+    1. an EXACT match against the map's own limb keys (verbatim, then lower-cased) always
+       wins - never overridden by an alias guess, so a map's real vocabulary is authoritative.
+    2. no ``jmap`` at all (pure-helper unit tests, no map to resolve against) - the historical
+       bare ``left``/``right``/``left_leg``/``right_leg`` vocabulary, unchanged from before
+       biped existed.
+    3. a ``jmap`` IS given but step 1 found nothing verbatim - try the historical aliases
+       (``left``/``left_leg``/``leftleg``/``bench`` for the left side, ``right``/``right_leg``/
+       ``rightleg`` for the right) and resolve to whichever of THIS map's own limb names
+       actually represents that side.  This is what lets an operator keep typing
+       ``--limb left`` or ``--limb bench`` against the NEW biped map and land on
+       ``left_leg`` without needing to learn the new spelling first.
+
+  A name that matches nothing in any of the three steps is a hard failure - the error lists
+  this map's actual limbs, since guessing which one was meant is exactly the silent-failure
+  mode this whole bridge refuses to have (a typo'd ``--limb`` must not drive nothing while
+  looking like it started).
   """
   raw = limb_arg.strip()
   s = raw.lower()
   known = sorted({limb for (limb, _motor) in jmap.motors}) if jmap is not None else []
+
+  # 1) the map's own vocabulary, verbatim, always wins.
   if raw in known:
     return raw
   if s in known:
     return s
-  if s in ("left", "right"):
-    return s
-  if s in ("left_leg", "leftleg"):
-    return "left"
-  if s in ("right_leg", "rightleg"):
-    return "right"
-  extra = f" or one of this map's limbs {known}" if known else ""
-  raise ValueError(f"--limb {limb_arg!r}: expected one of left/right/left_leg/right_leg{extra}")
+
+  # 2) no map to resolve against - preserve the pre-biped bare left/right/left_leg/right_leg
+  #    behaviour exactly (used by this module's own pure-helper tests).
+  if jmap is None:
+    if s in ("left", "right"):
+      return s
+    if s in ("left_leg", "leftleg"):
+      return "left"
+    if s in ("right_leg", "rightleg"):
+      return "right"
+    raise ValueError(f"--limb {limb_arg!r}: expected one of left/right/left_leg/right_leg")
+
+  # 3) a map was given, but didn't have this spelling verbatim - fall back to "which side"
+  #    and resolve to whatever THIS map calls that side.
+  for aliases in (_LEFT_ALIASES, _RIGHT_ALIASES):
+    if s in aliases:
+      for candidate in aliases:
+        if candidate in known:
+          return candidate
+      break  # matched a side bucket but this map has no limb for it - fall through to error
+
+  raise ValueError(
+    f"--limb {limb_arg!r}: not one of this map's limbs and no alias resolves to one "
+    f"(available limbs: {known})"
+  )
 
 
 @dataclasses.dataclass
@@ -257,6 +327,63 @@ class _Receiver:
       self.latest.put(msg)
 
 
+class _StatsTicker:
+  """Background thread: prints the receive counters (accepted/rejected_seq/
+  rejected_arm_token/rejected_contract/parse_errors) every ``interval_s`` seconds, not only at
+  process exit.
+
+  2026-09-04: the exit-only summary this bridge had before made a real bench session take
+  much longer to debug than it should have - TX was confirmed sending at 50 Hz, telemetry was
+  confirmed arriving, and the motor still never moved, and the ONLY thing that would have said
+  why (``rejected_arm_token`` climbing every tick, a stale ``--arm-token`` on one side) was
+  invisible until Ctrl-C.  A periodic line turns "nothing is happening, why" into "the counter
+  told me in five seconds" - same spirit as ``docs/123`` section 10.1's ``clear_fault()`` fix,
+  another case where the symptom looked identical to several different root causes and only a
+  number printed at the right time told them apart."""
+
+  def __init__(self, latest: LatestOnly, recv: _Receiver, *, interval_s: float = 5.0, label: str = ""):
+    self.latest = latest
+    self.recv = recv
+    self.interval_s = float(interval_s)
+    self.label = label
+    self._thread: threading.Thread | None = None
+    self._running = False
+
+  def start(self) -> None:
+    if self.interval_s <= 0:
+      return  # 0/negative disables the ticker outright - e.g. a short automated test run
+    self._running = True
+    self._thread = threading.Thread(target=self._loop, name="huphy-remote-stats", daemon=True)
+    self._thread.start()
+
+  def stop(self) -> None:
+    self._running = False
+    if self._thread is not None:
+      self._thread.join(timeout=1.0)
+      self._thread = None
+
+  def _loop(self) -> None:
+    while self._running:
+      # Sleep in small slices so `stop()` doesn't have to wait out a whole interval - a short
+      # --seconds test run must not be held up by a 5s-granularity join timeout.
+      slept = 0.0
+      while self._running and slept < self.interval_s:
+        time.sleep(min(0.2, self.interval_s - slept))
+        slept += 0.2
+      if not self._running:
+        return
+      self.print_once()
+
+  def print_once(self) -> None:
+    s = self.latest.stats
+    print(
+      f"{self.label}stats: accepted={s.accepted} rejected_seq={s.rejected_seq} "
+      f"rejected_arm_token={s.rejected_arm_token} rejected_contract={s.rejected_contract} "
+      f"parse_errors={self.recv.parse_errors}",
+      flush=True,
+    )
+
+
 # =========================================================================== dry run (no huphy)
 def run_dry(args) -> int:
   """"CAN 없이 명령만 로그·UDP 텔레메트리 에코" - no huphy, no CAN, assumes INSTANT perfect
@@ -283,11 +410,14 @@ def run_dry(args) -> int:
   )
   recv = _Receiver(listen_host, int(listen_port), latest, mapper.known_sim_joints())
   recv.start()
+  ticker = _StatsTicker(latest, recv, interval_s=args.stats_interval_s, label="dry-run: ")
+  ticker.start()
   tx_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
   print(
     f"huphy_remote_motion --dry-run: side={side} listening on {args.listen}, "
-    f"telemetry(assumed-instant-tracking) -> {args.telemetry}, enabled={sorted(enable)}"
+    f"telemetry(assumed-instant-tracking) -> {args.telemetry}, enabled={sorted(enable)}",
+    flush=True,
   )
   period = 1.0 / args.hz
   last_phase = None
@@ -323,17 +453,18 @@ def run_dry(args) -> int:
         except OSError as e:
           logger.warning("dry-run: telemetry send failed: %s", e)
       if args.verbose:
-        print(f"  [{state.phase}] single={single} ankle_pair={ankle_pair}")
+        print(f"  [{state.phase}] single={single} ankle_pair={ankle_pair}", flush=True)
       ticks += 1
       time.sleep(max(0.0, period - (time.monotonic() - t0)))
   except KeyboardInterrupt:
     pass
   finally:
     recv.stop()
+    ticker.stop()
     tx_sock.close()
     print(f"dry-run: stopped. accepted={latest.stats.accepted} "
           f"rejected_seq={latest.stats.rejected_seq} rejected_arm_token={latest.stats.rejected_arm_token} "
-          f"rejected_contract={latest.stats.rejected_contract} parse_errors={recv.parse_errors}")
+          f"rejected_contract={latest.stats.rejected_contract} parse_errors={recv.parse_errors}", flush=True)
   return 0
 
 
@@ -347,13 +478,17 @@ def run_real(args) -> int:
   from huphy import telemetry as tele
   from huphy.motors.base import Gains
   from huphy.robots.leg import ANKLE_POSITION
-  # build_robot, not build_leg (2026-09-04): `build_leg` hard-requires all six leg motors
-  # (hip_pitch/hip_roll/hip_yaw/knee/ankle_a/ankle_b) and dies with "다리에 필요한 모터가 없음"
-  # on the one-motor bench. HUPHY's own `build_robot` dispatches on `limb.kind` ("leg" ->
-  # build_leg, "single" -> build_single_joint) and both builders take the SAME keyword
-  # signature on purpose, so this is a drop-in that also keeps every existing leg config
-  # working unchanged.
-  from huphy.scripts.bringup import build_robot
+  # build_biped, not build_robot (2026-09-04, biped branch): `build_robot`/`LimbConfig.kind ==
+  # "single"` never existed in this repo's HUPHY checkout at all - `biped` only ever shipped
+  # `build_leg` (still hard-requires all six leg motors, `robots/leg.py` REQUIRED_MOTORS - the
+  # single-motor bench works around this by declaring all 6 motor rows in robot_bench.yaml,
+  # not by relaxing Leg) and `build_biped` (composes one-or-more Legs into a Biped, the
+  # `Robot`-contract object `ControlLoop`/`Telemetry.from_config` actually need). We build
+  # exactly ONE leg via `build_biped(..., limbs=[limb_cfg])` rather than biped's own default of
+  # "every kind:leg limb in robot.yaml" - see the module docstring's biped-migration note for
+  # why (Biped.connect()/enable() are all-or-nothing across every part it holds, and this tool
+  # has always driven exactly one side per invocation).
+  from huphy.scripts.bringup import build_biped
   from huphy.scripts.commission import CONFIG_NAME, _find_config
 
   contract = load_contract(args.cache, args.variant)
@@ -375,28 +510,38 @@ def run_real(args) -> int:
   except ConfigError as e:
     raise SystemExit(str(e)) from e
 
-  # HUPHY's own limb config key ("left_leg"/"right_leg") vs this bridge's --limb, which also
-  # accepts the joint map's plain "left"/"right" (resolve_side handles both; robot.limb()
-  # only knows the config-key form, so try that first and fall back to matching by .side).
+  # `RobotConfig.limb()` is unchanged by biped - still a straight dict lookup on robot.yaml's
+  # own `limbs` keys. `side` (resolve_side's result) is usually already that key verbatim (the
+  # biped default map's vocabulary IS robot.yaml's vocabulary, by construction), but a legacy
+  # map (bare "left"/"right"/"bench") won't match a biped robot.yaml's "left_leg"/"right_leg"
+  # key directly - fall back to matching by `LimbConfig.side` ("left"/"right"), inferred from
+  # `side`'s own spelling, same as the pre-biped fallback did.
   try:
-    limb_cfg = robot.limb(args.limb)
+    limb_cfg = robot.limb(side)
   except KeyError:
-    matches = [lc for lc in robot.limbs.values() if lc.side == side]
+    physical_side = "left" if side.lower().startswith("left") or side.lower() == "bench" else (
+      "right" if side.lower().startswith("right") else None
+    )
+    matches = [lc for lc in robot.limbs.values() if lc.side == physical_side]
     if not matches:
-      raise SystemExit(f"no limb in {path} has side={side!r} (--limb {args.limb!r})")
+      raise SystemExit(
+        f"no limb in {path} matches --limb {args.limb!r} (resolved side={side!r}; "
+        f"limbs in {path}: {sorted(robot.limbs)})"
+      )
     limb_cfg = matches[0]
 
-  leg = build_robot(
-    robot, limb_cfg,
+  biped = build_biped(
+    robot, limbs=[limb_cfg],
     allow_uncalibrated=args.allow_uncalibrated,
     gains=Gains(kp=args.kp_max, kd=args.kd_max),  # conservative uniform start; per-joint
     # overrides from the live message replace this every tick a joint is actually commanded
     # (see RemoteMotion.__call__) - this is only what an UNCOMMANDED-this-tick motor sits at.
     ankle_output=ANKLE_POSITION,
   )
+  leg = biped.part(limb_cfg.name)  # the one underlying Leg - kinematics/gain-override live here
 
   try:
-    leg.connect()
+    biped.connect()
   except ImportError as e:
     raise SystemExit(str(e)) from e
   except ConnectionError as e:
@@ -409,12 +554,15 @@ def run_real(args) -> int:
   # from a previous run blocks torque, `enable_torque` then silently does nothing, and the
   # symptom is a command stream that looks perfectly healthy - target exactly `max_delta_deg`
   # ahead of the measured pose (clamp_jump doing its job), telemetry at full rate - while the
-  # motor sits at tau ~= 0 and never moves. Guarded by hasattr so a robot whose bus has no
-  # clear_fault (or a test double) is unaffected.
-  bus_obj = getattr(leg, "bus", None)
-  if bus_obj is not None and hasattr(bus_obj, "clear_fault"):
-    bus_obj.clear_fault()
-    print("[remote_motion] cleared any latched motor fault before enabling torque", flush=True)
+  # motor sits at tau ~= 0 and never moves. Iterates every part of `biped` (not just `leg`) so
+  # this still clears every leg's bus once a second leg is ever added - guarded by hasattr so a
+  # bus with no clear_fault (or a test double) is unaffected.
+  for part in biped.parts:
+    bus_obj = getattr(part, "bus", None)
+    if bus_obj is not None and hasattr(bus_obj, "clear_fault"):
+      bus_obj.clear_fault()
+      print(f"[remote_motion] cleared any latched motor fault on {part.id} before enabling torque",
+            flush=True)
 
   listen_host, listen_port = args.listen.rsplit(":", 1)
   latest = LatestOnly(expected_arm_token=args.arm_token, expected_contract_hash=contract.contract_sha)
@@ -423,35 +571,40 @@ def run_real(args) -> int:
     enable=enable,
   )
   recv = _Receiver(listen_host, int(listen_port), latest, mapper.known_sim_joints())
+  ticker = _StatsTicker(latest, recv, interval_s=args.stats_interval_s, label="")
 
   telemetry_cfg = robot.telemetry
   if args.telemetry:
     tele_host, tele_port = args.telemetry.rsplit(":", 1)
     telemetry_cfg = dataclasses.replace(telemetry_cfg, host=tele_host, port=int(tele_port))
-  telemetry = tele.Telemetry.from_config(leg, telemetry_cfg)
+  telemetry = tele.Telemetry.from_config(biped, telemetry_cfg)
 
   motion = RemoteMotion(
-    leg=leg, side=side, mapper=mapper, deadman=deadman, latest=latest, gains_cls=Gains,
+    leg=leg, side=side, action_prefix=limb_cfg.name, mapper=mapper, deadman=deadman,
+    latest=latest, gains_cls=Gains,
     kp_max=args.kp_max, kd_max=args.kd_max, default_kp=args.kp_max, default_kd=args.kd_max,
   )
 
-  loop = ControlLoop(leg, hz=args.hz, telemetry=telemetry, mode=Mode.CONTROL)
+  loop = ControlLoop(biped, hz=args.hz, telemetry=telemetry, mode=Mode.CONTROL)
   recv.start()
+  ticker.start()
   print(
-    f"huphy_remote_motion: side={side} {limb_cfg.channel} listening on {args.listen}, "
-    f"telemetry -> {telemetry_cfg.host}:{telemetry_cfg.port}, enabled={sorted(enable)}, "
-    f"kp_max={args.kp_max} kd_max={args.kd_max}"
+    f"huphy_remote_motion: side={side} (biped limb {limb_cfg.name!r}) {limb_cfg.channel} "
+    f"listening on {args.listen}, telemetry -> {telemetry_cfg.host}:{telemetry_cfg.port}, "
+    f"enabled={sorted(enable)}, kp_max={args.kp_max} kd_max={args.kd_max}",
+    flush=True,
   )
   try:
     stats = loop.run(motion, duration_s=args.seconds)
-    print(f"\n  {stats.summary()}")
+    print(f"\n  {stats.summary()}", flush=True)
   finally:
     recv.stop()
-    leg.disconnect()
+    ticker.stop()
+    biped.disconnect()
     print(f"remote_motion: stopped. accepted={latest.stats.accepted} "
           f"rejected_seq={latest.stats.rejected_seq} rejected_arm_token={latest.stats.rejected_arm_token} "
           f"rejected_contract={latest.stats.rejected_contract} parse_errors={recv.parse_errors} "
-          f"warnings(last 20)={list(motion.warnings)[-20:]}")
+          f"warnings(last 20)={list(motion.warnings)[-20:]}", flush=True)
   return 0
 
 
@@ -460,13 +613,28 @@ class RemoteMotion:
   inside ``run_real()``'s huphy-available scope (constructed there and passed to
   ``ControlLoop.run``) - kept as a top-level class rather than a closure so its logic reads
   linearly and so a future test COULD drive it directly against a fake ``leg`` object without
-  a real HUPHY install, if one is written (not done here - see docs/123 section 5)."""
+  a real HUPHY install, if one is written (not done here - see docs/123 section 5).
 
-  def __init__(self, *, leg, side: str, mapper: JointTargetMapper, deadman: DeadmanFilter,
-               latest: LatestOnly, gains_cls, kp_max: float, kd_max: float,
-               default_kp: float, default_kd: float):
+  Biped structure migration (2026-09-04): note the TWO distinct "side" names this class
+  carries, which are usually equal in value but mean different things and can genuinely
+  diverge (a legacy joint map's ``left``/``right`` against a biped ``robot.yaml``'s
+  ``left_leg``/``right_leg``):
+
+    ``side``            the JOINT MAP's own limb key (``resolve_side``'s result) - used to
+                         pull this leg's motor targets out of ``mapper.to_motor_targets()``'s
+                         ``{limb: {...}}`` dict and to filter ``plan_gains``'s per-joint gains,
+                         exactly as before biped existed.
+    ``action_prefix``   the ACTUAL biped limb id (``Leg.id`` / ``LimbConfig.name``, e.g.
+                         ``"left_leg"``) - the ``/``-prefix ``Biped.split_action`` requires on
+                         every action key.  Applied ONLY at the very last step, on the way out.
+  """
+
+  def __init__(self, *, leg, side: str, action_prefix: str, mapper: JointTargetMapper,
+               deadman: DeadmanFilter, latest: LatestOnly, gains_cls, kp_max: float,
+               kd_max: float, default_kp: float, default_kd: float):
     self.leg = leg
     self.side = side
+    self.action_prefix = action_prefix
     self.mapper = mapper
     self.deadman = deadman
     self.latest = latest
@@ -520,7 +688,15 @@ class RemoteMotion:
         )
       self.leg.config = dataclasses.replace(self.leg.config, motors=motors)
 
-    return action
+    # Biped structure migration (2026-09-04): `action` above is built in bare per-leg names
+    # (`Leg.action_features`'s own vocabulary - "hip_pitch"/.../"ankle_pitch"/"ankle_roll",
+    # unchanged from before biped existed). `ControlLoop.step` hands this dict to
+    # `self.robot.build_commands(action)` where `self.robot` is the `Biped`, not this `Leg` -
+    # and `Biped.split_action` HARD-FAILS on any name without its owning limb's `/`-prefix
+    # (`robots/biped.py`: "모르는 이름은 에러임"). This is the one place in this file that
+    # prefixes for that - everywhere else (mapper, deadman, gain plan) stays in bare-name /
+    # `self.side` (the joint map's own vocabulary) terms, same as pre-biped.
+    return {f"{self.action_prefix}/{k}": v for k, v in action.items()}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -528,14 +704,24 @@ def build_parser() -> argparse.ArgumentParser:
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
   ap.add_argument("--variant", default="LegOnly-AB", choices=list(VARIANTS))
   ap.add_argument("--cache", default=CACHE_DIR)
-  ap.add_argument("--map", default=None, help="joint_map_huphy.json override")
+  ap.add_argument("--map", default=None,
+                   help="joint map override (default: joint_map_biped.json, biped's left_leg/"
+                        "right_leg vocabulary; joint_map_huphy.json's legacy left/right map "
+                        "still works if passed explicitly)")
   ap.add_argument("--config", default=None, help="HUPHY robot.yaml (real mode only)")
-  ap.add_argument("--limb", required=True, help="left/right or HUPHY's left_leg/right_leg")
+  ap.add_argument("--limb", required=True,
+                   help="which limb to command - the joint map's own vocabulary "
+                        "(left_leg/right_leg for the biped default) or a historical alias "
+                        "(left/right/left_leg/right_leg/bench); an alias resolves to whichever "
+                        "of the map's own limbs represents that side")
   ap.add_argument("--listen", default=f"0.0.0.0:{LISTEN_PORT}")
   ap.add_argument("--telemetry", default=None,
                    help="host:port for HUPHY telemetry (real mode overrides robot.yaml; "
                         "dry-run mode requires this)")
   ap.add_argument("--arm-token", required=True)
+  ap.add_argument("--stats-interval-s", type=float, default=5.0,
+                   help="print accepted/rejected_*/parse_errors this often while running, not "
+                        "only at exit (0 disables the periodic print)")
   ap.add_argument("--enable", default=None, help="comma-separated motor names, e.g. hip_pitch,knee,ankle")
   ap.add_argument("--kp-max", type=float, default=DEFAULT_KP)
   ap.add_argument("--kd-max", type=float, default=DEFAULT_KD)

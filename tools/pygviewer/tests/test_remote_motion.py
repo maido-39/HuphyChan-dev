@@ -6,6 +6,7 @@ HUPHY's source rather than tested; that gap is stated explicitly in docs/123 sec
 silently absorbed.
 """
 
+import dataclasses
 import json
 import socket
 import threading
@@ -17,6 +18,7 @@ import pytest
 
 from pygviewer import CACHE_DIR
 from pygviewer.bridge.huphy_remote_motion import (
+  RemoteMotion,
   build_parser,
   enable_motor_names_to_sim_joints,
   main,
@@ -26,6 +28,7 @@ from pygviewer.bridge.huphy_remote_motion import (
   split_motor_targets_into_action,
 )
 from pygviewer.bridge.huphy_udp import DEFAULT_MAP_PATH, JointMap
+from pygviewer.bridge.remote_target import DeadmanFilter, LatestOnly
 from pygviewer.bridge.tx_client import TxClient
 from pygviewer.contract import load_contract
 from pygviewer.schema import JointTarget
@@ -73,9 +76,11 @@ def test_resolve_side_rejects_garbage():
 
 # --------------------------------------------------------------------------- sim_joints_for_limb
 def test_sim_joints_for_limb_returns_six_names_per_side():
+  """Biped structure migration (2026-09-04): `_jmap()` is `DEFAULT_MAP_PATH` -> now
+  `joint_map_biped.json`, so the limb keys are `left_leg`/`right_leg`."""
   jmap = _jmap()
-  left = sim_joints_for_limb(jmap, "left")
-  right = sim_joints_for_limb(jmap, "right")
+  left = sim_joints_for_limb(jmap, "left_leg")
+  right = sim_joints_for_limb(jmap, "right_leg")
   assert len(left) == 6 and len(right) == 6
   assert all(n.startswith("L_") for n in left)
   assert all(n.startswith("R_") for n in right)
@@ -84,20 +89,20 @@ def test_sim_joints_for_limb_returns_six_names_per_side():
 # --------------------------------------------------------------------------- enable translation
 def test_enable_single_motor_names_translate_to_sim_joints():
   jmap = _jmap()
-  out = enable_motor_names_to_sim_joints(["hip_pitch", "knee"], "left", jmap)
+  out = enable_motor_names_to_sim_joints(["hip_pitch", "knee"], "left_leg", jmap)
   assert out == {"L_hip_pitch_joint", "L_knee_joint"}
 
 
 def test_enable_ankle_alias_expands_to_both_crank_joints():
   jmap = _jmap()
-  out = enable_motor_names_to_sim_joints(["ankle"], "left", jmap)
+  out = enable_motor_names_to_sim_joints(["ankle"], "left_leg", jmap)
   assert out == {"L_crank_A_joint", "L_crank_B_joint"}
 
 
 def test_enable_unknown_motor_name_is_a_hard_failure():
   jmap = _jmap()
   with pytest.raises(KeyError):
-    enable_motor_names_to_sim_joints(["elbow"], "left", jmap)
+    enable_motor_names_to_sim_joints(["elbow"], "left_leg", jmap)
 
 
 # --------------------------------------------------------------------------- split_motor_targets
@@ -125,7 +130,8 @@ def test_plan_gains_uses_message_values_when_live_and_clamps():
     t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.1], kp=[50.0], kd=[5.0],
     arm_token="x", origin="manual",
   )
-  plan = plan_gains(["L_knee_joint"], mapper, "left", msg, "live",
+  # side="left_leg" - the DEFAULT (biped) mapper's own limb key (2026-09-04 migration)
+  plan = plan_gains(["L_knee_joint"], mapper, "left_leg", msg, "live",
                      kp_max=5.0, kd_max=0.5, default_kp=5.0, default_kd=0.5)
   assert plan.kp["knee"] == pytest.approx(5.0)  # clamped down from 50
   assert plan.kd["knee"] == pytest.approx(0.5)  # clamped down from 5
@@ -141,7 +147,7 @@ def test_plan_gains_uses_defaults_when_not_live():
     t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.1], kp=[3.0], kd=[0.4],
     arm_token="x", origin="manual",
   )
-  plan = plan_gains(["L_knee_joint"], mapper, "left", msg, "returning",
+  plan = plan_gains(["L_knee_joint"], mapper, "left_leg", msg, "returning",
                      kp_max=5.0, kd_max=0.5, default_kp=2.0, default_kd=0.2)
   # not "live" -> the message's own kp/kd (3.0/0.4) are NOT used, default_kp/kd are
   assert plan.kp["knee"] == pytest.approx(2.0)
@@ -153,7 +159,7 @@ def test_plan_gains_skips_joints_on_the_other_side():
   from pygviewer.bridge.tx_map import JointTargetMapper
 
   mapper = JointTargetMapper(c)
-  plan = plan_gains(["R_knee_joint"], mapper, "left", None, "idle",
+  plan = plan_gains(["R_knee_joint"], mapper, "left_leg", None, "idle",
                      kp_max=5.0, kd_max=0.5, default_kp=5.0, default_kd=0.5)
   assert plan.kp == {} and plan.kd == {}
 
@@ -234,13 +240,15 @@ def test_run_dry_echoes_instant_tracking_telemetry_for_a_live_target():
         except socket.timeout:
           break
         obj = json.loads(data.decode("utf-8"))
-        if "left/knee/pos" in obj:
+        # "left_leg/..." - --limb left resolves against the DEFAULT (biped) map, whose own
+        # limb key is "left_leg" (2026-09-04 migration; resolve_side's alias resolution).
+        if "left_leg/knee/pos" in obj:
           drained = obj
       return drained
 
     pkt = _wait_until(_got_knee_target, timeout=2.0)
-    assert pkt["left/knee/pos"] == pkt["left/knee/tgt"]  # instant-tracking assumption, stated
-    assert pkt["left/knee/pos"] > 5.0  # some non-default degrees given 0.4 rad
+    assert pkt["left_leg/knee/pos"] == pkt["left_leg/knee/tgt"]  # instant-tracking, stated
+    assert pkt["left_leg/knee/pos"] > 5.0  # some non-default degrees given 0.4 rad
   finally:
     client.stop()
     t.join(timeout=3.0)
@@ -281,6 +289,125 @@ def test_run_dry_rejects_unknown_joint_and_wrong_arm_token():
   finally:
     sock.close()
     t.join(timeout=3.0)
+
+
+# ---------------------------------------------------------------- biped action-key prefixing
+# (2026-09-04, docs/121 section 12 / docs/123 section 11): ``RemoteMotion`` is a plain,
+# duck-typed class - it imports no ``huphy`` type at module or class scope, only inside
+# ``run_real()`` - so it CAN be driven directly against a fake ``leg`` object without a real
+# HUPHY install, exercising the one thing this file's rewrite exists to get right: every key
+# ``RemoteMotion.__call__`` returns must carry the ``f"{action_prefix}/"`` limb prefix
+# ``Biped.split_action`` requires, or a real run dies with "모르는 관절" the first tick it
+# tries to command anything.
+class _FakeGains:
+  def __init__(self, kp, kd):
+    self.kp = kp
+    self.kd = kd
+
+
+@dataclasses.dataclass
+class _FakeMotorCfg:
+  """A ``dataclasses.dataclass``, not a plain class: ``RemoteMotion.__call__``'s per-tick gain
+  override does ``dataclasses.replace(motors[name], gains=...)`` and
+  ``dataclasses.replace(self.leg.config, motors=...)``, both of which require an actual
+  dataclass instance - matching HUPHY's real ``LimbConfig``/``Motor`` (both
+  ``@dataclass(frozen=True)``, ``config/schema.py``)."""
+
+  gains: object = None
+
+
+@dataclasses.dataclass
+class _FakeLegConfig:
+  motors: dict
+
+
+def _fake_leg_config(motor_names) -> _FakeLegConfig:
+  return _FakeLegConfig(motors={n: _FakeMotorCfg() for n in motor_names})
+
+
+class _FakeKinematics:
+  """Trivial stand-in for HUPHY's ``AnkleKinematics`` - the exact pitch/roll numbers it
+  returns are irrelevant to a test that only checks WHICH KEYS come out, not their values."""
+
+  def solve_fk(self, a1_deg, a2_deg, *, guess_pitch_deg=0.0, guess_roll_deg=0.0):
+    return (a1_deg, a2_deg)
+
+
+class _FakeLeg:
+  def __init__(self, motor_names):
+    self.kinematics = _FakeKinematics()
+    self.config = _fake_leg_config(motor_names)
+
+
+def _remote_motion(mapper, *, side="left_leg", action_prefix="left_leg", arm_token="tok"):
+  fake_leg = _FakeLeg(["hip_pitch", "hip_roll", "hip_yaw", "knee", "ankle_a", "ankle_b"])
+  latest = LatestOnly(expected_arm_token=arm_token)
+  deadman = DeadmanFilter(default_q={}, deadman_s=1.0, hold_s=1.0, return_s=1.0)
+  motion = RemoteMotion(
+    leg=fake_leg, side=side, action_prefix=action_prefix, mapper=mapper, deadman=deadman,
+    latest=latest, gains_cls=_FakeGains, kp_max=5.0, kd_max=0.5, default_kp=5.0, default_kd=0.5,
+  )
+  return motion, latest
+
+
+def test_remote_motion_prefixes_single_joint_action_keys_with_the_biped_limb_id():
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)  # DEFAULT_MAP_PATH -> joint_map_biped.json, limb "left_leg"
+  motion, latest = _remote_motion(mapper)
+  latest.put(JointTarget(
+    t_ns=1, seq=1, joint_names=["L_hip_pitch_joint", "L_knee_joint"], q_target=[0.1, 0.2],
+    arm_token="tok", origin="manual", ttl_ms=5000,
+  ))
+  action = motion(0.0, observation={})
+  assert action is not None and action  # non-empty
+  assert all(k.startswith("left_leg/") for k in action), action
+  # the bare (unprefixed) names must never leak out - that is exactly what Biped.split_action
+  # hard-fails on.
+  assert "hip_pitch" not in action and "knee" not in action
+  assert action["left_leg/hip_pitch"] == pytest.approx(mapper.to_motor_targets(
+    ["L_hip_pitch_joint"], [0.1]
+  )["left_leg"]["hip_pitch"])
+
+
+def test_remote_motion_prefixes_ankle_pitch_roll_keys_too():
+  """The ankle pair goes through an extra FK step (crank a1/a2 -> pitch/roll) before joining
+  the action dict - confirm the prefix is applied to THOSE keys as well, not only the
+  single-joint ones added earlier."""
+  c = _contract()
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  mapper = JointTargetMapper(c)
+  motion, latest = _remote_motion(mapper)
+  latest.put(JointTarget(
+    t_ns=1, seq=1, joint_names=["L_crank_A_joint", "L_crank_B_joint"], q_target=[0.05, -0.05],
+    arm_token="tok", origin="manual", ttl_ms=5000,
+  ))
+  action = motion(0.0, observation={})
+  assert action is not None
+  assert "left_leg/ankle_pitch" in action and "left_leg/ankle_roll" in action
+  assert all(k.startswith("left_leg/") for k in action), action
+
+
+def test_remote_motion_uses_a_different_action_prefix_than_the_mapper_side_when_they_differ():
+  """The mapper/deadman side (the joint MAP's own limb key) and the biped action prefix (the
+  actual ``Leg.id``) are usually equal, but this proves they are genuinely independent knobs -
+  a legacy map's ``left`` grouping key still gets re-prefixed with whatever biped limb id the
+  caller resolved (e.g. ``left_leg``), never the map's own spelling."""
+  c = _contract()
+  from pygviewer.bridge.huphy_udp import LEGACY_MAP_PATH
+  from pygviewer.bridge.tx_map import JointTargetMapper
+
+  legacy_mapper = JointTargetMapper(c, jmap=JointMap(LEGACY_MAP_PATH))  # groups under "left"
+  motion, latest = _remote_motion(legacy_mapper, side="left", action_prefix="left_leg")
+  latest.put(JointTarget(
+    t_ns=1, seq=1, joint_names=["L_knee_joint"], q_target=[0.2], arm_token="tok", origin="manual",
+    ttl_ms=5000,
+  ))
+  action = motion(0.0, observation={})
+  assert set(action.keys()) == {"left_leg/knee"}
+  assert "left/knee" not in action
 
 
 # ---------------------------------------------------------------- bench limb (2026-09-04)

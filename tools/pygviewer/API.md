@@ -206,8 +206,10 @@ the Obs tab agree with the policy by construction, never a second derivation of 
 The RECEIVED real IMU (if any) is a separate field, `telemetry.imu` (`RealState.imu`,
 unchanged shape - `{quat_wxyz, gyro_rad_s, acc_m_s2, gravity_b, age_s}`, all optional) -
 kept apart from `Status.imu` so a client can never confuse "what the sim computed" with
-"what a robot reported". `side_mapping_verified` mirrors `bridge/joint_map_huphy.json`'s own
-flag, read once at process start (drives the top-bar UNVERIFIED badge, docs/121 section 5).
+"what a robot reported". `side_mapping_verified` mirrors the bridge's DEFAULT joint map's own
+flag - `bridge/joint_map_biped.json` since 2026-09-04 (docs/121 section 12), not the legacy
+`joint_map_huphy.json` this used to read directly - read once at process start (drives the
+top-bar UNVERIFIED badge, docs/121 section 5).
 
 ## Hardware bridge (P3, implemented)
 
@@ -220,7 +222,8 @@ today - use `HuphyUdpReceiver(core, ...)` directly if embedding) or relay `/ws/i
 standalone bridge's `RealState` (not implemented; today's bridge CLI is a standalone
 diagnostic/verification tool, see docs/121 section 9 for the live test that exercised it).
 
-`bridge/joint_map_huphy.json` is an **explicit 12-row table** - `{limb, motor}` -> `sim_joint`,
+`bridge/joint_map_biped.json` (the bridge's default since 2026-09-04, docs/121 section 12 -
+biped structure migration) is an **explicit 12-row table** - `{limb, motor}` -> `sim_joint`,
 `sign`, `offset_rad`, `motor_model`, plus an optional `rom_deg: [lo, hi] | null` (ROM clip
 task, 2026-09-04; `null` on every row of this file and of `joint_map_bench.json` today, since
 neither rig has been through HUPHY's `commission sweep` yet). No regex, no default: a `(limb,
@@ -229,6 +232,13 @@ motor)` pair not in the table is a hard failure (`KeyError`, counted in
 carries the FK-derived `ankle_pitch`/`ankle_roll` values (AB only) into
 `JointState.ankle_derived`, never into the canonical actuated `q`; its rows carry the same
 optional `rom_deg`.
+
+Limb naming: HUPHY's `biped` branch prefixes every joint/motor with the owning limb's
+`Leg.id` - `left_leg`/`right_leg`, `robot.yaml`'s own `limbs` keys - so this map's `limb`
+column uses that vocabulary, not the pre-biped fork's bare `left`/`right`. The legacy map
+(`bridge/joint_map_huphy.json`, unchanged, same 12+4 rows, `left`/`right` vocabulary) is still
+on disk and still loadable via `--map`, for anything that still targets it. Nothing in the
+parser hardcodes either vocabulary - it reads whichever the map FILE says.
 
 When a row's `rom_deg` is set, `HuphyBridge.parse_fast` clips `pos`/`tgt` to it in HUPHY's own
 already-calibrated cal-space degrees, **before** the sim-rad conversion below - a clamp event
@@ -253,9 +263,9 @@ reading (an upright robot), and treating it as "missing" would null out the most
 
 Defaults asserted by the user on 2026-09-03, both **UNVERIFIED** until verification protocol
 steps 2 and 3 pass (docs/121 section 5) - the UI's Telemetry panel shows a persistent banner
-until `joint_map_huphy.json`'s `side_mapping_verified` is flipped to `true`:
+until the default map's `side_mapping_verified` is flipped to `true`:
 
-* sim `L_*` = HUPHY `left` / can0 / ids 1-6; `R_*` = `right` / can1 / ids 7-12.
+* sim `L_*` = HUPHY `left_leg` / can0 / ids 1-6; `R_*` = `right_leg` / can1 / ids 7-12.
   (This conflicts with the `L_* = physical R` note in `tools/robot_model/rotor_faces.json`,
   which is exactly why the banner exists.)
 * HUPHY `ankle_a` = sim `crank_A` (upper motor), `ankle_b` = `crank_B` (lower).
