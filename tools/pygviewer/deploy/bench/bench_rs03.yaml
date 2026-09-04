@@ -26,8 +26,4 @@ limbs:
     interface: socketcan
     control_hz: 100.0
     motors:
-      m127: {id: 127, model: RS03, kp: 5.0, kd: 0.5}   # factory default id
-      m1:   {id: 1,   model: RS03, kp: 5.0, kd: 0.5}
-      m3:   {id: 3,   model: RS03, kp: 5.0, kd: 0.5}   # left hip_yaw slot
-      m5:   {id: 5,   model: RS03, kp: 5.0, kd: 0.5}   # left ankle_a slot
-      m6:   {id: 6,   model: RS03, kp: 5.0, kd: 0.5}   # left ankle_b slot
+      m127: {id: 127, model: RS03, kp: 5.0, kd: 0.5}   # bench motor: found at factory id 127 (2026-09-04), kept until it is assigned a leg slot
