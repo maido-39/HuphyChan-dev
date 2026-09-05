@@ -685,19 +685,20 @@ def run_real(args) -> int:
   # applies no torque but does make the motor answer with its state. One call before the loop
   # is enough to break the deadlock; after that each command's own reply keeps the table fresh.
   #
-  # ...but ONLY once torque is on (2026-09-05, second bench incident). A motor whose driver is
-  # off does not answer a MIT command frame at all - it still answers the private "who are you"
-  # query, which is why a probe found both motors happily on the bus while this seeding got
-  # 0/6. `ControlLoop._enter()` (huphy control/loop.py:363-372) is what calls `robot.enable()`,
-  # and that runs INSIDE `loop.run()` - i.e. AFTER this block. So the ordering only worked by
-  # luck: it survived while the previous process had been killed hard (leaving torque latched
-  # on), and broke the first time a run shut down cleanly, because `_exit()` disables torque on
-  # the way out. Then the NO_STATE deadlock above is permanent and the viewer shows every joint
-  # dead at 0.0 deg with the loop reporting a perfectly healthy 100 Hz.
+  # Torque is switched on first, so that state is seeded on a motor that is fully live.
   #
-  # Enabling here is safe and not a duplicate-with-side-effects: `enable()` only powers the
-  # driver, it applies no target (nothing moves until a command carries one), and `_enter()`
-  # calling it a second time a few milliseconds later is idempotent.
+  # CORRECTION (2026-09-05, measured): an earlier version of this comment claimed a motor with
+  # torque OFF does not answer a MIT command frame at all, and that this was why seeding
+  # returned 0/6. That is wrong - measured directly: after `disable_torque()`, both motors
+  # still answered every state request (0.5 s / 1.0 s / 2.0 s later, no motor missing), while
+  # a 5 deg offset produced 0.00 deg of motion and exactly zero torque. Response says nothing
+  # about whether torque is on. The 0/6 was the collect-window race below, and nothing else -
+  # the two variables happened to change together, and the cause was pinned on the wrong one.
+  #
+  # The call stays because enabling before reading state is the natural order and costs
+  # nothing: `enable()` only powers the driver, applies no target (nothing moves until a
+  # command carries one), and `ControlLoop._enter()` calling it again milliseconds later is
+  # idempotent.
   biped.enable()
   print("[remote_motion] torque enabled before seeding (motors ignore command frames while off)",
         flush=True)
