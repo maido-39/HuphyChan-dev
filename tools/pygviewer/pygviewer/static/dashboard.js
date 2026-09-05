@@ -1985,14 +1985,25 @@ function updateImu3D() {
   const legend = el("imu-legend");
   if (realImu) {
     imu3d.realGroup.visible = true;
-    if (realImu.quat_wxyz) {
+    // With no real quaternion the translucent body borrows the SIM's orientation, so the
+    // only thing on screen that actually came from the sensor is the gravity arrow. Say that,
+    // rather than let a sim-shaped body under a "real" label read as a measured pose - the
+    // bridge deliberately does not re-derive a quaternion (huphy_udp.py::parse_imu explains
+    // why), so this is the normal case, not a fault.
+    const hasRealPose = !!realImu.quat_wxyz;
+    if (hasRealPose) {
       const q = realImu.quat_wxyz;
       imu3d.realGroup.quaternion.set(q[1], q[2], q[3], q[0]);
     } else {
       imu3d.realGroup.quaternion.copy(imu3d.bodyGroup.quaternion);
     }
     if (realImu.gravity_b) setArrow(imu3d.gravArrowReal, realImu.gravity_b, 0.9);
-    if (legend) legend.textContent = `real IMU age ${fmt(realImu.age_s, 2)}s`;
+    if (legend) {
+      legend.textContent = hasRealPose
+        ? `real IMU age ${fmt(realImu.age_s, 2)}s`
+        : `real IMU age ${fmt(realImu.age_s, 2)}s - gravity arrow only; `
+          + `the translucent body copies the sim (no orientation on the wire)`;
+    }
   } else {
     imu3d.realGroup.visible = false;
     if (legend) legend.textContent = "no real IMU connected";

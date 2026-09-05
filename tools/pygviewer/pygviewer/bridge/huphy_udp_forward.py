@@ -79,7 +79,13 @@ async def _forward_until_disconnected(sock, bridge, ws, counters: dict) -> None:
         counters["rx"] += 1
         try:
           payload = json.loads(data.decode("utf-8"))
-          js = bridge.parse_fast(payload)
+          # IMU columns arrive in their own packet, keyed `imu/<name>/<field>`, and carry no
+          # joint values at all - so they have to be routed to parse_imu or they are simply
+          # dropped. This forwarder used to call parse_fast for everything, which silently
+          # discarded every IMU packet: parse_fast finds nothing it recognises and returns
+          # None, indistinguishable from a packet that had nothing new in it.
+          js = (bridge.parse_imu(payload) if any(k.startswith("imu/") for k in payload)
+                else bridge.parse_fast(payload))
         except Exception as exc:  # malformed packet: count, keep going
           counters["err"] += 1
           if counters["err"] <= 5:

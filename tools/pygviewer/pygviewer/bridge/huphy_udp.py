@@ -170,6 +170,7 @@ class HuphyBridge:
     self._minus_one_streak: dict[str, int] = {}
     self.warnings: deque[str] = deque(maxlen=20)
     self.packets_parsed = 0
+    self._imu_seq = 0
     # ROM clip task (2026-09-04): a joint-map row MAY carry an optional `rom_deg: [lo, hi]`
     # field - the real hardware's OWN calibrated ROM (HUPHY `Motor.limits_deg`, filled in
     # once the leg has been through `commission sweep`), in the same already-calibrated
@@ -201,6 +202,8 @@ class HuphyBridge:
       if len(parts) != 3:
         continue
       limb, motor, field = parts
+      if limb == "imu":
+        continue  # handled by parse_imu - not a joint value
       if motor in KNOWN_MOTORS:
         if field == "err":
           continue  # err is target-minus-pos, derivable; not carried on the canonical wire
