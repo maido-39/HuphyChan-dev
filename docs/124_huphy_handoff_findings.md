@@ -682,11 +682,19 @@ RS03·RS04 동일합니다.
 | 가지 | 끝 커밋 | 내용 |
 |---|---|---|
 | `fix-fault-byte-order` | `68de3b0` | 1번(고장값 바이트 순서, `e9ddfe8`) + 0b번(온도 위쪽 4비트, `68de3b0`). 각각 시험을 함께 넣었고, 벤치에서 실제로 온 프레임을 재현 시험으로 박아 두었습니다 |
-| `bench-partial-rig` | `9bf07be` | 위 두 수정 + 벤치용 설정 `config/robot_bench.yaml`(4번 우회) + 0a번 관련 `max_delta_deg` 50→3 |
+| `bench-partial-rig` | `d54d240` | 위 가지 전부 + 벤치용 설정 `config/robot_bench.yaml`(4번 우회) + 0a번 관련 `max_delta_deg` 50→3 |
 
-두 가지 모두 `biped`(`cd6b8ac`)에서 갈라져 나왔습니다. `fix-fault-byte-order` 쪽이 **코드 수정만**
-담고 있어 받아 쓰시기 편할 것이고, `bench-partial-rig` 는 저희 벤치 장비(6개 선언·2개 결선)
-사정이 섞여 있으니 설정 부분은 그대로 쓰지 마십시오.
+두 가지 모두 `biped`(`cd6b8ac`)에서 갈라져 나왔습니다. **`fix-fault-byte-order` 쪽만 보시면 됩니다** — 라이브러리 본체에
+해당하는 것은 전부 거기 있습니다(`src/huphy/motors/robstride/codec/mit.py` 와 짝이 되는 시험
+3개). `bench-partial-rig` 는 그 가지를 **포함한 뒤** 저희 벤치 설정 파일 하나
+(`config/robot_bench.yaml`, 6개 선언·2개 결선)를 더한 것이라, **라이브러리 쪽으로 새로 들어가는
+내용이 없습니다.** 저희 장비 사정이므로 설정은 그대로 쓰지 마십시오.
+
+> 처음 올릴 때 `bench-partial-rig` 에 코드 수정만 옮기고 짝이 되는 시험 수정을 빠뜨려,
+> 그 가지만 받으면 `test_codec.py` 가 2건 실패했습니다(`9bf07be`). `d54d240` 에서
+> `fix-fault-byte-order` 를 합쳐 바로잡았습니다. 지금은 1075건 통과이고, 남은 1건
+> (`test_precise_sleep_beats_plain_sleep`)은 **원본 `biped` 에서도 똑같이 실패**하는
+> 시간 측정 시험이라 저희 변경과 무관합니다.
 
 **원본은 건드리지 않았습니다** — 올린 뒤 확인한 값입니다:
 
