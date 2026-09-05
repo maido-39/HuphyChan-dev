@@ -899,6 +899,16 @@
    "width": 440,
    "height": 320,
    "color": "4"
+  },
+  {
+   "type": "text",
+   "width": 420,
+   "height": 180,
+   "color": "4",
+   "id": "n_legonly_v2_measure",
+   "x": 21000,
+   "y": 340,
+   "text": "legonly_ab_v2 완주 측정 (2026-09-05)\n무릎 스윙 좌 63.5/70.2° 우 49.5/54.1° (사람 55~65) — 좌우 축 수정 효과 확인\n좌우 비대칭 14° · 저속 정체 0.5 m/s 26 % · 회전 50 %\n모터 실효 전부 정격 안 (엉덩이 벌림 76 %)\n→ 다음: 정비 → 리서치 노트 → 대칭항 / 디딤비율 A/B"
   }
  ],
  "edges": [
@@ -1696,6 +1706,22 @@
    "fromNode": "n_legonly_v2_smoke",
    "toNode": "n_legonly_v2",
    "label": "smoke PASS (knee window open) -> 16384-env launch; P1 graduated @4100 -> P2 (DR+push ramp), no transition dip; P2 @11565 (64%) reward 108, DR 0.75, fall 0, thermal 2.85 < 3.0"
+  },
+  {
+   "id": "e_v2_to_measure",
+   "fromNode": "n_legonly_v2",
+   "toNode": "n_legonly_v2_measure",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "완주 후 측정"
+  },
+  {
+   "id": "e_gaitkin_to_measure",
+   "fromNode": "n_legonly_gaitkin",
+   "toNode": "n_legonly_v2_measure",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "수정 전 기준선"
   }
  ]
 }
