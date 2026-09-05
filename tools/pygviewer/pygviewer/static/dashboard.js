@@ -65,7 +65,8 @@ const S = {
   ring: [],             // [{t, q:{}, target:{}, tau:{}, qd:{}, realQ:{}, realTau:{}, realQd:{}, realAgeS, sentTarget:{}}]
   txStatus: null,        // GET /tx/status, polled - server-side truth for enabled/armed/sending
   txDeadmanTimer: null,
-  leftTab: "model",
+  leftTab: "scenario",   // must match whichever tab carries class="on" in dashboard.html
+                         // - a mismatch renders one tab while highlighting another
   rightTab: "control",
   controlMode: "joints", // "joints" | "policy" - mutually exclusive sub-view of the Control tab
   unit: "deg",           // "deg" | "rad" - Joints tab display only; wire/internal stays rad
@@ -84,6 +85,8 @@ const S = {
   plotCells: {},         // A5: "row:kind" -> the grid cell DOM node, so renderPlots() can
                           // write each panel's current-value readout (plotReadoutText) into
                           // its own `.pv` span without re-querying the DOM every tick.
+  scenario: null,       // GET /scenario - the computed NAME of the current setup,
+                        // or null-key + what differs. Never stored, always recomputed.
   violations: null,      // GET /violations, polled every pollSlow tick (see A5 note there) - {records, by_joint, total}
   violationPanelOpen: false,
   violLastSeenSeq: 0,    // A5: highest violations.py `seq` already fed into #op-console -
@@ -291,6 +294,9 @@ async function pollSlow() {
     // existing 4 Hz cadence with limit=100. The topbar badge's own text still comes from the
     // WS-delivered Status.telemetry.violations SUMMARY (renderTopBar), not this fetch.
     S.violations = await api("GET", "/violations?limit=100");
+    // The name has to keep up with the mode dropdown and the arm button, which can both
+    // move without this panel knowing - so it is re-derived on every slow tick, never cached.
+    S.scenario = await api("GET", "/scenario");
     ingestViolationsForConsole(S.violations.records || []);
     if (S.violationPanelOpen) renderViolationPanel();
   } catch (e) {}
@@ -948,6 +954,7 @@ function renderLeftTab() {
   const body = el("left-body");
   if (!S.contract) { body.innerHTML = `<div class="small">loading contract...</div>`; return; }
   switch (S.leftTab) {
+    case "scenario": return renderTabScenario(body);
     case "model": return renderTabModel(body);
     case "base": return renderTabBase(body);
     case "telemetry": return renderTabTelemetry(body);
@@ -956,7 +963,117 @@ function renderLeftTab() {
   }
 }
 
+/* ------------------------------------------------------ 지금 무엇을 하는 중인가 (조합)
+ * A setup has a NAME only when all three axes match a recipe exactly: the run mode, whether
+ * hardware transmit is armed, and which program the robot reports it is running. The server
+ * decides (pygviewer/scenario.py); this only draws it. Two things this must never do:
+ *
+ *   - keep a name after an axis moved. The mode dropdown and the arm button can both change
+ *     state behind this panel's back, so a stale name would be believed exactly when it is
+ *     wrong.
+ *   - arm anything. The one setup that reaches the motors still goes through
+ *     sync -> ARM -> hold Space; this panel says so and stops there.
+ */
+function scenarioAxisRow(ok, label, value) {
+  return `<div class="sc-ax">
+    <span class="m ${ok ? "ok" : "no"}">${ok ? "✓" : "·"}</span>
+    <span class="lbl">${label}</span>
+    <span class="v">${value}</span>
+  </div>`;
+}
+
+function renderTabScenario(body) {
+  const sc = S.scenario;
+  if (!sc) { body.innerHTML = `<div class="small">확인하는 중...</div>`; return; }
+
+  const prog = sc.program || {};
+  const progText = prog.confirm === "confirmed"
+    ? `${prog.name} (${prog.age_s != null ? prog.age_s.toFixed(1) + "초 전" : "-"})`
+    : prog.confirm === "mismatch" ? `모르는 프로그램 ${prog.id}` : "응답 없음";
+
+  const head = sc.key
+    ? `<div class="sc-name">${sc.name_ko}
+         <span class="sc-torque ${sc.arms_torque ? "on" : "off"}">${sc.arms_torque ? "힘 켜짐" : "힘 꺼짐"}</span>
+       </div>
+       <div class="sc-sum">${sc.summary}</div>`
+    : `<div class="sc-name none">이름 붙일 수 없는 조합</div>
+       <div class="sc-sum">아래 세 가지가 정해진 조합과 맞아야 이름이 붙습니다.
+         지금은 <b>${(sc.nearest && sc.nearest.name_ko) || "-"}</b>에 가장 가깝고, 다음이 다릅니다.</div>
+       <ul style="margin:0 0 8px;padding-left:16px;font-size:11px;color:var(--accent2);line-height:1.5">
+         ${((sc.nearest && sc.nearest.differences) || []).map((d) => `<li>${d}</li>`).join("")}
+       </ul>`;
+
+  // A tick means "this axis matches the setup we are aiming at" - the current one if there
+  // is a name, otherwise the nearest. A tick that only meant "this value is known" would sit
+  // next to the very axis that is wrong, which is the misreading this panel exists to stop.
+  const aim = sc.key
+    ? (sc.choices || []).find((c) => c.key === sc.key)
+    : (sc.choices || []).find((c) => c.key === (sc.nearest && sc.nearest.key));
+  const wrong = new Set((aim && aim.differences) || []);
+  const hasWrong = (needle) => [...wrong].some((d) => d.indexOf(needle) === 0);
+  const axes =
+    scenarioAxisRow(!hasWrong("화면 모드"), "화면 모드", sc.mode) +
+    scenarioAxisRow(!hasWrong("전송"), "전송", sc.tx_armed ? "무장됨" : "해제됨") +
+    scenarioAxisRow(prog.confirm === "confirmed" && !hasWrong("로봇이"),
+                    "로봇 프로그램", progText);
+
+  const choices = (sc.choices || []).map((c) => {
+    if (!c.available) {
+      return `<div class="sc-choice na">
+        <h4>${c.name_ko}</h4>
+        <div class="act">${c.summary}</div>
+        <div class="na-why">아직 못 씁니다 — ${c.unavailable_reason}</div>
+      </div>`;
+    }
+    const diffs = (c.differences || []).map((d) => `<li>${d}</li>`).join("");
+    return `<div class="sc-choice ${c.is_current ? "cur" : ""}">
+      <h4>${c.name_ko}${c.is_current ? " — 지금 이것" : ""}</h4>
+      <div class="act">${c.action}</div>
+      ${diffs ? `<ul>${diffs}</ul>` : ""}
+      ${c.is_current ? "" :
+        `<button class="sc-go" data-key="${c.key}">${
+          c.would_arm_torque ? "이 조합으로 (힘이 켜집니다)" : "이 조합으로"
+        }</button>`}
+    </div>`;
+  }).join("");
+
+  body.innerHTML = `${head}<div class="sc-axes">${axes}</div>
+    <h3>고를 수 있는 조합</h3>${choices}
+    <div id="sc-todo"></div>`;
+  // Every left tab has to stamp which tab the body currently holds. `tabNeedsBuild` compares
+  // against it, so a tab that replaces the body WITHOUT stamping leaves the previous tab's
+  // name behind: going back there skips the rebuild and immediately reads elements that are
+  // no longer in the DOM. That is the "renderLeftTab: el(...) is null" this panel caused.
+  body.dataset.builtTab = "scenario";
+
+  body.querySelectorAll(".sc-go").forEach((b) => {
+    b.onclick = async () => {
+      const key = b.dataset.key;
+      const c = (S.scenario.choices || []).find((x) => x.key === key) || {};
+      if (c.would_arm_torque &&
+          !confirm(`'${c.name_ko}' 는 실물 모터에 힘이 들어가는 조합입니다.\n` +
+                   `이 버튼은 무장하지 않습니다 — 화면 모드만 맞춥니다. 계속할까요?`)) return;
+      const r = await apiOk("POST", "/scenario/apply", { key });
+      if (!r) return;
+      S.scenario = r.scenario;
+      renderLeftTab();
+      const todo = el("sc-todo");
+      if (todo && (r.done.length || r.todo.length)) {
+        todo.innerHTML = `<div class="sc-todo">
+          ${r.done.map((d) => `<div>· ${d}</div>`).join("")}
+          ${r.todo.length ? `<div style="margin-top:5px"><b>남은 것 (직접 하셔야 합니다)</b></div>` : ""}
+          ${r.todo.map((t) => `<div>· ${t}</div>`).join("")}
+        </div>`;
+      }
+    };
+  });
+}
+
 function renderTabModel(body) {
+  // Stamp which tab this body now holds. `tabNeedsBuild` compares against it, so a tab
+  // that replaces #left-body without stamping leaves the PREVIOUS tab's name behind -
+  // returning there then skips the rebuild and reads elements that are gone.
+  body.dataset.builtTab = "model";
   const c = S.contract;
   const st = S.status;
   body.innerHTML = `
@@ -1175,6 +1292,10 @@ function renderTabScript(body) {
 }
 
 function renderTabStatus(body) {
+  // Stamp which tab this body now holds. `tabNeedsBuild` compares against it, so a tab
+  // that replaces #left-body without stamping leaves the PREVIOUS tab's name behind -
+  // returning there then skips the rebuild and reads elements that are gone.
+  body.dataset.builtTab = "status";
   const st = S.status;
   if (!st) { body.innerHTML = `<div class="small">waiting for /ws/out...</div>`; return; }
   const rates = st.rates || {};

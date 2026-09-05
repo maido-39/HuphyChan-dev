@@ -33,6 +33,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from . import scenario
 from .schema import (
   AnkleTargetIn,
   CmdIn,
@@ -54,6 +55,7 @@ from .schema import (
   ShadowFollowIn,
   Status,
   TargetIn,
+  ScenarioApplyIn,
   TxConfigIn,
   TxEnableIn,
   WIRE_VERSION,
@@ -658,6 +660,69 @@ def build_app(core, freshness: dict) -> FastAPI:
     st = core.tx.status()
     st["sync"] = core.hw_sync.status(target_now, real_now)
     return st
+
+  @app.get(
+    "/scenario",
+    summary="What the current setup is called, or what stands between it and a name",
+  )
+  def get_scenario():
+    """The name is COMPUTED from three axes, never stored: the run mode, whether TX is armed,
+    and which program the robot reports. All three have to match a recipe exactly - see
+    ``scenario.py``. The third axis is a measurement with an age, so it becomes "unknown" on
+    its own when the robot stops talking rather than lingering as the last thing an operator
+    asserted."""
+    age = None
+    if core.real.prog_t is not None:
+      age = round(time.monotonic() - core.real.prog_t, 3)
+    return scenario.status(
+      mode=core.mode,
+      tx_armed=bool(core.tx.armed),
+      reported_id=core.real.prog_id,
+      age_s=age,
+    )
+
+  @app.post(
+    "/scenario/apply",
+    summary="Set the two axes the viewer owns (mode, TX arm) toward a named setup",
+  )
+  def post_scenario_apply(body: ScenarioApplyIn):
+    """Deliberately does NOT touch the robot-side program.
+
+    Pressing a button in the viewer cannot make the robot be running something else, and a
+    control that quietly restarts a robot program over SSH - one that turns torque on - is
+    not a thing a UI should do on one click. The response carries what the operator still has
+    to do by hand, and ``/scenario`` will confirm it once the robot says so itself.
+
+    Arming is never done here either: reaching the one setup that drives hardware still goes
+    through sync -> arm -> dead-man, unchanged.
+    """
+    sc = scenario.BY_KEY.get(body.key)
+    if sc is None:
+      raise HTTPException(404, f"모르는 조합: {body.key}")
+    if not sc.available:
+      raise HTTPException(409, f"{sc.name_ko}: {sc.unavailable_reason}")
+    done, todo = [], []
+    if core.mode != sc.mode:
+      # Same preconditions POST /mode enforces - checked here rather than duplicated, so a
+      # scenario button can never reach a mode the mode control itself would have refused.
+      if sc.mode.startswith("policy") and core.policy is None:
+        raise HTTPException(409, f"'{sc.mode}' 모드는 정책을 먼저 불러와야 합니다 "
+                                 f"(POST /policy/load)")
+      if sc.mode == "file_replay" and core.replayer is None:
+        raise HTTPException(409, "'file_replay' 모드는 기록을 먼저 불러와야 합니다")
+      core.submit({"op": "mode", "value": sc.mode})
+      done.append(f"화면 모드를 '{sc.mode}' 로 바꿨습니다")
+    if not sc.tx_armed and core.tx.armed:
+      core.tx.disarm(reason=f"scenario {sc.key}")
+      done.append("전송 무장을 해제했습니다")
+    elif sc.tx_armed and not core.tx.armed:
+      todo.append("전송을 무장하세요 — 실물로 나가는 전환이라 자동으로 하지 않습니다 "
+                  "(0. 실물에서 값 가져오기 → 3. ARM → 스페이스)")
+    if core.real.prog_id != sc.program:
+      need = scenario.PROGRAMS[sc.program]
+      todo.append(f"로봇에서 '{need['name']}' 를 실행하세요 ({need['label']})")
+    return {"ok": True, "key": sc.key, "done": done, "todo": todo,
+            "scenario": get_scenario()}
 
   @app.get("/presets", summary="UI v2: gains presets - built-in train/real + custom *.json")
   def get_presets():

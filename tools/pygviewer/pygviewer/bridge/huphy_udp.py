@@ -77,6 +77,8 @@ DIAG_MOTOR_FIELDS = (
   # +-180 fold guard (docs/125 round 3): wrap_blocked says this joint is refusing commands,
   # wrap_margin says how many degrees are left before the fold.
   "wrap_blocked", "wrap_margin",
+  # Which robot-side program is driving (scenario.py). Same value on every joint it drives.
+  "prog",
 )
 """Fault visibility (2026-09-05, docs/121/docs/124) added `stuck`/`fault_le`/`fault_be` to the
 original temp/age/ack/miss set - handled the SAME way (never travel-sign/offset corrected,
@@ -159,7 +161,7 @@ class HuphyBridge:
     self._buf = {
       n: dict(
         q=None, target=None, qd=None, tau=None, temp=None, age=None, ack=None, miss=None,
-        stuck=None, fault_le=None, fault_be=None, temp_valid=None, cutoff=None,
+        stuck=None, fault_le=None, fault_be=None, temp_valid=None, cutoff=None, prog=None,
       )
       for n in self.act_names
     }
@@ -271,6 +273,7 @@ class HuphyBridge:
       fault_be=[self._buf[n]["fault_be"] for n in self.act_names],
       temp_valid=[self._buf[n]["temp_valid"] for n in self.act_names],
       cutoff=[self._buf[n]["cutoff"] for n in self.act_names],
+      prog=[self._buf[n]["prog"] for n in self.act_names],
     )
 
   # ---------------------------------------------------------------------- imu

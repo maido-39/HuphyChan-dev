@@ -235,6 +235,30 @@ table.gains input{width:56px;text-align:right}
   display:flex;flex-direction:column;padding:10px}
 #modal .u-wrap{flex:1}
 #modal .hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+
+/* 상황(조합) 탭 — 세 축을 하나씩 맞추는 체크리스트 (docs/121, mockup B) */
+.sc-name{font-size:15px;font-weight:600;margin:2px 0 2px}
+.sc-name.none{color:var(--accent2)}
+.sc-sum{font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.45}
+.sc-torque{display:inline-block;font-size:10px;padding:1px 6px;border-radius:2px;margin-left:6px;vertical-align:2px}
+.sc-torque.on{background:#7a2f24;color:#ffd9d2}
+.sc-torque.off{background:#24402f;color:#c7e8d5}
+.sc-axes{border-top:1px solid var(--border);margin:6px 0 10px}
+.sc-ax{display:grid;grid-template-columns:14px 1fr auto;gap:0 7px;padding:5px 0;border-bottom:1px solid var(--border);align-items:baseline;font-size:11px}
+.sc-ax .m{font-size:11px;line-height:1.2}
+.sc-ax .m.ok{color:var(--accent)}
+.sc-ax .m.no{color:var(--accent2)}
+.sc-ax .v{font-family:ui-monospace,monospace;font-size:10.5px;color:var(--dim);text-align:right;white-space:nowrap}
+.sc-ax .lbl{color:var(--text)}
+.sc-choice{border:1px solid var(--border);padding:7px 8px;margin-bottom:6px}
+.sc-choice.cur{border-color:var(--accent)}
+.sc-choice.na{opacity:.55}
+.sc-choice h4{margin:0 0 2px;font-size:12px;font-weight:600}
+.sc-choice .act{font-size:10.5px;color:var(--dim);margin-bottom:5px;line-height:1.4}
+.sc-choice ul{margin:4px 0 6px;padding-left:15px;font-size:10.5px;color:var(--accent2);line-height:1.45}
+.sc-choice button{width:100%;font-size:11px}
+.sc-choice .na-why{font-size:10.5px;color:var(--dim);font-style:italic}
+.sc-todo{border-left:2px solid var(--accent2);padding:6px 9px;margin-top:8px;font-size:11px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -265,7 +289,8 @@ table.gains input{width:56px;text-align:right}
 
   <div class="left">
     <div class="tabs-v" id="left-tabs">
-      <div class="tab on" data-tab="model">Model</div>
+      <div class="tab on" data-tab="scenario">지금 무엇을 하는 중인가</div>
+      <div class="tab" data-tab="model">Model</div>
       <div class="tab" data-tab="base">Base link</div>
       <div class="tab" data-tab="telemetry">Telemetry / Record</div>
       <div class="tab" data-tab="script">Script</div>

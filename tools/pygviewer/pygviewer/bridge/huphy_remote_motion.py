@@ -82,6 +82,7 @@ from .. import CACHE_DIR, VARIANTS
 from ..contract import load_contract
 from ..schema import from_jsonl
 from .huphy_udp import DEFAULT_MAP_PATH, JointMap
+from ..scenario import PROGRAM_REMOTE_MOTION as PROGRAM_ID
 from .motor_fault import (
   WrapGuard,
   describe_wrap_simple,
@@ -1119,7 +1120,15 @@ class RemoteMotion:
 
     temp_flags = self._update_thermal_cutoff(observation)
     wrap_flags = self._update_wrap_guard()
-    self._send_fault_telemetry(stuck_flags, fault_now, {**temp_flags, **wrap_flags})
+    # Say which program this is, every diagnostic packet. The viewer names the current setup
+    # from three axes and this is the only one it cannot see for itself; without it the name
+    # rests on whatever an operator last asserted, which survives the robot being restarted
+    # into something else. Repeated (rather than announced once) so it goes stale by itself
+    # when this process stops talking - see scenario.PROGRAM_STALE_S.
+    prog_flags = {f"{m}/prog": float(PROGRAM_ID)
+                  for m in self._enabled_single_motor_names()}
+    self._send_fault_telemetry(stuck_flags, fault_now,
+                               {**temp_flags, **wrap_flags, **prog_flags})
 
   def _enabled_single_motor_names(self) -> set[str]:
     """The subset of :data:`SINGLE_MOTOR_NAMES` currently enabled on this side - the same

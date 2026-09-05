@@ -118,6 +118,14 @@ class JointState(Header):
     "robot's checkout. Shown alongside fault_le so an operator is never silently shown only "
     "one, possibly-wrong, interpretation.",
   )
+  prog: list[float | None] | None = Field(
+    default=None,
+    description="Scenario naming (2026-09-06): the id of the robot-side program driving this "
+    "joint, as that program reports it (pygviewer/scenario.py PROGRAMS). Carried per joint "
+    "because that is the shape this stream already has - the value is the same for every "
+    "joint one program drives. Lets the viewer KNOW what is running instead of believing "
+    "what an operator last told it; it goes stale on its own when the robot stops talking.",
+  )
   temp_valid: list[float | None] | None = Field(
     default=None,
     description="Overheat cutoff (2026-09-05, docs/121 section 13c): 0.0 = this joint's last "
@@ -411,6 +419,17 @@ class TxConfigIn(BaseModel):
   kp_max: float | None = Field(default=None, description="default 5.0 (docs/123 section 3 bench cap)")
   kd_max: float | None = Field(default=None, description="default 0.5 (docs/123 section 3 bench cap)")
   ttl_ms: int | None = Field(default=None, description="default 250ms (bridge.tx_client.DEFAULT_TTL_MS)")
+
+
+class ScenarioApplyIn(BaseModel):
+  """Which named setup to move toward (``scenario.py`` keys).
+
+  Only the two axes the viewer owns are touched. The robot-side program is reported back as
+  something the operator still has to do - a UI button cannot make a robot be running
+  something else, and one that restarted a torque-ON program over SSH would be doing exactly
+  what the arm/dead-man sequence exists to prevent."""
+
+  key: str = Field(description="scenario key, e.g. 'drive-both'")
 
 
 class TxEnableIn(BaseModel):

@@ -101,6 +101,10 @@ class RealState:
     # so these are deliberately kept OUT of `_has_diag`/the ok/warn/dead verdict and surfaced
     # as their own `fault_reason` string instead (see `_joint_fault_reason` / `health()`).
     self.stuck: dict[str, float | None] = {n: None for n in act_names}
+    # Robot-side program identity (scenario.py). One value for the whole link, not per
+    # joint - the stream carries it per joint only because that is the shape it has.
+    self.prog_id: int | None = None
+    self.prog_t: float | None = None
     self.fault_le: dict[str, float | None] = {n: None for n in act_names}
     self.fault_be: dict[str, float | None] = {n: None for n in act_names}
     # Overheat cutoff (2026-09-05, docs/121 section 13c) - same "own signal, not folded into
@@ -170,6 +174,11 @@ class RealState:
       ack_list = msg.ack or [None] * len(msg.joint_names)
       miss_list = msg.miss or [None] * len(msg.joint_names)
       stuck_list = msg.stuck or [None] * len(msg.joint_names)
+      prog_list = msg.prog or []
+      for v in prog_list:
+        if v is not None:
+          self.prog_id, self.prog_t = int(v), now
+          break
       fault_le_list = msg.fault_le or [None] * len(msg.joint_names)
       fault_be_list = msg.fault_be or [None] * len(msg.joint_names)
       temp_valid_list = msg.temp_valid or [None] * len(msg.joint_names)
