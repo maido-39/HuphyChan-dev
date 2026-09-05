@@ -15,7 +15,7 @@
 > `ROBSTRIDE-DYNAMICS/Robstride-Dynamics-Python-SDK`.
 >
 > **HUPHY 원본 가지는 건드리지 않았습니다.** 고친 것은 새 가지에만 있습니다:
-> `fix-fault-byte-order`(커밋 `e9ddfe8`), `bench-partial-rig`(벤치 설정).
+> `fix-fault-byte-order`(`68de3b0`), `bench-partial-rig`(`9bf07be`) — 2026-09-05 올려 두었습니다. 문서 끝 "넘기는 것" 참고.
 
 ---
 
@@ -677,9 +677,22 @@ RS03·RS04 동일합니다.
 
 ## 넘기는 것
 
-| 가지 | 내용 |
-|---|---|
-| `fix-fault-byte-order` | 1번 수정 + 시험 3곳 정정 + 실측 재현 시험 (커밋 `e9ddfe8`) |
-| `bench-partial-rig` | 벤치용 설정 `config/robot_bench.yaml` (4번 우회) |
+**2026-09-05 `Human-Pygmalion/HUPHY` 에 올렸습니다.** 아래 두 가지를 받아 보시면 됩니다.
 
-원본 `biped` 가지는 `cd6b8ac` 그대로이며 저희가 아무것도 커밋하지 않았습니다.
+| 가지 | 끝 커밋 | 내용 |
+|---|---|---|
+| `fix-fault-byte-order` | `68de3b0` | 1번(고장값 바이트 순서, `e9ddfe8`) + 0b번(온도 위쪽 4비트, `68de3b0`). 각각 시험을 함께 넣었고, 벤치에서 실제로 온 프레임을 재현 시험으로 박아 두었습니다 |
+| `bench-partial-rig` | `9bf07be` | 위 두 수정 + 벤치용 설정 `config/robot_bench.yaml`(4번 우회) + 0a번 관련 `max_delta_deg` 50→3 |
+
+두 가지 모두 `biped`(`cd6b8ac`)에서 갈라져 나왔습니다. `fix-fault-byte-order` 쪽이 **코드 수정만**
+담고 있어 받아 쓰시기 편할 것이고, `bench-partial-rig` 는 저희 벤치 장비(6개 선언·2개 결선)
+사정이 섞여 있으니 설정 부분은 그대로 쓰지 마십시오.
+
+**원본은 건드리지 않았습니다** — 올린 뒤 확인한 값입니다:
+
+```
+biped = cd6b8ac   (문서 작성 시점과 동일)
+main  = 133855f   (푸시 전과 동일)
+```
+
+새 가지 두 개만 추가했고, 기존 가지에는 커밋을 얹지 않았습니다.

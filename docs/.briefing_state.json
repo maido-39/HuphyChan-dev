@@ -1382,7 +1382,8 @@
    "number": "무릎 최고 1,072도/초, 엉덩이 회전 134도/초",
    "media": [
     "docs/img/bench_joint_speed_2026-09-05.png"
-   ]
+   ],
+   "collapsed": true
   },
   "resizable-panes": {
    "id": "resizable-panes",
@@ -1465,6 +1466,16 @@
    "media": [
     "docs/mujoco/assets/legonly_ab_v2_18099_loads_sidebyside.mp4"
    ]
+  },
+  "github-push": {
+   "id": "github-push",
+   "created": "2026-09-05 13:42",
+   "title": "작업물을 GitHub 에 올림 — 우리 저장소와 로봇 라이브러리 양쪽",
+   "why": "8월 22일부터 큰 영상 파일 때문에 막혀 있던 푸시가 그대로였고, 개발자에게 넘길 수정본도 아직 안 올라가 있었음",
+   "finding": "막고 있던 153 MB 영상이 어느 이력에도 남아 있지 않아 푸시가 그냥 됐음(가장 큰 파일 7.8 MB). 이력 재작성이나 대용량 저장소 전환은 필요 없었음. 로봇 라이브러리 쪽에는 새 가지 두 개만 추가했고 원본 가지는 손대지 않았음을 올린 뒤 값으로 확인함",
+   "number": "우리 저장소: main 223커밋 전진(파일 372개, 삭제 0개), Viewer-Prototype 243커밋 신규. 로봇 라이브러리: fix-fault-byte-order(68de3b0), bench-partial-rig(9bf07be) 신규 / 원본 biped cd6b8ac·main 133855f 변동 없음",
+   "section": "done",
+   "changed": "2026-09-05 13:42"
   }
  },
  "order": [
@@ -1594,7 +1605,8 @@
   "bench-two-joint",
   "bench-round1",
   "bench-motors-off",
-  "legonly-v2-measure"
+  "legonly-v2-measure",
+  "github-push"
  ],
- "updated": "2026-09-05 13:33"
+ "updated": "2026-09-05 13:42"
 }
