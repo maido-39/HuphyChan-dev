@@ -159,7 +159,15 @@ A2는 "주기 시계를 **얹는** 것"이 아니라 "체공 보상을 **대체*
 설명하는지가 A4의 필요 여부를 결정한다. A1~A3은 A0 위에서 각각 단일 변인 +800회 이어 학습으로 비교한다. A1은 무위험으로 분류돼 있어 A0과 **묶어도** 되지만,
 "유일 변인" 원칙상 분리한다.
 
-**실행 경로(A1~A3의 +800회 이어 학습)**: 관측 구조가 같으므로 표준 학습 명령의 재개 옵션(`--agent.resume True --agent.load-run <A0 런> --agent.load-checkpoint model_<끝>.pt`, 반복 횟수 +800)으로 가능하다. 관측이 다른 과제로 넘길 때만 `analysis/train_actor_warmstart.py`(정책부만 불러오기)가 필요하다. 2단계 런처(`run_v2_scratch.py`)에는 +N회 모드가 없어(P1→P2 재개 로직만) 그대로는 못 쓴다 — A/B 실행 전에 런처에 "체크포인트에서 +N회" 모드를 넣거나 표준 명령으로 직접 띄울지 정해야 한다(계획 항목).
+**실행 경로(A1~A3의 +800회 이어 학습) — 준비 완료(2026-09-05, mjlab `1405031f`)**: 2단계 런처에 "체크포인트에서 +N회" 모드를 추가했다. 부모 런의 `repro/launch_manifest.json`에서 설정 33개를 그대로 읽어 기본으로 쓰고 `--env`로 **정확히 바꿀 것만** 덧씌우므로 유일 변인이 보장된다. 런 노트 게이트·재현 스냅샷·매시 리뷰·워치독 등록·스펙 표·GPU 락·사전 점검을 기존과 똑같이 태운다(단위 테스트 27개, 실제 체크포인트 dry-run 확인). 사용 예:
+
+```
+cd mujoco-sim/mjlab
+bash analysis/run_v2_scratch.sh --run legonly_ab_v3_keyfix_a1 \
+  --continue-from logs/rsl_rl/pygmalion_velocity/<A0 P2 런 디렉터리> --continue-ckpt model_<끝>.pt --extra-iters 800 \
+  --env PYG_LOWSPEED_DEADBAND=0.05
+```
+(A2·A3는 각자의 `--env`만 바꿔 같은 부모에서 갈래를 낸다. 관측이 다른 과제로 넘길 때만 `analysis/train_actor_warmstart.py`.)
 
 **하지 않을 것**: 무릎 스윙 항 추가(이번 측정으로 불필요 확인), 체공 시간 보상 임계만 낮추기(P2 — A2가 상위 해법).
 
