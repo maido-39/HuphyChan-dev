@@ -71,6 +71,7 @@ import argparse
 import dataclasses
 import json
 import logging
+import os
 import socket
 import threading
 import time
@@ -82,6 +83,8 @@ from ..contract import load_contract
 from ..schema import from_jsonl
 from .huphy_udp import DEFAULT_MAP_PATH, JointMap
 from .motor_fault import (
+  WrapGuard,
+  describe_wrap_simple,
   FaultPoller,
   FaultReading,
   StuckDetector,
@@ -549,16 +552,16 @@ def _make_can_fault_query_fn(limb_cfg, leg):
     )
     return None
 
-  # id -> motor name, by OBJECT IDENTITY against leg.config.motors - never a guessed
-  # attribute name on HUPHY's own MotorConfig/id type (see this function's own docstring).
-  cfg_to_name = {id(cfg): name for name, cfg in leg.config.motors.items()}
-  try:
-    motors_by_id = limb_cfg.motors_by_id()
-  except Exception as e:
-    logger.warning("remote_motion: fault code reading unavailable (motors_by_id failed): %s", e)
-    return None
-  name_by_id = {mid: cfg_to_name.get(id(cfg)) for mid, cfg in motors_by_id.items()}
-  name_by_id = {mid: name for mid, name in name_by_id.items() if name is not None}
+  # id -> motor name, taken from the motor's OWN id field.
+  #
+  # This used to match `leg.config.motors` values against `limb_cfg.motors_by_id()` values by
+  # object IDENTITY. The two dicts hold equal-but-DISTINCT objects, so the match never
+  # succeeded and fault-code reading was off for every run on 2026-09-05 - announced only as a
+  # single "fault code reading unavailable" line at start-up that was easy to read as "not
+  # wired up yet". The whole point of this layer is to make faults visible, so it failing
+  # invisibly was the worst possible way for it to fail.
+  name_by_id = {int(cfg.id): name for name, cfg in leg.config.motors.items()
+                if getattr(cfg, "id", None) is not None}
   if not name_by_id:
     logger.warning("remote_motion: fault code reading unavailable (no motor id/name match)")
     return None
@@ -578,6 +581,32 @@ def _make_can_fault_query_fn(limb_cfg, leg):
       # 4-byte fault word, same slice read_fault_raw.py's own reference tool uses.
       out[name_by_id[mid]] = None if data is None or len(data) < 5 else bytes(data[1:5])
     return out
+
+  # OFF unless explicitly asked for (2026-09-05, measured the moment it first actually ran).
+  #
+  # A fault reply carries the SAME CAN id as a state frame and nothing distinguishes them -
+  # HUPHY's own `read_fault` knows this and flushes its receive queue around the query
+  # (robstride/bus.py). But this poller uses a SEPARATE socket, and socketcan delivers every
+  # frame to every socket, so HUPHY's bus also receives our fault replies and decodes them as
+  # state: position 0, velocity 0, torque 0, temp 0.
+  #
+  # Measured within a minute of this layer first working: the knee's reported angle flipped
+  # between its real 39.90 deg and ~0 deg on 18 of 148 samples. A command computed against a
+  # false 0 is a 40 deg move, and the sync-before-arm gate would happily sync onto it. That is
+  # a worse failure than the blindness this layer was meant to cure.
+  #
+  # Making faults visible needs HUPHY to expose the fault word from the bus that already owns
+  # the channel (docs/124 section 2), not a second reader guessing alongside it.
+  if os.environ.get("PYG_FAULT_POLL", "").strip() not in ("1", "true", "yes"):
+    logger.warning(
+      "remote_motion: fault code reading is OFF by default - polling it from a second socket "
+      "corrupts the state stream (docs/125 round 3). Set PYG_FAULT_POLL=1 to override."
+    )
+    try:
+      bus.shutdown()
+    except Exception:
+      pass
+    return None
 
   logger.info(
     "remote_motion: fault code reading enabled on %s/%s for %s",
@@ -771,6 +800,42 @@ def run_real(args) -> int:
   # _make_can_fault_query_fn's own docstring for exactly what is and is not verified here.
   fault_query_fn = _make_can_fault_query_fn(limb_cfg, leg)
 
+  # RAW motor angles for the fold guard. `MotorState.position_deg` is raw space (the motor's
+  # own +-180 report), which is exactly what the guard needs and what every other path in this
+  # bridge has already folded away by the time it is visible. Best-effort: any failure leaves
+  # the guard with no data, which it treats as "unknown" and does not block on.
+  def _make_raw_angle_fn():
+    bus_obj = getattr(leg, "bus", None)
+    if bus_obj is None or not hasattr(bus_obj, "state"):
+      logger.warning("remote_motion: fold guard inactive (no bus state accessor)")
+      return None
+    # Match on the motor's OWN id, which `Motor` carries as a plain field. An earlier version
+    # matched `leg.config.motors` values against `limb_cfg.motors_by_id()` values by object
+    # IDENTITY - the two dicts hold equal-but-distinct objects, so nothing ever matched and
+    # this quietly stayed off (the fault-code reader below had the same bug, and was dead all
+    # day for the same reason, announcing itself only as one line at start-up).
+    name_by_id = {int(cfg.id): name for name, cfg in leg.config.motors.items()
+                  if getattr(cfg, "id", None) is not None}
+    if not name_by_id:
+      logger.warning("remote_motion: fold guard inactive (no motor id/name match)")
+      return None
+
+    def raw_angles() -> dict[str, float | None]:
+      out: dict[str, float | None] = {}
+      for mid, nm in name_by_id.items():
+        try:
+          st = bus_obj.state(mid)
+          # stamp 0 means "never heard from" - not an angle of 0
+          out[nm] = float(st.position_deg) if getattr(st, "stamp", 0.0) else None
+        except Exception:
+          out[nm] = None
+      return out
+
+    logger.info("remote_motion: fold guard active for %s", sorted(name_by_id.values()))
+    return raw_angles
+
+  raw_angle_fn = _make_raw_angle_fn()
+
   motion = RemoteMotion(
     leg=leg, side=side, action_prefix=limb_cfg.name, mapper=mapper, deadman=deadman,
     latest=latest, gains_cls=Gains,
@@ -778,6 +843,7 @@ def run_real(args) -> int:
     idle_refresh=args.idle_refresh,
     fault_query_fn=fault_query_fn,
     telemetry_addr=(telemetry_cfg.host, int(telemetry_cfg.port)),
+    raw_angle_fn=raw_angle_fn,
   )
   # constructed after `motion` so the ticker's periodic line can report the running
   # idle-refresh-tick count alongside the receive counters (docs/123 section 11b) - a
@@ -853,7 +919,8 @@ class RemoteMotion:
                deadman: DeadmanFilter, latest: LatestOnly, gains_cls, kp_max: float,
                kd_max: float, default_kp: float, default_kd: float, idle_refresh: bool = True,
                fault_query_fn: Callable[[], dict[str, bytes | None]] | None = None,
-               telemetry_addr: tuple[str, int] | None = None):
+               telemetry_addr: tuple[str, int] | None = None,
+               raw_angle_fn: Callable[[], dict[str, float | None]] | None = None):
     self.leg = leg
     self.side = side
     self.action_prefix = action_prefix
@@ -868,6 +935,15 @@ class RemoteMotion:
     self.idle_refresh = idle_refresh
     self.idle_refresh_count = 0
     self._ankle_guess = (0.0, 0.0)
+    # +-180 fold guard (docs/125 round 3). Needs the RAW motor angle, not the joint angle:
+    # HUPHY folds raw<->cal through wrap180 both ways, so a wound-past-180 joint reports a
+    # perfectly ordinary-looking joint angle while every command to it becomes a few hundred
+    # degrees. Measured on this bench: knee raw 271.59 -> a 6 deg request moved ~195 deg at
+    # ~1072 deg/s and tripped an overvoltage cutout on both motors.
+    self.raw_angle_fn = raw_angle_fn
+    self.wrap_guard = WrapGuard()
+    self._wrap_blocked_names: set[str] = set()
+    self._wrap_state_active: dict[str, str] = {}
     self.warnings: deque[str] = deque(maxlen=200)
 
     # Fault visibility (2026-09-05, docs/121 section 12c / docs/124) - see
@@ -970,7 +1046,7 @@ class RemoteMotion:
     # stale target either; omitting the key is not enough on its own to guarantee zero
     # torque. `_cut_motor_names` only ever contains SINGLE_MOTOR_NAMES (see
     # `_update_thermal_cutoff`'s own docstring for why ankle is not covered).
-    for motor_name in self._cut_motor_names:
+    for motor_name in (self._cut_motor_names | self._wrap_blocked_names):
       obs_pos = (observation or {}).get(f"{self.action_prefix}/{motor_name}{OBS_POS_SUFFIX}")
       action[motor_name] = obs_pos if obs_pos is not None else action.get(motor_name, 0.0)
       motors = dict(self.leg.config.motors)
@@ -1042,7 +1118,8 @@ class RemoteMotion:
         self.warnings.append(line)
 
     temp_flags = self._update_thermal_cutoff(observation)
-    self._send_fault_telemetry(stuck_flags, fault_now, temp_flags)
+    wrap_flags = self._update_wrap_guard()
+    self._send_fault_telemetry(stuck_flags, fault_now, {**temp_flags, **wrap_flags})
 
   def _enabled_single_motor_names(self) -> set[str]:
     """The subset of :data:`SINGLE_MOTOR_NAMES` currently enabled on this side - the same
@@ -1095,6 +1172,38 @@ class RemoteMotion:
         self.warnings.append(line)
         self._temp_unreadable_active[motor_name] = True
     self._cut_motor_names = cut_now
+    return flags
+
+  def _update_wrap_guard(self) -> dict[str, float]:
+    """Decide which joints have wound too close to the +-180 fold to be commanded.
+
+    Same division of labour as :meth:`_update_thermal_cutoff`: this only DECIDES and returns
+    telemetry flags; ``__call__`` is what actually withholds torque. Runs every tick, live or
+    idle, because a joint can be wound by hand while nothing is being commanded.
+    """
+    flags: dict[str, float] = {}
+    if self.raw_angle_fn is None:
+      return flags
+    try:
+      raws = self.raw_angle_fn()
+    except Exception as e:                      # never let a diagnostic kill the loop
+      self.warnings.append(f"raw angle read failed: {e}")
+      return flags
+    blocked: set[str] = set()
+    for motor_name in self._enabled_single_motor_names():
+      r = self.wrap_guard.update(motor_name, raws.get(motor_name))
+      flags[f"{motor_name}/wrap_blocked"] = 1.0 if r["state"] == "blocked" else 0.0
+      if r["margin_deg"] is not None:
+        flags[f"{motor_name}/wrap_margin"] = float(r["margin_deg"])
+      if r["state"] == "blocked":
+        blocked.add(motor_name)
+      if self._wrap_state_active.get(motor_name) != r["state"]:
+        self._wrap_state_active[motor_name] = r["state"]
+        if r["state"] in ("warn", "blocked"):
+          line = describe_wrap_simple(motor_name, r)
+          logger.warning("remote_motion: %s", line)
+          self.warnings.append(line)
+    self._wrap_blocked_names = blocked
     return flags
 
   def _send_fault_telemetry(

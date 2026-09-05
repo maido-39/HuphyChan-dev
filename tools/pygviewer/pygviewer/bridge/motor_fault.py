@@ -38,6 +38,7 @@ hardware verification is reserved for the human operator, not this session).
 from __future__ import annotations
 
 import dataclasses
+import math
 import time
 
 # --------------------------------------------------------------------------- stuck detection
@@ -347,3 +348,117 @@ def describe_cutoff_simple(motor_label: str, result: dict, *, resumed: bool) -> 
   if resumed:
     return f"{motor_label}: 식어서 다시 시작 (온도 {result['temp_c']:.1f}도)"
   return f"{motor_label}: 과열로 힘을 끊음 (온도 {result['temp_c']:.1f}도, 기준 {OVERHEAT_CUTOFF_C:.0f}도)"
+
+
+# ============================================================================ wrap boundary
+WRAP_WARN_DEG = 150.0
+"""deg (raw motor space) - past this, say so. 30 deg of margin before the block."""
+
+WRAP_BLOCK_DEG = 170.0
+"""deg (raw motor space) - past this, stop commanding the joint.
+
+The motor reports its angle in +-180 and HUPHY converts raw<->cal through `wrap180` in BOTH
+directions (`motors/base.py`), so multi-turn information is destroyed on the way in and not
+restored on the way out. Once a joint winds past +-180 the conversion folds it to the other
+end, and a command meant as a few degrees becomes a few hundred: measured on this bench
+2026-09-05, a knee at raw 271.59 deg turned a 6 deg request into a ~195 deg move at about
+1072 deg/s, which braked hard enough to trip an overvoltage cutout on BOTH motors sharing the
+supply. 170 leaves 10 deg of margin at the bench command rate.
+"""
+
+WRAP_JUMP_WINDOW_S = 0.5
+"""s - two readings further apart than this are not compared for a fold.
+
+A jump only means a fold if the two readings are CONSECUTIVE. Samples far apart in time say
+nothing: the joint had time to travel, or the motor went quiet and came back. At the 100 Hz
+command rate 0.5 s is 50 missed replies, already a fault in its own right.
+"""
+
+WRAP_JUMP_DEG = 180.0
+"""deg between consecutive readings that can only be a fold, not real motion.
+
+At 100 Hz this would be 18,000 deg/s - far past what any of these motors can do (RS04 no-load
+is about 1140 deg/s), so a step this large is the +-180 fold, not the joint moving.
+"""
+
+
+class WrapGuard:
+  """Refuses to command a joint that has wound too close to the +-180 fold.
+
+  Watches the RAW motor angle (``MotorState.position_deg`` is raw space, not joint space).
+  Three outcomes per joint:
+
+    ``ok``       inside :data:`WRAP_WARN_DEG`
+    ``warn``     past the warn line but still commandable - the operator should unwind it
+    ``blocked``  past :data:`WRAP_BLOCK_DEG`, or a fold was actually observed
+
+  ``blocked`` latches: a joint that folded cannot be trusted again until someone unwinds it
+  and clears the guard, because every reading after the fold is ambiguous - the same raw
+  number means two different physical positions and nothing on the wire distinguishes them.
+  """
+
+  def __init__(self, warn_deg: float = WRAP_WARN_DEG, block_deg: float = WRAP_BLOCK_DEG,
+               jump_deg: float = WRAP_JUMP_DEG, jump_window_s: float = WRAP_JUMP_WINDOW_S):
+    self.warn_deg = float(warn_deg)
+    self.block_deg = float(block_deg)
+    self.jump_deg = float(jump_deg)
+    self.jump_window_s = float(jump_window_s)
+    self._prev: dict[str, tuple[float, float]] = {}   # name -> (raw_deg, stamp)
+    self._folded: set[str] = set()
+
+  def clear(self, name: str | None = None) -> None:
+    """Forget a latched fold, for an operator who has physically unwound the joint."""
+    if name is None:
+      self._folded.clear()
+      self._prev.clear()
+    else:
+      self._folded.discard(name)
+      self._prev.pop(name, None)
+
+  def update(self, name: str, raw_deg: float | None, *, now: float | None = None) -> dict:
+    """Returns ``{state, raw_deg, margin_deg, folded, reason}``.
+
+    A missing reading is ``state="unknown"`` and does NOT block: a motor that is not
+    answering is already handled by the freeze detector, and blocking on absent data would
+    withhold commands from every unpopulated slot on a partial rig.
+    """
+    if raw_deg is None or not math.isfinite(raw_deg):
+      return dict(state="unknown", raw_deg=raw_deg, margin_deg=None,
+                  folded=name in self._folded, reason="각도를 읽을 수 없음")
+
+    raw = float(raw_deg)
+    now = time.monotonic() if now is None else float(now)
+    prev = self._prev.get(name)
+    self._prev[name] = (raw, now)
+    # Only CONSECUTIVE readings can be compared. Two samples far apart in time say nothing -
+    # the joint had time to travel between them, or the motor went quiet and came back - and
+    # treating that as a fold would block a perfectly healthy joint. At the 100 Hz command
+    # rate a real gap of jump_window_s is already an eternity.
+    prev_raw = None
+    if prev is not None and (now - prev[1]) <= self.jump_window_s:
+      prev_raw = prev[0]
+      if abs(raw - prev_raw) >= self.jump_deg:
+        self._folded.add(name)
+
+    margin = 180.0 - abs(raw)
+    if name in self._folded:
+      return dict(state="blocked", raw_deg=raw, margin_deg=margin, folded=True,
+                  reason=f"±180도 경계를 넘은 흔적이 있음 (한 번에 {abs(raw - prev_raw):.0f}도 튐)"
+                         if prev_raw is not None else "±180도 경계를 넘은 흔적이 있음")
+    if abs(raw) >= self.block_deg:
+      return dict(state="blocked", raw_deg=raw, margin_deg=margin, folded=False,
+                  reason=f"±180도 경계까지 {margin:.1f}도 남음 (한계 {180 - self.block_deg:.0f}도)")
+    if abs(raw) >= self.warn_deg:
+      return dict(state="warn", raw_deg=raw, margin_deg=margin, folded=False,
+                  reason=f"±180도 경계까지 {margin:.1f}도 남음")
+    return dict(state="ok", raw_deg=raw, margin_deg=margin, folded=False, reason=None)
+
+
+def describe_wrap_simple(motor_label: str, result: dict) -> str:
+  """One plain-language line for the operator."""
+  if result["state"] == "blocked":
+    return (f"{motor_label}: 명령을 멈춤 — {result['reason']}. "
+            f"이대로 명령하면 작은 값이 수백 도 이동이 됩니다. 관절을 되감아 주세요")
+  if result["state"] == "warn":
+    return f"{motor_label}: {result['reason']} — 되감는 것이 좋습니다"
+  return f"{motor_label}: 경계에서 충분히 떨어져 있음"

@@ -1,0 +1,122 @@
+[
+ {
+  "kp": 10.0,
+  "joint": "L_knee_joint",
+  "target_deg": 40.0,
+  "settled_deg": 39.79,
+  "error_deg": -0.21000000000000085,
+  "n": 29,
+  "valid": true,
+  "wire_kp": [
+   9.77,
+   9.77
+  ],
+  "approach_deg": 0.22999999999999687,
+  "approach_commanded_deg": 6.0
+ },
+ {
+  "kp": 10.0,
+  "joint": "L_hip_yaw_joint",
+  "target_deg": 15.0,
+  "settled_deg": 14.12,
+  "error_deg": -0.8800000000000008,
+  "n": 29,
+  "valid": true,
+  "wire_kp": [
+   9.77,
+   9.77
+  ],
+  "approach_deg": 1.2699999999999996,
+  "approach_commanded_deg": 6.0
+ },
+ {
+  "kp": 20.0,
+  "joint": "L_knee_joint",
+  "target_deg": 40.0,
+  "settled_deg": 39.79,
+  "error_deg": -0.21000000000000085,
+  "n": 29,
+  "valid": true,
+  "wire_kp": [
+   19.54,
+   19.54
+  ],
+  "approach_deg": 0.3400000000000034,
+  "approach_commanded_deg": 6.0
+ },
+ {
+  "kp": 20.0,
+  "joint": "L_hip_yaw_joint",
+  "target_deg": 15.0,
+  "settled_deg": 14.449999999999998,
+  "error_deg": -0.5500000000000025,
+  "n": 29,
+  "valid": true,
+  "wire_kp": [
+   19.54,
+   19.54
+  ],
+  "approach_deg": 5.25,
+  "approach_commanded_deg": 6.0
+ },
+ {
+  "kp": 40.0,
+  "joint": "L_knee_joint",
+  "target_deg": 40.0,
+  "settled_deg": 39.88,
+  "error_deg": -0.11999999999999744,
+  "n": 29,
+  "valid": true,
+  "wire_kp": [
+   39.07,
+   39.07
+  ],
+  "approach_deg": 5.859999999999999,
+  "approach_commanded_deg": 6.0
+ },
+ {
+  "kp": 40.0,
+  "joint": "L_hip_yaw_joint",
+  "target_deg": 15.0,
+  "settled_deg": 14.52,
+  "error_deg": -0.4800000000000004,
+  "n": 29,
+  "valid": true,
+  "wire_kp": [
+   39.07,
+   39.07
+  ],
+  "approach_deg": 5.380000000000001,
+  "approach_commanded_deg": 6.0
+ },
+ {
+  "kp": 80.0,
+  "joint": "L_knee_joint",
+  "target_deg": 40.0,
+  "settled_deg": 39.93000000000001,
+  "error_deg": -0.06999999999999318,
+  "n": 29,
+  "valid": true,
+  "wire_kp": [
+   79.37,
+   79.37
+  ],
+  "approach_deg": 5.899999999999999,
+  "approach_commanded_deg": 6.0
+ },
+ {
+  "kp": 80.0,
+  "joint": "L_hip_yaw_joint",
+  "target_deg": 15.0,
+  "settled_deg": 14.629999999999999,
+  "error_deg": -0.370000000000001,
+  "n": 29,
+  "valid": true,
+  "wire_kp": [
+   79.37,
+   79.37
+  ],
+  "approach_deg": 6.4,
+  "approach_commanded_deg": 6.0
+ }
+]

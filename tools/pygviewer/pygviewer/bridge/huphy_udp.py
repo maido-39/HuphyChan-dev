@@ -74,6 +74,9 @@ KNOWN_ANKLE_JOINTS = ("ankle_pitch", "ankle_roll")
 # FAST already accumulates into - see the class docstring.
 DIAG_MOTOR_FIELDS = (
   "temp", "age", "ack", "miss", "stuck", "fault_le", "fault_be", "temp_valid", "cutoff",
+  # +-180 fold guard (docs/125 round 3): wrap_blocked says this joint is refusing commands,
+  # wrap_margin says how many degrees are left before the fold.
+  "wrap_blocked", "wrap_margin",
 )
 """Fault visibility (2026-09-05, docs/121/docs/124) added `stuck`/`fault_le`/`fault_be` to the
 original temp/age/ack/miss set - handled the SAME way (never travel-sign/offset corrected,
