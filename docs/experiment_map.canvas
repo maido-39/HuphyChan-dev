@@ -919,6 +919,16 @@
    "width": 420,
    "height": 140,
    "color": "3"
+  },
+  {
+   "id": "n_legonly_v3_keyfix",
+   "type": "file",
+   "file": "experiments/2026-09-05_legonly_ab_v3_keyfix.md",
+   "x": 21480,
+   "y": 580,
+   "width": 420,
+   "height": 160,
+   "color": "4"
   }
  ],
  "edges": [
@@ -1740,6 +1750,22 @@
    "fromSide": "bottom",
    "toSide": "top",
    "label": "세 결함의 뿌리"
+  },
+  {
+   "id": "e_research_to_v3",
+   "fromNode": "n_legonly_v2_research",
+   "toNode": "n_legonly_v3_keyfix",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "A0: 시작 자세 수정만"
+  },
+  {
+   "id": "e_v2_to_v3",
+   "fromNode": "n_legonly_v2",
+   "toNode": "n_legonly_v3_keyfix",
+   "fromSide": "right",
+   "toSide": "top",
+   "label": "유일 변인"
   }
  ]
 }
