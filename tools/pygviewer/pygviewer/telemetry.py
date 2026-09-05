@@ -229,9 +229,23 @@ class RealState:
               rate_limit_s=2.0,
             )
         if fault_le is not None:
+          changed = self.fault_le[n] != fault_le
           self.fault_le[n] = fault_le
           self.fault_be[n] = fault_be
-          if fault_le != 0 and self.violations is not None:
+          # Record a fault as an EVENT, not as a condition (2026-09-05 bench).
+          #
+          # The robot's telemetry buffer keeps the last value it saw for every field, so an
+          # unchanged fault word arrives with every packet - and recording one per packet
+          # turned a single stale reading into 420 violations per SECOND. Measured: 10,516
+          # records in 25 s, all of them the same two never-connected motors, and the
+          # all-time counter at 11.3 million. A real fault on a real motor would have been
+          # one line in that flood.
+          #
+          # `rate_limit_s` only thins the visible ring; the cumulative count and the console
+          # feed both ran at full rate. Comparing against the previous value fixes it at the
+          # source: a fault is reported when it APPEARS and when it CHANGES, and clearing it
+          # is an event too (handled by the caller reading self.fault_le).
+          if fault_le != 0 and changed and self.violations is not None:
             bits = named_fault_bits(int(fault_le))
             simple = "/".join(FAULT_BIT_SIMPLE_KO[b] for b in FAULT_BIT_NAMES if int(fault_le) >> b & 1)
             reason = (

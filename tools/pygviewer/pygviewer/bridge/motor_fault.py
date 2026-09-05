@@ -39,9 +39,13 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import os
+import logging
 import time
 
 # --------------------------------------------------------------------------- stuck detection
+logger = logging.getLogger(__name__)
+
 STUCK_ERR_DEG = 3.0
 """deg - |target - measured| must exceed this before a joint is even considered for "not
 tracking" at all (a joint that is simply mid-move, close to its target, is never flagged)."""
@@ -298,12 +302,36 @@ def query_fault_raw(
 
 
 # --------------------------------------------------------------------------- thermal cutoff
-OVERHEAT_CUTOFF_C = 50.0
+def _env_float(name: str, default: float) -> float:
+  """Read a threshold override from the environment, ignoring anything unusable.
+
+  The cut-off exists to protect the motors, so it must never be RAISED by a stray value or
+  silently disabled by a typo - a bad value falls back to the default rather than to no
+  limit. Present so the cut-off can be PROVEN to fire without heating a motor to 50 C:
+  set it a degree above the current winding temperature and watch it engage
+  (docs/125 round 4).
+  """
+  raw = (os.environ.get(name) or "").strip()
+  if not raw:
+    return default
+  try:
+    v = float(raw)
+  except ValueError:
+    logger.warning("%s=%r is not a number - keeping %.1f", name, raw, default)
+    return default
+  if not (0.0 < v <= default):
+    logger.warning("%s=%.1f is outside (0, %.1f] - keeping %.1f", name, v, default, default)
+    return default
+  logger.warning("overheat cut-off LOWERED to %.1f C by %s (test override)", v, name)
+  return v
+
+
+OVERHEAT_CUTOFF_C = _env_float("PYG_OVERHEAT_C", 50.0)
 """deg C - manual-stated operating temperature upper bound (docs/124 section 6: "사용 온도
 범위 -20 ~ 50도"), well below the 130 C winding limit and the 145 C fault threshold - this is
 a PREVENTIVE cutoff, not a reaction to the motor's own fault, by user instruction."""
 
-OVERHEAT_RESUME_C = 45.0
+OVERHEAT_RESUME_C = OVERHEAT_CUTOFF_C - 5.0
 """deg C - resume threshold, 5 C below the cutoff so a temperature sitting right at 50 C does
 not chatter the motor on/off every tick (hysteresis)."""
 
