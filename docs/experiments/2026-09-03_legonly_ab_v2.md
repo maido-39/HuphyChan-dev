@@ -365,6 +365,12 @@ base z **0.903 m**(std 0), base vx −0.001±0.000 m/s — 완전 정지.
 
 표 원본: `docs/mujoco/assets/actuator_eval_clean.csv`, `actuator_eval_push.csv`. 원 데이터 `analysis/out/legonly_ab_v2_18099_{clean,push}.npz`(각 90,750스텝).
 
+#### 영상 (규칙: 개요·근접 둘 다)
+- **개요(학습 진행 누적)**: `logs/.../legonly_ab_v2_p2/videos/accumulated_progress.mp4` — 완주 시 자동 생성(22.6 MB).
+- **근접(최종 정책, 부하 시각화)**: `docs/mujoco/assets/legonly_ab_v2_18099_loads_sidebyside.mp4` — 왼쪽 외란 없음 /
+  오른쪽 외란 주입, 실시간 25 fps, 대표 명령 8구간 × 15초(2분), 관절 색 = 부하, 화살표 = 지면 반력(청록 왼발·자홍 오른발,
+  0.4 m = 체중 1배), 글자는 영어. 20.7 MB. **저장소에는 커밋하지 않음**(대용량 영상은 LFS 결정 대기 — 기존 미해결 이슈).
+
 ### 2c-2. 다음 학습 계획 제안 (실행은 승인 후)
 
 규칙: 보상 변경 전 리서치 노트 필수, 단일 변인, 검증된 기준선 우선.
