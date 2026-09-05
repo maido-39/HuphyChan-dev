@@ -70,6 +70,7 @@ bash analysis/run_v2_scratch.sh --run legonly_ab_v3_keyfix --ankle AB --seed 42 
 
 | 시각 | iter | reward | ep_len | noise σ | value loss | entropy | surrogate / LR | fell / low_base | err_vxy / err_wz | DR / vx_max | thermal | 판정 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 09-05 17:42 | 724 | 108.8 (50avg 108.6) | 1000 | 0.193 | 0.0205 | -6.74 | -0.0004 / 1.3e-04 | 0.000 / 0.042 | 0.470 / 0.495 | 0.00 / 0.8 | 1.24 | **계속** — 게이트 1(17:45, 60분 심박): iter 724, reward 108.8 (50avg 108.6), ep_len 1000, 낙상 0.000 / 0.042, 추종오차 0.470 / 0.495, 단계 0(vx≤0.8), thermal 1.24. **v2 같은 시점(iter 685: 110.5 / ep_len 1000 / 낙상 0 / 오차 0.586)과 동급** — 오차는 0.470으로 오히려 낮음. 시작 자세 수정이 초기 학습을 해치지 않음. 중단 사유 없음 |
 
 ## §R 참조
 - 직전 런: [[2026-09-03_legonly_ab_v2]] · 뿌리 원인: [[2026-09-05_legonly_v2_gait_defects_root_cause]] · 시작 자세 수정 기록: [[106_session_backlog]] 09-05 항목
