@@ -1397,7 +1397,8 @@
    "media": [
     "docs/img/dashboard_console_covering_control_before.png",
     "docs/img/dashboard_resizable_panes_after.png"
-   ]
+   ],
+   "collapsed": true
   },
   "bench-temp-decode": {
    "id": "bench-temp-decode",
@@ -1476,6 +1477,15 @@
    "number": "우리 저장소: main 223커밋 전진(파일 372개, 삭제 0개), Viewer-Prototype 243커밋 신규. 로봇 라이브러리: fix-fault-byte-order(68de3b0), bench-partial-rig(9bf07be) 신규 / 원본 biped cd6b8ac·main 133855f 변동 없음",
    "section": "done",
    "changed": "2026-09-05 13:42"
+  },
+  "reset-keyframe-fix": {
+   "id": "reset-keyframe-fix",
+   "created": "2026-09-05 13:50",
+   "title": "다음 학습 전 정비: 로봇 시작 자세의 두 결함 수정",
+   "section": "done",
+   "changed": "2026-09-05 13:50",
+   "finding": "시작 자세에서 발바닥이 바닥 아래 31 mm 들어가 있고 발목 링크가 37 mm 찢어진 채 매 에피소드가 시작되던 문제를 찾아 수정. 발바닥은 바닥 위 5 mm, 링크 찢김은 0 mm로 확인. 이 수정은 다음 학습부터 적용하고, 지난 학습 결과 측정에는 옛 자세를 그대로 쓰는 스위치를 둠",
+   "number": "발바닥 −31→+5 mm, 링크 37.23→0.00 mm"
   }
  },
  "order": [
@@ -1606,7 +1616,8 @@
   "bench-round1",
   "bench-motors-off",
   "legonly-v2-measure",
-  "github-push"
+  "github-push",
+  "reset-keyframe-fix"
  ],
- "updated": "2026-09-05 13:42"
+ "updated": "2026-09-05 13:50"
 }
