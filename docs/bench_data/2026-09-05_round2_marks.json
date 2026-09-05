@@ -1,0 +1,90 @@
+[
+ {
+  "t_s": 0.5106577910482883,
+  "name": "CREEP kp=30: move +8deg then hold"
+ },
+ {
+  "t_s": 8.715396362997126,
+  "name": "CREEP kp=30: dead-man released, watching 60 s"
+ },
+ {
+  "t_s": 68.77396175899776,
+  "name": "CREEP kp=30: end"
+ },
+ {
+  "t_s": 69.28736772504635,
+  "name": "CREEP kp=60: move +8deg then hold"
+ },
+ {
+  "t_s": 77.49594094004715,
+  "name": "CREEP kp=60: dead-man released, watching 60 s"
+ },
+ {
+  "t_s": 137.54418465105118,
+  "name": "CREEP kp=60: end"
+ },
+ {
+  "t_s": 138.05255984404357,
+  "name": "GAP 50ms: commanding a slow sweep"
+ },
+ {
+  "t_s": 141.067139804014,
+  "name": "GAP 50ms: withholding commands"
+ },
+ {
+  "t_s": 141.117503735004,
+  "name": "GAP 50ms: commands resumed"
+ },
+ {
+  "t_s": 147.12770068499958,
+  "name": "GAP 100ms: commanding a slow sweep"
+ },
+ {
+  "t_s": 150.13937178702326,
+  "name": "GAP 100ms: withholding commands"
+ },
+ {
+  "t_s": 150.24371079402044,
+  "name": "GAP 100ms: commands resumed"
+ },
+ {
+  "t_s": 156.2507117240457,
+  "name": "GAP 150ms: commanding a slow sweep"
+ },
+ {
+  "t_s": 159.25587360700592,
+  "name": "GAP 150ms: withholding commands"
+ },
+ {
+  "t_s": 159.40632734203245,
+  "name": "GAP 150ms: commands resumed"
+ },
+ {
+  "t_s": 165.4147115360247,
+  "name": "GAP 250ms: commanding a slow sweep"
+ },
+ {
+  "t_s": 168.41670295601944,
+  "name": "GAP 250ms: withholding commands"
+ },
+ {
+  "t_s": 168.66729702899465,
+  "name": "GAP 250ms: commands resumed"
+ },
+ {
+  "t_s": 174.67460816999665,
+  "name": "GAP 500ms: commanding a slow sweep"
+ },
+ {
+  "t_s": 177.67670632101363,
+  "name": "GAP 500ms: withholding commands"
+ },
+ {
+  "t_s": 178.1789109710371,
+  "name": "GAP 500ms: commands resumed"
+ },
+ {
+  "t_s": 184.18701292102924,
+  "name": "done"
+ }
+]

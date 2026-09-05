@@ -100,6 +100,11 @@ class TxClient:
     src: str = "sim",
     frame: str = "model_v30",
     on_violation: Callable[[dict], None] | None = None,
+    # First sequence number this client will send. Not 0 when the caller is REPLACING a
+    # client that was already talking to a robot: the robot drops any message at or below the
+    # highest seq it has accepted (`remote_target.LatestOnly.put`), so restarting the count
+    # silently muted every command. See `tx.py::configure`.
+    start_seq: int = 0,
   ) -> None:
     if origin not in ("manual", "script"):
       raise RuntimeError(
@@ -168,7 +173,7 @@ class TxClient:
     self._lock = threading.Lock()
     self._pending: dict | None = None
     self._prev_sent: dict[str, float] = {}
-    self._seq = 0
+    self._seq = int(start_seq)
     self.sent_count = 0
     self.warnings: deque[str] = deque(maxlen=50)
 

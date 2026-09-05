@@ -378,6 +378,7 @@ class _StatsTicker:
     self.interval_s = float(interval_s)
     self.label = label
     self.idle_refresh_fn = idle_refresh_fn
+    self._seen_restarts = 0
     """Optional ``() -> int`` returning the running idle-refresh-tick count (2026-09-04, docs/
     123 section 11b) - ``None`` in ``--dry-run`` (no ``RemoteMotion``/real control loop, the
     concept does not apply there) so the field is omitted rather than printed as a
@@ -412,11 +413,22 @@ class _StatsTicker:
 
   def print_once(self) -> None:
     s = self.latest.stats
+    # Say it out loud when the receiver re-baselines onto a restarted sender. It recovers on
+    # its own now (LatestOnly.SEQ_RESTART_RUN), but an operator who restarts the viewer should
+    # be told WHY the robot went quiet for a second instead of having to wonder - the whole
+    # reason this bug survived a day is that nothing anywhere said a word about it.
+    if s.seq_restarts > self._seen_restarts:
+      self._seen_restarts = s.seq_restarts
+      logger.warning(
+        "remote_motion: the sender restarted its message count - now following the new "
+        "stream (%d time(s) so far). Commands were ignored for about %d messages while "
+        "that was decided.", s.seq_restarts, LatestOnly.SEQ_RESTART_RUN,
+      )
     extra = f" idle_refresh={self.idle_refresh_fn()}" if self.idle_refresh_fn is not None else ""
     print(
       f"{self.label}stats: accepted={s.accepted} rejected_seq={s.rejected_seq} "
       f"rejected_arm_token={s.rejected_arm_token} rejected_contract={s.rejected_contract} "
-      f"parse_errors={self.recv.parse_errors}{extra}",
+      f"parse_errors={self.recv.parse_errors} seq_restarts={s.seq_restarts}{extra}",
       flush=True,
     )
 

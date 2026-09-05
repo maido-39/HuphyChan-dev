@@ -38,6 +38,8 @@ class ReceiveStats:
 
   accepted: int = 0
   rejected_seq: int = 0
+  seq_restarts: int = 0
+  """Times the sender was judged to have restarted its counter (see LatestOnly.put)."""
   rejected_arm_token: int = 0
   rejected_contract: int = 0
   parse_errors: int = 0
@@ -68,13 +70,47 @@ class LatestOnly:
     self._msg: JointTarget | None = None
     self._recv_t: float | None = None
     self._last_seq: int | None = None
+    self._behind_run = 0
+    self._behind_first: int | None = None
+
+  SEQ_RESTART_RUN = 50
+  """Consecutive behind-the-high-water-mark messages that count as "the sender restarted".
+
+  50 at the 50 Hz command rate is one second - far longer than any reordering a UDP path
+  produces (a reorder is one or two packets, and the NEXT in-order packet clears the run),
+  and short enough that an operator who restarts the viewer does not sit through a dead
+  robot wondering what is wrong.
+  """
 
   def put(self, msg: JointTarget, *, now: float | None = None) -> bool:
     """Returns whether the message was accepted (for a caller that wants to log rejects)."""
     now = time.monotonic() if now is None else now
     if self._last_seq is not None and msg.seq <= self._last_seq:
-      self.stats.rejected_seq += 1
-      return False
+      # Reordered duplicate, or a sender that restarted its counter?
+      #
+      # Dropping everything at or below the high-water mark is right for the first case and
+      # catastrophic for the second: a restarted viewer begins at seq 0, so EVERY command it
+      # sends is "behind" and the robot ignores all of them - silently, because the link,
+      # the loop and the telemetry all stay perfectly healthy. Measured on the bench
+      # 2026-09-05: accepted=843 against rejected_seq=5823, an entire measurement run doing
+      # nothing at all, with no indication anywhere on screen.
+      #
+      # The two cases are told apart by how LONG the run lasts and whether it climbs.
+      # A reorder is one or two packets and the next in-order packet ends it. A restarted
+      # sender produces an unbroken run of steadily increasing low numbers. After
+      # SEQ_RESTART_RUN of those, re-baseline onto the new sender.
+      if self._behind_first is None or msg.seq <= self._behind_first:
+        self._behind_first, self._behind_run = msg.seq, 1
+      else:
+        self._behind_run += 1
+      if self._behind_run < self.SEQ_RESTART_RUN:
+        self.stats.rejected_seq += 1
+        return False
+      # accept, and re-baseline below
+      self.stats.seq_restarts += 1
+      self._last_seq = None
+    self._behind_run = 0
+    self._behind_first = None
     if msg.arm_token != self.expected_arm_token:
       self.stats.rejected_arm_token += 1
       return False

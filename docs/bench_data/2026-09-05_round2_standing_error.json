@@ -1,0 +1,66 @@
+[
+ {
+  "kp": 10.0,
+  "joint": "L_knee_joint",
+  "target_deg": 45.66,
+  "settled_deg": 45.66,
+  "error_deg": 0.0,
+  "n": 28
+ },
+ {
+  "kp": 10.0,
+  "joint": "L_hip_yaw_joint",
+  "target_deg": 31.970000000000002,
+  "settled_deg": 31.970000000000002,
+  "error_deg": 0.0,
+  "n": 28
+ },
+ {
+  "kp": 20.0,
+  "joint": "L_knee_joint",
+  "target_deg": 45.66,
+  "settled_deg": 45.66,
+  "error_deg": 0.0,
+  "n": 29
+ },
+ {
+  "kp": 20.0,
+  "joint": "L_hip_yaw_joint",
+  "target_deg": 31.970000000000002,
+  "settled_deg": 31.970000000000002,
+  "error_deg": 0.0,
+  "n": 29
+ },
+ {
+  "kp": 40.0,
+  "joint": "L_knee_joint",
+  "target_deg": 45.66,
+  "settled_deg": 45.66,
+  "error_deg": 0.0,
+  "n": 27
+ },
+ {
+  "kp": 40.0,
+  "joint": "L_hip_yaw_joint",
+  "target_deg": 31.970000000000002,
+  "settled_deg": 31.970000000000002,
+  "error_deg": 0.0,
+  "n": 27
+ },
+ {
+  "kp": 80.0,
+  "joint": "L_knee_joint",
+  "target_deg": 45.66,
+  "settled_deg": 45.66,
+  "error_deg": 0.0,
+  "n": 29
+ },
+ {
+  "kp": 80.0,
+  "joint": "L_hip_yaw_joint",
+  "target_deg": 31.970000000000002,
+  "settled_deg": 31.970000000000002,
+  "error_deg": 0.0,
+  "n": 29
+ }
+]

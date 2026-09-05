@@ -55,6 +55,7 @@ passed to this class, by construction, not by a runtime check that could be forg
 
 from __future__ import annotations
 
+import os
 import secrets
 import time
 from collections import deque
@@ -89,11 +90,25 @@ class TxState:
     # safe_clip or a mode-gate refusal lands in the same GET /violations a recv-side ROM
     # violation does - see violations.py's module docstring.
     self.violations = violations
-    # A shared secret this process makes up once and reports in status() - an operator
-    # copies it verbatim into the receiver's own --arm-token (dummy_rx.py /
-    # huphy_remote_motion.py both require one; there is deliberately no built-in default so a
-    # stale/forgotten value can never match by accident).
-    self.arm_token = secrets.token_hex(8)
+    # A shared secret this process reports in status(); an operator copies it verbatim into
+    # the receiver's own --arm-token (dummy_rx.py / huphy_remote_motion.py both require one;
+    # there is deliberately no built-in default, so a stale or forgotten value can never
+    # match by accident).
+    #
+    # Normally made up fresh each start. That is safe but it means **restarting the viewer
+    # kills the robot silently**: the receiver keeps checking the OLD token, drops every
+    # command as `rejected_arm_token`, and nothing on screen says so - the link, the loop and
+    # the telemetry all stay green while the joints simply stop responding (bench, twice on
+    # 2026-09-05). Setting PYG_ARM_TOKEN pins it, so the viewer can be restarted without
+    # restarting the robot too. Pin it only where the operator controls both ends - it is
+    # still a shared secret, so it does not belong in a shell history or a committed file.
+    env_token = (os.environ.get("PYG_ARM_TOKEN") or "").strip()
+    if env_token:
+      self.arm_token = env_token
+      self.arm_token_pinned = True
+    else:
+      self.arm_token = secrets.token_hex(8)
+      self.arm_token_pinned = False
 
     self.host: str | None = None
     self.port: int | None = None
@@ -130,7 +145,19 @@ class TxState:
     self.kp_max = float(kp_max) if kp_max is not None else DEFAULT_KP_CAP
     self.kd_max = float(kd_max) if kd_max is not None else DEFAULT_KD_CAP
     self.ttl_ms = int(ttl_ms) if ttl_ms is not None else DEFAULT_TTL_MS
+    # Carry the sequence counter across the rebuild (2026-09-05 bench).  `configure` replaces
+    # the TxClient, and a fresh one starts at seq 0 - but the ROBOT remembers the highest seq
+    # it has accepted and drops anything at or below it (`remote_target.LatestOnly.put`).  So
+    # a reconfigure made the robot ignore every command until the new counter climbed back
+    # past the old high-water mark, with nothing on screen to say so: joints simply stopped
+    # responding while the loop, the link and the telemetry all looked perfect.  Measured on
+    # the bench: accepted=843 against rejected_seq=5823, and a whole gain sweep silently did
+    # nothing.  A viewer RESTART hits the same wall from the other side, which
+    # `LatestOnly` now handles itself.
+    resume_seq = 0
     if self._client is not None:
+      last = self._client.last_seq
+      resume_seq = 0 if last is None else last + 1
       self._client.stop()
     # joint_names fixes the SET this client will ever send (bridge.tx_client.TxClient's own
     # docstring) - an empty `enable` list is a valid, safe default: nothing is ever sendable
@@ -146,6 +173,7 @@ class TxState:
       kd_max=self.kd_max,
       ttl_ms=self.ttl_ms,
       on_violation=self._on_client_violation if self.violations is not None else None,
+      start_seq=resume_seq,
     )
     self.enabled = False
     self.armed = False
