@@ -1335,7 +1335,16 @@ async function setControlMode(mode) {
   if (mode === S.controlMode) return;
   S.controlMode = mode;
   if (mode === "joints") {
-    if (S.status && S.status.mode && S.status.mode.startsWith("policy")) {
+    // 2026-09-07 bench (user: "2. activate TX panel 했는데 왜 ARM 이 안되지?"). This used to
+    // fire ONLY when a policy was running, so a freshly started viewer - which comes up in
+    // `idle`, not `manual` - sat in idle no matter how many times the Joints tab was opened.
+    // TX refuses to arm outside manual mode, so steps 0-2 of the TX panel all reported
+    // success and step 3 was permanently dead, with the reason hidden in a tooltip on a
+    // disabled button. Opening the manual-control tab IS the request to drive manually.
+    // Replay modes are deliberately left alone: they are a viewing state chosen elsewhere,
+    // and TX is meant to be impossible during one.
+    const m = S.status && S.status.mode;
+    if (m === "idle" || (m && m.startsWith("policy"))) {
       await apiOk("POST", "/mode", { mode: "manual" });
     }
   } else if (mode === "policy") {
@@ -2368,6 +2377,7 @@ function renderTxSectionHtml() {
     <div class="row tight"><label>2. activate TX panel</label><input type="checkbox" id="tx-enable"></div>
     <div class="row tight"><button id="btn-tx-arm" style="flex:1">3. ARM</button>
       <button id="btn-tx-disarm" style="flex:1">disarm</button></div>
+    <div class="small" id="tx-arm-block" style="margin:2px 0"></div>
     <div class="row tight"><span id="tx-badge" class="pill">-</span>
       <span class="small" id="tx-heartbeat-age"></span></div>
     <div class="small" style="margin:4px 0">Hold <b>Space</b> to send (keyboard dead-man,
@@ -2432,6 +2442,21 @@ function collectTxEnableList() {
   return Array.from(document.querySelectorAll(".tx-motor-cb"))
     .filter((cb) => cb.checked)
     .map((cb) => cb.dataset.n);
+}
+
+// Everything POST /tx/arm would refuse on, phrased as what the operator must DO about it and
+// ordered by the TX panel's own numbering, so the list reads as the remaining steps. Pure:
+// mirrors api.py's post_tx_arm (check_armable -> hw_sync.check_arm_ready) and never decides
+// anything itself - the server refusal is still the authority.
+function txArmBlockers(tx, st, sync) {
+  const out = [];
+  if (!tx || !tx.host || !(tx.enable || []).length) out.push("not configured yet - press \"1. configure\"");
+  if (!sync || !sync.valid) out.push(`${(sync && sync.reason) || "no sync yet"} - press "0. sync from hardware"`);
+  if (!tx || !tx.enabled) out.push("TX panel not activated - tick \"2. activate TX panel\"");
+  if (!st || st.mode !== "manual") {
+    out.push(`sim mode is "${(st && st.mode) || "?"}", TX only sends in "manual" - open Control > Joints`);
+  }
+  return out;
 }
 
 // The TX form fields that mirror server state, paired with the /tx/status key each one
@@ -2581,9 +2606,23 @@ function renderTxStatusLive() {
   const sync = tx ? tx.sync : null;
   const syncOk = !!(sync && sync.valid);
   el("btn-tx-arm").disabled = !modeOk || !tx || !tx.enabled || tx.armed || !syncOk;
-  if (!modeOk) el("btn-tx-arm").title = `blocked: mode is ${st ? st.mode : "?"}, TX only allowed in 'manual'`;
-  else if (!syncOk) el("btn-tx-arm").title = `blocked: ${sync ? sync.reason : "no sync yet"} - press '0. sync from hardware' first`;
-  else el("btn-tx-arm").title = "";
+  // Every unmet precondition, in the panel's own step order, written into the page rather
+  // than only into the button's tooltip (2026-09-07 bench: a disabled button whose reason
+  // lives in `title` is a reason nobody reads - the operator did steps 0-2, pressed 3, and
+  // had no way to see that the sim was in `idle`). Listing ALL of them, not just the first,
+  // so fixing one does not simply reveal the next.
+  const blockers = txArmBlockers(tx, st, sync);
+  el("btn-tx-arm").title = blockers.length ? `blocked: ${blockers.join(" / ")}` : "";
+  const blockEl = el("tx-arm-block");
+  if (blockEl) {
+    if (tx && tx.armed) blockEl.innerHTML = "";
+    else if (!blockers.length) {
+      blockEl.innerHTML = `<span style="color:var(--accent)">ready to ARM</span>`;
+    } else {
+      blockEl.innerHTML = `<span style="color:var(--bad)">ARM blocked:</span> `
+        + blockers.map((b) => `<span>&bull; ${b}</span>`).join(" ");
+    }
+  }
   const syncEl = el("sync-status");
   if (syncEl) {
     if (!sync) {

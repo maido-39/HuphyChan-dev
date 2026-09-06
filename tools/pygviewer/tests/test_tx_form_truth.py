@@ -240,3 +240,51 @@ def test_dashboard_refuses_a_blank_host():
   body = m.group(0)
   assert "if (!host)" in body, "blank host must be refused, not posted"
   assert "return null" in body
+
+
+# ------------------------------------------------------------------ why ARM stayed dead
+def test_arm_is_refused_in_idle_mode_and_says_so():
+  """The bench sequence that produced "2. activate TX panel 했는데 왜 ARM 이 안되지?":
+  everything in the TX panel reported success, and step 3 was refused purely because the sim
+  was in `idle`. The refusal must name the mode - it is the only clue an operator gets."""
+  core, client = _core_client()
+  try:
+    a, _ = _two_joints(core)
+    _ingest(core, {a: 0.1})
+    client.post("/tx/config", json={"host": HOST_A, "port": PORT, "enable": [a]})
+    client.post("/sync_from_real")
+    client.post("/tx/enable", json={"on": True})
+    core.mode = "idle"
+    r = client.post("/tx/arm")
+    assert r.status_code == 409, r.text
+    detail = r.json()["detail"]
+    assert "manual" in detail and "idle" in detail, detail
+  finally:
+    core.stop()
+
+
+def test_joints_tab_leaves_idle_for_manual():
+  """``setControlMode("joints")`` used to request manual ONLY when a policy was running, so a
+  freshly started viewer (which comes up in `idle`) never left idle by opening the manual
+  control tab - and TX could then never be armed at all."""
+  js = DASHBOARD_JS.read_text()
+  m = re.search(r"function setControlMode\(mode\)\s*\{.*?\n\}", js, re.S)
+  assert m, "setControlMode() not found"
+  body = m.group(0)
+  joints_branch = body.split('if (mode === "joints")')[1].split("else if")[0]
+  assert '"idle"' in joints_branch, (
+    "opening the Joints tab must also rescue the sim out of idle, not only out of policy modes"
+  )
+  assert 'mode: "manual"' in joints_branch
+
+
+def test_dashboard_lists_every_arm_blocker_on_the_page():
+  """A disabled button whose reason lives only in `title` is a reason nobody reads."""
+  js = DASHBOARD_JS.read_text()
+  m = re.search(r"function txArmBlockers\(tx, st, sync\)\s*\{.*?\n\}", js, re.S)
+  assert m, "txArmBlockers() not found"
+  body = m.group(0)
+  for needle in ["1. configure", "0. sync from hardware", "2. activate TX panel", "manual"]:
+    assert needle in body, needle
+  assert 'id="tx-arm-block"' in js, "the blocker list needs somewhere on the page to render"
+  assert "txArmBlockers(tx, st, sync)" in js, "renderTxStatusLive must actually call it"
