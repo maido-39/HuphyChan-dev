@@ -62,10 +62,6 @@ bash analysis/run_v2_scratch.sh --run legonly_ab_v3_keyfix --ankle AB --seed 42 
 측정은 v2와 동일: 보행 운동학(0.6 / 1.2 m/s, 각 17초, 초기 자세 흔든 반복 3회) + 전체 명령 범위(121개 × 15초, 외란 없음·외란 주입) + 모터 활용도 + 추종표.
 **주의**: 이 런의 체크포인트는 새 시작 자세로 측정한다(옛 정책만 `PYG_BENT_KEYFRAME_LEGACY=1`).
 
-<!-- SPEC-TABLES:BEGIN -->
-(런처가 §1b~§1b-4 보상·게인·액추에이터·가동범위 표를 자동 삽입한다)
-<!-- SPEC-TABLES:END -->
-
 <!-- SPEC-TABLES:BEGIN (analysis/run_spec_tables.py) -->
 
 ## 1b. 이 run의 Reward & Gains (config에서 파싱 — 재현용)
