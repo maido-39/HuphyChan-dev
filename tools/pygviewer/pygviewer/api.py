@@ -480,17 +480,31 @@ def build_app(core, freshness: dict) -> FastAPI:
     unknown = [n for n in body.enable if n not in core.act_names]
     if unknown:
       raise HTTPException(400, f"not actuated joints of {core.c.variant}: {unknown}")
+    prev_target = (core.tx.host, core.tx.port)
     try:
       core.tx.configure(
         body.host, body.port, body.enable, kp_max=body.kp_max, kd_max=body.kd_max, ttl_ms=body.ttl_ms
       )
     except TxNotAllowed as exc:
       raise HTTPException(409, str(exc))
-    # Sync-before-arm gate (hw_sync.py, docs/123 section 10.2): a reconfigure can change which
-    # joints TX will ever send - an old sync computed against a different enable list must not
-    # silently keep covering the new one.
-    core.hw_sync.invalidate("TX reconfigured (POST /tx/config)")
-    return core.tx.status()
+    # Sync-before-arm gate (hw_sync.py, docs/123 section 10.2).
+    #
+    # This used to invalidate on EVERY reconfigure, on the grounds that the enable list may
+    # have changed under an older sync.  It does not need to: `POST /tx/arm` already calls
+    # `hw_sync.check_arm_ready(core.tx.enabled_motors, ...)`, whose first check is
+    # `missing = [j for j in enable if j not in self.synced]` - a joint added to the enable
+    # list after a sync cannot be armed either way.  The blanket invalidation only destroyed
+    # a still-valid sync, and because the dashboard re-pushes this endpoint on every motor
+    # checkbox toggle, the normal "sync, then tick the joints you want" order was impossible:
+    # the panel sat permanently on "sync invalid: TX reconfigured (POST /tx/config)"
+    # (2026-09-07 bench, user: "sync invalid: TX reconfigured 계속 뜨면서 이상한데").
+    #
+    # What genuinely breaks a sync is the TARGET moving: the baseline poses were measured
+    # from one receiver, and a different host/port may be a different robot in a different
+    # pose.  Gains (kp_max/kd_max/ttl_ms) do not enter the pose comparison at all.
+    if (core.tx.host, core.tx.port) != prev_target:
+      core.hw_sync.invalidate(f"TX target changed to {core.tx.host}:{core.tx.port}")
+    return _tx_status_with_sync()
 
   @app.post("/tx/enable", summary="UI v2 TX stage 1: turn the TX panel on/off (needs POST /tx/config first)")
   def post_tx_enable(body: TxEnableIn):
@@ -498,7 +512,7 @@ def build_app(core, freshness: dict) -> FastAPI:
       core.tx.set_enabled(body.on)
     except TxNotAllowed as exc:
       raise HTTPException(409, str(exc))
-    return core.tx.status()
+    return _tx_status_with_sync()
 
   def _target_and_real_now() -> tuple[dict[str, float], dict[str, float | None]]:
     """The current manual target and the current live real value, per actuated joint - the
@@ -511,6 +525,23 @@ def build_app(core, freshness: dict) -> FastAPI:
     real_snap = core.real.snapshot_joints()
     real_now = {n: real_snap[n]["q"] for n in core.act_names}
     return target_now, real_now
+
+  def _tx_status_with_sync() -> dict:
+    """TX status plus the sync-before-arm gate's own view, staleness-refreshed.
+
+    Every endpoint whose response the dashboard assigns straight into ``S.txStatus`` returns
+    this shape.  They did not used to: ``/tx/config``, ``/tx/enable`` and ``/tx/disarm``
+    returned a bare ``core.tx.status()`` with no ``sync`` key at all, so the moment one of
+    them answered, the panel's sync line blanked and the ARM button greyed out until the next
+    250 ms poll put the key back - a flicker that reads exactly like the sync being lost
+    (2026-09-07 bench, found while tracking down "sync invalid ... 계속 뜨면서 이상한데")."""
+    ages = {n: core.real.joint_age_s(n) for n in core.act_names}
+    core.hw_sync.refresh_staleness(ages, core.c.contract_sha)
+    target_now, real_now = _target_and_real_now()
+    st = core.tx.status()
+    st["sync"] = core.hw_sync.status(target_now, real_now)
+    return st
+
 
   @app.post(
     "/sync_from_real",
@@ -628,14 +659,12 @@ def build_app(core, freshness: dict) -> FastAPI:
       core.tx.arm(core.mode)
     except TxNotAllowed as exc:
       raise HTTPException(409, str(exc))
-    result = core.tx.status()
-    result["sync"] = core.hw_sync.status(target_now, real_now)
-    return result
+    return _tx_status_with_sync()
 
   @app.post("/tx/disarm", summary="UI v2 TX: disarm")
   def post_tx_disarm():
     core.tx.disarm(reason="operator")
-    return core.tx.status()
+    return _tx_status_with_sync()
 
   @app.post("/tx/heartbeat", summary="UI v2 TX: keyboard dead-man keep-alive (Space, held, ~100ms cadence)")
   def post_tx_heartbeat():
@@ -654,12 +683,7 @@ def build_app(core, freshness: dict) -> FastAPI:
     staleness on every call, so a client polling only this endpoint sees an invalidated sync
     (e.g. telemetry that quietly went stale) at most one poll late - never has to separately
     poll ``GET /health`` to notice."""
-    ages = {n: core.real.joint_age_s(n) for n in core.act_names}
-    core.hw_sync.refresh_staleness(ages, core.c.contract_sha)
-    target_now, real_now = _target_and_real_now()
-    st = core.tx.status()
-    st["sync"] = core.hw_sync.status(target_now, real_now)
-    return st
+    return _tx_status_with_sync()
 
   @app.get(
     "/scenario",

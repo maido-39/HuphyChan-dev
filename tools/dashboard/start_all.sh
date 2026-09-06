@@ -11,7 +11,13 @@ up 6006 || (cd $M && nohup .venv/bin/tensorboard --logdir logs/rsl_rl/pygmalion_
 up 8089 || bash $M/analysis/viser_live.sh AB 8089
 up 8090 || bash $M/analysis/viser_live.sh RP 8090
 # pygviewer: sim<->real comparison viewer (viser 8094 + REST/WS API 8095). CPU only.
-up 8094 || (cd $R && CUDA_VISIBLE_DEVICES="" setsid nohup $M/.venv/bin/python3 tools/pygviewer/run.py \
+# PYG_TX_HOST/PYG_TX_PORT: where the TX panel's "host" box starts, i.e. the bench robot's
+# command receiver (bridge.huphy_remote_motion --listen 0.0.0.0:9872). Before this existed the
+# box opened on 127.0.0.1 and pressing "1. configure" quietly aimed transmission at this
+# laptop - the panel stayed green while no packet ever reached a motor (2026-09-07 bench).
+# It is a DISPLAY default only; nothing is sendable until an operator presses "1. configure".
+up 8094 || (cd $R && CUDA_VISIBLE_DEVICES="" PYG_TX_HOST=10.8.0.14 PYG_TX_PORT=9872 \
+  setsid nohup $M/.venv/bin/python3 tools/pygviewer/run.py \
   --variant LegOnly-AB --port 8094 --api-port 8095 > tools/pygviewer/logs/pygviewer.log 2>&1 < /dev/null &)
 pgrep -f "gpu_sample[r].sh" >/dev/null || (cd $M && nohup bash analysis/gpu_sampler.sh analysis/out/gpu_usage.csv > /dev/null 2>&1 &)
 pgrep -f "review_loo[p].sh" >/dev/null || (cd $M && nohup bash analysis/review_loop.sh > analysis/out/review_loop.log 2>&1 &)

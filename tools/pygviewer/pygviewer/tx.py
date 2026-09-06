@@ -74,6 +74,35 @@ keeps calling the client's send path at all, see the module docstring item 4."""
 DEFAULT_KP_CAP = DEFAULT_KP_MAX
 DEFAULT_KD_CAP = DEFAULT_KD_MAX
 
+DEFAULT_TX_PORT = 9872
+"""Port the robot-side receiver (``bridge.huphy_remote_motion --listen 0.0.0.0:9872``) binds.
+Only a DEFAULT for the pre-configure state below - ``configure`` always takes the real one
+from the operator."""
+
+
+def _env_tx_target() -> tuple[str | None, int]:
+  """Where TX *would* send, before anyone has pressed "1. configure".
+
+  2026-09-07 bench.  The dashboard's TX panel used to open with ``127.0.0.1`` typed into its
+  host box as a plain HTML default, and nothing ever wrote the live config back into that
+  box - so after any rebuild of the panel the form read "127.0.0.1" while this object held
+  the real robot (10.8.0.14).  Pressing "1. configure" then re-pointed TX at loopback, where
+  nothing listens, and the failure looks exactly like "the robot stopped responding": the
+  panel is green, the sequence counter climbs, and no packet ever reaches a motor.
+
+  Seeding host/port from the environment (``PYG_TX_HOST`` / ``PYG_TX_PORT``, set by
+  ``tools/dashboard/start_all.sh``) means the box shows the address that is actually wanted
+  from the first paint.  This does NOT make TX sendable - ``self._client`` stays ``None``
+  until :meth:`configure` runs, which is what every send path checks.
+  """
+  host = (os.environ.get("PYG_TX_HOST") or "").strip() or None
+  raw = (os.environ.get("PYG_TX_PORT") or "").strip()
+  try:
+    port = int(raw) if raw else DEFAULT_TX_PORT
+  except ValueError:
+    port = DEFAULT_TX_PORT
+  return host, port
+
 
 class TxNotAllowed(RuntimeError):
   """Raised by every TxState method that refuses to act - always a 409 at the API layer."""
@@ -110,8 +139,7 @@ class TxState:
       self.arm_token = secrets.token_hex(8)
       self.arm_token_pinned = False
 
-    self.host: str | None = None
-    self.port: int | None = None
+    self.host, self.port = _env_tx_target()  # display-only until configure(); see _env_tx_target
     self.enabled_motors: list[str] = []
     self.kp_max = DEFAULT_KP_CAP
     self.kd_max = DEFAULT_KD_CAP

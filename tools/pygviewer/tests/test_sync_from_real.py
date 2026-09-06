@@ -137,10 +137,11 @@ def _fresh_core_client() -> tuple[SimCore, TestClient]:
 
 
 def _configure_tx(client: TestClient, enable: list[str]) -> None:
-  """Mode -> config -> enable, in that order (docs/123 section 10.2's own numbering: TX must
-  be configured BEFORE a sync is computed against its enable list, or ``POST /tx/config``'s
-  own reconfigure-invalidates-any-earlier-sync rule would immediately undo a sync done
-  first)."""
+  """Mode -> config -> enable, in that order (docs/123 section 10.2's own numbering).
+
+  Until 2026-09-07 the order was also forced by ``POST /tx/config`` invalidating any earlier
+  sync unconditionally; it now only does so when the host/port actually change (see that
+  endpoint's comment and ``test_tx_form_truth.py``), but this remains the natural order."""
   assert client.post("/mode", json={"mode": "manual"}).status_code == 200
   r = client.post("/tx/config", json={"host": "127.0.0.1", "port": 9, "enable": enable})
   assert r.status_code == 200, r.text

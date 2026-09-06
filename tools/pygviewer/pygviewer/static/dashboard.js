@@ -2357,11 +2357,12 @@ function renderTxSectionHtml() {
     </div>
     <div class="row tight"><button id="btn-sync-from-real" class="primary" style="flex:1">0. sync from hardware</button></div>
     <div class="small" id="sync-status" style="margin:2px 0 8px"></div>
-    <div class="row tight"><label>host</label><input id="tx-host" value="127.0.0.1" style="width:96px">
+    <div class="row tight"><label>host</label><input id="tx-host" placeholder="robot IP" style="width:96px">
       <label>port</label><input id="tx-port" type="number" value="9872" style="width:60px"></div>
     <div class="row tight"><label>kp max</label><input id="tx-kpmax" type="number" value="5" step="0.1" style="width:50px">
       <label>kd max</label><input id="tx-kdmax" type="number" value="0.5" step="0.05" style="width:50px">
       <label>ttl ms</label><input id="tx-ttlms" type="number" value="250" step="10" style="width:50px"></div>
+    <div class="small" id="tx-cfg-note" style="margin:2px 0"></div>
     <div>${motorRows}</div>
     <div class="row tight"><button id="btn-tx-config" style="flex:1">1. configure (host/port/enable/gains)</button></div>
     <div class="row tight"><label>2. activate TX panel</label><input type="checkbox" id="tx-enable"></div>
@@ -2433,9 +2434,31 @@ function collectTxEnableList() {
     .map((cb) => cb.dataset.n);
 }
 
+// The TX form fields that mirror server state, paired with the /tx/status key each one
+// reflects. Single source for both directions: renderTxStatusLive() writes server -> form,
+// pushTxConfig() reads form -> server, so the two can never drift apart.
+function txFormFields() {
+  const tx = S.txStatus || {};
+  return [
+    ["tx-host", tx.host],
+    ["tx-port", tx.port],
+    ["tx-kpmax", tx.kp_max],
+    ["tx-kdmax", tx.kd_max],
+    ["tx-ttlms", tx.ttl_ms],
+  ];
+}
+
 async function pushTxConfig() {
+  const host = (el("tx-host").value || "").trim();
+  if (!host) {
+    // Bench 2026-09-07: the box used to be pre-filled with 127.0.0.1, so an operator who
+    // never touched it configured TX to talk to this laptop. Blank is now the honest empty
+    // state and is refused outright - better a visible stop than a silent no-op.
+    toast("robot IP is empty - type the receiver's address before configuring");
+    return null;
+  }
   const body = {
-    host: el("tx-host").value,
+    host,
     port: parseInt(el("tx-port").value, 10) || 0,
     enable: collectTxEnableList(),
     kp_max: parseFloat(el("tx-kpmax").value) || 5.0,
@@ -2591,6 +2614,33 @@ function renderTxStatusLive() {
   document.querySelectorAll(".tx-motor-cb").forEach((cb) => {
     if (document.activeElement !== cb) cb.checked = (tx.enable || []).includes(cb.dataset.n);
   });
+  // Bench 2026-09-07 (user: "IP 이상태면 RX 안떠야되지않나?" -> the host box read 127.0.0.1
+  // while the server was actually pointed at 10.8.0.14, and kp max read 5 against a real 305).
+  // The two checkbox groups above have always been written back from server truth; the five
+  // text/number fields never were - renderTxSectionHtml() emits fixed HTML defaults and any
+  // rebuild of this panel silently reset the form. That is not merely cosmetic: pushTxConfig()
+  // reads these exact fields, so pressing "1. configure" (or toggling any motor checkbox,
+  // which re-pushes) would have re-pointed TX at loopback, where nothing listens - a failure
+  // indistinguishable from "the robot stopped responding". Never overwrite the field the
+  // operator is currently typing into, exactly as the checkboxes do.
+  txFormFields().forEach(([id, val]) => {
+    const node = el(id);
+    if (!node || node === document.activeElement) return;
+    if (val === null || val === undefined) return;
+    const next = String(val);
+    if (node.value !== next) node.value = next;
+  });
+  const cfgNote = el("tx-cfg-note");
+  if (cfgNote) {
+    // "configured" here means a TxClient exists server-side (host+enable list fixed). Before
+    // that, host/port are only the launch-time default (PYG_TX_HOST) shown for convenience.
+    const ready = !!(tx.host && (tx.enable || []).length);
+    cfgNote.innerHTML = ready
+      ? `<span style="color:var(--muted)">sending to ${tx.host}:${tx.port} &middot; ` +
+        `kp&le;${tx.kp_max} kd&le;${tx.kd_max} &middot; ${(tx.enable || []).length} joint(s)</span>`
+      : `<span style="color:var(--warn,#c90)">not configured yet &mdash; press "1. configure" ` +
+        `after checking the joints you want</span>`;
+  }
   // structural safety net mirrored in the UI: mode left 'manual' while armed -> the server
   // already auto-disarmed (SimCore._on_control_tick -> TxState.check_mode_gate); stop the
   // local dead-man loop too so it does not keep calling a now-pointless /tx/heartbeat.
