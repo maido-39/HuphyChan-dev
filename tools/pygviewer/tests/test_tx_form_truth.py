@@ -29,6 +29,7 @@ misleading:
 
 from __future__ import annotations
 
+import math
 import re
 import time
 from pathlib import Path
@@ -369,3 +370,191 @@ def test_trace_admits_when_the_robot_counters_are_missing():
   m = re.search(r'rows\.push\(\{ label: "로봇이 받아들임", ok: null,.*?\}\);', js, re.S)
   assert m, "the unknown-counters branch is missing"
   assert "ok: null" in m.group(0), "an unreported counter is 'unknown', never 'pass'"
+
+
+# --------------------------------- the backfill must not fight the operator (2026-09-07)
+def test_backfill_leaves_an_edited_field_alone():
+  """User: "kp max / kd max 값을 못바꾸잖아. 바꾸면 원복되는데 뭔짓을했나?"
+
+  Skipping only the FOCUSED field was not enough. Typing a new cap and then clicking away to
+  press "1. configure" blurs the field, and the very next 250 ms poll wrote the still-in-force
+  value back over it - so configure pushed the OLD number. Fixing "the form lies" had produced
+  "the form cannot be edited", which is worse: the first at least let the operator set a value.
+  """
+  js = DASHBOARD_JS.read_text()
+  m = re.search(r"txFormFields\(\)\.forEach\(\(\[id, val\]\) => \{.*?\n  \}\);", js, re.S)
+  assert m, "the backfill loop was not found"
+  body = m.group(0)
+  assert 'node.dataset.dirty === "1"' in body, "an edited field must be skipped, not overwritten"
+  assert "node === document.activeElement" in body, "the focused field must still be skipped"
+
+
+def test_editing_a_field_marks_it_and_pushing_clears_it():
+  js = DASHBOARD_JS.read_text()
+  assert 'node.addEventListener("input", () => { node.dataset.dirty = "1"; });' in js, (
+    "typing into a TX field must claim it from the backfill"
+  )
+  m = re.search(r"async function pushTxConfig\(\)\s*\{.*?\n\}", js, re.S)
+  assert m
+  assert "delete n.dataset.dirty" in m.group(0), (
+    "once the server holds the typed values they are no longer pending edits"
+  )
+
+
+def test_an_unapplied_edit_is_stated_on_screen():
+  """An edit that has not been pushed must not look applied, and must not be silently thrown
+  away either - the panel says which fields are typed but not in force."""
+  js = DASHBOARD_JS.read_text()
+  assert "typed but NOT applied" in js
+  assert "txStatusValue(id, tx)" in js, "the comparison must be form-value against server-value"
+
+
+# --------------------------------------- what a motor actually receives (2026-09-07)
+def test_the_gains_that_went_on_the_wire_are_reported():
+  """A cap is not what a motor receives: it is a ceiling applied per joint over the gains
+  table. "I typed 30" and "the motor got 30" have to be separately checkable, which is the
+  same lesson as docs/127 - report the effect, not the intent."""
+  core, client = _core_client()
+  try:
+    a, _ = _two_joints(core)
+    _ingest(core, {a: 0.1})
+    client.post("/tx/config", json={"host": HOST_A, "port": PORT, "enable": [a],
+                                    "kp_max": 12.0, "kd_max": 0.8})
+    st = client.get("/tx/status").json()
+    assert "last_sent_gains" in st, "the viewer must report the gains it actually sent"
+    assert st["last_sent_gains"] == {}, "nothing sent yet -> nothing to report"
+  finally:
+    core.stop()
+
+
+def test_the_cap_is_what_reaches_the_wire_when_it_binds():
+  """The end-to-end claim, checked on the real client rather than by reading the code: a gains
+  table above the cap must arrive AT the cap, and one below it must arrive unchanged."""
+  from pygviewer.bridge.tx_client import TxClient
+  core, _ = _core_client()
+  try:
+    a, b = _two_joints(core)
+    c = core.c
+    tx = TxClient(HOST_A, PORT, joint_names=[a, b], arm_token="t", origin="manual",
+                  contract=c, kp_max=12.0, kd_max=0.8)
+    tx.arm()
+    tx.set_target({a: 0.0, b: 0.0}, mode="manual",
+                  kp={a: 150.0, b: 3.0},      # one far above the cap, one below it
+                  kd={a: 5.0, b: 0.2})
+    msg = tx.build_message()
+    assert msg is not None
+    got = dict(zip(msg.joint_names, msg.kp))
+    assert got[a] == 12.0, f"a gain above the cap must arrive AT the cap, got {got[a]}"
+    assert got[b] == 3.0, f"a gain below the cap must pass through, got {got[b]}"
+    gains = tx.last_sent_gains
+    assert gains[a]["kp"] == 12.0 and gains[b]["kp"] == 3.0
+    assert gains[a]["kd"] == 0.8 and gains[b]["kd"] == 0.2
+  finally:
+    core.stop()
+
+
+def test_reported_gains_are_the_clamped_ones_not_the_requested_ones():
+  """The whole point of reporting them: if this echoed back what was asked for, it would agree
+  with the form no matter what actually happened, which is exactly the failure mode this
+  session has been unpicking."""
+  from pygviewer.bridge.tx_client import TxClient
+  core, _ = _core_client()
+  try:
+    a, _ = _two_joints(core)
+    tx = TxClient(HOST_A, PORT, joint_names=[a], arm_token="t", origin="manual",
+                  contract=core.c, kp_max=5.0, kd_max=0.5)
+    tx.arm()
+    tx.set_target({a: 0.0}, mode="manual", kp={a: 999.0}, kd={a: 99.0})
+    tx.build_message()
+    assert tx.last_sent_gains[a]["kp"] == 5.0
+    assert tx.last_sent_gains[a]["kd"] == 0.5
+  finally:
+    core.stop()
+
+
+# ----------------------------- arming must not silently launch a large first move (2026-09-07)
+def test_arm_refuses_a_large_first_move_and_names_the_travel():
+  """The bench incident this comes from. `check_arm_ready` skipped its check entirely for any
+  target that differed from the synced value - read as "a deliberate command" with NO ceiling
+  on its size. So a stale target 40 deg from the measured pose armed without a word, which is
+  precisely what docs/123 section 10.2 claims this gate prevents. Measured, once the gain cap
+  was restored to a value that can actually move these joints: L_hip_yaw 40.1 -> 0.3 deg and
+  L_knee 49.5 -> 5.8 deg in about a second. It had stayed invisible only because the previous
+  cap of 5 was too weak to execute any target at all."""
+  core, client = _core_client()
+  try:
+    a, _ = _two_joints(core)
+    _ingest(core, {a: 0.1})
+    client.post("/tx/config", json={"host": HOST_A, "port": PORT, "enable": [a]})
+    client.post("/sync_from_real")
+    client.post("/tx/enable", json={"on": True})
+    # move the manual target far away from the measured pose, as a stale target would be
+    client.post("/target", json={"values": {a: 0.1 + math.radians(40)}})
+    r = client.post("/tx/arm")
+    assert r.status_code == 409, r.text
+    detail = r.json()["detail"]
+    assert "arming would move the hardware immediately" in detail
+    assert a in detail and "of travel" in detail, detail
+  finally:
+    core.stop()
+
+
+def test_a_confirmed_large_move_is_allowed():
+  """A deliberate large move must stay possible - the check questions the SIZE, it does not
+  forbid it. The refusal names the numbers, and confirming is a second, explicit act."""
+  core, client = _core_client()
+  try:
+    a, _ = _two_joints(core)
+    _ingest(core, {a: 0.1})
+    client.post("/tx/config", json={"host": HOST_A, "port": PORT, "enable": [a]})
+    client.post("/sync_from_real")
+    client.post("/tx/enable", json={"on": True})
+    client.post("/target", json={"values": {a: 0.1 + math.radians(40)}})
+    assert client.post("/tx/arm").status_code == 409
+    r = client.post("/tx/arm", json={"allow_jump": True})
+    assert r.status_code == 200, r.text
+  finally:
+    core.stop()
+
+
+def test_a_small_deliberate_move_still_arms_untouched():
+  core, client = _core_client()
+  try:
+    a, _ = _two_joints(core)
+    _ingest(core, {a: 0.1})
+    client.post("/tx/config", json={"host": HOST_A, "port": PORT, "enable": [a]})
+    client.post("/sync_from_real")
+    core.step_n(8)      # the queue drains on a CONTROL tick, one per `decimation` physics steps
+    client.post("/tx/enable", json={"on": True})
+    client.post("/target", json={"values": {a: 0.1 + math.radians(3)}})   # well under the limit
+    core.step_n(8)
+    r = client.post("/tx/arm")
+    assert r.status_code == 200, r.text
+  finally:
+    core.stop()
+
+
+def test_arming_right_after_a_sync_still_needs_no_confirmation():
+  """The normal path: sync sets the target to the measured pose, so the first packet commands
+  no motion and nothing is questioned."""
+  core, client = _core_client()
+  try:
+    a, _ = _two_joints(core)
+    _ingest(core, {a: 0.1})
+    client.post("/tx/config", json={"host": HOST_A, "port": PORT, "enable": [a]})
+    r = client.post("/sync_from_real").json()
+    core.step_n(8)      # the queue drains on a CONTROL tick, one per `decimation` physics steps
+    client.post("/tx/enable", json={"on": True})
+    ar = client.post("/tx/arm")
+    assert ar.status_code == 200, ar.text
+    assert "applied" in r, "the sync must say whether the target actually took"
+  finally:
+    core.stop()
+
+
+def test_the_dashboard_confirms_rather_than_dead_ends():
+  js = DASHBOARD_JS.read_text()
+  assert "armJumpConfirmUntil" in js
+  assert "arming would move the hardware immediately" in js
+  assert "allow_jump: true" in js
+  assert "S.lastApiError = e.message" in js, "apiOk must keep the refusal text for the caller"

@@ -442,6 +442,18 @@ class ScenarioApplyIn(BaseModel):
   key: str = Field(description="scenario key, e.g. 'drive-both'")
 
 
+class TxArmIn(BaseModel):
+  """Body for ``POST /tx/arm``. Optional - arming with no body is the normal case."""
+
+  allow_jump: bool = Field(
+    default=False,
+    description="Confirm a first packet that would move the hardware further than the arm "
+    "jump limit (hw_sync.DEFAULT_ARM_JUMP_LIMIT_RAD). The refusal names every joint and the "
+    "exact travel, so this is only ever set after those numbers have been read - it exists "
+    "because a large deliberate move must stay possible, not to make the check skippable.",
+  )
+
+
 class TxEnableIn(BaseModel):
   """UI v2 TX stage 1: turn the TX panel itself on/off. Requires ``POST /tx/config`` first;
   turning it off also disarms (stage 2)."""

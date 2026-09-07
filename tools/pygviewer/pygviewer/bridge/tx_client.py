@@ -173,6 +173,13 @@ class TxClient:
     self._lock = threading.Lock()
     self._pending: dict | None = None
     self._prev_sent: dict[str, float] = {}
+    # The gains that actually went out in the last built message, POST-clamp. 2026-09-07: the
+    # cap an operator types is not what reaches the motor - it is a ceiling applied per joint
+    # over the gains table, and a value below break-away friction produces a perfectly healthy
+    # command stream with no motion (docs/127 section 2-3). "What did I type" and "what went
+    # on the wire" have to be separately visible or the difference is unnoticeable.
+    self._prev_sent_kp: dict[str, float] = {}
+    self._prev_sent_kd: dict[str, float] = {}
     self._seq = int(start_seq)
     self.sent_count = 0
     self.warnings: deque[str] = deque(maxlen=50)
@@ -184,6 +191,16 @@ class TxClient:
     :meth:`tick` - for a caller (``pygviewer/tx.py``'s wrapper, in this codebase) that wants
     to display "what was actually sent" without keeping its own copy of every message."""
     return dict(self._prev_sent)
+
+  @property
+  def last_sent_gains(self) -> dict[str, dict[str, float]]:
+    """``{joint: {"kp": .., "kd": ..}}`` from the last message :meth:`build_message` built,
+    after the caps in :attr:`kp_max`/:attr:`kd_max` were applied - the numbers a motor
+    actually received, not the ones an operator asked for."""
+    return {
+      n: {"kp": self._prev_sent_kp[n], "kd": self._prev_sent_kd.get(n, 0.0)}
+      for n in self._prev_sent_kp
+    }
 
   @property
   def last_seq(self) -> int | None:
@@ -327,6 +344,10 @@ class TxClient:
       arm_token=self.arm_token,
       origin=self.origin,
     )
+    if kp is not None:
+      self._prev_sent_kp = dict(zip(names, kp))
+    if kd is not None:
+      self._prev_sent_kd = dict(zip(names, kd))
     self._seq += 1
     return msg
 

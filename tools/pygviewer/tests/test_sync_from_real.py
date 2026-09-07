@@ -219,6 +219,10 @@ def test_sync_then_arm_succeeds(core, client):
   _ingest(core, {"L_knee_joint": 0.4}, seq=3)
   r = client.post("/sync_from_real")
   assert r.status_code == 200, r.text
+  # `SimCore.submit` only queues; the live sim applies the new target on its next CONTROL tick
+  # (one per `decimation` physics steps). Without this the target is still the pre-sync value,
+  # which is the very race the arm-time jump check exists to catch (2026-09-07).
+  core.step_n(core.decimation)
   assert client.get("/tx/status").json()["sync"]["valid"] is True
   r = client.post("/tx/arm")
   assert r.status_code == 200, r.text

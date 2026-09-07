@@ -57,6 +57,15 @@ STALE_INVALIDATE_S = 1.0
 invalidates the WHOLE sync (not just that joint) - see :meth:`HwSyncState.refresh_staleness`."""
 
 DEFAULT_ARM_DRIFT_LIMIT_RAD = math.radians(5.0)
+
+DEFAULT_ARM_JUMP_LIMIT_RAD = math.radians(10.0)
+"""How far the FIRST transmitted packet may move a joint before arming has to be confirmed.
+
+Not the same thing as ``DEFAULT_ARM_DRIFT_LIMIT_RAD``, which asks "did the HARDWARE move since
+the sync". This one asks "how far will the hardware move the instant I arm" - the gap between
+the manual target and the measured pose. Ten degrees is small enough that the bench incident
+(40 deg on one joint, 44 on another) could not have passed, and large enough that a deliberate
+nudge set up before arming still goes through untouched."""
 """Default block threshold for "the real joint moved away from an untouched synced target"
 (docs/123 section 10.2 user decision, 2026-09-04) - exposed as a module constant, not buried
 in a method body, so a caller/test can name it instead of hard-coding ``math.radians(5.0)``
@@ -74,8 +83,10 @@ class HwSyncState:
   live real values) computed the same thread-safe way every other endpoint already reads
   them (``core.snapshot()`` / ``core.real.snapshot_joints()``)."""
 
-  def __init__(self, arm_drift_limit_rad: float = DEFAULT_ARM_DRIFT_LIMIT_RAD):
+  def __init__(self, arm_drift_limit_rad: float = DEFAULT_ARM_DRIFT_LIMIT_RAD,
+               arm_jump_limit_rad: float = DEFAULT_ARM_JUMP_LIMIT_RAD):
     self.arm_drift_limit_rad = float(arm_drift_limit_rad)
+    self.arm_jump_limit_rad = float(arm_jump_limit_rad)
     self.valid = False
     self.reason: str | None = "no sync yet - POST /sync_from_real first"
     self.synced: dict[str, float] = {}  # joint -> value applied at sync time (post-clip)
@@ -178,6 +189,7 @@ class HwSyncState:
     enable: list[str],
     target_now: dict[str, float],
     real_now: dict[str, float | None],
+    allow_jump: bool = False,
   ) -> None:
     """Raise :class:`HwSyncNotReady` unless arming is allowed right now.
 
@@ -213,12 +225,54 @@ class HwSyncState:
         "'0. sync from hardware' with real data flowing for them, or remove them from the "
         "TX enable list via POST /tx/config"
       )
+    # How far the FIRST packet would move each joint (2026-09-07 bench incident).
+    #
+    # The `continue` below used to be unconditional: any target differing from the synced
+    # value was read as "a deliberate command" and skipped, with NO ceiling on its size. So a
+    # stale target 40 deg away from the measured pose armed without a word - which is exactly
+    # what docs/123 section 10.2 says this gate exists to prevent ("a stale target left over
+    # at 66.4 deg while the real joint sat at 27.8 deg is exactly what this prevents from
+    # being sent as the first packet"), and it did not prevent it. Measured: with the gain cap
+    # restored to a value that can actually move these joints, arming after a sync that had
+    # not taken drove L_hip_yaw 40.1 -> 0.3 deg and L_knee 49.5 -> 5.8 deg in about a second.
+    # It stayed invisible for as long as it did only because the previous cap of 5 was too
+    # weak to execute any target at all.
+    #
+    # A deliberate move is still never blocked; only its SIZE is questioned, and `allow_jump`
+    # lets an operator who has read the numbers proceed. Arming is a discrete, deliberate act,
+    # so making a large first move require saying so costs one extra press.
+    jumps: list[tuple[str, float, float]] = []
+    for j in enable:
+      synced_v = self.synced[j]
+      tgt_v = target_now.get(j, synced_v)
+      if abs(tgt_v - synced_v) <= 1e-9:
+        # The target IS the synced value, so any travel from here is the sync's own clip - a
+        # joint whose real pose sits outside the model range, which `clip_warnings` already
+        # names in full and which an operator cannot avoid. Not questioned again here; this
+        # check is about a target that is NOT what the sync put there.
+        continue
+      real_v_now = real_now.get(j)
+      if real_v_now is not None and math.isfinite(real_v_now):
+        if abs(tgt_v - real_v_now) > self.arm_jump_limit_rad:
+          jumps.append((j, real_v_now, tgt_v))
+    if jumps and not allow_jump:
+      details = ", ".join(
+        f"{j}: {math.degrees(r):.1f} (deg) -> {math.degrees(t):.1f} (deg), "
+        f"{math.degrees(abs(t - r)):.1f} (deg) of travel"
+        for j, r, t in jumps
+      )
+      raise HwSyncNotReady(
+        f"arming would move the hardware immediately: {details} (limit "
+        f"{math.degrees(self.arm_jump_limit_rad):.1f} (deg)). Press '0. sync from hardware' to "
+        f"command no motion at all, or arm again to confirm you meant this move."
+      )
+
     moved_real: list[tuple[str, float, float]] = []
     for j in enable:
       synced_v = self.synced[j]
       tgt = target_now.get(j, synced_v)
       if abs(tgt - synced_v) > 1e-9:
-        continue  # operator moved this joint's target since sync - a deliberate command, never blocked
+        continue  # operator moved this joint's target since sync - a deliberate command, size checked above
       real_at_sync_v = self.real_at_sync.get(j)
       if real_at_sync_v is None:
         continue  # no raw baseline recorded (defensive only - should not happen once j in self.synced)
@@ -302,6 +356,7 @@ class HwSyncState:
       target_drift_joint=drift_joint,
       arm_drift_limit_rad=self.arm_drift_limit_rad,
       arm_drift_limit_deg=round(math.degrees(self.arm_drift_limit_rad), 3),
+      arm_jump_limit_deg=round(math.degrees(self.arm_jump_limit_rad), 3),
       # 2026-09-04 bench fix: non-blocking - see clip_warnings' own docstring. Recomputed on
       # every status() call (like everything else here) so a client polling only this
       # endpoint sees the current travel distance, not a stale one from sync time.

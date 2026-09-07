@@ -368,6 +368,7 @@ class TxState:
     rate_hz = round(len(self._send_times) / window_s, 1) if self._send_times else 0.0
     deadman_age = None if self._last_heartbeat is None else round(now - self._last_heartbeat, 3)
     last_sent_target = dict(self._client.last_sent) if self._client is not None else {}
+    last_sent_gains = dict(self._client.last_sent_gains) if self._client is not None else {}
     last_seq = self._client.last_seq if self._client is not None else None
     return dict(
       armed=self.armed,
@@ -383,6 +384,7 @@ class TxState:
       rejected_count=self.rejected_count,
       disarm_reason=self.disarm_reason,
       last_sent_target=last_sent_target,
+      last_sent_gains=last_sent_gains,
       kp_max=self.kp_max,
       kd_max=self.kd_max,
       ttl_ms=self.ttl_ms,

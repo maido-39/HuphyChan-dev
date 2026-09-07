@@ -26,7 +26,17 @@ async function api(method, path, body) {
   if (!r.ok) { const msg = (data && data.detail) ? data.detail : r.statusText; throw new Error(`${method} ${path} -> ${r.status}: ${JSON.stringify(msg)}`); }
   return data;
 }
-function apiOk(method, path, body) { return api(method, path, body).catch((e) => { console.warn(e); toast(e.message); return null; }); }
+// Keeps the last refusal text where a caller can read it. The ARM button needs the message,
+// not just "it failed", to tell a jump refusal (which a second press confirms) apart from
+// every other 409 (2026-09-07).
+function apiOk(method, path, body) {
+  return api(method, path, body).catch((e) => {
+    console.warn(e);
+    S.lastApiError = e.message;
+    toast(e.message);
+    return null;
+  });
+}
 
 let toastTimer = null;
 function toast(msg) {
@@ -64,6 +74,8 @@ const S = {
   latestTxSent: {},      // {joint_name: rad} - from polling /tx/status().last_sent_target
   ring: [],             // [{t, q:{}, target:{}, tau:{}, qd:{}, realQ:{}, realTau:{}, realQd:{}, realAgeS, sentTarget:{}}]
   txStatus: null,        // GET /tx/status, polled - server-side truth for enabled/armed/sending
+  lastApiError: null,    // text of the most recent refused request (see apiOk)
+  armJumpConfirmUntil: 0, // ms deadline for a second ARM press to confirm a large first move
   txDeadmanTimer: null,
   leftTab: "scenario",   // must match whichever tab carries class="on" in dashboard.html
                          // - a mismatch renders one tab while highlighting another
@@ -2530,6 +2542,19 @@ function txArmBlockers(tx, st, sync) {
 // The TX form fields that mirror server state, paired with the /tx/status key each one
 // reflects. Single source for both directions: renderTxStatusLive() writes server -> form,
 // pushTxConfig() reads form -> server, so the two can never drift apart.
+// The form's current value and the server's value for the same field, as strings, so the
+// "typed but not applied" check compares like with like.
+function txFormValue(id) {
+  const n = el(id);
+  return n ? n.value : "";
+}
+function txStatusValue(id, tx) {
+  const map = { "tx-host": "host", "tx-port": "port", "tx-kpmax": "kp_max",
+                "tx-kdmax": "kd_max", "tx-ttlms": "ttl_ms" };
+  const v = tx ? tx[map[id]] : undefined;
+  return v === null || v === undefined ? "" : v;
+}
+
 function txFormFields() {
   const tx = S.txStatus || {};
   return [
@@ -2559,7 +2584,14 @@ async function pushTxConfig() {
     ttl_ms: parseInt(el("tx-ttlms").value, 10) || 250,
   };
   const r = await apiOk("POST", "/tx/config", body);
-  if (r) { S.txStatus = r; toast(`TX configured: ${body.enable.length} joint(s) enabled`); }
+  if (r) {
+    S.txStatus = r;
+    // The server now holds exactly what these fields say, so they are no longer pending edits
+    // and the backfill may resume owning them.
+    txFormFields().forEach(([id]) => { const n = el(id); if (n) delete n.dataset.dirty; });
+    toast(`TX configured: kp<=${r.kp_max} kd<=${r.kd_max} -> ${r.host}:${r.port}`
+          + ` (${body.enable.length} joint(s))`);
+  }
   return r;
 }
 
@@ -2613,6 +2645,13 @@ function isTypingTarget(ev) {
 }
 
 function wireTxSection() {
+  // Mark a field as the operator's the moment they type in it, so the 250 ms backfill stops
+  // overwriting it (see renderTxStatusLive). Cleared only by a successful push.
+  txFormFields().forEach(([id]) => {
+    const node = el(id);
+    if (!node) return;
+    node.addEventListener("input", () => { node.dataset.dirty = "1"; });
+  });
   el("btn-sync-from-real").onclick = doSyncFromReal;
   el("btn-tx-config").onclick = () => {
     if (S.txStatus && S.txStatus.armed) { toast("disarm before reconfiguring"); return; }
@@ -2625,7 +2664,23 @@ function wireTxSection() {
     else ev.target.checked = !on; // request refused (no config yet) - revert the checkbox
   });
   el("btn-tx-arm").onclick = async () => {
-    const r = await apiOk("POST", "/tx/arm");
+    // A first packet that would move the hardware more than the jump limit is refused once,
+    // with every joint and its exact travel named, and goes through on a second press within
+    // 10 s (2026-09-07 bench: arming after a sync that had not taken drove one joint 40 deg
+    // and another 44 deg, because the gate treated ANY target different from the synced value
+    // as deliberate with no ceiling on its size). A deliberate large move stays possible; it
+    // just has to be said twice.
+    const confirming = S.armJumpConfirmUntil && Date.now() < S.armJumpConfirmUntil;
+    const r = await apiOk("POST", "/tx/arm", confirming ? { allow_jump: true } : {});
+    if (!r) {
+      const msg = String(S.lastApiError || "");
+      if (msg.includes("arming would move the hardware immediately")) {
+        S.armJumpConfirmUntil = Date.now() + 10000;
+        toast(msg + "  [ARM again within 10s to confirm]");
+      }
+      return;
+    }
+    S.armJumpConfirmUntil = 0;
     if (r) {
       S.txStatus = r;
       toast("TX armed - hold Space to send");
@@ -2837,9 +2892,20 @@ function renderTxStatusLive() {
   // which re-pushes) would have re-pointed TX at loopback, where nothing listens - a failure
   // indistinguishable from "the robot stopped responding". Never overwrite the field the
   // operator is currently typing into, exactly as the checkboxes do.
+  // Skipping only the FOCUSED field is not enough (2026-09-07, user: "kp max / kd max 값을
+  // 못바꾸잖아. 바꾸면 원복되는데"). Typing a new cap and then clicking away to press
+  // "1. configure" blurs the field, and the very next 250 ms poll overwrote it with the value
+  // still in force - so configure pushed the OLD number back. Fixing "the form lies" had
+  // produced "the form cannot be edited", which is worse.
+  //
+  // A field the operator has edited is left alone until it is actually pushed. `dirty` is set
+  // on `input` and cleared by a successful pushTxConfig(); until then the note under the
+  // fields says the typed value is not the one in force, so an un-pushed edit is visible
+  // rather than silently either applied or discarded.
   txFormFields().forEach(([id, val]) => {
     const node = el(id);
     if (!node || node === document.activeElement) return;
+    if (node.dataset.dirty === "1") return;
     if (val === null || val === undefined) return;
     const next = String(val);
     if (node.value !== next) node.value = next;
@@ -2849,11 +2915,31 @@ function renderTxStatusLive() {
     // "configured" here means a TxClient exists server-side (host+enable list fixed). Before
     // that, host/port are only the launch-time default (PYG_TX_HOST) shown for convenience.
     const ready = !!(tx.host && (tx.enable || []).length);
-    cfgNote.innerHTML = ready
-      ? `<span style="color:var(--muted)">sending to ${tx.host}:${tx.port} &middot; ` +
-        `kp&le;${tx.kp_max} kd&le;${tx.kd_max} &middot; ${(tx.enable || []).length} joint(s)</span>`
-      : `<span style="color:var(--warn,#c90)">not configured yet &mdash; press "1. configure" ` +
-        `after checking the joints you want</span>`;
+    const pending = txFormFields().filter(([id]) => {
+      const n = el(id);
+      return n && (n.dataset.dirty === "1" || n === document.activeElement)
+             && String(txFormValue(id)) !== String(txStatusValue(id, tx));
+    }).map(([id]) => id.replace("tx-", ""));
+    // What a cap is set to and what a motor actually receives are different numbers: the cap
+    // is a ceiling over the gains table, applied per joint. Show the real one whenever a
+    // message has gone out, so "I typed 30" and "the motor got 30" are separately checkable.
+    const g = tx.last_sent_gains || {};
+    const gNames = Object.keys(g);
+    const onWire = gNames.length
+      ? " &middot; on the wire: " + gNames.map((n) =>
+          `${n.replace("_joint", "")} kp ${g[n].kp} kd ${g[n].kd}`).join(", ")
+      : "";
+    if (pending.length) {
+      cfgNote.innerHTML = `<span style="color:var(--warn,#c90)">typed but NOT applied: `
+        + `${pending.join(", ")} &mdash; press "1. configure"</span>`;
+    } else {
+      cfgNote.innerHTML = ready
+        ? `<span style="color:var(--muted)">sending to ${tx.host}:${tx.port} &middot; `
+          + `kp&le;${tx.kp_max} kd&le;${tx.kd_max} &middot; ${(tx.enable || []).length} joint(s)`
+          + `${onWire}</span>`
+        : `<span style="color:var(--warn,#c90)">not configured yet &mdash; press "1. configure" `
+          + `after checking the joints you want</span>`;
+    }
   }
   // structural safety net mirrored in the UI: mode left 'manual' while armed -> the server
   // already auto-disarmed (SimCore._on_control_tick -> TxState.check_mode_gate); stop the

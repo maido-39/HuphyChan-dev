@@ -57,6 +57,7 @@ from .schema import (
   TargetIn,
   ScenarioApplyIn,
   TxConfigIn,
+  TxArmIn,
   TxEnableIn,
   WIRE_VERSION,
   validate_joint_names,
@@ -101,6 +102,16 @@ def rss_mb() -> float | None:
       return int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE") / 1e6
   except Exception:
     return None
+
+
+SYNC_APPLY_DEADLINE_S = 0.3
+"""How long ``POST /sync_from_real`` waits for the sim to APPLY the target it just queued.
+
+``SimCore.submit`` only enqueues; the manual target changes on the next control tick (200 Hz,
+so ~5 ms in the live viewer). Answering before that made the endpoint report a sync the target
+had not reached, and an immediate arm then sent the STALE value as its first packet - see the
+wait itself for the measurement. Generous enough to cover a slow tick, short enough that a
+non-stepping sim (tests) is not held up meaningfully."""
 
 
 def build_app(core, freshness: dict) -> FastAPI:
@@ -579,6 +590,7 @@ def build_app(core, freshness: dict) -> FastAPI:
         "no real telemetry has ever been received on this process (rx_count=0) - connect a "
         "receiver/bridge or bench transmitter over WS /ws/in before syncing",
       )
+    applied = False
     target_before, _ = _target_and_real_now()
     real_snap = core.real.snapshot_joints()
     joints_health = core.real.health(expected_period_s=core.dt * core.decimation)["joints"]
@@ -615,6 +627,20 @@ def build_app(core, freshness: dict) -> FastAPI:
     )
     if synced:
       core.submit({"op": "target", "values": synced})
+      # Wait for the sim to actually APPLY it before answering (2026-09-07 bench).
+      # `submit` only queues; the manual target changes on the next control tick. This
+      # endpoint used to return success - and `record_sync` used to mark the sync valid - with
+      # `core.target` still holding the OLD value, so a client that armed promptly afterwards
+      # armed against a target the sync had not reached yet, and the stale value went out as
+      # the first packet. Measured directly: sync reported "synced to 5.7 deg" while the
+      # manual target still read -10.0 deg, and only changed once the sim stepped.
+      deadline = time.monotonic() + SYNC_APPLY_DEADLINE_S
+      while time.monotonic() < deadline:
+        now_t, _ = _target_and_real_now()
+        if all(abs(now_t.get(n, v) - v) <= 1e-9 for n, v in synced.items()):
+          applied = True
+          break
+        time.sleep(0.002)
     sync_token = core.hw_sync.record_sync(synced, real_at_sync, clip_ranges, core.c.contract_sha)
     return {
       "synced": synced,
@@ -622,11 +648,16 @@ def build_app(core, freshness: dict) -> FastAPI:
       "skipped": skipped,
       "max_delta_before": max_delta_before,
       "sync_token": sync_token,
+      # Whether the sim actually took the new target before this call returned. False means
+      # the queued change had not landed yet (a sim that is not stepping, or a very slow
+      # tick); the sync is still recorded, but the arm-time jump check is then what stands
+      # between a stale target and the first packet. Never silently claim it applied.
+      "applied": applied or not synced,
       "t": time.time(),
     }
 
   @app.post("/tx/arm", summary="UI v2 TX stage 2: arm hardware transmit - manual mode only")
-  def post_tx_arm():
+  def post_tx_arm(body: TxArmIn | None = None):
     """Refuses (409) unless stage 1 is enabled AND the sim is in ``manual`` mode (design item
     2: policy output must never be transmittable), AND (docs/123 section 10.2) a valid
     ``POST /sync_from_real`` covers every joint TX is configured to send - see
@@ -652,7 +683,10 @@ def build_app(core, freshness: dict) -> FastAPI:
     core.hw_sync.refresh_staleness(ages, core.c.contract_sha)
     target_now, real_now = _target_and_real_now()
     try:
-      core.hw_sync.check_arm_ready(core.tx.enabled_motors, target_now, real_now)
+      core.hw_sync.check_arm_ready(
+        core.tx.enabled_motors, target_now, real_now,
+        allow_jump=bool(body.allow_jump) if body is not None else False,
+      )
     except HwSyncNotReady as exc:
       raise HTTPException(409, str(exc))
     try:
