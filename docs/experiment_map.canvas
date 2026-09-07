@@ -939,6 +939,36 @@
    "width": 400,
    "height": 170,
    "color": "5"
+  },
+  {
+   "id": "n_huphy_findings",
+   "type": "file",
+   "file": "124_huphy_handoff_findings.md",
+   "x": 21000,
+   "y": 1100,
+   "width": 420,
+   "height": 180,
+   "color": "5"
+  },
+  {
+   "id": "n_bridge_findings",
+   "type": "file",
+   "file": "126_viewer_bridge_findings.md",
+   "x": 21000,
+   "y": 1320,
+   "width": 420,
+   "height": 180,
+   "color": "5"
+  },
+  {
+   "id": "n_motor_rootcause",
+   "type": "file",
+   "file": "127_motor_wont_move_root_cause.md",
+   "x": 21560,
+   "y": 1210,
+   "width": 420,
+   "height": 180,
+   "color": "5"
   }
  ],
  "edges": [
@@ -1784,6 +1814,22 @@
    "toNode": "n_v3_knee_symmetry_research",
    "toSide": "left",
    "label": "반복 측정 → 정정 + 디딤 불균형"
+  },
+  {
+   "id": "e_huphy_to_rootcause",
+   "fromNode": "n_huphy_findings",
+   "fromSide": "right",
+   "toNode": "n_motor_rootcause",
+   "toSide": "left",
+   "label": "로봇 본체 결함 3건 → 같은 증상"
+  },
+  {
+   "id": "e_bridge_to_rootcause",
+   "fromNode": "n_bridge_findings",
+   "fromSide": "right",
+   "toNode": "n_motor_rootcause",
+   "toSide": "left",
+   "label": "어댑터 결함 3건 → 같은 증상"
   }
  ]
 }
