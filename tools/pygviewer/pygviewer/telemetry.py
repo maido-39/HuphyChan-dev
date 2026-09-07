@@ -142,6 +142,11 @@ class RealState:
     self.last_error: str | None = None
     self.bridge_errors = 0
     self.bridge_last_error: str | None = None
+    # Command-link counters as the ROBOT counts them (docs/127 section 3-1), latched: the
+    # robot reports them at a low rate and the last value stays current until a newer one
+    # arrives. Empty means no sender has ever reported them - which the command-path trace
+    # must show as "unknown", never as "zero rejections".
+    self.link_stats: dict[str, float] = {}
 
     self._last_rx_mono: float | None = None
     self._rx_times: deque[float] = deque(maxlen=RX_RATE_WINDOW)
@@ -165,6 +170,8 @@ class RealState:
         self.last_seq = msg.seq
       if msg.contract_hash and msg.contract_hash != self.contract_sha:
         self.contract_mismatches += 1
+      if msg.link_stats:
+        self.link_stats.update(msg.link_stats)
 
       qd_list = msg.qd or [None] * len(msg.joint_names)
       tau_list = msg.tau_est or [None] * len(msg.joint_names)
@@ -443,6 +450,11 @@ class RealState:
         have_policy_io=self.policy_io is not None,
         bridge_errors=self.bridge_errors,
         bridge_last_error=self.bridge_last_error,
+        # Command-link counters as the ROBOT counts them (docs/127 section 3-1). None until a
+        # sender that reports them has been heard from - "not reported" and "zero rejections"
+        # are different answers, and the command-path trace shows the first as unknown rather
+        # than as a pass.
+        link_stats=(dict(self.link_stats) if self.link_stats else None),
       )
 
   def snapshot_joints(self) -> dict[str, dict[str, float | None]]:

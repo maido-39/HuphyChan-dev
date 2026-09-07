@@ -845,6 +845,7 @@ def run_real(args) -> int:
     fault_query_fn=fault_query_fn,
     telemetry_addr=(telemetry_cfg.host, int(telemetry_cfg.port)),
     raw_angle_fn=raw_angle_fn,
+    parse_errors_fn=(lambda: recv.parse_errors),
   )
   # constructed after `motion` so the ticker's periodic line can report the running
   # idle-refresh-tick count alongside the receive counters (docs/123 section 11b) - a
@@ -921,7 +922,8 @@ class RemoteMotion:
                kd_max: float, default_kp: float, default_kd: float, idle_refresh: bool = True,
                fault_query_fn: Callable[[], dict[str, bytes | None]] | None = None,
                telemetry_addr: tuple[str, int] | None = None,
-               raw_angle_fn: Callable[[], dict[str, float | None]] | None = None):
+               raw_angle_fn: Callable[[], dict[str, float | None]] | None = None,
+               parse_errors_fn: Callable[[], int] | None = None):
     self.leg = leg
     self.side = side
     self.action_prefix = action_prefix
@@ -942,6 +944,11 @@ class RemoteMotion:
     # degrees. Measured on this bench: knee raw 271.59 -> a 6 deg request moved ~195 deg at
     # ~1072 deg/s and tripped an overvoltage cutout on both motors.
     self.raw_angle_fn = raw_angle_fn
+    # `parse_errors` is counted by the socket reader, not by LatestOnly, so it has to be
+    # reached through the receiver. Optional like every other injected source here, so a test
+    # double or the dry run can leave it out.
+    self.parse_errors_fn = parse_errors_fn
+    self._link_stats_last_sent = 0.0
     self.wrap_guard = WrapGuard()
     self._wrap_blocked_names: set[str] = set()
     self._wrap_state_active: dict[str, str] = {}
@@ -1128,7 +1135,42 @@ class RemoteMotion:
     prog_flags = {f"{m}/prog": float(PROGRAM_ID)
                   for m in self._enabled_single_motor_names()}
     self._send_fault_telemetry(stuck_flags, fault_now,
-                               {**temp_flags, **wrap_flags, **prog_flags})
+                               {**temp_flags, **wrap_flags, **prog_flags},
+                               self._link_stats_due())
+
+  # -------------------------------------------------------------------- link counters
+  LINK_STATS_PERIOD_S = 0.5
+  """How often the receive counters go out. They change slowly and are latched at the other
+  end, so twice a second is plenty; the point is that they travel AT ALL."""
+
+  def _link_stats_due(self) -> dict[str, float] | None:
+    """Accepted/rejected counts for the command link, at most twice a second.
+
+    This process has counted these since the day it was written and printed them to its own
+    log, on the robot. Nothing ever carried them to the operator's screen, so "did my commands
+    even arrive?" could not be answered without a terminal on this machine - and it had to be
+    answered that way every single time (docs/127 section 3-1). `rejected_seq` is the counter
+    that stood at 5823 against 843 accepted while an entire measurement run silently did
+    nothing, and the counter that would have said so in one glance.
+
+    Returns ``None`` when it is not yet due, so the caller sends nothing rather than a
+    duplicate.
+    """
+    now = time.monotonic()
+    if now - self._link_stats_last_sent < self.LINK_STATS_PERIOD_S:
+      return None
+    self._link_stats_last_sent = now
+    st = self.latest.stats
+    out = {
+      "link/accepted": float(st.accepted),
+      "link/rejected_seq": float(st.rejected_seq),
+      "link/rejected_arm_token": float(st.rejected_arm_token),
+      "link/rejected_contract": float(st.rejected_contract),
+      "link/seq_restarts": float(getattr(st, "seq_restarts", 0)),
+    }
+    if self.parse_errors_fn is not None:
+      out["link/parse_errors"] = float(self.parse_errors_fn())
+    return out
 
   def _enabled_single_motor_names(self) -> set[str]:
     """The subset of :data:`SINGLE_MOTOR_NAMES` currently enabled on this side - the same
@@ -1218,10 +1260,17 @@ class RemoteMotion:
   def _send_fault_telemetry(
     self, stuck_flags: dict[str, float], fault_now: dict[str, FaultReading],
     temp_flags: dict[str, float] | None = None,
+    link_stats: dict[str, float] | None = None,
   ) -> None:
     if self._telemetry_sock is None or self.telemetry_addr is None:
       return
     pkt: dict[str, float] = {}
+    # `link/*` keys are two-segment on purpose: they describe the LINK, not a joint, and the
+    # joint decoder skips anything that is not `limb/motor/field` for free. Added before the
+    # per-motor flags so a tick with no fault to report still carries them - the counters are
+    # most interesting precisely when nothing else is wrong.
+    if link_stats:
+      pkt.update(link_stats)
     for motor_name, flag in stuck_flags.items():
       pkt[f"{self.action_prefix}/{motor_name}/stuck"] = flag
     for motor_name, reading in fault_now.items():

@@ -180,6 +180,11 @@ class HuphyBridge:
     # model-range clip at the qpos-snap point (sim_core.py `_update_replay_targets`), which
     # is the actual safety backstop regardless of whether any bridge sets this.
     self.rom_clamp_count: dict[str, int] = {}
+    # Command-link counters as the RECEIVER counts them (docs/127 section 3-1). Latched: the
+    # robot sends them at a low rate, and the last reported value stays current until a newer
+    # one arrives - a JointState built between two reports must still carry them, or the
+    # viewer's command-path trace would blink between "accepted 1722" and "not reported".
+    self._link_stats: dict[str, float] = {}
 
   def _clip_rom_deg(self, sim_joint: str, row: dict, value: float) -> float:
     rom = row.get("rom_deg")
@@ -194,8 +199,44 @@ class HuphyBridge:
         self.warnings.append(f"{sim_joint}: rom_deg {value:.2f} -> {clipped:.2f} deg")
     return clipped
 
+  # ---------------------------------------------------------------------- link
+  LINK_COUNTERS = (
+    "accepted", "rejected_seq", "rejected_arm_token", "rejected_contract",
+    "parse_errors", "seq_restarts",
+  )
+  """What the command receiver counts, per ``bridge/remote_target.py``'s ``LatestOnly.stats``.
+
+  These answer the question that has needed a terminal on the robot every single time so far:
+  did my commands even arrive, and if they were dropped, which gate dropped them? The robot
+  has always kept them and printed them to its own log; nothing carried them here (docs/127
+  section 3-1). ``rejected_seq`` in particular is the counter that read 5823 against 843
+  accepted while a whole measurement run silently did nothing.
+  """
+
+  def parse_link(self, payload: dict) -> bool:
+    """Absorb ``link/<counter>`` keys. Returns whether any were present.
+
+    Deliberately a separate two-segment namespace rather than a per-motor diag field: these
+    are properties of the LINK, not of a joint, and smuggling them onto one motor's row would
+    make them look joint-specific and break the moment that motor is not in the enable list.
+    ``parse_fast`` ignores them for free - it skips every key that is not ``limb/motor/field``.
+    """
+    seen = False
+    for key, value in payload.items():
+      parts = key.split("/")
+      if len(parts) != 2 or parts[0] != "link":
+        continue
+      if parts[1] not in self.LINK_COUNTERS:
+        continue          # an unknown counter is ignored, never guessed at
+      if value is None:
+        continue
+      self._link_stats[parts[1]] = float(value)
+      seen = True
+    return seen
+
   # ---------------------------------------------------------------------- fast
   def parse_fast(self, payload: dict) -> JointState | None:
+    self.parse_link(payload)   # link counters may ride along in any packet
     touched = False
     for key, value in payload.items():
       parts = key.split("/")
@@ -277,6 +318,7 @@ class HuphyBridge:
       temp_valid=[self._buf[n]["temp_valid"] for n in self.act_names],
       cutoff=[self._buf[n]["cutoff"] for n in self.act_names],
       prog=[self._buf[n]["prog"] for n in self.act_names],
+      link_stats=(dict(self._link_stats) or None),
     )
 
   # ---------------------------------------------------------------------- imu

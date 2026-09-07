@@ -139,6 +139,16 @@ class JointState(Header):
     "(bridge/motor_fault.py ThermalCutoff) - resumes automatically at 45 C. 0.0 = not cut. "
     "null = not evaluated this tick.",
   )
+  link_stats: dict[str, float] | None = Field(
+    default=None,
+    description="Command-link counters as the RECEIVER counts them (docs/127 section 3-1): "
+    "accepted, rejected_seq, rejected_arm_token, rejected_contract, parse_errors, "
+    "seq_restarts. Not per joint - one dict for the whole link, which is why it is a plain "
+    "dict rather than a list like the fields above. The robot has always kept these; until "
+    "now they only reached a log file on the robot, so 'were my commands even accepted?' "
+    "could not be answered from the viewer at all and every diagnosis needed a terminal on "
+    "the other machine. null = this sender does not report them.",
+  )
 
 
 class ImuState(Header):
