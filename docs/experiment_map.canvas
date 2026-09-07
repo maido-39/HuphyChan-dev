@@ -979,6 +979,16 @@
    "width": 460,
    "height": 220,
    "color": "1"
+  },
+  {
+   "id": "n_rate_limit_fix",
+   "type": "text",
+   "text": "**속도 제한 재구성 (2026-09-07)**\n\n가지 `rate-limit-from-datasheet` `7c17ccc`\n\n기준점을 측정 위치 → **직전 명령**으로.\n옛 방식은 오차를 잘라 토크를 묶었고(kp×3°=1.57 N·m),\n모터가 뒤처지면 명령도 안 나아가 느릴수록 더 느려짐\n(이론 300°/s, 실측 49°/s).\n\n한도는 도/s로 기재 · 데이터시트 정격에서 유도\n(RS03 1080, RS04 1002 도/s).\n명령 50 Hz vs 제어 100 Hz 는 실측 경과시간으로 흡수.\n끊김 뒤 설정점 재시딩 = 사고 3건의 공통 경로 차단.",
+   "x": 22100,
+   "y": 1470,
+   "width": 460,
+   "height": 260,
+   "color": "4"
   }
  ],
  "edges": [
@@ -1848,6 +1858,14 @@
    "toNode": "n_bench_incidents",
    "toSide": "top",
    "label": "계측기 도입 중 드러난 실제 사고"
+  },
+  {
+   "id": "e_incidents_to_ratefix",
+   "fromNode": "n_bench_incidents",
+   "fromSide": "right",
+   "toNode": "n_rate_limit_fix",
+   "toSide": "left",
+   "label": "재개 첫 패킷 → 재시딩 규칙"
   }
  ]
 }
