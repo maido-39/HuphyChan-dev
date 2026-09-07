@@ -969,6 +969,16 @@
    "width": 420,
    "height": 180,
    "color": "5"
+  },
+  {
+   "id": "n_bench_incidents",
+   "type": "text",
+   "text": "**벤치 사고 2건 (2026-09-07)**\n\n확인 작업 중 의도치 않은 관절 이동.\n1) hip_yaw 40.1→0.3도, knee 49.5→5.8도 — 원인 확정:\n   맞춤이 목표 반영 전에 성공 반환 + 무장에 이동 크기 제한 없음.\n   고침: 반영까지 대기 + 10도 초과 시 무장 거부(재확인 시 진행).\n2) hip_yaw 0.25→−9.99도 — **원인 미확정**, 하드웨어 확인 중단.\n\n둘 다 화면을 거치지 않고 프로그램으로 직접 명령한 경로에서 발생.",
+   "x": 21560,
+   "y": 1470,
+   "width": 460,
+   "height": 220,
+   "color": "1"
   }
  ],
  "edges": [
@@ -1830,6 +1840,14 @@
    "toNode": "n_motor_rootcause",
    "toSide": "left",
    "label": "어댑터 결함 3건 → 같은 증상"
+  },
+  {
+   "id": "e_rootcause_to_incidents",
+   "fromNode": "n_motor_rootcause",
+   "fromSide": "bottom",
+   "toNode": "n_bench_incidents",
+   "toSide": "top",
+   "label": "계측기 도입 중 드러난 실제 사고"
   }
  ]
 }
