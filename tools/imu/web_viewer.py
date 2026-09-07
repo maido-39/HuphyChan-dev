@@ -249,6 +249,7 @@ HTML_PAGE = r"""<!doctype html>
 <div id="canvas-wrap"></div>
 <div id="hud">
   <h1>EBIMU live</h1>
+  <div class="row"><span class="lbl">3D self-check</span><span id="v-selfcheck">-</span></div>
   <div class="row"><span class="lbl">quat (w,x,y,z)</span><span id="v-quat">-</span></div>
   <div class="row"><span class="lbl">gravity (body)</span><span id="v-grav">-</span></div>
   <div class="row"><span class="lbl">gyro dps</span><span id="v-gyro">-</span></div>
@@ -280,125 +281,339 @@ HTML_PAGE = r"""<!doctype html>
     <button id="btn-reset-view">reset</button>
   </div>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
+/* ===========================================================================
+   From-scratch 3D view.  No library, no CDN, no Y-up.
+
+   Why this is hand-written (2026-09-07, user: "뷰어의 x 축 회전이 반대인데,
+   Y-UP 인 THREE.JS 쓰지말고 제로부터 구현하던가 해"):
+
+   * The sensor's world is RIGHT-HANDED, +Z UP.  three.js is Y-up, so every
+     earlier version of this page carried a sensor->library axis mapping, and
+     every rotation-sense bug this viewer has had came out of that mapping.
+     The first attempt was a plain component swap (x,z,y), which is a
+     REFLECTION (determinant -1): it leaves static arrows pointing the right
+     way while inverting the visual sense of rotation.  It was replaced by a
+     proper -90 deg rotation about X, and the sense was reported wrong again.
+     The mapping is now GONE.  Sensor coordinates are drawn verbatim; there is
+     no axis transform anywhere in this file, so the class of bug cannot come
+     back.
+   * Both libraries were loaded from public CDNs.  With no route to them the
+     whole 3D block throws on load, which looks exactly like "the viewer does
+     not navigate" - no camera, no controls, no drawing at all.  Nothing here
+     is fetched.
+
+   Conventions, stated once and asserted by the self-check at the bottom:
+     world      right-handed, +X / +Y horizontal, +Z up
+     camera     orbits `target` at distance r, azimuth `az` about +Z,
+                elevation `el` up from the XY plane
+     screen     +x right, +y DOWN (canvas convention), so world +Z draws upward
+     drag       the scene follows the pointer: drag right -> the face toward
+                you swings right (az DECREASES, derived below); drag down ->
+                you see more of the top (el INCREASES)
+   ========================================================================= */
+
 const wrap = document.getElementById('canvas-wrap');
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111318);
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.01, 100);
-camera.position.set(1.6, 1.2, 1.6);
-const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(window.innerWidth, window.innerHeight);
-wrap.appendChild(renderer.domElement);
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.target.set(0,0,0);
+const cv = document.createElement('canvas');
+cv.style.width = '100%'; cv.style.height = '100%'; cv.style.display = 'block';
+cv.style.touchAction = 'none'; cv.style.cursor = 'grab';
+cv.tabIndex = 0;
+wrap.appendChild(cv);
+const ctx = cv.getContext('2d');
 
-const grid = new THREE.GridHelper(2, 20, 0x333844, 0x22252e);
-scene.add(grid);
-// NOTE: THREE.AxesHelper's default colors are red/green/blue for X/Y/Z --
-// identical to the body-axis arrow colors below. A FIXED world reference
-// triad sitting at the same origin as the ROTATING body triad, in the same
-// colors, is very easy to mistake for "the axes rotating the wrong way"
-// when they're actually just two different things overlapping. Kept, but
-// recolored to a single dim neutral so it reads as "reference", not "data".
-const worldAxes = new THREE.AxesHelper(0.4);
-worldAxes.setColors(0x555a66, 0x555a66, 0x555a66);
-scene.add(worldAxes);
+const DEG = Math.PI / 180;
+const HOME = { az: 215 * DEG, el: 24 * DEG, r: 2.6 };
+const cam = { az: HOME.az, el: HOME.el, r: HOME.r, tx: 0, ty: 0, tz: 0, persp: true };
+const FOV_Y = 50 * DEG;
+const EL_LIMIT = 89.5 * DEG;   // never let the view direction meet world up
 
-function makeArrow(color, len) {
-  const dir = new THREE.Vector3(0,0,1);
-  const origin = new THREE.Vector3(0,0,0);
-  const a = new THREE.ArrowHelper(dir, origin, len, color, len*0.22, len*0.12);
-  scene.add(a);
-  return a;
+// ---- small vector helpers (world space, all Z-up) -------------------------
+const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
+const add = (a, b) => [a[0]+b[0], a[1]+b[1], a[2]+b[2]];
+const scl = (a, k) => [a[0]*k, a[1]*k, a[2]*k];
+const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+const cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const vlen = (a) => Math.hypot(a[0], a[1], a[2]);
+function norm(a) { const n = vlen(a); return n < 1e-12 ? [0,0,0] : [a[0]/n, a[1]/n, a[2]/n]; }
+
+// ---- camera basis ---------------------------------------------------------
+// The eye sits on a sphere around the target; `fwd` looks back at the target.
+// `right` is fwd x worldUp, which is why elevation is clamped short of 90 deg:
+// at exactly vertical those two are parallel and `right` collapses to zero.
+function camBasis(c) {
+  const t = [c.tx, c.ty, c.tz];
+  const dir = [Math.cos(c.el)*Math.cos(c.az), Math.cos(c.el)*Math.sin(c.az), Math.sin(c.el)];
+  const eye = add(t, scl(dir, c.r));
+  const fwd = norm(sub(t, eye));
+  const right = norm(cross(fwd, [0, 0, 1]));
+  const up = cross(right, fwd);        // unit already: right and fwd are orthonormal
+  return { eye, fwd, right, up };
 }
-const arrowX = makeArrow(0xff5555, 0.5);
-const arrowY = makeArrow(0x55ff77, 0.5);
-const arrowZ = makeArrow(0x5599ff, 0.5);
-const arrowAccelDown = makeArrow(0xffcc33, 0.6);
 
-// fixed reference: true world down
-const refDown = makeArrow(0x888888, 0.6);
-refDown.setDirection(new THREE.Vector3(0,-1,0).normalize());
-refDown.line.material.transparent = true;
-refDown.line.material.opacity = 0.5;
-refDown.cone.material.transparent = true;
-refDown.cone.material.opacity = 0.5;
+let VIEW = camBasis(cam);
+function refreshView() { VIEW = camBasis(cam); }
 
-const trailMax = 4000;
-const trailGeom = new THREE.BufferGeometry();
-const trailPos = new Float32Array(trailMax*3);
-trailGeom.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
-trailGeom.setDrawRange(0,0);
-const trailLine = new THREE.Line(trailGeom, new THREE.LineBasicMaterial({color:0x33ddff}));
-scene.add(trailLine);
-
-const compGeom = new THREE.BufferGeometry();
-const compPos = new Float32Array(trailMax*3);
-compGeom.setAttribute('position', new THREE.BufferAttribute(compPos, 3));
-compGeom.setDrawRange(0,0);
-const compLine = new THREE.Line(compGeom, new THREE.LineBasicMaterial({color:0xff66ff}));
-compLine.visible = false;
-scene.add(compLine);
-
-document.getElementById('chk-computed').addEventListener('change', (e) => {
-  compLine.visible = e.target.checked;
-});
-document.getElementById('btn-reset-view').addEventListener('click', () => {
-  camera.up.set(0,1,0);
-  camera.position.set(1.6, 1.2, 1.6);
-  controls.target.set(0,0,0);
-  camera.lookAt(controls.target);
-  controls.update();
-});
-
-// Lock the camera to look straight down one SENSOR axis at a time, with no
-// perspective/isometric foreshortening -- the only way to judge rotation
-// SENSE about an axis by eye without ambiguity is to view along that axis.
-// Sensor->three.js mapping used everywhere else: three=(sensor.x, sensor.z, -sensor.y).
-function lookDownSensorAxis(threePos, up) {
-  camera.up.copy(up);
-  camera.position.copy(threePos);
-  controls.target.set(0,0,0);
-  camera.lookAt(controls.target);
-  controls.update();
+// ---- projection -----------------------------------------------------------
+// Returns {x, y, d} in CSS pixels, or null when the point is behind the eye.
+// `d` is depth along the view direction, used only for back-to-front sorting.
+let W = 1, H = 1;
+function project(p) {
+  const v = sub(p, VIEW.eye);
+  const d = dot(v, VIEW.fwd);
+  if (d <= 1e-4) return null;
+  const xs = dot(v, VIEW.right);
+  const ys = dot(v, VIEW.up);
+  // Orthographic is for the axis-lock views: judging the SENSE of a rotation
+  // by eye is only unambiguous looking straight down that axis with parallel
+  // projection, where nothing is foreshortened.
+  const s = cam.persp
+    ? (H / 2) / Math.tan(FOV_Y / 2) / d
+    : (H / 2) / (cam.r * Math.tan(FOV_Y / 2));
+  return { x: W/2 + xs*s, y: H/2 - ys*s, d };   // screen +y is DOWN, hence the minus
 }
-document.getElementById('btn-view-x').addEventListener('click', () => {
-  // sensor +X == three +X
-  lookDownSensorAxis(new THREE.Vector3(2,0,0), new THREE.Vector3(0,1,0));
-});
-document.getElementById('btn-view-y').addEventListener('click', () => {
-  // sensor +Y == three -Z
-  lookDownSensorAxis(new THREE.Vector3(0,0,-2), new THREE.Vector3(0,1,0));
-});
-document.getElementById('btn-view-z').addEventListener('click', () => {
-  // sensor +Z == three +Y; camera.up can't be parallel to the view direction
-  lookDownSensorAxis(new THREE.Vector3(0,2,0), new THREE.Vector3(1,0,0));
-});
 
-// NOTE: sensor gives (x,y,z) in its own body/world convention (Z up when
-// level, per HUPHY docs). three.js default is Y-up, so we remap axes for
-// display only. A plain component swap (x, z, y) is a REFLECTION (det=-1),
-// not a rotation -- it preserves static vector directions but inverts the
-// visual sense of rotation about whichever axis isn't swapped (X here).
-// This was caught because rotating the physical sensor about X visibly
-// rotated the on-screen arrows the wrong way. The fix is a proper -90 deg
-// rotation about X (det=+1): three.x=x, three.y=z, three.z=-y.
-function toThree(v) { return new THREE.Vector3(v[0], v[2], -v[1]); }
+// ---- draw list ------------------------------------------------------------
+// Every primitive is queued with a depth, then painted back to front. The
+// scene is a few hundred items, so a full sort per frame costs nothing.
+let queue = [];
+function qline(a, b, color, width, alpha) {
+  const A = project(a), B = project(b);
+  if (!A || !B) return;
+  queue.push({ d: (A.d + B.d)/2, kind: 'line', A, B, color,
+               width: width || 1, alpha: alpha === undefined ? 1 : alpha });
+}
+function qpoly(pts, color, alpha) {
+  const P = pts.map(project);
+  if (P.some((q) => !q)) return;
+  queue.push({ d: P.reduce((s, q) => s + q.d, 0)/P.length, kind: 'poly', P, color,
+               alpha: alpha === undefined ? 1 : alpha });
+}
+function qtext(p, text, color, dx, dy) {
+  const A = project(p);
+  if (!A) return;
+  queue.push({ d: A.d, kind: 'text', A, text, color, dx: dx || 0, dy: dy || 0 });
+}
+function qpolyline(pts, color, width, alpha) {
+  for (let i = 1; i < pts.length; i++) qline(pts[i-1], pts[i], color, width, alpha);
+}
 
-function setArrow(arrow, vec3, len) {
-  const n = vec3.length();
-  if (n > 1e-6) {
-    arrow.setDirection(vec3.clone().normalize());
-    arrow.setLength(len, len*0.22, len*0.12);
+// An arrow: a shaft plus a head drawn as a triangle in the plane containing the
+// shaft and facing the camera, so it still reads as a head from any angle.
+function qarrow(from, dir, length, color, alpha) {
+  const d = norm(dir);
+  if (vlen(d) < 0.5) return;                    // zero/degenerate direction
+  const tip = add(from, scl(d, length));
+  const headLen = length * 0.22, headRad = length * 0.075;
+  const base = add(from, scl(d, length - headLen));
+  let side = cross(d, VIEW.fwd);
+  if (vlen(side) < 1e-6) side = cross(d, VIEW.up);   // shaft points at the camera
+  side = norm(side);
+  qline(from, base, color, 2.5, alpha);
+  qpoly([tip, add(base, scl(side, headRad)), add(base, scl(side, -headRad))], color, alpha);
+}
+
+function paint() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = wrap.clientWidth || 1, h = wrap.clientHeight || 1;
+  if (cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)) {
+    cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+  }
+  W = w; H = h;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#111318'; ctx.fillRect(0, 0, w, h);
+  queue.length = 0;
+  refreshView();
+  buildScene();
+  queue.sort((a, b) => b.d - a.d);              // far first
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
+  for (const it of queue) {
+    ctx.globalAlpha = it.alpha === undefined ? 1 : it.alpha;
+    if (it.kind === 'line') {
+      ctx.strokeStyle = it.color; ctx.lineWidth = it.width;
+      ctx.beginPath(); ctx.moveTo(it.A.x, it.A.y); ctx.lineTo(it.B.x, it.B.y); ctx.stroke();
+    } else if (it.kind === 'poly') {
+      ctx.fillStyle = it.color;
+      ctx.beginPath(); ctx.moveTo(it.P[0].x, it.P[0].y);
+      for (let i = 1; i < it.P.length; i++) ctx.lineTo(it.P[i].x, it.P[i].y);
+      ctx.closePath(); ctx.fill();
+    } else {
+      ctx.fillStyle = it.color; ctx.fillText(it.text, it.A.x + it.dx, it.A.y + it.dy);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---- the scene ------------------------------------------------------------
+// Straight from the server payload, in SENSOR/world coordinates. No mapping.
+const S = {
+  body_x: [1,0,0], body_y: [0,1,0], body_z: [0,0,1],
+  accel_down: [0,0,-1],
+  trail: [], computed: [], showComputed: false,
+};
+
+function buildScene() {
+  // ground grid on the world XY plane (z = 0), because +Z is up
+  const N = 10, step = 0.2, ext = N * step;
+  for (let i = -N; i <= N; i++) {
+    const c = (i === 0) ? '#3b4150' : '#22252e';
+    qline([i*step, -ext, 0], [i*step, ext, 0], c, 1, 0.9);
+    qline([-ext, i*step, 0], [ext, i*step, 0], c, 1, 0.9);
+  }
+  // Fixed world reference triad - deliberately ONE dim neutral colour, never
+  // the body colours: a fixed triad in the same colours as the rotating one,
+  // sharing an origin with it, is very easy to misread as "the axes are
+  // turning the wrong way" when it is really two things overlapping.
+  const REF = '#555a66';
+  qarrow([0,0,0], [1,0,0], 0.4, REF, 0.85); qtext([0.44,0,0], 'X', REF, 3, 3);
+  qarrow([0,0,0], [0,1,0], 0.4, REF, 0.85); qtext([0,0.44,0], 'Y', REF, 3, 3);
+  qarrow([0,0,0], [0,0,1], 0.4, REF, 0.85); qtext([0,0,0.44], 'Z up', REF, 3, -3);
+  // fixed true-world-down reference (gravity points -Z)
+  qarrow([0,0,0], [0,0,-1], 0.6, '#888888', 0.5);
+  // rotating body triad, exactly as the sensor reports it
+  qarrow([0,0,0], S.body_x, 0.5, '#ff5555', 1);
+  qarrow([0,0,0], S.body_y, 0.5, '#55ff77', 1);
+  qarrow([0,0,0], S.body_z, 0.5, '#5599ff', 1);
+  // accel-implied down, to compare against the grey reference above
+  qarrow([0,0,0], S.accel_down, 0.6, '#ffcc33', 1);
+  if (S.trail.length > 1) qpolyline(S.trail, '#33ddff', 1.5, 1);
+  if (S.showComputed && S.computed.length > 1) qpolyline(S.computed, '#ff66ff', 1.5, 1);
+}
+
+// ---- navigation -----------------------------------------------------------
+// Sign derivation for azimuth, so "it turns the wrong way" is settled by
+// arithmetic instead of by taste. Put the camera at el=0, azimuth a; then
+//   eye   = (cos a, sin a, 0)
+//   fwd   = -eye
+//   right = fwd x (0,0,1) = (-sin a, cos a, 0)
+// Take the point on the object nearest the camera, P = (1,0,0) (its "front" at
+// a = 0) and move the camera to a = D:
+//   v  = P - eye = (1-cos D, -sin D, 0)
+//   xs = v . right = -sin D (1-cos D) - cos D sin D  ~=  -D  for small D
+// So INCREASING az drags the front to the LEFT. For the scene to follow the
+// pointer, dragging right (dx > 0) must DECREASE az. Asserted in selfCheck().
+const ROT_PER_PX = 0.008;      // radians per CSS pixel
+let drag = null;
+
+cv.addEventListener('pointerdown', (e) => {
+  cv.focus();
+  cv.setPointerCapture(e.pointerId);
+  const pan = e.button === 2 || e.shiftKey || e.ctrlKey;
+  drag = { x: e.clientX, y: e.clientY, pan };
+  cv.style.cursor = pan ? 'move' : 'grabbing';
+});
+cv.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (drag.pan) {
+    // slide the target across the screen plane, so the scene follows the pointer
+    const k = 2 * cam.r * Math.tan(FOV_Y/2) / Math.max(H, 1);
+    const t = add([cam.tx, cam.ty, cam.tz],
+                  add(scl(VIEW.right, -dx*k), scl(VIEW.up, dy*k)));
+    cam.tx = t[0]; cam.ty = t[1]; cam.tz = t[2];
+  } else {
+    cam.az -= dx * ROT_PER_PX;                                  // see derivation above
+    cam.el = Math.max(-EL_LIMIT, Math.min(EL_LIMIT, cam.el + dy * ROT_PER_PX));
+  }
+});
+function endDrag(e) {
+  if (!drag) return;
+  drag = null; cv.style.cursor = 'grab';
+  if (e && e.pointerId !== undefined && cv.hasPointerCapture(e.pointerId)) {
+    cv.releasePointerCapture(e.pointerId);
   }
 }
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+cv.addEventListener('contextmenu', (e) => e.preventDefault());  // right-drag pans
+cv.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  cam.r = Math.max(0.3, Math.min(20, cam.r * Math.exp(e.deltaY * 0.0012)));
+}, { passive: false });
 
-// Fixed-width number formatting so the HUD doesn't jump around as values
-// change sign or gain/lose a digit. Always shows a sign and pads with
-// leading spaces (not zeros) to a constant width; `white-space:pre` on the
-// value spans (see CSS) is required for the padding to actually render.
+// Keyboard, so the view is reachable without a mouse and without a trackpad
+// gesture the browser might swallow. Arrow keys match the drag directions.
+window.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+  const step = e.shiftKey ? 10*DEG : 3*DEG;
+  if (e.key === 'ArrowLeft') cam.az += step;
+  else if (e.key === 'ArrowRight') cam.az -= step;
+  else if (e.key === 'ArrowUp') cam.el = Math.min(EL_LIMIT, cam.el + step);
+  else if (e.key === 'ArrowDown') cam.el = Math.max(-EL_LIMIT, cam.el - step);
+  else if (e.key === '+' || e.key === '=') cam.r = Math.max(0.3, cam.r / 1.1);
+  else if (e.key === '-' || e.key === '_') cam.r = Math.min(20, cam.r * 1.1);
+  else if (e.key === 'r' || e.key === 'R') resetView();
+  else return;
+  e.preventDefault();
+});
+
+// ---- view buttons ---------------------------------------------------------
+// Looking straight down a SENSOR axis, orthographic.
+function lookAlong(az, el) {
+  cam.az = az; cam.el = el; cam.tx = cam.ty = cam.tz = 0; cam.persp = false;
+}
+function resetView() {
+  cam.az = HOME.az; cam.el = HOME.el; cam.r = HOME.r;
+  cam.tx = cam.ty = cam.tz = 0; cam.persp = true;
+}
+document.getElementById('btn-view-x').onclick = () => lookAlong(0, 0);         // eye on +X
+document.getElementById('btn-view-y').onclick = () => lookAlong(90*DEG, 0);    // eye on +Y
+document.getElementById('btn-view-z').onclick = () => lookAlong(0, EL_LIMIT);  // eye above
+document.getElementById('btn-reset-view').onclick = resetView;
+document.getElementById('chk-computed').addEventListener('change', (e) => {
+  S.showComputed = e.target.checked;
+});
+
+// ---- self-check -----------------------------------------------------------
+// Runs once at load and prints its verdict into the HUD. The point is that the
+// three properties this viewer has actually got wrong before are now checked by
+// the page itself rather than by eye: up is up, a right-handed rotation looks
+// right-handed, and the scene follows the pointer.
+function selfCheck() {
+  const save = JSON.stringify(cam);
+  const fails = [];
+  W = 800; H = 600;
+  resetView();
+  refreshView();
+
+  // 1. world +Z must draw ABOVE the origin (smaller screen y).
+  const o = project([0,0,0]), pz = project([0,0,0.5]);
+  if (!o || !pz || !(pz.y < o.y - 1)) fails.push('+Z is not up on screen');
+
+  // 2. A right-handed rotation of +90 deg about world +X sends +Y to +Z, so the
+  //    tip must move UP the screen. This is the exact sense that was reported
+  //    inverted; it can only hold while nothing remaps the axes.
+  const py = project([0, 0.5, 0]);
+  const pyRot = project([0, 0, 0.5]);          // Rx(+90) . (0,0.5,0) = (0,0,0.5)
+  if (!py || !pyRot || !(pyRot.y < py.y - 1)) fails.push('+X rotation sense is inverted');
+
+  // 3. Dragging right must carry the front of the object to the right. The probe
+  //    sits on the object's near face - straight toward the camera from the
+  //    target, but NOT at the eye itself, where depth is zero and project()
+  //    correctly returns null.
+  const front = scl(norm(VIEW.eye), 0.5);
+  const before = project(front);
+  cam.az -= 40 * ROT_PER_PX;                   // as if dragged 40 px right
+  refreshView();
+  const after = project(front);
+  if (!before || !after || !(after.x > before.x + 1)) fails.push('drag direction is inverted');
+
+  Object.assign(cam, JSON.parse(save));
+  refreshView();
+  const el = document.getElementById('v-selfcheck');
+  if (el) {
+    el.textContent = fails.length ? ('FAIL: ' + fails.join('; ')) : 'pass (up / X-sense / drag)';
+    el.className = fails.length ? 'warn' : 'ok';
+  }
+  return fails;
+}
+
+// ---- HUD ------------------------------------------------------------------
+// Fixed-width number formatting so the readout never jumps as values change
+// sign or gain a digit. `white-space:pre` on the value spans (see CSS) is what
+// makes the padding actually render.
 function padNum(v, decimals, width) {
   const s = (v >= 0 ? '+' : '-') + Math.abs(v).toFixed(decimals);
   return s.padStart(width, ' ');
@@ -412,25 +627,24 @@ const evtSource = new EventSource('/stream');
 evtSource.onopen = () => { document.getElementById('v-conn').textContent = 'live'; document.getElementById('v-conn').className='ok'; };
 evtSource.onerror = () => { document.getElementById('v-conn').textContent = 'disconnected'; document.getElementById('v-conn').className='warn'; };
 
-let lastDropped = 0, lastPolls = 0;
+const TRAIL_MAX = 4000;
 evtSource.onmessage = (ev) => {
   const msg = JSON.parse(ev.data);
   const s = msg.sample;
   if (s) {
-    setArrow(arrowX, toThree(s.body_x), 0.5);
-    setArrow(arrowY, toThree(s.body_y), 0.5);
-    setArrow(arrowZ, toThree(s.body_z), 0.5);
-    setArrow(arrowAccelDown, toThree(s.accel_down_world), 0.6);
+    S.body_x = s.body_x; S.body_y = s.body_y; S.body_z = s.body_z;
+    S.accel_down = s.accel_down_world;
 
-    const dv = toThree(s.accel_down_world).normalize();
-    const trueDown = new THREE.Vector3(0,-1,0);
-    const tiltDeg = THREE.MathUtils.radToDeg(dv.angleTo(trueDown));
-    const gyroMag = Math.sqrt(s.gyro_dps[0]**2 + s.gyro_dps[1]**2 + s.gyro_dps[2]**2);
-    // Above ~60 dps, real inertial acceleration swamps the accel-vs-gravity
-    // comparison (verified empirically: static-hold tilt error ~0.03 rad,
-    // fast-rotation tilt error ~0.6 rad on the same sensor) -- the tilt
-    // reading is only a trustworthy static-mismatch signal below that.
-    // [STATIC]/[MOVING] are kept the same length so this line never shifts.
+    // Tilt: angle between the accel-implied down and true world down (0,0,-1),
+    // both already in world coordinates - no display transform is involved.
+    const dv = norm(s.accel_down_world);
+    const tiltDeg = Math.acos(Math.max(-1, Math.min(1, dot(dv, [0,0,-1])))) / DEG;
+    const gyroMag = Math.hypot(s.gyro_dps[0], s.gyro_dps[1], s.gyro_dps[2]);
+    // Above ~60 dps real inertial acceleration swamps the accel-vs-gravity
+    // comparison (measured on this sensor: 0.03 rad held still, 0.6 rad during
+    // fast rotation), so the tilt number is only a trustworthy static-mismatch
+    // signal below that. [STATIC]/[MOVING] are the same length so the line
+    // never shifts.
     const moving = gyroMag > 60.0;
 
     const tiltEl = document.getElementById('v-tilt');
@@ -451,37 +665,13 @@ evtSource.onmessage = (ev) => {
   }
   document.getElementById('v-drop').textContent = padInt(msg.dropped, 6) + ' / ' + padInt(msg.host_polls, 7);
 
-  const trail = msg.trail;
-  const n = Math.min(trail.length, trailMax);
-  for (let i=0;i<n;i++) {
-    const p = toThree(trail[trail.length-n+i]);
-    trailPos[i*3]=p.x; trailPos[i*3+1]=p.y; trailPos[i*3+2]=p.z;
-  }
-  trailGeom.setDrawRange(0,n);
-  trailGeom.attributes.position.needsUpdate = true;
-
-  const ctrail = msg.computed_trail;
-  const cn = Math.min(ctrail.length, trailMax);
-  for (let i=0;i<cn;i++) {
-    const p = toThree(ctrail[ctrail.length-cn+i]);
-    compPos[i*3]=p.x; compPos[i*3+1]=p.y; compPos[i*3+2]=p.z;
-  }
-  compGeom.setDrawRange(0,cn);
-  compGeom.attributes.position.needsUpdate = true;
+  S.trail = msg.trail.slice(-TRAIL_MAX);
+  S.computed = msg.computed_trail.slice(-TRAIL_MAX);
 };
 
-function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
-}
+function animate() { paint(); requestAnimationFrame(animate); }
+selfCheck();
 animate();
-
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth/window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
 </script>
 </body>
 </html>
