@@ -324,7 +324,13 @@ class SimCore:
     self.script_run_id: str | None = None
 
     # ---------------------------------------------------------------- TX (UI v2, 09-04)
-    self.tx = TxState(self.act_names, contract, violations=self.violations)
+    self.tx = TxState(
+      self.act_names, contract, violations=self.violations,
+      # The measured REAL pose, for the packet log's per-packet "what state was this command
+      # computed against" column (packet_log.py). Read through the same thread-safe snapshot
+      # every endpoint uses, never the raw arrays.
+      state_fn=lambda: {n: v["q"] for n, v in self.real.snapshot_joints().items()},
+    )
 
     # ---------------------------------------------------------------- HW sync gate (09-04)
     # Real near-miss on the bench (docs/123 section 10.2): a manual target left over at

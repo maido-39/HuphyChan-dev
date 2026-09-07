@@ -22,6 +22,7 @@ up 8090 || bash $M/analysis/viser_live.sh RP 8090
 # value that cannot move the motors and looks exactly like a dead link (docs/127).
 up 8094 || (cd $R && CUDA_VISIBLE_DEVICES="" PYG_TX_HOST=10.8.0.14 PYG_TX_PORT=9872 \
   PYG_TX_KP_MAX=30 PYG_TX_KD_MAX=1.5 \
+  PYG_TX_LOG=$R/tools/pygviewer/logs/packets/tx.jsonl \
   setsid nohup $M/.venv/bin/python3 tools/pygviewer/run.py \
   --variant LegOnly-AB --port 8094 --api-port 8095 > tools/pygviewer/logs/pygviewer.log 2>&1 < /dev/null &)
 pgrep -f "gpu_sample[r].sh" >/dev/null || (cd $M && nohup bash analysis/gpu_sampler.sh analysis/out/gpu_usage.csv > /dev/null 2>&1 &)

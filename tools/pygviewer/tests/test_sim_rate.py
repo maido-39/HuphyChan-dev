@@ -5,7 +5,6 @@ resident, on the CPU, with no GPU touched.
 """
 
 import os
-import resource
 
 import pytest
 
@@ -14,21 +13,54 @@ from pygviewer.contract import load_contract
 from pygviewer.sim_core import SimCore
 
 MIN_HZ = 195.0
-MAX_RSS_MB = 600.0
+SIM_RSS_BUDGET_MB = 400.0
+"""How much resident memory ONE SimCore may add.
+
+This used to be an absolute cap of 600 MB read from ``resource.getrusage(...).ru_maxrss``,
+which is the PEAK since the process started and never comes down - so it measured the pytest
+process's entire history rather than this sim's footprint. Once the suite passed ~600 tests it
+reported 882 MB here no matter what SimCore did, and a green suite turned red with no change
+to the viewer (2026-09-07). Switching to CURRENT resident size did not fix it either (731 MB):
+inside a process that has already loaded 625 tests' worth of contracts and models, no absolute
+number means anything.
+
+What the budget in this module's docstring actually asks is "how much does the viewer's sim
+cost", and that is the INCREASE across constructing and running one, which is independent of
+whatever else the host process is carrying. The end-to-end number - the whole viewer process's
+resident size - is reported live by ``GET /status`` as ``rss_mb`` and is the thing to watch on
+the machine, not here."""
+
+
+def _rss_mb() -> float:
+  """CURRENT resident size of this process, in MB.
+
+  Was ``resource.getrusage(...).ru_maxrss``, which is the PEAK since the process started and
+  never comes down. That measures the pytest process's whole history, not this sim's
+  footprint: once the suite grew past ~600 tests it read 882 MB here no matter what SimCore
+  did, and the failure looked like a regression in the viewer (2026-09-07). Current RSS is
+  what the budget in this module's docstring actually means - "the viewer stays under 600 MB
+  while it runs".
+  """
+  with open("/proc/self/statm", encoding="ascii") as fh:
+    pages = int(fh.read().split()[1])
+  return pages * os.sysconf("SC_PAGE_SIZE") / (1024.0 * 1024.0)
 
 
 @pytest.mark.parametrize("variant", ["LegOnly-AB", "LegOnly-RP"])
 def test_realtime_and_footprint(variant):
   assert os.environ.get("CUDA_VISIBLE_DEVICES", "") == "", "run the tests CPU-only"
+  rss_before = _rss_mb()
   core = SimCore(load_contract(CACHE_DIR, variant), realtime=True)
   try:
     core.run_blocking(5.0)
     s = core.snapshot()
     hz = s["rates"]["phys_hz"]
-    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
+    grew = _rss_mb() - rss_before
     assert hz >= MIN_HZ, f"{variant}: physics only {hz:.1f} Hz (need {MIN_HZ})"
     assert s["rates"]["drops"] == 0, f"{variant}: dropped {s['rates']['drops']} substeps"
-    assert rss < MAX_RSS_MB, f"{variant}: RSS {rss:.0f} MB (cap {MAX_RSS_MB})"
+    assert grew < SIM_RSS_BUDGET_MB, (
+      f"{variant}: one SimCore added {grew:.0f} MB resident (budget {SIM_RSS_BUDGET_MB})"
+    )
     assert s["t"] == pytest.approx(5.0, abs=0.2), "sim clock left the wall clock"
   finally:
     core.stop()

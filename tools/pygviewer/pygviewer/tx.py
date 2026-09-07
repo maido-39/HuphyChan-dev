@@ -60,6 +60,7 @@ import secrets
 import time
 from collections import deque
 
+from . import packet_log as packet_log_mod
 from .bridge.tx_client import DEFAULT_KD_MAX, DEFAULT_KP_MAX, DEFAULT_TTL_MS, TxClient
 from .violations import ViolationLog
 
@@ -135,13 +136,17 @@ class TxState:
   """Owns exactly one (possibly ``None``) :class:`bridge.tx_client.TxClient` and the
   enable/arm/heartbeat state machine wrapped around it."""
 
-  def __init__(self, act_names: list[str], contract=None, violations: ViolationLog | None = None):
+  def __init__(self, act_names: list[str], contract=None, violations: ViolationLog | None = None,
+               state_fn=None):
     self.act_names = list(act_names)
     self.contract = contract
     # A2 (2026-09-04): the SAME shared record log SimCore hands to RealState, so a send-side
     # safe_clip or a mode-gate refusal lands in the same GET /violations a recv-side ROM
     # violation does - see violations.py's module docstring.
     self.violations = violations
+    # Reads the measured real pose at send time, so every logged packet carries the state it
+    # was computed against - a command alone cannot be judged after the fact (packet_log.py).
+    self.state_fn = state_fn
     # A shared secret this process reports in status(); an operator copies it verbatim into
     # the receiver's own --arm-token (dummy_rx.py / huphy_remote_motion.py both require one;
     # there is deliberately no built-in default, so a stale or forgotten value can never
@@ -163,6 +168,10 @@ class TxState:
       self.arm_token_pinned = False
 
     self.host, self.port = _env_tx_target()  # display-only until configure(); see _env_tx_target
+    # Packet-level debug log, off unless PYG_TX_LOG names a file (packet_log.py). One log for
+    # the life of this process, handed to every TxClient `configure` builds, so a reconfigure
+    # does not start a new file mid-incident.
+    self.packet_log = packet_log_mod.from_env()
     self.enabled_motors: list[str] = []
     self.kp_max, self.kd_max = _env_gain_caps()
     self.ttl_ms = DEFAULT_TTL_MS
@@ -224,6 +233,8 @@ class TxState:
       kd_max=self.kd_max,
       ttl_ms=self.ttl_ms,
       on_violation=self._on_client_violation if self.violations is not None else None,
+      packet_log=self.packet_log,
+      state_fn=self.state_fn,
       start_seq=resume_seq,
     )
     self.enabled = False

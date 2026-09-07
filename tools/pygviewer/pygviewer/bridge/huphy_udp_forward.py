@@ -42,6 +42,7 @@ import time
 
 from ..contract import load_contract
 from .. import CACHE_DIR
+from .. import packet_log
 from .huphy_udp import HuphyBridge, JointMap
 
 
@@ -64,9 +65,31 @@ async def _drain_replies(ws, stats: dict) -> None:
         print(f"[fwd] server reported: {obj['error']}", file=sys.stderr, flush=True)
 
 
-async def _forward_until_disconnected(sock, bridge, ws, counters: dict) -> None:
+RX_DIAG_HEARTBEAT_S = 5.0
+"""Slowest a diagnostic packet is written when nothing in it has changed. Any change is
+written immediately regardless, so this only governs how often a steady state is restated."""
+
+RX_LOG_PERIOD_S = 0.25
+"""How often an ordinary joint packet is written to the receive log.
+
+Joint frames arrive at ~300 Hz; writing every one buries the interesting packets and fills
+the disk. Diagnostic packets (below) are ALWAYS written regardless of this, because they are
+rare and they carry the fields - fault words, stuck flags, link counters - that every
+investigation so far has actually turned on."""
+
+_DIAG_KEYS = frozenset({
+  "stuck", "fault_le", "fault_be", "temp_valid", "cutoff", "prog", "wrap_margin",
+  "accepted", "rejected_seq", "rejected_arm_token", "rejected_contract",
+  "parse_errors", "seq_restarts",
+})
+
+
+async def _forward_until_disconnected(sock, bridge, ws, counters: dict, rxlog=None) -> None:
   loop = asyncio.get_running_loop()
   stats = {"acked": 0, "errors": 0}
+  # [last joint-packet log time, last motor-state signature, last diag log time,
+  #  last link-counter signature] - a list so the inner scope can update it without `nonlocal`
+  last_rx_log = [0.0, "", 0.0, ""]
   drain_task = asyncio.create_task(_drain_replies(ws, stats))
   t_report = time.time()
   try:
@@ -79,6 +102,51 @@ async def _forward_until_disconnected(sock, bridge, ws, counters: dict) -> None:
         counters["rx"] += 1
         try:
           payload = json.loads(data.decode("utf-8"))
+          # Packet-level record of what the robot ACTUALLY sent, before any interpretation
+          # (2026-09-07, docs/127 section 8). The decoded JointState is not enough: a field
+          # this decoder does not know about, or a key it silently skips, is invisible
+          # downstream and has already cost this project a day once (an old viewer schema
+          # dropping `link_stats` looked exactly like the robot not sending it). Raw keys, as
+          # received. Rate-limited because joint packets arrive at ~300 Hz and the question is
+          # never "every single one" - it is "what was on the wire around this moment".
+          if rxlog is not None:
+            now_mono = time.monotonic()
+            diag = {k: v for k, v in payload.items()
+                    if k.rsplit("/", 1)[-1] in _DIAG_KEYS}
+            if diag:
+              # Diagnostic packets arrive every control tick (~100 Hz) and are almost always
+              # identical, so "always log a diag packet" logged everything - 700 kB in 18 s
+              # on first trial. The useful rule is CHANGE: write one the instant any of these
+              # fields differs from the last one written, and otherwise only on a slow
+              # heartbeat, so a transition can never be missed while a steady state costs
+              # nothing.
+              # Two signatures, because the two kinds of field change for different reasons.
+              #
+              # Motor state (stuck / fault / cutoff / temp_valid / wrap_blocked / prog): these
+              # are discrete and normally still, so any difference is worth a line.
+              # `wrap_margin` is deliberately excluded - it is a live measurement (degrees left
+              # to the +/-180 fold) that differs on essentially every packet, and including it
+              # made "changed" mean "always". It stays IN the payload, just not in the test.
+              #
+              # Link counters ride in only some packets (they go out at 2 Hz), so comparing a
+              # packet that has them against one that does not flagged a change on every
+              # alternation - 86 of them in 31 idle seconds on first trial. They get their own
+              # signature, compared only when they are actually present.
+              sig = repr(sorted((k, v) for k, v in diag.items()
+                                if not k.startswith("link/")
+                                and not k.endswith("/wrap_margin")))
+              link = {k: v for k, v in diag.items() if k.startswith("link/")}
+              link_sig = repr(sorted(link.items())) if link else last_rx_log[3]
+              changed = sig != last_rx_log[1] or link_sig != last_rx_log[3]
+              if changed or now_mono - last_rx_log[2] >= RX_DIAG_HEARTBEAT_S:
+                last_rx_log[1] = sig
+                last_rx_log[2] = now_mono
+                last_rx_log[3] = link_sig
+                rxlog.write("rx", {"n_keys": len(payload), "changed": changed,
+                                   "payload": payload})
+            elif now_mono - last_rx_log[0] >= RX_LOG_PERIOD_S:
+              last_rx_log[0] = now_mono
+              rxlog.write("rx", {"n_keys": len(payload), "payload": payload})
           # IMU columns arrive in their own packet, keyed `imu/<name>/<field>`, and carry no
           # joint values at all - so they have to be routed to parse_imu or they are simply
           # dropped. This forwarder used to call parse_fast for everything, which silently
@@ -118,6 +186,11 @@ async def run(args) -> int:
   sock.bind((host, int(port)))
   sock.setblocking(False)
   counters = {"rx": 0, "tx": 0, "err": 0}
+  # Receive-side packet log, off unless PYG_RX_LOG names a file - the mirror of the viewer's
+  # PYG_TX_LOG, so a run can be reconstructed from both ends against wall-clock time.
+  rxlog = packet_log.from_env("PYG_RX_LOG")
+  if rxlog is not None:
+    print(f"[fwd] packet log -> {rxlog.path}", flush=True)
   n_reconnects = 0
   backoff_s = 1.0
   print(f"[fwd] listening UDP {args.listen} -> {args.ws}  (map={args.map or 'default'})", flush=True)
@@ -130,7 +203,7 @@ async def run(args) -> int:
         if n_reconnects:
           print(f"[fwd] reconnected to {args.ws} (attempt {n_reconnects})", flush=True)
         backoff_s = 1.0
-        await _forward_until_disconnected(sock, bridge, ws, counters)
+        await _forward_until_disconnected(sock, bridge, ws, counters, rxlog)
     except (websockets.exceptions.ConnectionClosed, OSError) as exc:
       n_reconnects += 1
       print(

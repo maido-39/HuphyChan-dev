@@ -105,6 +105,10 @@ class TxClient:
     # highest seq it has accepted (`remote_target.LatestOnly.put`), so restarting the count
     # silently muted every command. See `tx.py::configure`.
     start_seq: int = 0,
+    # Packet-level debug log (packet_log.PacketLog) and a way to read the measured pose at
+    # send time. Both optional: with neither, `tick` behaves exactly as it always has.
+    packet_log=None,
+    state_fn: Callable[[], dict[str, float | None]] | None = None,
   ) -> None:
     if origin not in ("manual", "script"):
       raise RuntimeError(
@@ -172,6 +176,8 @@ class TxClient:
     self._armed = False
     self._lock = threading.Lock()
     self._pending: dict | None = None
+    self.packet_log = packet_log
+    self.state_fn = state_fn
     self._prev_sent: dict[str, float] = {}
     # The gains that actually went out in the last built message, POST-clamp. 2026-09-07: the
     # cap an operator types is not what reaches the motor - it is a ceiling applied per joint
@@ -358,6 +364,32 @@ class TxClient:
     msg = self.build_message()
     if msg is None:
       return None
+    # Packet-level record of what is ACTUALLY going out (2026-09-07, docs/127 section 8): two
+    # unexplained joint movements could not be reconstructed afterwards because nothing kept
+    # the individual commands - `last_sent_target` is the newest value only, and is wiped when
+    # the client is rebuilt. `state_fn` supplies the measured pose at this instant, because a
+    # command without the state it was computed against cannot be judged after the fact.
+    if self.packet_log is not None:
+      measured = {}
+      if self.state_fn is not None:
+        try:
+          measured = self.state_fn() or {}
+        except Exception:                 # never let a logger break the control path
+          measured = {}
+      self.packet_log.write("tx", {
+        "seq": msg.seq,
+        "origin": msg.origin,
+        "joints": msg.joint_names,
+        "q_target": list(msg.q_target),
+        "kp": list(msg.kp) if msg.kp else None,
+        "kd": list(msg.kd) if msg.kd else None,
+        "ttl_ms": msg.ttl_ms,
+        "measured": [measured.get(n) for n in msg.joint_names],
+        "error": [
+          (None if measured.get(n) is None else round(float(t) - float(measured[n]), 6))
+          for n, t in zip(msg.joint_names, msg.q_target)
+        ],
+      })
     if self._sock is None:
       self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     self._sock.sendto(to_jsonl(msg).strip().encode("utf-8"), (self.host, self.port))
