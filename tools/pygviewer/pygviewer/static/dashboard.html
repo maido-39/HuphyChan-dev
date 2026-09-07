@@ -205,11 +205,32 @@ body.resizing-v,body.resizing-h{user-select:none}
 .joint-row .num{width:100%}
 .joint-row .name{font-size:11px}
 .joint-row .phys{font-size:10px;color:var(--dim)}
-/* A joint whose command cannot reach the motor right now (hwHoldState): visibly greyed, and
-   the row still takes pointer events so clicking it can explain why. */
-.joint-row.hw-held{opacity:.45}
-.joint-row.hw-held input[type=range],.joint-row.hw-held .num{cursor:not-allowed}
+/* A transmit-enabled joint whose value is NOT reaching the motor right now (Space not held).
+   Dimmed as a hint about where the value goes - the slider still works; plan B replaced the
+   old disable-the-row behaviour with "show the divergence" (docs/127 section 4-2). */
+.joint-row.hw-held{opacity:.72}
+/* the same joint while Space IS held and the motor is following */
+.joint-row.hw-live{background:rgba(80,200,120,.10);border-radius:3px}
+/* asked-for minus measured, always on screen for every transmitting joint */
+.joint-row .jdiv{grid-column:1/-1;font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:-2px 0 1px 0}
+.joint-row .jdiv:empty{display:none}
+.joint-row .jdiv-moving{color:var(--accent)}   /* delivering, and the motor has yet to arrive */
+.joint-row .jdiv-stale{color:var(--bad)}       /* a gap that nothing is currently closing */
 .tx-cb{transform:scale(.85)}
+
+/* Command path trace (docs/127 section 4): one row per link, first failing row is the cause. */
+.trace{margin:6px 0 2px 0;border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.trace-head{font-size:11px;padding:3px 6px;background:var(--panel2,rgba(255,255,255,.04));
+            border-bottom:1px solid var(--border)}
+.trace-row{display:grid;grid-template-columns:22px 104px 1fr;gap:4px;font-size:10px;
+           padding:2px 6px;align-items:baseline}
+.trace-mark{font-weight:600;text-align:center}
+.trace-label{color:var(--dim)}
+.trace-detail{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr-ok .trace-mark{color:var(--accent)}
+.tr-bad .trace-mark{color:var(--bad)}
+.tr-bad .trace-detail{color:var(--bad)}
+.tr-unk .trace-mark{color:var(--dim)}
 
 /* Obs tab */
 .obsterm{margin:6px 0}

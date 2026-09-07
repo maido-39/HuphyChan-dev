@@ -1403,6 +1403,7 @@ function renderJointsPanel(sub, force) {
         <input type="range" class="slider" step="0.001">
         <input type="number" class="num" step="0.001">
         <span class="phys mono" title="physical angle (mirrored joints only)"></span>
+        <span class="jdiv mono" title="asked-for minus measured"></span>
         <input type="checkbox" class="tx-cb" disabled title="read-only mirror of the Telemetry tab's TX enable list - toggle it there">
       </div>`;
     }).join("");
@@ -1456,12 +1457,15 @@ function renderJointsPanel(sub, force) {
   const hold = hwHoldState(S.txStatus);
   const banner = sub.querySelector("#joints-lock-banner");
   if (banner) {
-    banner.style.display = (lock.locked || hold.holding) ? "" : "none";
+    // Two different things, deliberately worded so they cannot be confused:
+    // "locked" means the slider will not move at all (sync gate). "not delivering" means the
+    // slider moves the SIMULATOR only - it is a statement about where the value goes, never a
+    // refusal to accept it (plan B, docs/127 section 4-2).
+    banner.style.display = (lock.locked || (hold.joints.length && !hold.delivering)) ? "" : "none";
     if (lock.locked) {
       banner.textContent = `Locked: press "0. sync from hardware" (Telemetry tab) to unlock manual control - ${lock.reason}`;
-    } else if (hold.holding) {
-      banner.textContent = `지금은 움직일 수 없습니다 — ${hold.reason}. `
-        + `(${hold.joints.map((j) => j.replace("_joint", "")).join(", ")})`;
+    } else if (hold.joints.length && !hold.delivering) {
+      banner.textContent = `${hold.reason} (${hold.joints.map((j) => j.replace("_joint", "")).join(", ")})`;
     }
   }
   sub.querySelectorAll(".ankle-slider").forEach((sl) => { sl.disabled = lock.locked; });
@@ -1474,18 +1478,20 @@ function renderJointsPanel(sub, force) {
     const row = sub.querySelector(`.joint-row[data-n="${n}"]`);
     if (!row) return;
     const slider = row.querySelector(".slider"), num = row.querySelector(".num"), phys = row.querySelector(".phys");
-    const held = hold.holding && hold.joints.includes(n);
-    const blocked = lock.locked || held;
-    slider.disabled = blocked;
-    num.disabled = blocked;
-    row.classList.toggle("hw-held", held && !lock.locked);
+    // Plan B: a transmit-enabled joint is NEVER disabled for the dead-man any more - only the
+    // sync gate can still lock a slider. Space decides where the value goes, not whether the
+    // operator may set one.
+    const txJoint = hold.joints.includes(n);
+    slider.disabled = lock.locked;
+    num.disabled = lock.locked;
+    row.classList.toggle("hw-held", txJoint && !hold.delivering && !lock.locked);
+    row.classList.toggle("hw-live", txJoint && hold.delivering && !lock.locked);
     slider.title = lock.locked
       ? `locked - ${lock.reason} - press "0. sync from hardware" to unlock`
-      : (held ? `지금은 움직일 수 없습니다 - ${hold.reason}` : "");
+      : (txJoint ? hold.reason : "");
     num.title = slider.title;
-    row.dataset.blockReason = blocked
-      ? (lock.locked ? `먼저 "0. sync from hardware" 를 누르세요 - ${lock.reason}` : hold.reason)
-      : "";
+    row.dataset.blockReason = lock.locked
+      ? `먼저 "0. sync from hardware" 를 누르세요 - ${lock.reason}` : "";
     const target = c.default_q[n];
     const cur = q[n];
     if (document.activeElement !== slider && document.activeElement !== num) {
@@ -1497,6 +1503,26 @@ function renderJointsPanel(sub, force) {
     else phys.textContent = cur !== undefined ? displayVal(cur).toFixed(1) : "";
     const txCb = row.querySelector(".tx-cb");
     if (txCb) txCb.checked = !!(S.txStatus && (S.txStatus.enable || []).includes(n));
+    // The number that was missing every one of the seven times "the motors do not move" came
+    // up (docs/127): asked-for minus measured, on screen at all times for every joint that
+    // transmits. A gap that never closes and a gap that is ZERO because nothing was commanded
+    // are different faults, and until now they looked identical.
+    const divEl = row.querySelector(".jdiv");
+    if (divEl) {
+      const d = txJoint ? jointDivergence(n) : null;
+      if (!d) { divEl.textContent = ""; divEl.className = "jdiv"; }
+      else {
+        const gap = displayVal(d.diff);
+        const sentGap = d.sentDiff === null ? null : displayVal(d.sentDiff);
+        const big = Math.abs(gap) > (S.unit === "deg" ? 2.0 : 0.035);
+        divEl.textContent = `Δ${gap >= 0 ? "+" : ""}${gap.toFixed(S.unit === "deg" ? 1 : 3)}`
+          + (sentGap === null ? "" : ` (sent Δ${sentGap >= 0 ? "+" : ""}${sentGap.toFixed(S.unit === "deg" ? 1 : 3)})`);
+        divEl.className = "jdiv" + (big ? (hold.delivering ? " jdiv-moving" : " jdiv-stale") : "");
+        divEl.title = `manual target ${displayVal(d.target).toFixed(2)}${unitSuffix()}`
+          + ` · measured ${displayVal(d.real).toFixed(2)}${unitSuffix()}`
+          + (d.sent === null ? "" : ` · last sent ${displayVal(d.sent).toFixed(2)}${unitSuffix()}`);
+      }
+    }
   });
 }
 
@@ -1516,20 +1542,61 @@ function zipNamed2(names, arr) { const o = {}; if (!arr) return o; names.forEach
  * reach hardware is a pure-sim joint and moving it cannot desynchronise anything.
  *
  * PURE (no DOM), so the decision is testable on its own. */
+// Is the hardware following the manual target right now, and if not, why not?
+//
+// 2026-09-07, plan B (user: "슬라이더는 항상 조작 가능하게 두고, 스페이스는 '지금 실물에
+// 전달할지'만 결정하며, 목표와 실측의 차이를 항상 숫자로 띄우는 것 ... 그래."). This used to
+// DISABLE the sliders of every transmit-enabled joint whenever Space was not held, and
+// `stopTxDeadman` pulled the target back onto the measurement on release. Together those made
+// commanding a motion nearly impossible: the only window was "hold Space with one hand and
+// drag with the other", and letting go erased what had just been commanded. Measured on the
+// bench: 1722 packets accepted by the robot, every one of them carrying the joint's own
+// present position - docs/127.
+//
+// The lock is gone. Divergence is no longer PREVENTED, it is REPORTED (see jointDivergence
+// below and the `delivering` banner): the sliders always move, Space decides only whether
+// what they say reaches the motors, and the gap between target and measurement is on screen
+// as a number at all times.
 function hwHoldState(txStatus) {
-  const none = { holding: false, reason: null, joints: [] };
-  if (!txStatus || !txStatus.enabled) return none;
+  const idle = { delivering: false, armed: false, reason: null, joints: [] };
+  if (!txStatus || !txStatus.enabled) return idle;
   const joints = txStatus.enable || [];
-  if (!joints.length) return none;
+  if (!joints.length) return idle;
   if (!txStatus.armed) {
-    return { holding: true, joints, reason: "하드웨어 전송이 켜져 있지만 아직 무장(ARM) 전입니다" };
+    return { delivering: false, armed: false, joints,
+             reason: "하드웨어 전송이 켜져 있지만 아직 무장(ARM) 전입니다 - 슬라이더는 시뮬레이터만 움직입니다" };
   }
   const age = txStatus.deadman_age_s;
   const timeout = txStatus.deadman_timeout_s || 0.3;
   if (age === null || age === undefined || age > timeout) {
-    return { holding: true, joints, reason: "스페이스를 누르고 있는 동안에만 실물이 따라옵니다" };
+    return { delivering: false, armed: true, joints,
+             reason: "스페이스를 누르고 있는 동안에만 실물에 전달됩니다 - 지금 움직이는 것은 시뮬레이터입니다" };
   }
-  return none;
+  return { delivering: true, armed: true, joints,
+           reason: "스페이스 유지 중 - 실물에 전달되고 있습니다" };
+}
+
+// Per-joint gap between what we are asking for and what the motor reports, in the display
+// unit. This is the number that was missing every one of the seven times "the motors do not
+// move" came up (docs/127 section 1): the whole failure class shows itself here as either a
+// gap that never closes, or - today's case - a gap that is ZERO because nothing was ever
+// commanded. `null` means the joint has no real reading to compare against.
+function jointDivergence(name) {
+  const j = S.joints;
+  if (!j) return null;
+  const tgt = zipNamed2(j.joint_names, j.target)[name];
+  const real = S.latestReal ? S.latestReal.q[name] : undefined;
+  const sent = S.latestTxSent ? S.latestTxSent[name] : undefined;
+  if (tgt === undefined || real === undefined || real === null) return null;
+  // `sent` is what the robot was last actually told (from /tx/status.last_sent_target), which
+  // is NOT the same as the on-screen target whenever nothing is being delivered. Keeping both
+  // is the point: "target moved but sent did not" and "sent moved but the motor did not" are
+  // different faults that used to look identical.
+  return {
+    target: tgt, real, sent: sent === undefined ? null : sent,
+    diff: tgt - real,
+    sentDiff: sent === undefined ? null : sent - real,
+  };
 }
 
 function jointsLockState(status, txStatus) {
@@ -2378,6 +2445,7 @@ function renderTxSectionHtml() {
     <div class="row tight"><button id="btn-tx-arm" style="flex:1">3. ARM</button>
       <button id="btn-tx-disarm" style="flex:1">disarm</button></div>
     <div class="small" id="tx-arm-block" style="margin:2px 0"></div>
+    <div id="tx-trace" class="trace"></div>
     <div class="row tight"><span id="tx-badge" class="pill">-</span>
       <span class="small" id="tx-heartbeat-age"></span></div>
     <div class="small" style="margin:4px 0">Hold <b>Space</b> to send (keyboard dead-man,
@@ -2509,14 +2577,17 @@ function startTxDeadman() {
 function stopTxDeadman() {
   if (!S.txDeadmanTimer) return;
   clearInterval(S.txDeadmanTimer); S.txDeadmanTimer = null;
-  // The instant the dead-man lapses the hardware stops following, but the manual target is
-  // wherever the operator last dragged it. Pull the target back onto the measured pose so the
-  // two can never sit apart while nothing is being transmitted - the sliders are locked from
-  // here on (hwHoldState), so this is the last moment they can diverge at all.
-  // Bench requirement: "어떤때라도 그 싱크가 깨지면 안되".
-  if (S.txStatus && S.txStatus.enabled) {
-    apiOk("POST", "/sync_from_real").then((r) => { if (r) S.txStatus = { ...S.txStatus }; }).catch(() => {});
-  }
+  // This used to POST /sync_from_real here, snapping the manual target back onto the measured
+  // pose the instant Space was released - the literal reading of "어떤때라도 그 싱크가 깨지면
+  // 안되". Combined with the slider lock it made commanding a motion nearly impossible: the
+  // only window was "hold Space and drag at the same time", and letting go erased the command.
+  // Measured consequence: 1722 packets accepted by the robot, every one carrying the joint's
+  // own present position, and an operator concluding the motors were disconnected (docs/127).
+  //
+  // Plan B (user, 2026-09-07): do not erase it - SHOW it. The target stays where it was put,
+  // the row's divergence readout keeps reporting target-minus-measured, and Space governs only
+  // whether that target is delivered. Releasing Space still stops transmission immediately;
+  // the robot's own dead-man then holds its last commanded position.
 }
 
 /* Input types that genuinely consume a space character. Everything else - range, checkbox,
@@ -2595,6 +2666,110 @@ function wireTxSection() {
     }, true);
     window.addEventListener("blur", stopTxDeadman); // losing window focus must stop it too
   }
+}
+
+// ---------------------------------------------------------------- command path trace
+// docs/127 section 4. Seven times now, "the motors do not move" has had seven different
+// causes and ONE appearance: every indicator green, the motor still. That happens because
+// each indicator reports a component in its own terms and nothing reports the end-to-end
+// quantity - did a commanded change produce a measured change.
+//
+// This is that missing instrument. One row per link of the chain, each carrying the number it
+// is judged on, in the order a command actually travels. The FIRST failing row is the cause;
+// everything below it is unreliable, not innocent. Nothing here decides anything - it only
+// reads state the page already holds, so it can never itself become another thing to debug.
+function commandPathTrace() {
+  const tx = S.txStatus, st = S.status;
+  const joints = (tx && tx.enable) || [];
+  const rows = [];
+  const u = unitSuffix();
+  const dp = S.unit === "deg" ? 1 : 3;
+  const f = (v) => (v >= 0 ? "+" : "") + v.toFixed(dp);
+
+  // 1. Is anything actually being asked for? A gap of zero here is the whole of today's
+  //    incident: 1722 packets accepted by the robot, every one saying "stay where you are".
+  let maxGap = null, gapJoint = null;
+  joints.forEach((n) => {
+    const d = jointDivergence(n);
+    if (!d) return;
+    const g = Math.abs(displayVal(d.diff));
+    if (maxGap === null || g > maxGap) { maxGap = g; gapJoint = n; }
+  });
+  const asking = maxGap !== null && maxGap > (S.unit === "deg" ? 0.5 : 0.009);
+  rows.push({
+    label: "목표가 실측과 다른가",
+    ok: asking,
+    detail: maxGap === null
+      ? "비교할 실측값 없음"
+      : `${gapJoint.replace("_joint", "")} Δ${f(maxGap)}${u}`
+        + (asking ? "" : " — 제자리 명령입니다. 슬라이더를 움직여야 합니다"),
+  });
+
+  rows.push({ label: "모드 manual", ok: !!(st && st.mode === "manual"),
+              detail: st ? st.mode : "?" });
+  rows.push({ label: "무장(ARM)", ok: !!(tx && tx.armed),
+              detail: tx && tx.armed ? "armed" : "disarmed" });
+
+  const age = tx ? tx.deadman_age_s : null;
+  const timeout = (tx && tx.deadman_timeout_s) || 0.3;
+  const held = age !== null && age !== undefined && age <= timeout;
+  rows.push({ label: "스페이스 유지", ok: held,
+              detail: (age === null || age === undefined)
+                ? `한 번도 안 누름 (기준 ${timeout}s)`
+                : `마지막 ${fmt(age, 2)}초 전 (기준 ${timeout}s)` });
+
+  const rate = tx ? tx.rate_hz : 0;
+  rows.push({ label: "패킷 송신", ok: rate > 1,
+              detail: `${fmt(rate, 1)} Hz · seq ${tx && tx.last_seq !== null && tx.last_seq !== undefined ? tx.last_seq : "-"}` });
+
+  // 6. The robot's own accept/reject counters. It has kept them all along and printed them to
+  //    a log file on the robot; nothing ever carried them back here, so every diagnosis so far
+  //    needed a terminal on the other machine (docs/127 section 3-1).
+  const link = S.status && S.status.telemetry ? S.status.telemetry.link_stats : null;
+  if (link) {
+    const rejected = (link.rejected_seq || 0) + (link.rejected_arm_token || 0)
+                   + (link.rejected_contract || 0) + (link.parse_errors || 0);
+    rows.push({ label: "로봇이 받아들임", ok: rejected === 0 && (link.accepted || 0) > 0,
+                detail: `받아들임 ${link.accepted || 0} · 거부 ${rejected}`
+                  + (rejected ? ` (번호 ${link.rejected_seq||0} / 토큰 ${link.rejected_arm_token||0}`
+                              + ` / 모델 ${link.rejected_contract||0} / 해석 ${link.parse_errors||0})` : "") });
+  } else {
+    rows.push({ label: "로봇이 받아들임", ok: null,
+                detail: "로봇이 아직 이 숫자를 보내지 않습니다 (로봇쪽 프로그램 갱신 필요)" });
+  }
+
+  // 7. Did the motor actually go? Compared against what was SENT, not what is on screen.
+  let follow = null, followJoint = null;
+  joints.forEach((n) => {
+    const d = jointDivergence(n);
+    if (!d || d.sentDiff === null) return;
+    const g = Math.abs(displayVal(d.sentDiff));
+    if (follow === null || g > follow) { follow = g; followJoint = n; }
+  });
+  const tol = S.unit === "deg" ? 2.0 : 0.035;
+  rows.push({
+    label: "모터가 따라옴",
+    ok: follow === null ? null : follow <= tol,
+    detail: follow === null ? "보낸 값과 비교할 실측 없음"
+      : `${followJoint.replace("_joint", "")} 보낸값 대비 Δ${f(follow)}${u}`
+        + (follow <= tol ? "" : (held ? " — 이동 중이거나 힘이 모자랍니다" : " — 지금은 전달되지 않는 중")),
+  });
+  return rows;
+}
+
+function renderCommandPathTrace() {
+  const host = el("tx-trace");
+  if (!host) return;
+  const rows = commandPathTrace();
+  const firstBad = rows.find((r) => r.ok === false);
+  const mark = (ok) => ok === null ? "?" : (ok ? "OK" : "X");
+  const cls = (ok) => ok === null ? "tr-unk" : (ok ? "tr-ok" : "tr-bad");
+  host.innerHTML =
+    `<div class="trace-head">명령 경로 — ${firstBad ? "첫 막힌 곳: " + firstBad.label : "막힌 곳 없음"}</div>`
+    + rows.map((r) => `<div class="trace-row ${cls(r.ok)}">`
+        + `<span class="trace-mark">${mark(r.ok)}</span>`
+        + `<span class="trace-label">${r.label}</span>`
+        + `<span class="trace-detail">${r.detail}</span></div>`).join("");
 }
 
 function renderTxStatusLive() {
@@ -2684,6 +2859,7 @@ function renderTxStatusLive() {
   // already auto-disarmed (SimCore._on_control_tick -> TxState.check_mode_gate); stop the
   // local dead-man loop too so it does not keep calling a now-pointless /tx/heartbeat.
   if (!modeOk) stopTxDeadman();
+  renderCommandPathTrace();
 }
 
 document.addEventListener("DOMContentLoaded", boot);

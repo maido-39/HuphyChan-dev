@@ -16,7 +16,12 @@ up 8090 || bash $M/analysis/viser_live.sh RP 8090
 # box opened on 127.0.0.1 and pressing "1. configure" quietly aimed transmission at this
 # laptop - the panel stayed green while no packet ever reached a motor (2026-09-07 bench).
 # It is a DISPLAY default only; nothing is sendable until an operator presses "1. configure".
+# PYG_TX_KP_MAX/KD_MAX: the bench MEASURED that the built-in default cap of 5 sits below
+# these joints' break-away friction (a 5 deg knee command moved 0.04 deg). 30/1.5 is the
+# cap this bench actually works at; without it every viewer restart silently reverts to a
+# value that cannot move the motors and looks exactly like a dead link (docs/127).
 up 8094 || (cd $R && CUDA_VISIBLE_DEVICES="" PYG_TX_HOST=10.8.0.14 PYG_TX_PORT=9872 \
+  PYG_TX_KP_MAX=30 PYG_TX_KD_MAX=1.5 \
   setsid nohup $M/.venv/bin/python3 tools/pygviewer/run.py \
   --variant LegOnly-AB --port 8094 --api-port 8095 > tools/pygviewer/logs/pygviewer.log 2>&1 < /dev/null &)
 pgrep -f "gpu_sample[r].sh" >/dev/null || (cd $M && nohup bash analysis/gpu_sampler.sh analysis/out/gpu_usage.csv > /dev/null 2>&1 &)

@@ -104,6 +104,29 @@ def _env_tx_target() -> tuple[str | None, int]:
   return host, port
 
 
+def _env_float(name: str, fallback: float) -> float:
+  raw = (os.environ.get(name) or "").strip()
+  if not raw:
+    return fallback
+  try:
+    return float(raw)
+  except ValueError:
+    return fallback
+
+
+def _env_gain_caps() -> tuple[float, float]:
+  """Transmit gain caps the panel opens with (``PYG_TX_KP_MAX`` / ``PYG_TX_KD_MAX``).
+
+  2026-09-07 bench.  ``DEFAULT_KP_CAP`` is 5, chosen for the very first single-motor
+  experiment.  This bench then MEASURED that 5 sits below the joints' break-away friction -
+  a 5 deg command on the knee produced 0.04 deg of motion - and settled on knee 20 /
+  hip_yaw 10 under a cap of 30.  A viewer restart silently reverted the cap to 5, and the
+  next session read the resulting 0.01 N*m of torque as "the motors are disconnected"
+  (docs/127 section 2-3).  A hard-won working value must not be lost to a process restart.
+  """
+  return _env_float("PYG_TX_KP_MAX", DEFAULT_KP_CAP), _env_float("PYG_TX_KD_MAX", DEFAULT_KD_CAP)
+
+
 class TxNotAllowed(RuntimeError):
   """Raised by every TxState method that refuses to act - always a 409 at the API layer."""
 
@@ -141,8 +164,7 @@ class TxState:
 
     self.host, self.port = _env_tx_target()  # display-only until configure(); see _env_tx_target
     self.enabled_motors: list[str] = []
-    self.kp_max = DEFAULT_KP_CAP
-    self.kd_max = DEFAULT_KD_CAP
+    self.kp_max, self.kd_max = _env_gain_caps()
     self.ttl_ms = DEFAULT_TTL_MS
 
     self._client: TxClient | None = None
@@ -170,8 +192,9 @@ class TxState:
       raise TxNotAllowed(f"not actuated joints of this model: {unknown}")
     self.host, self.port = host, int(port)
     self.enabled_motors = list(enable)
-    self.kp_max = float(kp_max) if kp_max is not None else DEFAULT_KP_CAP
-    self.kd_max = float(kd_max) if kd_max is not None else DEFAULT_KD_CAP
+    env_kp, env_kd = _env_gain_caps()
+    self.kp_max = float(kp_max) if kp_max is not None else env_kp
+    self.kd_max = float(kd_max) if kd_max is not None else env_kd
     self.ttl_ms = int(ttl_ms) if ttl_ms is not None else DEFAULT_TTL_MS
     # Carry the sequence counter across the rebuild (2026-09-05 bench).  `configure` replaces
     # the TxClient, and a fresh one starts at seq 0 - but the ROBOT remembers the highest seq

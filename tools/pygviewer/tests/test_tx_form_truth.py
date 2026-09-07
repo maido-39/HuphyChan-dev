@@ -288,3 +288,84 @@ def test_dashboard_lists_every_arm_blocker_on_the_page():
     assert needle in body, needle
   assert 'id="tx-arm-block"' in js, "the blocker list needs somewhere on the page to render"
   assert "txArmBlockers(tx, st, sync)" in js, "renderTxStatusLive must actually call it"
+
+
+# ---------------------------------------- plan B: report divergence, never prevent it
+def test_releasing_space_no_longer_erases_the_command():
+  """`stopTxDeadman` used to POST /sync_from_real, snapping the manual target back onto the
+  measured pose the instant Space was released. With the slider lock that made commanding a
+  motion nearly impossible - the only window was "hold Space and drag at once", and letting go
+  erased it. Measured result: 1722 packets accepted by the robot, every one carrying the
+  joint's own present position (docs/127)."""
+  js = DASHBOARD_JS.read_text()
+  m = re.search(r"function stopTxDeadman\(\)\s*\{.*?\n\}", js, re.S)
+  assert m, "stopTxDeadman() not found"
+  # the comment explains the removal, so look for an actual CALL, not the word
+  code = "\n".join(l for l in m.group(0).splitlines() if not l.strip().startswith("//"))
+  assert "sync_from_real" not in code, (
+    "releasing the dead-man must not rewrite the operator's target"
+  )
+  assert "apiOk" not in code, "releasing Space must not post anything at all"
+
+
+def test_dead_man_no_longer_disables_sliders():
+  """Only the sync gate may lock a slider. Space decides where the value goes, not whether the
+  operator may set one."""
+  js = DASHBOARD_JS.read_text()
+  assert "slider.disabled = lock.locked;" in js
+  assert "num.disabled = lock.locked;" in js
+  assert "const blocked = lock.locked || held;" not in js, "the old dead-man lock is back"
+
+
+def test_hold_state_reports_delivery_rather_than_refusal():
+  js = DASHBOARD_JS.read_text()
+  m = re.search(r"function hwHoldState\(txStatus\)\s*\{.*?\n\}", js, re.S)
+  assert m, "hwHoldState() not found"
+  body = m.group(0)
+  assert "delivering" in body, "the state must say whether the value is being DELIVERED"
+  assert "holding: true" not in body, "the old refusal shape is back"
+
+
+def test_every_transmitting_joint_shows_target_minus_measured():
+  """The number missing from all seven incidents: asked-for minus measured, on screen at all
+  times. A gap that never closes and a gap that is zero because nothing was commanded are
+  different faults that used to look identical."""
+  js = DASHBOARD_JS.read_text()
+  m = re.search(r"function jointDivergence\(name\)\s*\{.*?\n\}", js, re.S)
+  assert m, "jointDivergence() not found"
+  body = m.group(0)
+  assert "diff: tgt - real" in body
+  assert "sentDiff" in body, "what was SENT must be tracked separately from the on-screen target"
+  assert 'class="jdiv mono"' in js, "the joint row needs somewhere to render it"
+  assert ".jdiv{grid-column:1/-1" in (DASHBOARD_JS.parent / "dashboard.html").read_text()
+
+
+# ------------------------------------------------------- the command path trace (docs/127)
+def test_command_path_trace_covers_every_link_in_order():
+  js = DASHBOARD_JS.read_text()
+  m = re.search(r"function commandPathTrace\(\)\s*\{.*?\n  return rows;\n\}", js, re.S)
+  assert m, "commandPathTrace() not found"
+  body = m.group(0)
+  # in the order a command actually travels
+  order = ["목표가 실측과 다른가", "모드 manual", "무장(ARM)", "스페이스 유지",
+           "패킷 송신", "로봇이 받아들임", "모터가 따라옴"]
+  positions = [body.index(lbl) for lbl in order]
+  assert positions == sorted(positions), f"trace rows out of order: {order}"
+
+
+def test_trace_names_the_first_blocked_link():
+  """The whole point: the first failing row is the cause. A list that does not say which one
+  is first is just more indicators."""
+  js = DASHBOARD_JS.read_text()
+  assert "rows.find((r) => r.ok === false)" in js
+  assert "첫 막힌 곳" in js
+  assert "renderCommandPathTrace();" in js, "the trace must actually be rendered"
+
+
+def test_trace_admits_when_the_robot_counters_are_missing():
+  """`accepted`/`rejected_*` live on the robot and are printed to a log file there. Until they
+  are carried back, that row must say so rather than quietly showing a pass."""
+  js = DASHBOARD_JS.read_text()
+  m = re.search(r'rows\.push\(\{ label: "로봇이 받아들임", ok: null,.*?\}\);', js, re.S)
+  assert m, "the unknown-counters branch is missing"
+  assert "ok: null" in m.group(0), "an unreported counter is 'unknown', never 'pass'"
