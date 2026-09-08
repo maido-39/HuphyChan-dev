@@ -185,6 +185,7 @@ class HuphyBridge:
     # one arrives - a JointState built between two reports must still carry them, or the
     # viewer's command-path trace would blink between "accepted 1722" and "not reported".
     self._link_stats: dict[str, float] = {}
+    self.imu_quat_rejects = 0
 
   def _clip_rom_deg(self, sim_joint: str, row: dict, value: float) -> float:
     rom = row.get("rom_deg")
@@ -332,6 +333,7 @@ class HuphyBridge:
     before this was caught by ``test_bridge_huphy.py``."""
     touched = False
     gx = gy = gz = ax = ay = az = gvx = gvy = gvz = age_ms = None
+    qw = qx = qy = qz = None
     for key, value in payload.items():
       parts = key.split("/")
       if len(parts) != 3 or parts[0] != "imu":
@@ -361,6 +363,14 @@ class HuphyBridge:
         gvy = value
       elif field == "grav_z":
         gvz = value
+      elif field == "qw":
+        qw = value
+      elif field == "qx":
+        qx = value
+      elif field == "qy":
+        qy = value
+      elif field == "qz":
+        qz = value
     if not touched:
       return None
     self._seq += 1
@@ -369,16 +379,72 @@ class HuphyBridge:
       seq=self._seq,
       src="real",
       contract_hash=None,
-      # HUPHY has already reordered its sensor's native (z,y,x,w) quaternion and computed
-      # gravity_b from it; re-deriving a quaternion here would risk a second, independent
-      # reordering bug, so gravity_b is taken from HUPHY's own grav_* fields directly and
-      # quat is left null unless a future need requires it.
-      quat_wxyz=None,
+      # The quaternion, which used to be dropped here (2026-09-08).
+      #
+      # The old note said HUPHY has already reordered its sensor's native (z,y,x,w)
+      # quaternion, so re-deriving one here would risk a second, independent reordering bug,
+      # and left this null "unless a future need requires it". The need arrived: the
+      # dashboard's real-IMU axes need a full attitude, and gravity alone fixes only two of
+      # the three degrees of freedom - there is no yaw in it, so the axes cannot be drawn.
+      #
+      # The risk the note worried about is handled by CHECKING rather than by trusting.
+      # `_imu_quat_ok` re-derives gravity from these very components using HUPHY's own
+      # formula (`sensors/base.py::gravity_from_quat`) and compares it against the grav_*
+      # fields HUPHY computed itself. Agreement means the ordering is right; disagreement
+      # nulls the quaternion and warns, so a reordering bug can never reach the screen
+      # silently. Verified against 40 live packets from this bench: worst component
+      # difference 0.008, which is the wire's own two-decimal rounding.
+      quat_wxyz=self._imu_quat_ok(qw, qx, qy, qz, gvx, gvy, gvz),
       gyro_rad_s=([gx, gy, gz] if None not in (gx, gy, gz) else None),
       acc_m_s2=([ax, ay, az] if None not in (ax, ay, az) else None),
       gravity_b=([gvx, gvy, gvz] if None not in (gvx, gvy, gvz) else None),
       age_s=(age_ms / 1e3 if age_ms not in (None, -1) else None),
     )
+
+  IMU_QUAT_GRAVITY_TOL = 0.05
+  """How far the quaternion-derived gravity may sit from HUPHY's own before the quaternion is
+  rejected. The wire carries two decimals, so agreement lands near 0.008 on this bench; 0.05
+  passes that comfortably while catching any component-ordering or sign error, all of which
+  move a component by far more."""
+
+  def _imu_quat_ok(self, qw, qx, qy, qz, gvx, gvy, gvz) -> list[float] | None:
+    """The quaternion, but only if it agrees with the gravity HUPHY computed from it.
+
+    HUPHY's own ``sensors/base.py::gravity_from_quat`` is ``g = -(third ROW of R)`` for the
+    standard (w, x, y, z) body-to-world rotation:
+
+        g = ( 2(wy - xz),  -2(yz + wx),  2(x^2 + y^2) - 1 )
+
+    Re-deriving it here and comparing against the grav_* fields on the same packet turns "is
+    the component order right?" from a thing to be trusted into a thing that is measured, on
+    every packet. Getting this wrong is not hypothetical: a first attempt at this check used
+    the third COLUMN instead of the third row and disagreed on X by 0.59, which reads exactly
+    like a sensor sign fault and is not one.
+
+    ``None`` (and a warning) when the check fails or a field is missing, so a wrong attitude
+    is never drawn as if it were right.
+    """
+    if None in (qw, qx, qy, qz):
+      return None
+    w, x, y, z = float(qw), float(qx), float(qy), float(qz)
+    n = math.sqrt(w*w + x*x + y*y + z*z)
+    if not (0.9 < n < 1.1):
+      self.warnings.append(f"imu quaternion is not a unit quaternion (|q| = {n:.3f})")
+      return None
+    if None in (gvx, gvy, gvz):
+      return [w, x, y, z]      # nothing to check against; the fields are named, so take them
+    derived = (2.0*(w*y - x*z), -2.0*(y*z + w*x), 2.0*(x*x + y*y) - 1.0)
+    worst = max(abs(a - b) for a, b in zip(derived, (gvx, gvy, gvz)))
+    if worst > self.IMU_QUAT_GRAVITY_TOL:
+      if self.imu_quat_rejects == 0:
+        self.warnings.append(
+          f"imu quaternion disagrees with the reported gravity by {worst:.3f} "
+          f"(derived {tuple(round(v,3) for v in derived)} vs sent "
+          f"{(round(gvx,3), round(gvy,3), round(gvz,3))}) - attitude not shown"
+        )
+      self.imu_quat_rejects += 1
+      return None
+    return [w, x, y, z]
 
   # ---------------------------------------------------------------------- sentinel tracking
   def _sentinel(self, field: str, value) -> bool:

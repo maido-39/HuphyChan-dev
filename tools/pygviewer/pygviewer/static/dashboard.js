@@ -1940,8 +1940,9 @@ function renderTabObs(body) {
   if (tabNeedsBuild(body.dataset.builtTab, "obs")) {
     body.innerHTML = `<div id="obs-terms"></div>
       <h3 style="margin-top:10px">IMU (body frame)</h3>
-      <div class="small">solid = sim, translucent = real (when connected). Red/green/blue =
-        X/Y/Z body axes, yellow = projected gravity, cyan = gyro (scaled).</div>
+      <div class="small">solid = sim, translucent = the real sensor's own attitude (when
+        connected). Red/green/blue = X/Y/Z body axes, yellow = projected gravity,
+        cyan = gyro (scaled). Overlapping axes mean sim and hardware agree.</div>
       <div id="imu3d"></div>
       <div class="imu-legend" id="imu-legend"></div>`;
     body.dataset.builtTab = "obs";
@@ -2032,7 +2033,9 @@ function initImu3D(container) {
   const realGroup = new THREE.Group();
   scene.add(bodyGroup); scene.add(realGroup);
   const bodyAxes = mkAxes(1.0);
-  const realAxes = mkAxes(0.35);
+  // 0.35 was right while these only echoed the sim; now that they carry the sensor's own
+  // attitude they have to be legible where the two overlap.
+  const realAxes = mkAxes(0.7);
   Object.values(bodyAxes).forEach((a) => bodyGroup.add(a));
   Object.values(realAxes).forEach((a) => realGroup.add(a));
 
@@ -2073,11 +2076,14 @@ function updateImu3D() {
   const legend = el("imu-legend");
   if (realImu) {
     imu3d.realGroup.visible = true;
-    // With no real quaternion the translucent body borrows the SIM's orientation, so the
-    // only thing on screen that actually came from the sensor is the gravity arrow. Say that,
-    // rather than let a sim-shaped body under a "real" label read as a measured pose - the
-    // bridge deliberately does not re-derive a quaternion (huphy_udp.py::parse_imu explains
-    // why), so this is the normal case, not a fault.
+    // 2026-09-08: the bridge now carries the real quaternion (huphy_udp.py::parse_imu, gated
+    // on a per-packet cross-check against the gravity HUPHY derives from that same
+    // quaternion), so these axes are the SENSOR's attitude rather than a copy of the sim's.
+    // Until then they silently borrowed the sim's orientation, which is why the real axes
+    // "were not visible": they were there, sitting exactly on top of the sim ones.
+    //
+    // The fallback stays for a sender that reports no attitude, and it still says so - a
+    // sim-shaped body under a "real" label must never read as a measured pose.
     const hasRealPose = !!realImu.quat_wxyz;
     if (hasRealPose) {
       const q = realImu.quat_wxyz;
@@ -2088,9 +2094,10 @@ function updateImu3D() {
     if (realImu.gravity_b) setArrow(imu3d.gravArrowReal, realImu.gravity_b, 0.9);
     if (legend) {
       legend.textContent = hasRealPose
-        ? `real IMU age ${fmt(realImu.age_s, 2)}s`
+        ? `real IMU age ${fmt(realImu.age_s, 2)}s - translucent axes are the SENSOR's own `
+          + `attitude (checked against its reported gravity)`
         : `real IMU age ${fmt(realImu.age_s, 2)}s - gravity arrow only; `
-          + `the translucent body copies the sim (no orientation on the wire)`;
+          + `the translucent body copies the sim (no usable orientation on the wire)`;
     }
   } else {
     imu3d.realGroup.visible = false;
