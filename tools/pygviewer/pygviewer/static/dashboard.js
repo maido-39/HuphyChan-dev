@@ -2956,12 +2956,33 @@ function renderTxStatusLive() {
   // txFormFields (which handles text/number boxes).
   const apEl = el("tx-allowpolicy");
   if (apEl && document.activeElement !== apEl) apEl.checked = !!tx.allow_policy;
+  // A button that cannot work should look like it cannot work. The refusal was previously
+  // only a 4-second toast, so pressing it again - the natural response - looked like nothing
+  // happened at all.
+  const cfgBtn = el("btn-tx-config");
+  if (cfgBtn) {
+    cfgBtn.disabled = !!tx.armed;
+    cfgBtn.title = tx.armed
+      ? "disarm first - reconfiguring while armed is refused, so the set of joints being "
+        + "transmitted cannot change mid-stream"
+      : "";
+  }
   // What the per-packet cap means in the unit an operator actually thinks in. 0.3 deg/packet
   // is not a number anyone has intuition for; 15 deg/s is.
   const dpsEl = el("tx-maxstep-dps");
   if (dpsEl) {
     const v = parseFloat(el("tx-maxstep") ? el("tx-maxstep").value : "");
-    dpsEl.textContent = Number.isFinite(v) && v > 0 ? `= ${Math.round(v * 50)} deg/s @50Hz` : "";
+    if (!Number.isFinite(v) || v <= 0) {
+      dpsEl.textContent = "";
+      dpsEl.style.color = "";
+    } else {
+      const dps = Math.round(v * 50);
+      // A cap above what the motors can physically do is not a cap. Rated output speed is
+      // 1002 deg/s (RS04, the knee) - see docs/124 section 2-2 for where that comes from.
+      const over = dps > 1002;
+      dpsEl.textContent = `= ${dps} deg/s @50Hz` + (over ? " - above the motor's rated 1002, so no real cap" : "");
+      dpsEl.style.color = over ? "var(--warn,#c90)" : "";
+    }
   }
   const cfgNote = el("tx-cfg-note");
   if (cfgNote) {
@@ -2983,8 +3004,16 @@ function renderTxStatusLive() {
           `${n.replace("_joint", "")} kp ${g[n].kp} kd ${g[n].kd}`).join(", ")
       : "";
     if (pending.length) {
-      cfgNote.innerHTML = `<span style="color:var(--warn,#c90)">typed but NOT applied: `
-        + `${pending.join(", ")} &mdash; press "1. configure"</span>`;
+      // Say WHY it is not applied, not just that it is not. `configure` is refused while
+      // armed (the joint set must not change mid-stream), so "press 1. configure" was advice
+      // that could not work, and pressing it again is the natural thing to try
+      // (2026-09-08, user: "값 바꾸고, 1. 눌렀는데도 값 반영 안된다고").
+      cfgNote.innerHTML = tx.armed
+        ? `<span style="color:var(--bad)">typed but NOT applied: ${pending.join(", ")}`
+          + ` &mdash; TX is ARMED. Press "disarm" first; configure is refused while armed`
+          + ` so the joints being sent cannot change mid-stream.</span>`
+        : `<span style="color:var(--warn,#c90)">typed but NOT applied: `
+          + `${pending.join(", ")} &mdash; press "1. configure"</span>`;
     } else {
       cfgNote.innerHTML = ready
         ? `<span style="color:var(--muted)">sending to ${tx.host}:${tx.port} &middot; `

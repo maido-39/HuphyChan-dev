@@ -594,3 +594,34 @@ def test_one_rule_decides_whether_the_panel_thinks_it_may_send():
 def test_the_panel_says_when_a_policy_may_drive():
   js = DASHBOARD_JS.read_text()
   assert "POLICY MAY DRIVE" in js, "this is not a state to leave implicit in a toast"
+
+
+# ------------------------------- a refusal has to say why, on the panel (2026-09-08)
+def test_the_pending_note_names_the_arm_as_the_blocker():
+  """User: "값 바꾸고, 1. 눌렀는데도 값 반영 안된다고." TX was armed, and `configure` is
+  refused while armed so the joint set cannot change mid-stream. The panel said only "typed
+  but NOT applied - press 1. configure", which is advice that could not work; pressing it
+  again is the natural response and looks like nothing happens.
+
+  The refusal existed - as a four-second toast. That is not where a persistent condition
+  belongs."""
+  js = DASHBOARD_JS.read_text()
+  assert "TX is ARMED" in js
+  assert 'Press "disarm" first' in js
+  m = re.search(r"if \(pending\.length\) \{.*?\} else \{", js, re.S)
+  assert m and "tx.armed" in m.group(0), "the note must branch on the actual blocker"
+
+
+def test_the_configure_button_is_disabled_while_armed():
+  """A button that cannot work should look like it cannot work."""
+  js = DASHBOARD_JS.read_text()
+  assert 'cfgBtn.disabled = !!tx.armed;' in js
+  assert "disarm first" in js
+
+
+def test_a_step_cap_above_the_motor_says_it_is_not_a_cap():
+  """100 deg/packet at 50 Hz is 5000 deg/s, five times the RS04's rated 1002 - a number that
+  looks like a limit and is not one."""
+  js = DASHBOARD_JS.read_text()
+  assert "1002" in js
+  assert "no real cap" in js
