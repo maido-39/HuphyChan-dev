@@ -506,7 +506,8 @@ def build_app(core, freshness: dict) -> FastAPI:
     prev_target = (core.tx.host, core.tx.port)
     try:
       core.tx.configure(
-        body.host, body.port, body.enable, kp_max=body.kp_max, kd_max=body.kd_max, ttl_ms=body.ttl_ms
+        body.host, body.port, body.enable, kp_max=body.kp_max, kd_max=body.kd_max,
+        ttl_ms=body.ttl_ms, allow_policy=body.allow_policy, max_step_deg=body.max_step_deg,
       )
     except TxNotAllowed as exc:
       raise HTTPException(409, str(exc))

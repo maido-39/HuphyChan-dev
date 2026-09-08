@@ -429,6 +429,22 @@ class TxConfigIn(BaseModel):
   kp_max: float | None = Field(default=None, description="default 5.0 (docs/123 section 3 bench cap)")
   kd_max: float | None = Field(default=None, description="default 0.5 (docs/123 section 3 bench cap)")
   ttl_ms: int | None = Field(default=None, description="default 250ms (bridge.tx_client.DEFAULT_TTL_MS)")
+  allow_policy: bool = Field(
+    default=False,
+    description="Let a policy's own output reach the motors (sim mode 'policy_sim'). Off by "
+    "default, and with it off nothing about this endpoint behaves differently than before it "
+    "existed. Requires max_step_deg: every other guard is checked once at arm time, but a "
+    "policy rewrites every target 50 times a second, so only a per-packet cap still protects "
+    "anything after the first packet. 'policy_shadow' is never included - it exists to watch "
+    "a policy without letting it drive.",
+  )
+  max_step_deg: float | None = Field(
+    default=None,
+    description="Cap on how far a transmitted target may move per packet, in degrees, "
+    "anchored to the PREVIOUS COMMAND (not to the measurement - anchoring to the measurement "
+    "turns a speed limit into a torque cap, see docs/124 section 2-2). Optional for manual "
+    "driving, mandatory with allow_policy.",
+  )
 
 
 class ScenarioApplyIn(BaseModel):

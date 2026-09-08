@@ -32,6 +32,7 @@ same "just stop sending" idea HUPHY's own reference design uses (docs/123 sectio
 from __future__ import annotations
 
 import logging
+import math
 import socket
 import threading
 import time
@@ -109,6 +110,11 @@ class TxClient:
     # send time. Both optional: with neither, `tick` behaves exactly as it always has.
     packet_log=None,
     state_fn: Callable[[], dict[str, float | None]] | None = None,
+    # Modes out of BLOCKED_MODES the owner has deliberately opted into (TxState.configure's
+    # `allow_policy`). Empty keeps the original behaviour: every blocked mode is refused.
+    # This layer stays useful either way - it still catches a mode nobody opted into, which is
+    # the case it was written for: a caller whose `origin` and `mode` have drifted apart.
+    allow_modes: frozenset[str] | set[str] | None = None,
   ) -> None:
     if origin not in ("manual", "script"):
       raise RuntimeError(
@@ -178,6 +184,7 @@ class TxClient:
     self._pending: dict | None = None
     self.packet_log = packet_log
     self.state_fn = state_fn
+    self._allow_modes = frozenset(allow_modes or ())
     self._prev_sent: dict[str, float] = {}
     # The gains that actually went out in the last built message, POST-clamp. 2026-09-07: the
     # cap an operator types is not what reaches the motor - it is a ceiling applied per joint
@@ -242,6 +249,26 @@ class TxClient:
   # ---------------------------------------------------------------------------------- arm
   def arm(self) -> None:
     self._armed = True
+    # Seed the slew ramp from where the joints ACTUALLY are (2026-09-08).
+    #
+    # `_clamp_positions` anchors each step to `_prev_sent`, and `disarm()` clears it so a
+    # later arm does not resume mid-ramp from a stale pose. But an empty `_prev_sent` makes
+    # the fallback `prev = clipped`, so the FIRST packet after arming passes through the cap
+    # untouched - and the first packet is the dangerous one, the whole reason the arm-jump
+    # gate in hw_sync.py exists. Seeding from the measured pose makes the ramp start at the
+    # joint, so a far target is approached from packet one instead of after it.
+    #
+    # Only when a cap is configured and a state source exists: with neither, this is exactly
+    # the behaviour it always had.
+    if self._max_delta and self.state_fn is not None:
+      try:
+        measured = self.state_fn() or {}
+      except Exception:            # a logger/telemetry fault must not block arming
+        measured = {}
+      for n in self.joint_names:
+        v = measured.get(n)
+        if v is not None and math.isfinite(float(v)):
+          self._prev_sent[n] = float(v)
 
   def disarm(self) -> None:
     self._armed = False
@@ -269,14 +296,16 @@ class TxClient:
     changing and then stopped calling it" (the viewer's keyboard-deadman story) equivalent to
     just not calling this again: the LAST value sits here until ``disarm()`` clears it.
 
-    ``mode``, if given, is checked against ``BLOCKED_MODES`` and raises ``RuntimeError`` for
-    ``policy_sim``/``policy_shadow`` - pass the viewer's current run mode here every call and
-    this client refuses to update the target while a policy owns the sim (docs/123 section 4).
+    ``mode``, if given, is checked against ``BLOCKED_MODES`` and raises ``RuntimeError`` -
+    pass the viewer's current run mode here every call and this client refuses to update the
+    target while a policy owns the sim, unless the owner explicitly opted that mode in via
+    ``allow_modes`` (see the constructor).
     """
-    if mode is not None and mode in BLOCKED_MODES:
+    if mode is not None and mode in BLOCKED_MODES and mode not in self._allow_modes:
       raise RuntimeError(
-        f"mode={mode!r} is blocked - policy output must never be transmitted "
-        f"(docs/123 section 4, BLOCKED_MODES={sorted(BLOCKED_MODES)})"
+        f"mode={mode!r} is blocked - a policy owns the sim's target and this client was not "
+        f"configured to transmit from it (BLOCKED_MODES={sorted(BLOCKED_MODES)}, "
+        f"allow_modes={sorted(self._allow_modes)})"
       )
     unknown = sorted(set(values) - set(self.joint_names))
     if unknown:

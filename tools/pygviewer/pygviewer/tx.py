@@ -55,6 +55,7 @@ passed to this class, by construction, not by a runtime check that could be forg
 
 from __future__ import annotations
 
+import math
 import os
 import secrets
 import time
@@ -79,6 +80,15 @@ DEFAULT_TX_PORT = 9872
 """Port the robot-side receiver (``bridge.huphy_remote_motion --listen 0.0.0.0:9872``) binds.
 Only a DEFAULT for the pre-configure state below - ``configure`` always takes the real one
 from the operator."""
+
+POLICY_MODES = ("policy_sim",)
+"""Sim modes whose target a policy writes, and which :meth:`TxState.configure` can be asked
+to allow through to the motors.
+
+``policy_shadow`` is deliberately NOT here: it exists to watch a policy WITHOUT letting it
+drive (``modes.SHADOW_MAY_TRANSMIT``), and a shadow that reaches the motors is a contradiction
+in terms. The replay modes are not here either - a recording driving hardware is a separate
+decision with its own failure modes, and nobody has asked for it."""
 
 
 def _env_tx_target() -> tuple[str | None, int]:
@@ -175,6 +185,10 @@ class TxState:
     self.enabled_motors: list[str] = []
     self.kp_max, self.kd_max = _env_gain_caps()
     self.ttl_ms = DEFAULT_TTL_MS
+    # Policy output reaching the motors: off unless configure() is explicitly asked for it,
+    # and refused there without a per-tick step cap. See configure()'s docstring.
+    self.allow_policy = False
+    self.max_step_deg: float | None = None
 
     self._client: TxClient | None = None
     self.enabled = False  # stage 1
@@ -193,18 +207,46 @@ class TxState:
     kp_max: float | None = None,
     kd_max: float | None = None,
     ttl_ms: int | None = None,
+    allow_policy: bool = False,
+    max_step_deg: float | None = None,
   ) -> None:
+    """(Re)build the underlying client.
+
+    ``allow_policy`` lets a policy's own output through to the motors (user decision,
+    2026-09-08: "Policy 출력 실제로 모터 제어하는거 시작해줘"). It defaults to False, and with
+    it False every path here behaves exactly as it did before this parameter existed.
+
+    ``max_step_deg`` caps how far a transmitted target may move per packet, anchored to the
+    PREVIOUS COMMAND (``TxClient._clamp_positions``) - the same anchor the robot's own rate
+    limit uses, and for the same reason: anchoring to the measurement instead turns a speed
+    limit into a torque cap and makes the command stop advancing whenever the motor lags.
+
+    **``allow_policy`` requires ``max_step_deg``**, and this refuses the combination without
+    it. Every other guard in this file is checked once, at arm time: the sync gate, the
+    arm-jump ceiling, the mode. An operator's targets then change only as fast as a hand moves
+    a slider. A policy rewrites all of them every 20 ms, so a once-at-arm check is no
+    protection at all after the first packet, and the per-packet cap is the only thing that
+    is. Refusing here rather than warning keeps that from being an option someone forgets.
+    """
     if self.armed:
       raise TxNotAllowed("cannot reconfigure while armed - POST /tx/disarm first")
     unknown = sorted(set(enable) - set(self.act_names))
     if unknown:
       raise TxNotAllowed(f"not actuated joints of this model: {unknown}")
+    if allow_policy and (max_step_deg is None or float(max_step_deg) <= 0):
+      raise TxNotAllowed(
+        "allow_policy needs max_step_deg (degrees per packet, > 0): a policy rewrites every "
+        "target 50 times a second, so the arm-time checks stop protecting anything after the "
+        "first packet and the per-packet step cap is the only guard left"
+      )
     self.host, self.port = host, int(port)
     self.enabled_motors = list(enable)
     env_kp, env_kd = _env_gain_caps()
     self.kp_max = float(kp_max) if kp_max is not None else env_kp
     self.kd_max = float(kd_max) if kd_max is not None else env_kd
     self.ttl_ms = int(ttl_ms) if ttl_ms is not None else DEFAULT_TTL_MS
+    self.allow_policy = bool(allow_policy)
+    self.max_step_deg = float(max_step_deg) if max_step_deg is not None else None
     # Carry the sequence counter across the rebuild (2026-09-05 bench).  `configure` replaces
     # the TxClient, and a fresh one starts at seq 0 - but the ROBOT remembers the highest seq
     # it has accepted and drops anything at or below it (`remote_target.LatestOnly.put`).  So
@@ -236,6 +278,10 @@ class TxState:
       packet_log=self.packet_log,
       state_fn=self.state_fn,
       start_seq=resume_seq,
+      # Per-packet step cap, anchored to the previous COMMAND. None keeps the old behaviour
+      # (no slew limit at all) for manual driving, where a hand on a slider is the limit.
+      max_delta_rad=(math.radians(self.max_step_deg) if self.max_step_deg else None),
+      allow_modes=(frozenset(POLICY_MODES) if self.allow_policy else frozenset()),
     )
     self.enabled = False
     self.armed = False
@@ -265,11 +311,12 @@ class TxState:
         "TX arm refused: the TX panel is not enabled - POST /tx/config then "
         'POST /tx/enable {"on": true} first'
       )
-    if mode != "manual":
+    if not self.mode_allowed(mode):
+      allowed = "'manual'" + (f" or {POLICY_MODES}" if self.allow_policy else "")
       raise TxNotAllowed(
-        f"TX arm refused: sim mode is {mode!r}. Only 'manual' (the Joints tab, or a "
-        "running POST /script/run sequence) may arm TX - policy output must never be "
-        "transmittable (docs/121 section 10 TX item)."
+        f"TX arm refused: sim mode is {mode!r}, and this TX config allows {allowed}. "
+        "'manual' covers the Joints tab and a running POST /script/run sequence; a policy "
+        'mode needs POST /tx/config {"allow_policy": true, "max_step_deg": ...} first.'
       )
 
   def arm(self, mode: str) -> None:
@@ -292,10 +339,21 @@ class TxState:
       raise TxNotAllowed("cannot heartbeat: not armed")
     self._last_heartbeat = time.monotonic()
 
+  def mode_allowed(self, mode: str) -> bool:
+    """Whether TX may be armed, and stay armed, in this sim mode.
+
+    ``manual`` always - the Joints tab and a running script both run under it. A policy mode
+    only when this config opted in (:meth:`configure`), which additionally forces a per-packet
+    step cap. One predicate, used by BOTH the arm check and the every-tick gate below, so the
+    two can never drift into disagreeing about what is allowed."""
+    if mode == "manual":
+      return True
+    return bool(self.allow_policy) and mode in POLICY_MODES
+
   def check_mode_gate(self, mode: str) -> None:
     """Call every control tick (``SimCore._on_control_tick``) regardless of what the API
     layer checked - structural enforcement, not a UI-only checkbox."""
-    if self.armed and mode != "manual":
+    if self.armed and not self.mode_allowed(mode):
       self.disarm(reason=f"mode changed to {mode!r} while armed")
 
   # -------------------------------------------------------------------------- violations (A2)
@@ -399,6 +457,11 @@ class TxState:
       kp_max=self.kp_max,
       kd_max=self.kd_max,
       ttl_ms=self.ttl_ms,
+      # Whether a policy is allowed to drive the motors through this config, and the
+      # per-packet step cap that comes with it. Reported so the panel can say it out loud -
+      # "a policy can move the hardware right now" is not a state to leave implicit.
+      allow_policy=self.allow_policy,
+      max_step_deg=self.max_step_deg,
       arm_token=self.arm_token,
       warnings=list(self._client.warnings) if self._client is not None else [],
       # A2: send-side violation count only, so a client watching only /tx/status still sees
