@@ -151,11 +151,33 @@ def test_a_recovery_failure_does_not_kill_the_receive_thread():
 
 
 # ------------------------------------------------------------------- the panel
-def test_the_button_appears_only_when_something_is_faulted():
-  """An always-visible "re-enable torque" button is an invitation."""
+def test_the_button_is_only_clickable_when_something_is_faulted():
+  """A live "re-enable torque" button is an invitation - the CLICK is what turns torque on.
+
+  It used to be hidden outright for that reason, which also made it unfindable in the one
+  moment it is wanted (2026-09-08, user: "버튼 어디있냐고"). So it stays on screen and goes
+  disabled instead: the invitation is gone either way, and now the operator knows it exists
+  and where it will be.
+  """
   js = DASHBOARD_JS.read_text()
   assert 'id="btn-tx-clearfault"' in js
-  assert 'recRow.style.display = faulted.length ? "" : "none"' in js
+  assert 'style="display:none"' not in _recover_row(js), "the row must not be hidden"
+  assert "disabled" in _recover_row(js), "and it must open in the locked state"
+  assert "recBtn.disabled = !faulted.length" in js, "unlocked only by a reported fault"
+
+
+def test_the_locked_button_says_why_it_is_locked():
+  """A greyed-out button with no explanation is the same dead end as a missing one."""
+  js = DASHBOARD_JS.read_text()
+  m = re.search(r"if \(recNote && !faulted\.length\) \{.*?\n  \}", js, re.S)
+  assert m, "the no-fault branch of the note was not found"
+  assert "no motor is reporting a fault" in m.group(0)
+
+
+def _recover_row(js):
+  m = re.search(r'<div class="row tight" id="tx-recover-row".*?</div>', js, re.S)
+  assert m, "the recovery row was not found"
+  return m.group(0)
 
 
 def test_the_button_asks_first_and_says_nothing_will_move():

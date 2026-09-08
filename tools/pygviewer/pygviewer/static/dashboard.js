@@ -2481,8 +2481,8 @@ policy_shadow is never included - it exists to watch a policy without letting it
     <div class="row tight"><button id="btn-tx-arm" style="flex:1">3. ARM</button>
       <button id="btn-tx-disarm" style="flex:1">disarm</button></div>
     <div class="small" id="tx-arm-block" style="margin:2px 0"></div>
-    <div class="row tight" id="tx-recover-row" style="display:none">
-      <button id="btn-tx-clearfault" style="flex:1">motor cut out - clear fault &amp; re-enable torque</button></div>
+    <div class="row tight" id="tx-recover-row">
+      <button id="btn-tx-clearfault" style="flex:1" disabled>clear fault &amp; re-enable torque</button></div>
     <div class="small" id="tx-recover-note" style="margin:2px 0"></div>
     <div id="tx-trace" class="trace"></div>
     <div class="row tight"><span id="tx-badge" class="pill">-</span>
@@ -3075,14 +3075,27 @@ function renderTxStatusLive() {
   // already auto-disarmed (SimCore._on_control_tick -> TxState.check_mode_gate); stop the
   // local dead-man loop too so it does not keep calling a now-pointless /tx/heartbeat.
   if (!modeOk) stopTxDeadman();
-  // The recovery button only appears when something is actually reporting a fault - an
-  // always-visible "re-enable torque" button is an invitation, and this one is not needed
-  // until a motor has cut out.
+  // The recovery button stays VISIBLE but is only CLICKABLE when something is actually
+  // reporting a fault. It used to be hidden outright, on the reasoning that an always-live
+  // "re-enable torque" button is an invitation - which is true, and this keeps that property,
+  // because the click is what turns torque on, not the pixels. What hiding it also did was
+  // make it unfindable: an operator looking for the recovery control in the moment they need
+  // it has no way to know it exists, or where it will appear (2026-09-08, user: "버튼
+  // 어디있냐고"). Disabled-and-labelled says both things at once - here it is, and it is not
+  // needed yet.
   const faulted = faultedJoints(st);
-  const recRow = el("tx-recover-row");
-  if (recRow) recRow.style.display = faulted.length ? "" : "none";
+  const recBtn = el("btn-tx-clearfault");
+  if (recBtn) {
+    recBtn.disabled = !faulted.length;
+    recBtn.textContent = faulted.length
+      ? "motor cut out - clear fault & re-enable torque"
+      : "clear fault & re-enable torque";
+  }
   const recNote = el("tx-recover-note");
-  if (recNote && !faulted.length) recNote.innerHTML = "";
+  if (recNote && !faulted.length) {
+    recNote.innerHTML = `<span style="color:var(--muted)">no motor is reporting a fault, so `
+      + `this is locked. It unlocks by itself if one cuts out.</span>`;
+  }
   renderCommandPathTrace();
 }
 
