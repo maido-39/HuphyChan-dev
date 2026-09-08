@@ -958,7 +958,7 @@ class SimCore:
       # `tx.check_mode_gate` - this call just makes it take effect immediately rather than
       # waiting up to one tick, mirroring the honesty `/target`'s synchronous clip response
       # already aims for elsewhere in this file.)
-      self.hw_sync.note_mode(want)
+      self.hw_sync.note_mode(want, tx_allows=self.tx.mode_allowed(want))
     elif op == "cmd":
       self.cmd = np.asarray(cmd["value"], dtype=float).reshape(3)
     elif op == "gains":
@@ -996,7 +996,7 @@ class SimCore:
     # `_apply_cmd`'s "mode" op already calls `hw_sync.note_mode`, but `self.mode` can also be
     # written directly (tests, a future caller) without going through that path, so this is
     # checked every tick too, not only when the API-driven op runs.
-    self.hw_sync.note_mode(self.mode)
+    self.hw_sync.note_mode(self.mode, tx_allows=self.tx.mode_allowed(self.mode))
     if self.tx.enabled:
       # The ONLY thing ever handed to the TX wrapper is the current manual/script target -
       # never a policy action, which is a different attribute entirely (self.last_action /

@@ -2457,6 +2457,17 @@ function renderTxSectionHtml() {
     <div class="row tight"><label>kp max</label><input id="tx-kpmax" type="number" value="5" step="0.1" style="width:50px">
       <label>kd max</label><input id="tx-kdmax" type="number" value="0.5" step="0.05" style="width:50px">
       <label>ttl ms</label><input id="tx-ttlms" type="number" value="250" step="10" style="width:50px"></div>
+    <div class="row tight">
+      <label title="How far a transmitted target may move per packet, anchored to the previous
+COMMAND. At 50 Hz, 0.3 deg/packet is 15 deg/s. Blank = no cap (fine for slider driving, where
+a hand is the limit). Required before a policy may drive.">step max &deg;/pkt</label>
+      <input id="tx-maxstep" type="number" placeholder="none" step="0.1" min="0" style="width:56px">
+      <span class="small mono" id="tx-maxstep-dps"></span></div>
+    <div class="row tight">
+      <label title="Let the policy's own output reach the motors (sim mode policy_sim).
+policy_shadow is never included - it exists to watch a policy without letting it drive.">let
+        policy drive</label>
+      <input type="checkbox" id="tx-allowpolicy"></div>
     <div class="small" id="tx-cfg-note" style="margin:2px 0"></div>
     <div>${motorRows}</div>
     <div class="row tight"><button id="btn-tx-config" style="flex:1">1. configure (host/port/enable/gains)</button></div>
@@ -2540,8 +2551,14 @@ function txArmBlockers(tx, st, sync) {
   if (!tx || !tx.host || !(tx.enable || []).length) out.push("not configured yet - press \"1. configure\"");
   if (!sync || !sync.valid) out.push(`${(sync && sync.reason) || "no sync yet"} - press "0. sync from hardware"`);
   if (!tx || !tx.enabled) out.push("TX panel not activated - tick \"2. activate TX panel\"");
-  if (!st || st.mode !== "manual") {
-    out.push(`sim mode is "${(st && st.mode) || "?"}", TX only sends in "manual" - open Control > Joints`);
+  // Mirrors TxState.mode_allowed: manual always, a policy mode only when this config opted in.
+  const modeOk = st && (st.mode === "manual"
+                        || (tx && tx.allow_policy && st.mode === "policy_sim"));
+  if (!modeOk) {
+    out.push(tx && tx.allow_policy
+      ? `sim mode is "${(st && st.mode) || "?"}" - this config sends in "manual" or "policy_sim"`
+      : `sim mode is "${(st && st.mode) || "?"}", TX only sends in "manual" - open Control > `
+        + `Joints, or tick "let policy drive" to allow policy_sim`);
   }
   return out;
 }
@@ -2557,7 +2574,7 @@ function txFormValue(id) {
 }
 function txStatusValue(id, tx) {
   const map = { "tx-host": "host", "tx-port": "port", "tx-kpmax": "kp_max",
-                "tx-kdmax": "kd_max", "tx-ttlms": "ttl_ms" };
+                "tx-kdmax": "kd_max", "tx-ttlms": "ttl_ms", "tx-maxstep": "max_step_deg" };
   const v = tx ? tx[map[id]] : undefined;
   return v === null || v === undefined ? "" : v;
 }
@@ -2570,6 +2587,9 @@ function txFormFields() {
     ["tx-kpmax", tx.kp_max],
     ["tx-kdmax", tx.kd_max],
     ["tx-ttlms", tx.ttl_ms],
+    // null is a real value here ("no cap"), and must clear the box rather than leave a stale
+    // number sitting in it - which is why the backfill skips undefined, not falsy.
+    ["tx-maxstep", tx.max_step_deg === null ? "" : tx.max_step_deg],
   ];
 }
 
@@ -2589,6 +2609,11 @@ async function pushTxConfig() {
     kp_max: parseFloat(el("tx-kpmax").value) || 5.0,
     kd_max: parseFloat(el("tx-kdmax").value) || 0.5,
     ttl_ms: parseInt(el("tx-ttlms").value, 10) || 250,
+    // Blank means "no cap", which is a real setting for slider driving - so an empty box must
+    // send null, not 0 (which the server would reject) and not a stale default.
+    max_step_deg: (el("tx-maxstep").value || "").trim() === ""
+      ? null : parseFloat(el("tx-maxstep").value),
+    allow_policy: !!el("tx-allowpolicy").checked,
   };
   const r = await apiOk("POST", "/tx/config", body);
   if (r) {
@@ -2597,7 +2622,8 @@ async function pushTxConfig() {
     // and the backfill may resume owning them.
     txFormFields().forEach(([id]) => { const n = el(id); if (n) delete n.dataset.dirty; });
     toast(`TX configured: kp<=${r.kp_max} kd<=${r.kd_max} -> ${r.host}:${r.port}`
-          + ` (${body.enable.length} joint(s))`);
+          + ` (${body.enable.length} joint(s))`
+          + (r.allow_policy ? ` · POLICY MAY DRIVE, step<=${r.max_step_deg}deg/pkt` : ""));
   }
   return r;
 }
@@ -2839,7 +2865,10 @@ function renderTxStatusLive() {
   if (!badge) return;
   const tx = S.txStatus;
   const st = S.status;
-  const modeOk = st && st.mode === "manual";
+  // Same rule as txArmBlockers/TxState.mode_allowed - one reading of "may we send",
+  // so the button state and the reason list can never contradict each other.
+  const modeOk = !!(st && (st.mode === "manual"
+                           || (tx && tx.allow_policy && st.mode === "policy_sim")));
   const sync = tx ? tx.sync : null;
   const syncOk = !!(sync && sync.valid);
   el("btn-tx-arm").disabled = !modeOk || !tx || !tx.enabled || tx.armed || !syncOk;
@@ -2917,6 +2946,17 @@ function renderTxStatusLive() {
     const next = String(val);
     if (node.value !== next) node.value = next;
   });
+  // The policy opt-in is a checkbox, so it backfills like the other two rather than through
+  // txFormFields (which handles text/number boxes).
+  const apEl = el("tx-allowpolicy");
+  if (apEl && document.activeElement !== apEl) apEl.checked = !!tx.allow_policy;
+  // What the per-packet cap means in the unit an operator actually thinks in. 0.3 deg/packet
+  // is not a number anyone has intuition for; 15 deg/s is.
+  const dpsEl = el("tx-maxstep-dps");
+  if (dpsEl) {
+    const v = parseFloat(el("tx-maxstep") ? el("tx-maxstep").value : "");
+    dpsEl.textContent = Number.isFinite(v) && v > 0 ? `= ${Math.round(v * 50)} deg/s @50Hz` : "";
+  }
   const cfgNote = el("tx-cfg-note");
   if (cfgNote) {
     // "configured" here means a TxClient exists server-side (host+enable list fixed). Before

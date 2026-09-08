@@ -141,7 +141,7 @@ class HwSyncState:
       self.valid = False
       self.reason = reason
 
-  def note_mode(self, mode: str) -> None:
+  def note_mode(self, mode: str, tx_allows: bool = False) -> None:
     """Call every time the current mode is known (``sim_core.py``'s ``_apply_cmd`` op
     ``"mode"``, and structurally every control tick from ``_on_control_tick``).
 
@@ -153,8 +153,18 @@ class HwSyncState:
     need to invalidate is a policy/replay mode taking over AFTER a manual sync, since that
     drives the target through a path this sync's snapshot never saw. Tracking the previous
     mode (``_last_mode``) is what lets "left manual" and "was never in manual" be told apart.
+
+    ``tx_allows`` is ``TxState.mode_allowed(mode)`` - whether the operator explicitly
+    configured TX to transmit from this mode (2026-09-08). Without it, policy driving is
+    impossible rather than merely gated: leaving manual invalidates the sync, and a policy
+    mode cannot re-sync because the policy rewrites the target every tick, so the arm gate
+    could never be satisfied. Not invalidating there is not a loosening - the thing the sync
+    protects against is a STALE OPERATOR target going out as the first packet, and a policy's
+    target is not stale, it is being recomputed 50 times a second. What still protects that
+    first packet is :meth:`check_arm_ready`'s jump ceiling, which compares the live target
+    against the live measurement and does not care where the target came from.
     """
-    left_manual = self._last_mode == "manual" and mode != "manual"
+    left_manual = self._last_mode == "manual" and mode != "manual" and not tx_allows
     self._last_mode = mode
     if left_manual:
       self.invalidate(

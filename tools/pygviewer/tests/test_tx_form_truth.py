@@ -558,3 +558,39 @@ def test_the_dashboard_confirms_rather_than_dead_ends():
   assert "arming would move the hardware immediately" in js
   assert "allow_jump: true" in js
   assert "S.lastApiError = e.message" in js, "apiOk must keep the refusal text for the caller"
+
+
+# --------------------------------- the policy opt-in is set from the panel (2026-09-08)
+def test_the_panel_can_set_the_step_cap_and_the_policy_opt_in():
+  """User: "이것도 Telemetry 섹션에서 설정가능하게 해줘." Both were API-only, so the one
+  setting that still guards a policy session could not be seen or changed where the operator
+  actually works."""
+  js = DASHBOARD_JS.read_text()
+  assert 'id="tx-maxstep"' in js and 'id="tx-allowpolicy"' in js
+  m = re.search(r"async function pushTxConfig\(\)\s*\{.*?\n\}", js, re.S)
+  assert m
+  body = m.group(0)
+  assert "max_step_deg:" in body and "allow_policy:" in body
+  assert 'el("tx-maxstep").value || ""' in body, (
+    "an empty box means 'no cap' and must send null - not 0, which the server rejects"
+  )
+
+
+def test_the_step_cap_is_shown_in_degrees_per_second_too():
+  """0.3 deg/packet is not a number anyone has intuition for; 15 deg/s is."""
+  js = DASHBOARD_JS.read_text()
+  assert 'id="tx-maxstep-dps"' in js
+  assert "deg/s @50Hz" in js
+
+
+def test_one_rule_decides_whether_the_panel_thinks_it_may_send():
+  """The ARM button's enabled state and the blocker list must not disagree - that is a panel
+  that greys out a button and then lists no reason, or the reverse."""
+  js = DASHBOARD_JS.read_text()
+  hits = re.findall(r'tx\.allow_policy && st\.mode === "policy_sim"', js)
+  assert len(hits) == 2, f"both the button and the blocker list must use it, found {len(hits)}"
+
+
+def test_the_panel_says_when_a_policy_may_drive():
+  js = DASHBOARD_JS.read_text()
+  assert "POLICY MAY DRIVE" in js, "this is not a state to leave implicit in a toast"

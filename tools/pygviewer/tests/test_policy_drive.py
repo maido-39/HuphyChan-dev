@@ -237,3 +237,47 @@ def test_a_broken_state_source_does_not_block_arming():
                 max_delta_rad=math.radians(0.5), state_fn=boom)
   tx.arm()
   assert tx.armed
+
+
+# --------------------------------------------- the sync gate has to let a policy session arm
+def test_leaving_manual_for_an_allowed_policy_mode_keeps_the_sync():
+  """Without this the feature is impossible rather than gated: leaving manual invalidated the
+  sync, and a policy mode cannot re-sync (the policy rewrites the target every tick), so the
+  arm gate could never be satisfied. Found live - the first policy arm was refused with
+  "left manual mode (now 'policy_sim') while synced".
+
+  Not a loosening: the sync protects against a STALE OPERATOR target going out as the first
+  packet. A policy's target is not stale; it is recomputed 50 times a second. The first packet
+  is still covered by the arm-jump ceiling, which compares the live target against the live
+  measurement and does not care where the target came from.
+  """
+  from pygviewer.hw_sync import HwSyncState
+
+  st = HwSyncState()
+  st.record_sync({"j": 0.1}, {"j": 0.1}, {"j": (-1.0, 1.0)}, "sha")
+  st.note_mode("manual", tx_allows=True)
+  st.note_mode("policy_sim", tx_allows=True)
+  assert st.valid, "an opted-in policy mode must not invalidate the sync"
+
+
+def test_leaving_manual_for_a_mode_nobody_opted_into_still_invalidates():
+  from pygviewer.hw_sync import HwSyncState
+
+  st = HwSyncState()
+  st.record_sync({"j": 0.1}, {"j": 0.1}, {"j": (-1.0, 1.0)}, "sha")
+  st.note_mode("manual", tx_allows=True)
+  st.note_mode("file_replay", tx_allows=False)
+  assert not st.valid
+  assert "file_replay" in (st.reason or "")
+
+
+def test_a_sync_made_outside_manual_is_still_not_invalidated_by_the_next_tick():
+  """The 2026-09-04 rule this must not regress: syncing while idle, then staying idle, is not
+  "leaving manual" and must survive."""
+  from pygviewer.hw_sync import HwSyncState
+
+  st = HwSyncState()
+  st.record_sync({"j": 0.1}, {"j": 0.1}, {"j": (-1.0, 1.0)}, "sha")
+  st.note_mode("idle")
+  st.note_mode("idle")
+  assert st.valid
