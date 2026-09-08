@@ -431,9 +431,21 @@ def test_dashboard_js_joints_lock_never_fires_without_real_telemetry():
   assert "if (!realConnected) return { locked: false, reason: null };" in src
 
 
-def test_dashboard_js_arm_button_disabled_considers_sync_valid():
+def test_dashboard_js_arm_state_considers_sync_valid():
+  """An invalid sync has to be one of the things that stops an arm, and has to be SAID.
+
+  This used to assert the literal `!syncOk` in the button's `disabled` expression. The button
+  is no longer disabled when merely blocked (2026-09-08: a disabled button fires no click, so
+  pressing it produced no response at all and the operator had no way to learn why), so the
+  test now checks the property instead of the old spelling: the sync feeds the ready/blocked
+  decision, and it appears in the reason list an operator actually reads."""
   src = _dashboard_js_text()
-  assert "!syncOk" in src
+  m = re.search(r"const armReady = .*?;", src)
+  assert m, "the ARM readiness expression was not found"
+  assert "syncOk" in m.group(0), "an invalid sync must still block arming"
+  blockers = re.search(r"function txArmBlockers\(tx, st, sync\)\s*\{.*?\n\}", src, re.S)
+  assert blockers and "sync.valid" in blockers.group(0), \
+    "and the operator has to be told the sync is what is missing"
 
 
 def test_dashboard_js_arm_shows_clip_warnings():

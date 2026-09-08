@@ -167,8 +167,12 @@ class HwSyncState:
     left_manual = self._last_mode == "manual" and mode != "manual" and not tx_allows
     self._last_mode = mode
     if left_manual:
+      # "went to", not "now": this string is written ONCE at the moment the sync broke and
+      # then shown for as long as it stays broken, so by the time anyone reads it the mode has
+      # usually moved on and "now" names a mode the viewer is not in (2026-09-08, caught by
+      # scripts/ux_check.py - the line read "now 'policy_sim'" while the mode was 'idle').
       self.invalidate(
-        f"left manual mode (now {mode!r}) while synced - re-sync required: switch back to "
+        f"left manual mode (went to {mode!r}) while synced - re-sync required: switch back to "
         "manual, press '0. sync from hardware', then arm"
       )
 

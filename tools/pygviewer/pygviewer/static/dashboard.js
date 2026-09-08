@@ -834,11 +834,77 @@ function initTabs() {
   });
 }
 
+/* The run mode, as a control rather than a caption.
+
+   Every way of changing the mode used to live somewhere else: a segmented control buried in
+   Control > Policy, a SIDE EFFECT of opening Control > Joints, a "mode: file_replay" button
+   under Replay, and the scenario tab's apply. None of them was labelled "mode", and the one
+   place the word appears - the top bar - could only display it (2026-09-08, user: "모드 변경은
+   어디서 하냐고"). It sits in the top bar because that is on screen from every tab, which is
+   the property the scattered controls all lacked.
+
+   Two rules it must not break. It always shows the mode the SERVER reports, so a change that
+   does not take snaps back rather than lying about it (the /mode endpoint waits for the sim
+   thread to apply it and reports `applied`). And a mode with an unmet precondition is offered
+   but disabled WITH the reason in its own label, rather than hidden - "policy_sim is missing"
+   is a worse puzzle than "policy_sim (load a policy first)". */
+const MODE_LABELS = {
+  idle: "idle - nothing drives the joints",
+  manual: "manual - sliders and scripts drive",
+  policy_sim: "policy_sim - the loaded policy drives",
+  policy_shadow: "policy_shadow - policy watched, never drives",
+  real_replay: "real_replay - the robot's measured angles drive",
+  file_replay: "file_replay - a recording drives",
+};
+
+function modeUnavailableReason(mode, st) {
+  // Only from what the SERVER reports, and only where the server itself refuses on the same
+  // grounds (api.py post_mode: `core.policy is None`). `file_replay` is deliberately left
+  // enabled: nothing in the status says whether a recording is loaded, and a greyed-out option
+  // labelled from a guess would be a lie on a fresh page. Its 409 message is precise, and the
+  // box snaps back to the real mode, so pressing it costs one toast and teaches the truth.
+  if (mode.startsWith("policy") && st && !st.policy) return "load a policy first";
+  return null;
+}
+
+function renderModeSelect(st) {
+  const sel = el("mode-select");
+  if (!sel) return;
+  const opts = Object.keys(MODE_LABELS).map((m) => {
+    const why = modeUnavailableReason(m, st);
+    return `<option value="${m}"${why ? " disabled" : ""}>mode: ${MODE_LABELS[m]}`
+      + `${why ? ` (${why})` : ""}</option>`;
+  }).join("");
+  // Rebuild only on change - a <select> rewritten under an open dropdown closes it, and this
+  // runs on every status poll (same bug class as the ARM blocker line, 2026-09-08).
+  if (sel.dataset.opts !== opts) { sel.innerHTML = opts; sel.dataset.opts = opts; }
+  const mode = st ? st.mode : null;
+  if (mode && sel.value !== mode) sel.value = mode;
+}
+
+function wireModeSelect() {
+  const sel = el("mode-select");
+  if (!sel) return;
+  sel.addEventListener("change", async () => {
+    const want = sel.value;
+    const r = await apiOk("POST", "/mode", { mode: want });
+    // Snap back to the truth either way: a refusal (409, reason already toasted by apiOk) or
+    // an accepted request the sim thread did not actually apply in time.
+    if (!r || r.mode !== want) {
+      if (r && r.mode !== want) toast(`mode stayed "${r.mode}" - the sim did not take "${want}"`);
+      renderModeSelect(S.status);
+      return;
+    }
+    S.status = { ...(S.status || {}), mode: r.mode };
+    toast(`mode: ${r.mode}`);
+  });
+}
+
 /* ------------------------------------------------------------------ top bar */
 function renderTopBar() {
   const st = S.status;
   el("pill-variant").textContent = S.contract ? S.contract.variant : "-";
-  el("pill-mode").textContent = "mode: " + (st ? st.mode : "-");
+  renderModeSelect(st);
   if (st) {
     let baseTxt = "base: " + st.base.mode;
     if (st.base.mode === "string" && st.string) {
@@ -938,6 +1004,7 @@ function boot() {
     el("viser-frame").src = `http://${location.hostname}:8094`;
   }
   initTabs();
+  wireModeSelect();
   initPaneResize();
   initPlotsToolbar();
   initModal();

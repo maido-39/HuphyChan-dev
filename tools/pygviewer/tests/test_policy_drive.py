@@ -244,7 +244,7 @@ def test_leaving_manual_for_an_allowed_policy_mode_keeps_the_sync():
   """Without this the feature is impossible rather than gated: leaving manual invalidated the
   sync, and a policy mode cannot re-sync (the policy rewrites the target every tick), so the
   arm gate could never be satisfied. Found live - the first policy arm was refused with
-  "left manual mode (now 'policy_sim') while synced".
+  "left manual mode (went to 'policy_sim') while synced".
 
   Not a loosening: the sync protects against a STALE OPERATOR target going out as the first
   packet. A policy's target is not stale; it is recomputed 50 times a second. The first packet
