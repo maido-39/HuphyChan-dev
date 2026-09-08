@@ -306,7 +306,8 @@ class _Receiver:
   """UDP receive thread shared by ``run_dry``/``run_real`` - parses, rejects unknown joints
   hard (never a guess), and hands accepted messages to a ``LatestOnly``.  No huphy import."""
 
-  def __init__(self, host: str, port: int, latest: LatestOnly, known_sim_joints: set[str]):
+  def __init__(self, host: str, port: int, latest: LatestOnly, known_sim_joints: set[str],
+               on_command=None):
     self.host = host
     self.port = port
     self.latest = latest
@@ -315,6 +316,12 @@ class _Receiver:
     self._thread: threading.Thread | None = None
     self._running = False
     self.parse_errors = 0
+    # Called for an accepted RobotCommand (recovery actions - see schema.RobotCommand).
+    # None means this receiver has no way to act on one and will say so rather than
+    # accepting a command it cannot carry out.
+    self.on_command = on_command
+    self.commands_ok = 0
+    self.commands_refused = 0
 
   def start(self) -> None:
     self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -348,6 +355,9 @@ class _Receiver:
         self.parse_errors += 1
         logger.warning("remote_motion: bad packet: %s", e)
         continue
+      if msg.type == "RobotCommand":
+        self._handle_command(msg)
+        continue
       if msg.type != "JointTarget":
         self.parse_errors += 1
         continue
@@ -357,6 +367,33 @@ class _Receiver:
         logger.warning("remote_motion: rejecting message with unknown joint(s) %s", unknown)
         continue
       self.latest.put(msg)
+
+  def _handle_command(self, msg) -> None:
+    """One recovery action (schema.RobotCommand), on the same socket and behind the same
+    shared secret as a movement command.
+
+    The arm token is checked HERE rather than in ``LatestOnly`` because a command is not a
+    target: it has no sequence number to order, nothing to hold, and it must not disturb the
+    movement stream's own state. But it must be no easier to send than a movement, which is
+    why it is the same secret, checked the same way.
+    """
+    if msg.arm_token != self.latest.expected_arm_token:
+      self.commands_refused += 1
+      logger.warning("remote_motion: RobotCommand refused - arm token does not match")
+      return
+    if self.on_command is None:
+      self.commands_refused += 1
+      logger.warning("remote_motion: RobotCommand %r arrived but this receiver cannot act "
+                     "on one", msg.op)
+      return
+    why = f" ({msg.reason})" if msg.reason else ""
+    logger.warning("remote_motion: RobotCommand %r accepted%s", msg.op, why)
+    try:
+      self.on_command(msg.op)
+      self.commands_ok += 1
+    except Exception as e:      # a recovery action must never take the receive thread down
+      self.commands_refused += 1
+      logger.warning("remote_motion: RobotCommand %r failed: %s", msg.op, e)
 
 
 class _StatsTicker:
@@ -789,7 +826,32 @@ def run_real(args) -> int:
     default_q=default_q, deadman_s=args.deadman_s, hold_s=args.hold_s, return_s=args.return_s,
     enable=enable,
   )
-  recv = _Receiver(listen_host, int(listen_port), latest, mapper.known_sim_joints())
+  def _do_command(op: str) -> None:
+    """Carry out a recovery action.
+
+    Deliberately the SAME two calls, in the same order, that this bridge already makes at
+    startup: clear the latch, then enable. The order matters - `enable_torque` on a motor that
+    is still latched silently does nothing, which is how a "recovered" motor sits producing no
+    torque while the command stream, the link and the telemetry all look perfectly healthy
+    (docs/123 section 10.1 found this the hard way).
+
+    No target is applied. This makes a motor able to listen again; it does not make it move.
+    """
+    if op != "clear_fault":
+      raise ValueError(f"unknown op {op!r}")
+    cleared = []
+    for part in biped.parts:
+      bus_obj = getattr(part, "bus", None)
+      if bus_obj is not None and hasattr(bus_obj, "clear_fault"):
+        bus_obj.clear_fault()
+        cleared.append(part.id)
+    biped.enable()
+    print(f"[remote_motion] clear_fault: cleared {cleared}, torque re-enabled. No target "
+          f"applied - nothing moves until a JointTarget arrives on the normal path.",
+          flush=True)
+
+  recv = _Receiver(listen_host, int(listen_port), latest, mapper.known_sim_joints(),
+                   on_command=_do_command)
 
   telemetry_cfg = robot.telemetry
   if args.telemetry:

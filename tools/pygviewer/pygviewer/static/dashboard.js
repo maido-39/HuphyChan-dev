@@ -2481,6 +2481,9 @@ policy_shadow is never included - it exists to watch a policy without letting it
     <div class="row tight"><button id="btn-tx-arm" style="flex:1">3. ARM</button>
       <button id="btn-tx-disarm" style="flex:1">disarm</button></div>
     <div class="small" id="tx-arm-block" style="margin:2px 0"></div>
+    <div class="row tight" id="tx-recover-row" style="display:none">
+      <button id="btn-tx-clearfault" style="flex:1">motor cut out - clear fault &amp; re-enable torque</button></div>
+    <div class="small" id="tx-recover-note" style="margin:2px 0"></div>
     <div id="tx-trace" class="trace"></div>
     <div class="row tight"><span id="tx-badge" class="pill">-</span>
       <span class="small" id="tx-heartbeat-age"></span></div>
@@ -2552,6 +2555,15 @@ function collectTxEnableList() {
 // ordered by the TX panel's own numbering, so the list reads as the remaining steps. Pure:
 // mirrors api.py's post_tx_arm (check_armable -> hw_sync.check_arm_ready) and never decides
 // anything itself - the server refusal is still the authority.
+// Joints whose own fault line is currently set. `fault_reason` is the plain-language string
+// the telemetry layer builds (telemetry.py::_joint_fault_reason) and is deliberately separate
+// from the ok/warn/dead connectivity verdict - a motor can answer every packet and still have
+// cut its own torque, which is the case this button exists for.
+function faultedJoints(st) {
+  const joints = (st && st.telemetry && st.telemetry.health && st.telemetry.health.joints) || {};
+  return Object.keys(joints).filter((n) => joints[n] && joints[n].fault_reason);
+}
+
 function txArmBlockers(tx, st, sync) {
   const out = [];
   if (!tx || !tx.host || !(tx.enable || []).length) out.push("not configured yet - press \"1. configure\"");
@@ -2728,6 +2740,25 @@ function wireTxSection() {
       // range, and the exact travel distance BEFORE the packet goes out. Non-blocking.
       const clipWarnings = (r.sync && r.sync.clip_warnings) || [];
       clipWarnings.forEach((w) => toast(w.message));
+    }
+  };
+  el("btn-tx-clearfault").onclick = async () => {
+    // Recovery, not motion. The command carries no target and the robot applies none, so
+    // this makes a cut-out motor able to listen again without moving it anywhere - which is
+    // why it does not need (and must not require) an arm: a latched motor is exactly the
+    // case where arming is impossible (2026-09-08, user: "모터 Kill 된 경우에 리셋하는 버튼은?").
+    const names = faultedJoints(S.status).join(", ") || "(none reported)";
+    if (!confirm(`Clear the latched fault and re-enable torque?\n\n`
+                 + `Reported by: ${names}\n\n`
+                 + `Nothing moves - no target is sent. The joint stays where it is until you `
+                 + `arm and command it as usual.`)) return;
+    const r = await apiOk("POST", "/tx/clear_fault", { reason: "dashboard button" });
+    const note = el("tx-recover-note");
+    if (r) {
+      toast(`clear_fault sent to ${r.to}`);
+      if (note) note.innerHTML = `<span style="color:var(--muted)">clear_fault sent to `
+        + `${r.to}. Watch the fault line above - if it stays, the motor did not recover and `
+        + `the robot's own log says why.</span>`;
     }
   };
   el("btn-tx-disarm").onclick = async () => {
@@ -3027,6 +3058,14 @@ function renderTxStatusLive() {
   // already auto-disarmed (SimCore._on_control_tick -> TxState.check_mode_gate); stop the
   // local dead-man loop too so it does not keep calling a now-pointless /tx/heartbeat.
   if (!modeOk) stopTxDeadman();
+  // The recovery button only appears when something is actually reporting a fault - an
+  // always-visible "re-enable torque" button is an invitation, and this one is not needed
+  // until a motor has cut out.
+  const faulted = faultedJoints(st);
+  const recRow = el("tx-recover-row");
+  if (recRow) recRow.style.display = faulted.length ? "" : "none";
+  const recNote = el("tx-recover-note");
+  if (recNote && !faulted.length) recNote.innerHTML = "";
   renderCommandPathTrace();
 }
 

@@ -63,6 +63,7 @@ from collections import deque
 
 from . import packet_log as packet_log_mod
 from .bridge.tx_client import DEFAULT_KD_MAX, DEFAULT_KP_MAX, DEFAULT_TTL_MS, TxClient
+from .schema import RobotCommand
 from .violations import ViolationLog
 
 DEADMAN_TIMEOUT_S = 0.3
@@ -286,6 +287,39 @@ class TxState:
     self.enabled = False
     self.armed = False
     self.disarm_reason = None
+
+  # -------------------------------------------------------------------------- recovery
+  def send_command(self, op: str, reason: str | None = None) -> dict:
+    """Send one recovery action to the robot (schema.RobotCommand).
+
+    2026-09-08, user: "모터 Kill 된 경우에 리셋하는 버튼은?" - there was none. A latched motor
+    stops producing torque and refuses commands until the latch is cleared, and the only thing
+    that cleared it was the robot bridge's own startup, so recovery meant an ssh session and a
+    process restart for a condition the operator can already see on screen.
+
+    Deliberately allowed while DISARMED, and deliberately not gated on the sync or the mode.
+    A motor that has cut out is exactly the situation where arming is impossible, so requiring
+    an arm first would make this useless precisely when it is needed. What it is NOT allowed
+    to do is move anything: the command carries no target, and the robot applies none.
+    """
+    if self._client is None:
+      raise TxNotAllowed(
+        "no TX config yet - POST /tx/config first (the robot's address comes from there)"
+      )
+    msg = RobotCommand(
+      t_ns=time.monotonic_ns(),
+      seq=0,
+      src="sim",
+      frame=self._client.frame,
+      contract_hash=self._client.contract_hash,
+      op=op,
+      arm_token=self.arm_token,
+      reason=reason,
+    )
+    self._client.send_raw(msg)
+    if self.packet_log is not None:
+      self.packet_log.write("cmd", {"op": op, "reason": reason})
+    return {"sent": op, "to": f"{self.host}:{self.port}", "reason": reason}
 
   # -------------------------------------------------------------------------- stage 1: enable
   def set_enabled(self, on: bool) -> None:

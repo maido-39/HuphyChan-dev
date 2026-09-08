@@ -58,6 +58,7 @@ from .schema import (
   ScenarioApplyIn,
   TxConfigIn,
   TxArmIn,
+  TxClearFaultIn,
   TxEnableIn,
   WIRE_VERSION,
   validate_joint_names,
@@ -724,6 +725,29 @@ def build_app(core, freshness: dict) -> FastAPI:
   def post_tx_disarm():
     core.tx.disarm(reason="operator")
     return _tx_status_with_sync()
+
+  @app.post("/tx/clear_fault",
+            summary="Clear a latched motor fault and re-enable torque - no target is applied")
+  def post_tx_clear_fault(body: TxClearFaultIn | None = None):
+    """Recovery for a motor that has cut out (2026-09-08, user: "모터 Kill 된 경우에
+    리셋하는 버튼은?").
+
+    A latched motor stops producing torque and refuses commands until the latch is cleared,
+    and until now the only thing that cleared it was the robot bridge's own startup sequence -
+    so recovering meant an ssh session and a process restart, for a condition already visible
+    on screen.
+
+    Deliberately available while DISARMED and independent of the sync and the mode: a motor
+    that has cut out is exactly the case where arming is impossible, so requiring an arm first
+    would make this useless precisely when it is needed. It cannot move anything - the command
+    carries no target and the robot applies none, so the joint stays where it is until an
+    ordinary armed command arrives.
+    """
+    try:
+      return core.tx.send_command("clear_fault",
+                                  reason=(body.reason if body is not None else None))
+    except TxNotAllowed as exc:
+      raise HTTPException(409, str(exc))
 
   @app.post("/tx/heartbeat", summary="UI v2 TX: keyboard dead-man keep-alive (Space, held, ~100ms cadence)")
   def post_tx_heartbeat():

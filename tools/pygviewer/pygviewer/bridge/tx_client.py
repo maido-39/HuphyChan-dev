@@ -386,6 +386,20 @@ class TxClient:
     self._seq += 1
     return msg
 
+  def send_raw(self, msg) -> None:
+    """Put one already-built message on this client's socket, outside the target stream.
+
+    For control messages that are not movement (schema.RobotCommand). It deliberately shares
+    the socket and the destination with the target stream - a recovery action should reach
+    exactly the receiver the commands go to, and nothing else - but touches none of the
+    stream's state: no sequence number, no `_prev_sent`, no arming. Sending one can therefore
+    never disturb a movement in progress, and works while disarmed, which is when it is
+    needed.
+    """
+    if self._sock is None:
+      self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    self._sock.sendto(to_jsonl(msg).strip().encode("utf-8"), (self.host, self.port))
+
   def tick(self) -> JointTarget | None:
     """Send exactly one packet now (if armed and a target has been set).  Returns the message
     actually sent, or ``None`` if nothing went out this tick - a caller can use the return

@@ -470,6 +470,16 @@ class TxArmIn(BaseModel):
   )
 
 
+class TxClearFaultIn(BaseModel):
+  """Body for ``POST /tx/clear_fault``. Optional - the reason is for the robot's own log."""
+
+  reason: str | None = Field(
+    default=None,
+    description="Free text, logged by the receiver so the robot's log records WHY torque was "
+    "re-enabled, not merely that it was.",
+  )
+
+
 class TxEnableIn(BaseModel):
   """UI v2 TX stage 1: turn the TX panel itself on/off. Requires ``POST /tx/config`` first;
   turning it off also disarms (stage 2)."""
@@ -530,12 +540,45 @@ class ScriptRunIn(BaseModel):
 # One message per line, exactly ``model_dump_json()`` - this is the ONLY place that
 # decides which pydantic class a "type" field maps to, so the recorder, the replayer, the
 # WS /ws/in ingest and the dummy transmitter can never disagree with each other about it.
+class RobotCommand(Header):
+  """A one-shot recovery action for the robot, on the same UDP socket as ``JointTarget``.
+
+  2026-09-08, user: "모터 Kill 된 경우에 리셋하는 버튼은?" - there was none. A motor that has
+  latched a fault stops producing torque and keeps refusing commands until the fault is
+  cleared, and the ONLY thing that cleared it was the robot bridge's own startup sequence
+  (``clear_fault()`` then ``enable()``). So recovering a killed motor meant an ssh session and
+  a process restart, for a condition the operator can see on screen.
+
+  Deliberately NOT a new socket or a new port: the receiver already validates ``arm_token`` on
+  every packet, and reusing that is what makes this safe to add - an action that re-enables
+  torque must be no easier to send than a movement command.
+
+  It is also deliberately not a movement. ``clear_fault`` clears the latch and re-enables the
+  driver; it applies no target, so nothing moves until an ordinary ``JointTarget`` arrives
+  through the usual arm/dead-man path. The two stay separate: this makes a motor able to
+  listen again, it does not make it go anywhere.
+  """
+
+  type: Literal["RobotCommand"] = "RobotCommand"
+  op: Literal["clear_fault"] = Field(
+    description="clear_fault: clear any latched motor fault and re-enable torque. No target "
+    "is applied - nothing moves until a JointTarget arrives on the normal path."
+  )
+  arm_token: str = Field(description="receiver-checked shared secret; empty is refused")
+  reason: str | None = Field(
+    default=None,
+    description="Free text the operator or UI supplies, logged by the receiver so the robot's "
+    "own log says why torque was re-enabled and by whom, not merely that it was.",
+  )
+
+
 MESSAGE_TYPES: dict[str, type[Header]] = {
   "JointState": JointState,
   "ImuState": ImuState,
   "JointTarget": JointTarget,
   "PolicyIO": PolicyIO,
   "Status": Status,
+  "RobotCommand": RobotCommand,
 }
 
 
