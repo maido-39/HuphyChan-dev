@@ -62,18 +62,43 @@ def test_arming_warning_appears_only_when_torque_would_actually_turn_on():
   assert S.would_arm_torque(tx_armed=False, key="mirror-hardware") is False
 
 
+RUNNABLE = {DRIVE, "policy-drive"}
+"""The setups that can actually be reached today. `policy-drive` joined on 2026-09-08, once
+the policy-driving path existed (TxState.configure's allow_policy); before that it would have
+been a button that could not do what it said."""
+
+
 def test_combinations_we_cannot_run_yet_say_why_instead_of_offering_themselves():
   st = S.status(**ARMED)
   for c in st["choices"]:
-    if c["key"] == DRIVE:
-      assert c["available"] and c["unavailable_reason"] is None
+    if c["key"] in RUNNABLE:
+      assert c["available"] and c["unavailable_reason"] is None, c["key"]
     else:
       assert not c["available"], c["key"]
       assert c["unavailable_reason"], "an unavailable choice must say what is missing"
 
 
-def test_exactly_one_named_combination_reaches_the_hardware():
-  assert sum(1 for s in S.SCENARIOS if s.arms_torque) == 1
+def test_every_hardware_reaching_combination_is_marked_as_one():
+  """Was "exactly one reaches the hardware". Two do now, and the guard that matters is not the
+  count but that each one is FLAGGED - `arms_torque` is what puts "힘 켜짐" on the card and
+  what makes the button ask before it is pressed. Pinning the exact set means a third cannot
+  appear without someone reading this test and deciding it belongs."""
+  arming = {s.key for s in S.SCENARIOS if s.arms_torque}
+  assert arming == {DRIVE, "policy-drive"}, arming
+  for s in S.SCENARIOS:
+    if s.arms_torque:
+      assert "힘이 들어갑니다" in s.action, f"{s.key} must say so in words, not only in a flag"
+      assert s.tx_armed, f"{s.key} claims torque but does not arm transmission"
+
+
+def test_the_two_policy_scenarios_are_not_confusable():
+  """'로봇 정책 관측' and '정책으로 실물 일부 구동' differ by exactly the thing that matters:
+  who runs the policy, and whether anything leaves the viewer."""
+  shadow = S.BY_KEY["shadow-policy"]
+  drive = S.BY_KEY["policy-drive"]
+  assert shadow.arms_torque is False and drive.arms_torque is True
+  assert shadow.tx_armed is False and drive.tx_armed is True
+  assert shadow.mode == "policy_shadow" and drive.mode == "policy_sim"
 
 
 def test_every_choice_carries_what_it_would_do_before_it_is_pressed():

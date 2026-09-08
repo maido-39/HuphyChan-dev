@@ -738,7 +738,16 @@ class SimCore:
     # Maintained every tick a policy is loaded, regardless of mode, so the real-history
     # buffer is already warm whenever an operator flips a term's obs source to "real".
     self.real_q_hist.append({n: v["q"] for n, v in self.real.snapshot_joints().items()})
-    if self.mode == "policy_shadow":
+    # Which builder to use is decided by what the operator ASKED FOR, not by the mode
+    # (2026-09-08). It used to be "policy_shadow reads the mux, everything else is all-sim",
+    # which made the one setup this project actually wants - a policy driving the motors while
+    # its gravity term comes from the real IMU - impossible to express: the driving mode was
+    # the one that ignored the mux.
+    #
+    # The fast all-sim path is kept for the common case where nothing was asked of the real
+    # robot, because build_shadow does per-term work this does not need then.
+    wants_real = self.obs_mux is not None and "real" in self.obs_mux.sources.values()
+    if self.mode == "policy_shadow" or wants_real:
       obs, effective, warnings = self.obs_builder.build_shadow(
         self.obs_mux,
         dict(
@@ -762,7 +771,12 @@ class SimCore:
         self.cmd,
       )
       if self.obs_mux is not None:
-        self.obs_mux.effective = dict(self.obs_mux.sources)
+        # Everything on this path came from the sim, so say sim. This used to copy the
+        # REQUESTED sources into `effective`, which reports where a term was asked to come
+        # from as though it were where it came from - the Obs tab would show "real" for a
+        # value that was sim. `wants_real` above means no term is asking for real here, so
+        # this is now a statement of fact rather than an echo of the request.
+        self.obs_mux.effective = {n: "sim" for n in self.obs_mux.sources}
         self._shadow_warnings = []
     action = self.policy(obs)
     raw, target = action_to_target(

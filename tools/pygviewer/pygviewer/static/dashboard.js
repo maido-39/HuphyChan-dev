@@ -1726,6 +1726,12 @@ function renderPolicyPanel(sub) {
       </details>
       <hr class="hr">
       <h3>Obs source (per term)</h3>
+      <div class="small">Where each observation term comes from. Applies in
+        <b>policy_shadow</b> AND <b>policy_sim</b> - so a policy driving the motors can be fed
+        the real sensor. A term that asks for <b>real</b> and has no fresh data falls back to
+        sim and says so in the strip below; it is never fed a stale number.
+        With 2 of 12 joints connected, joint terms have no real data to use - the IMU
+        (gravity) is the one term the bench can actually supply.</div>
       <div id="pol-obs-src"></div>
       <div id="pol-src-strip" class="obsbars" style="margin-top:6px"></div>
       <div class="small" id="pol-warn"></div>
