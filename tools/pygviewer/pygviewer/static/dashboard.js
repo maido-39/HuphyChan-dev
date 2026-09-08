@@ -2748,17 +2748,34 @@ function wireTxSection() {
     // why it does not need (and must not require) an arm: a latched motor is exactly the
     // case where arming is impossible (2026-09-08, user: "모터 Kill 된 경우에 리셋하는 버튼은?").
     const names = faultedJoints(S.status).join(", ") || "(none reported)";
+    const wasArmed = !!(S.txStatus && S.txStatus.armed);
     if (!confirm(`Clear the latched fault and re-enable torque?\n\n`
                  + `Reported by: ${names}\n\n`
                  + `Nothing moves - no target is sent. The joint stays where it is until you `
-                 + `arm and command it as usual.`)) return;
+                 + `arm and command it as usual.`
+                 + (wasArmed
+                    ? `\n\nThis also DISARMS. The joint froze where it died while the command `
+                      + `kept advancing, so you must re-arm - that re-checks the target `
+                      + `against where the joint actually is.`
+                    : ``))) return;
     const r = await apiOk("POST", "/tx/clear_fault", { reason: "dashboard button" });
     const note = el("tx-recover-note");
     if (r) {
-      toast(`clear_fault sent to ${r.to}`);
+      toast(`clear_fault sent to ${r.to}` + (r.disarmed ? " - disarmed, re-arm to resume" : ""));
+      if (r.disarmed) {
+        // The server disarmed us. Drop the key-held keep-alive too, or it keeps POSTing a
+        // heartbeat that now 409s every 100 ms, and refresh the panel so it stops showing
+        // "armed" while nothing is being sent.
+        stopTxDeadman();
+        S.txStatus = await api("GET", "/tx/status");
+      }
       if (note) note.innerHTML = `<span style="color:var(--muted)">clear_fault sent to `
         + `${r.to}. Watch the fault line above - if it stays, the motor did not recover and `
-        + `the robot's own log says why.</span>`;
+        + `the robot's own log says why.`
+        + (r.disarmed ? ` <b>Transmit is now disarmed</b> - the joint is where it died and `
+                        + `the command is not, so arm again (that re-checks the two against `
+                        + `each other) before it can move.` : ``)
+        + `</span>`;
     }
   };
   el("btn-tx-disarm").onclick = async () => {

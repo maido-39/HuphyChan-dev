@@ -301,11 +301,27 @@ class TxState:
     A motor that has cut out is exactly the situation where arming is impossible, so requiring
     an arm first would make this useless precisely when it is needed. What it is NOT allowed
     to do is move anything: the command carries no target, and the robot applies none.
+
+    ``clear_fault`` DISARMS first if armed, and that is the point rather than a convenience.
+    A cut-out joint freezes where it died, but nothing upstream notices: the policy keeps
+    walking, and both rate limits that stand between it and the motor - this side's
+    ``_prev_sent`` slew and the robot's ``clamp_rate`` - are anchored to the PREVIOUS COMMAND,
+    which advanced right along with it. So neither one can see the gap that opened, and the
+    instant torque comes back the standing command is wherever the policy walked to. Over one
+    gait cycle that is the joint's whole swing (measured 2026-09-08: knee 16.1 -> 54.6 deg,
+    38.5 deg of travel), delivered as a single step against kp. Disarming forces the operator
+    back through :meth:`arm`, which re-seeds the slew ramp from the MEASURED position and
+    re-checks the 10 deg arm gate - the two checks that are anchored to the real joint and
+    therefore the only two that can still see the divergence.
     """
     if self._client is None:
       raise TxNotAllowed(
         "no TX config yet - POST /tx/config first (the robot's address comes from there)"
       )
+    disarmed = False
+    if op == "clear_fault" and self.armed:
+      self.disarm(reason="clear_fault: re-arm from the joint's real position before commanding it")
+      disarmed = True
     msg = RobotCommand(
       t_ns=time.monotonic_ns(),
       seq=0,
@@ -319,7 +335,8 @@ class TxState:
     self._client.send_raw(msg)
     if self.packet_log is not None:
       self.packet_log.write("cmd", {"op": op, "reason": reason})
-    return {"sent": op, "to": f"{self.host}:{self.port}", "reason": reason}
+    return {"sent": op, "to": f"{self.host}:{self.port}", "reason": reason,
+            "disarmed": disarmed}
 
   # -------------------------------------------------------------------------- stage 1: enable
   def set_enabled(self, on: bool) -> None:

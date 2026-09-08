@@ -742,6 +742,12 @@ def build_app(core, freshness: dict) -> FastAPI:
     would make this useless precisely when it is needed. It cannot move anything - the command
     carries no target and the robot applies none, so the joint stays where it is until an
     ordinary armed command arrives.
+
+    If TX *was* armed this disarms it (``disarmed: true`` in the reply) - see
+    :meth:`tx.TxState.send_command`. The short version: the dead joint stopped where it was
+    while the command kept advancing, and every rate limit in the path is anchored to the
+    previous COMMAND, so none of them can see the gap. Re-arming is what re-anchors to the
+    real joint.
     """
     try:
       return core.tx.send_command("clear_fault",

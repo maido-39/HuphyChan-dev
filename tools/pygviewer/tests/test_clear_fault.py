@@ -176,3 +176,103 @@ def test_faulted_joints_are_read_from_the_fault_line_not_the_link_verdict():
   assert m
   assert "fault_reason" in m.group(0)
   assert '"dead"' not in m.group(0)
+
+
+# ------------------------------------------------------------------- recovering mid-drive
+# 2026-09-08, second pass. The button above was written for the case an operator is most
+# likely to notice: a motor cuts out while nothing much is happening, they press the button,
+# they carry on. The dangerous case is the other one - a motor cuts out while a POLICY is
+# driving it.
+#
+# Nothing upstream notices a dead joint. The policy keeps walking and the viewer keeps
+# sending, so the command marches on while the joint stays exactly where it died. Every rate
+# limit between them is anchored to the PREVIOUS COMMAND (this side's `_prev_sent` slew, the
+# robot's `clamp_rate`), which advanced right along with it - so not one of them can see the
+# gap that opened. Torque comes back against a command that is a whole gait cycle away:
+# measured 2026-09-08, the knee swings 16.1 -> 54.6 deg, so up to 38.5 deg delivered in one
+# step against kp.
+#
+# The two checks that ARE anchored to the real joint both live in the arm path (`TxClient.arm`
+# re-seeds the slew ramp from the measured position; `hw_sync.check_arm_ready` refuses a
+# target more than 10 deg from it). So clearing a fault has to send the operator back through
+# it, which means disarming.
+def test_clearing_a_fault_while_armed_disarms():
+  sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+  sock.bind(("127.0.0.1", 0))
+  port = sock.getsockname()[1]
+  tx = _tx_pointing_at(port)
+  tx.set_enabled(True)
+  tx.arm("manual")
+  assert tx.armed is True
+
+  out = tx.send_command("clear_fault")
+
+  assert tx.armed is False, "torque must not come back under a command nothing re-checked"
+  assert out["disarmed"] is True, "and the caller has to be told, or the UI still says armed"
+  assert "re-arm" in (tx.disarm_reason or ""), \
+    f"the reason has to say what to do next, got {tx.disarm_reason!r}"
+  sock.close()
+
+
+def test_clearing_a_fault_while_disarmed_reports_no_disarm():
+  """The ordinary case, and the reply must not claim a state change that did not happen."""
+  sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+  sock.bind(("127.0.0.1", 0))
+  port = sock.getsockname()[1]
+  tx = _tx_pointing_at(port)
+  out = tx.send_command("clear_fault")
+  assert out["disarmed"] is False
+  assert tx.armed is False
+  sock.close()
+
+
+def test_the_clear_still_reaches_the_robot_when_it_disarms():
+  """Disarming is a local consequence, not a substitute for the action. If the packet stopped
+  going out, the button would silently become a disarm button."""
+  sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+  sock.bind(("127.0.0.1", 0))
+  sock.settimeout(2.0)
+  port = sock.getsockname()[1]
+  tx = _tx_pointing_at(port)
+  tx.set_enabled(True)
+  tx.arm("manual")
+  tx.send_command("clear_fault", reason="mid-drive")
+  data, _ = sock.recvfrom(4096)
+  sock.close()
+  msg = from_jsonl(data.decode())
+  assert msg.op == "clear_fault"
+  assert msg.reason == "mid-drive"
+
+
+def test_re_arming_after_the_clear_goes_through_the_position_check():
+  """What makes the disarm worth anything: the next arm re-seeds the slew ramp from where the
+  joint actually IS, instead of resuming from the command that ran away without it."""
+  sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+  sock.bind(("127.0.0.1", 0))
+  port = sock.getsockname()[1]
+  c = _contract()
+  joint = c.action_joint_names[0]
+  measured = {joint: 0.20}
+  tx = TxState(list(c.action_joint_names), c, state_fn=lambda: dict(measured))
+  tx.configure("127.0.0.1", port, [joint], max_step_deg=4.0)
+  tx.set_enabled(True)
+  tx.arm("manual")
+  # the command runs away from the joint while it is dead
+  tx._client._prev_sent[joint] = 0.90
+  tx.send_command("clear_fault")
+  tx.arm("manual")
+  assert abs(tx._client._prev_sent[joint] - 0.20) < 1e-9, \
+    "the re-arm must anchor to the measured joint, not the command that left it behind"
+  sock.close()
+
+
+def test_the_button_tells_the_operator_it_disarmed():
+  """A silent disarm is its own failure: the panel would read "armed" while the keep-alive
+  409s in the background and nothing is being sent."""
+  js = DASHBOARD_JS.read_text()
+  m = re.search(r'el\("btn-tx-clearfault"\)\.onclick.*?\n  \};', js, re.S)
+  assert m
+  body = m.group(0)
+  assert "r.disarmed" in body, "the reply's disarmed flag has to be read"
+  assert "stopTxDeadman()" in body, "the held-key keep-alive has to stop too"
+  assert "DISARM" in body.upper(), "and the operator has to be told, in words"
