@@ -144,6 +144,56 @@ async def run(url: str, keep_mode: bool) -> int:
           c.add(False, "이유에 붙은 해결 단추가 눌린다",
                 f"누르지 못했습니다 - 다시 그려지며 사라졌을 수 있습니다: {str(e)[:120]}")
 
+    # ---------------------------------------------------------------- 시나리오를 눌러서 실행
+    # 2026-09-08 사용자: "시나리오 하나하나 실행을 위한 버튼을 순서대로 눌러도 동작 제대로
+    # 안한다." 그래서 여기서 확인하는 것은 "단추가 있다"가 아니라 **눌렀을 때 순서대로
+    # 진행하고, 실물 앞에서 멈추고, 어디까지 갔는지 보인다**는 것이다.
+    await pg.get_by_text("지금 무엇을 하는 중인가", exact=False).first.click()
+    await pg.wait_for_timeout(ACT_MS)
+    runbtn = pg.locator(".sc-run").first
+    c.add(await runbtn.count() > 0, "시나리오마다 '실행' 단추가 있다")
+    if await runbtn.count():
+      # 실물로 나가지 않는 실행으로 확인한다. 이 검사가 모터를 돌리면 안 된다.
+      started = await pg.evaluate("""async () => {
+        // 화면이 고르는 것과 같은 목록에서 첫 호환 정책을 쓴다 - 검사가 화면과 다른 길로
+        // 가면, 화면에서만 나는 문제를 못 잡는다.
+        const list = await fetch('/policy/list').then(r => r.json());
+        const pol = (list.policies || list || []).find(p => p.compatible);
+        const r = await fetch('/scenario/run', {method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({key:'policy-drive', dry_run:true,
+                                policy: pol ? pol.name : undefined})});
+        return {status: r.status, body: (await r.text()).slice(0,200)};
+      }""")
+      c.add(started["status"] in (200, 409), "실행 요청이 받아들여지거나 이유를 말한다",
+            f"{started['status']} {started['body'][:100]}")
+      if started["status"] == 200:
+        run = None
+        for _ in range(30):
+          await pg.wait_for_timeout(500)
+          run = await pg.evaluate("() => fetch('/scenario/run').then(r=>r.json())")
+          if run["state"] in ("waiting", "done", "failed"):
+            break
+        done = [s for s in (run["steps"] or []) if s["state"] == "done"]
+        c.add(len(done) >= 5, "누르면 여러 단계가 순서대로 진행된다",
+              f"{len(done)}단계 완료 · 상태 {run['state']}")
+        c.add(run["state"] != "failed", "끝까지 가거나 사람을 기다린다",
+              (run.get("message") or "")[:120])
+        shown = await pg.evaluate("""() => {
+          const b = document.getElementById('sc-run');
+          return b ? b.textContent.trim().length : 0; }""")
+        c.add(shown > 40, "어디까지 갔는지가 화면에 보인다", f"{shown}자")
+        await pg.evaluate("() => fetch('/scenario/run/abort',{method:'POST'})")
+        await pg.wait_for_timeout(ACT_MS)
+
+    # ---------------------------------------------------------------- 손 없이 실물이 움직이지 않는가
+    # 열쇠 감시는 boot 에서 한 번 걸리며 그 표시를 window 에 남긴다. 예전에는 Telemetry 탭을
+    # 지은 뒤에야 걸렸고, 그래서 다른 탭에서 스페이스를 눌러도 서버는 아무것도 못 받았다 -
+    # 실제 실행이 "스페이스를 누른 채 계속" 에서 멈춰 있길래 찾았다.
+    hold = await pg.evaluate("() => !!window.__txKeyWired")
+    c.add(bool(hold), "손을 놓았는지 보는 장치가 어느 탭에서나 걸려 있다",
+          "예전에는 Telemetry 탭을 열어야만 걸렸고, 다른 탭에서는 스페이스가 무시됐다")
+
     # ---------------------------------------------------------------- 다시 그려도 안 사라지는가
     stable = await pg.evaluate("""async () => {
       const ids = ['tx-arm-block', 'tx-recover-note', 'tx-cfg-note'];

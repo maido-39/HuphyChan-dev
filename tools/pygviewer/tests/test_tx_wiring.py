@@ -131,10 +131,23 @@ def test_check_mode_gate_is_a_noop_while_still_manual():
   assert tx.armed is True
 
 
-def test_heartbeat_requires_armed():
+def test_heartbeat_is_recorded_while_disarmed_but_still_sends_nothing():
+  """It used to refuse unless armed. That made "is a human holding the key" unmeasurable
+  until after arming, and the one-press scenario runner (scenario_runner.py, 2026-09-08)
+  needs the opposite order - it must confirm the operator is present BEFORE it arms, because
+  arming is one of the steps it performs for them. The alternative would be the runner faking
+  a heartbeat, which is the exact thing the dead-man exists to prevent.
+
+  The property that matters is unchanged and asserted here: a heartbeat alone sends nothing.
+  It only ever GATES sending; `sending()` still needs armed and enabled as well."""
   tx = TxState(ACT_NAMES)
-  with pytest.raises(TxNotAllowed):
-    tx.heartbeat()
+  tx.heartbeat()
+  assert tx._heartbeat_fresh() is True
+  assert tx.armed is False
+  assert tx.sending() is False, "a held key must never be enough to put a packet on the wire"
+  tx.configure("127.0.0.1", 9872, ["L_knee_joint"])
+  tx.set_enabled(True)
+  assert tx.sending() is False, "still not armed"
 
 
 def test_stale_heartbeat_stops_sending_but_does_not_disarm():

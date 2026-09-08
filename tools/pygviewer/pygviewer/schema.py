@@ -447,6 +447,37 @@ class TxConfigIn(BaseModel):
   )
 
 
+class ScenarioRunIn(BaseModel):
+  """Run a named setup end to end (``scenario_runner.py``).
+
+  2026-09-08, user: "시나리오 하나하나 실행을 위한 버튼을 순서대로 눌러도 동작 제대로
+  안한다... 단계가 너무 많아서 실행 불가능해." ``/scenario/apply`` only ever set the run mode
+  and disarmed; the other seven steps lived in a command-line script and nowhere on screen.
+
+  Every field has a working default so the button needs no form. They exist because a bench
+  session does change them - a different policy, a different speed, a different per-packet
+  cap - and burying those in the server would just move the unreachable knob."""
+
+  key: str
+  policy: str | None = Field(
+    default=None, description="Baked policy to load. None keeps whatever is loaded.")
+  vx: float = Field(default=0.5, description="Forward speed command, m/s")
+  max_step_deg: float = Field(
+    default=4.0, gt=0,
+    description="Per-packet travel cap. At 50 Hz, 4.0 deg is 200 deg/s. A walking knee needs "
+                "about 2.5 - too small silently lags the policy instead of refusing.")
+  kp_max: float = Field(default=30.0, gt=0)
+  kd_max: float = Field(default=1.5, gt=0)
+  obs_imu: Literal["sim", "real"] = Field(
+    default="sim",
+    description="Where the policy's attitude observation comes from. 'real' is only "
+                "meaningful once the sensor is mounted on the robot - a sensor on the desk "
+                "feeds the policy someone else's posture.")
+  dry_run: bool = Field(
+    default=False, description="Do everything except transmit - the sim runs, nothing reaches "
+                              "a motor.")
+
+
 class ScenarioApplyIn(BaseModel):
   """Which named setup to move toward (``scenario.py`` keys).
 

@@ -34,6 +34,8 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from . import scenario
+from . import scenario_runner as runner_mod
+from . import tx as tx_mod
 from .schema import (
   AnkleTargetIn,
   CmdIn,
@@ -56,6 +58,7 @@ from .schema import (
   Status,
   TargetIn,
   ScenarioApplyIn,
+  ScenarioRunIn,
   TxConfigIn,
   TxArmIn,
   TxClearFaultIn,
@@ -705,6 +708,20 @@ def build_app(core, freshness: dict) -> FastAPI:
       core.tx.check_armable(core.mode)
     except TxNotAllowed as exc:
       raise HTTPException(409, str(exc))
+    # Base-held-before-arm, in a policy mode only (2026-09-08 red-team finding). Arming takes
+    # time - the jump gate below waits for the policy's target to come within 10 deg of the
+    # real joint, which for a walking gait only happens at certain points in the cycle. With
+    # the base free the sim is WALKING while that wait happens, so the operator arms a robot
+    # that has moved on: measured once at 2 m travelled and a fall before the arm succeeded
+    # (scripts/run_policy_drive.py's docstring). Until now nothing enforced this - the CLI
+    # script held the base by discipline and a UI could simply not, which is exactly the
+    # incident reproduced. Manual mode is untouched: nothing drives the sim there.
+    if core.mode in tx_mod.POLICY_MODES and core.base_mode != "fixed":
+      raise HTTPException(409,
+        f"arm refused: the sim's base is '{core.base_mode}' while a policy drives it. Hold the "
+        "base ('base: fixed') first, arm, and free it afterwards - arming waits for the "
+        "policy's target to come near the real joint, and a walking sim moves away from it "
+        "while you wait.")
     ages = {n: core.real.joint_age_s(n) for n in core.act_names}
     core.hw_sync.refresh_staleness(ages, core.c.contract_sha)
     target_now, real_now = _target_and_real_now()
@@ -793,6 +810,276 @@ def build_app(core, freshness: dict) -> FastAPI:
       reported_id=core.real.prog_id,
       age_s=age,
     )
+
+  # ------------------------------------------------------------------ run it, in order
+  # 2026-09-08. The order below is the whole point of this endpoint, and every constraint in
+  # it was paid for on the bench (scripts/run_policy_drive.py documents each one):
+  #
+  #   * TX is configured with `allow_policy` BEFORE the mode leaves manual. The other way
+  #     round, `hw_sync.note_mode` invalidates the sync (it only spares the transition when TX
+  #     already allows that mode), and a policy mode cannot re-sync because the policy rewrites
+  #     the target every tick - so arm can never succeed again until someone goes back to
+  #     manual. That is the trap the dashboard's own "load & run" button walks into.
+  #   * The base is HELD before the mode goes to policy, and freed only after arming. Arming
+  #     waits for the policy's target to pass near the real joint; with the base free the sim
+  #     walks away while you wait.
+  #   * The real joints are moved to the policy's starting pose before arming, because the
+  #     10 deg arm gate compares the policy's live target against the real joint and a bench
+  #     left where the last session ended is nowhere near it.
+  #
+  # Steps that move real hardware are separated into the second phase, which only advances
+  # while the operator holds the dead-man key. See scenario_runner.py.
+  def _runner_recover():
+    """Whatever went wrong, leave it safe: stop transmitting, then hold the sim up."""
+    core.tx.disarm(reason="scenario run aborted")
+    core.submit({"op": "base", "mode": "fixed"})
+
+  def _heartbeat_fresh() -> bool:
+    return core.tx._heartbeat_fresh()
+
+  scen_runner = runner_mod.ScenarioRunner(
+    heartbeat_fresh=_heartbeat_fresh, recover=_runner_recover)
+
+  def _deg(rad: float) -> float:
+    return math.degrees(rad)
+
+  def _policy_target_for(names: list[str], wait_s: float = 1.0) -> dict[str, float]:
+    """What the policy wants for these joints RIGHT NOW.
+
+    Only meaningful with the base held: a walking policy's target moves through the gait
+    cycle, so "the current value" of a free-base policy is a moment, not a place. Held, the
+    policy holds a standing pose and that pose is where the walk starts from.
+
+    Waits briefly, because this is called immediately after the mode change lands and the
+    policy has not necessarily produced its first target yet - asking one tick too early and
+    reporting "the policy is not running" is a lie the operator cannot check.
+    """
+    deadline = time.monotonic() + wait_s
+    tgt = None
+    while time.monotonic() < deadline:
+      tgt = (core.snapshot().get("policy") or {}).get("target")
+      if tgt:
+        break
+      time.sleep(0.02)
+    if not tgt:
+      raise runner_mod.StepFailed(
+        f"정책이 {wait_s:.0f}초 동안 목표를 내지 않았습니다 - 정책이 실제로 도는지 확인하세요")
+    idx = {n: i for i, n in enumerate(core.act_names)}
+    return {n: float(tgt[idx[n]]) for n in names if n in idx}
+
+  def _build_steps(body: ScenarioRunIn, sc):
+    """The two phases, as data. Labels are what the operator reads - no jargon."""
+    joints = list(core.tx.enabled_motors)
+    S = runner_mod.Step
+
+    def s_disarm():
+      core.tx.disarm(reason="scenario run: settings cannot change while armed")
+      return "해제됨"
+
+    def s_policy():
+      if body.policy:
+        post_policy_load(PolicyLoadIn(name=body.policy))
+        return body.policy
+      if core.policy is None:
+        raise runner_mod.StepFailed("정책이 없습니다 - 이름을 골라 주세요")
+      return "이미 불러온 정책을 씁니다"
+
+    def s_obs():
+      if core.obs_mux is None:
+        return "이 정책에는 바꿀 관측이 없습니다"
+      core.submit({"op": "obs_source", "sources": {
+        "base_ang_vel": body.obs_imu, "projected_gravity": body.obs_imu}})
+      return f"자세 관측: {'실물 자세계' if body.obs_imu == 'real' else '시뮬레이터'}"
+
+    def s_tx():
+      if body.dry_run:
+        return "건너뜀 (실물로 보내지 않는 실행)"
+      if not joints:
+        raise runner_mod.StepFailed(
+          "보낼 관절이 하나도 선택되어 있지 않습니다 - Telemetry 탭의 전송 설정에서 "
+          "모터를 고르고 '1. configure' 를 누르세요")
+      core.tx.configure(core.tx.host, core.tx.port, joints,
+                        kp_max=body.kp_max, kd_max=body.kd_max, ttl_ms=core.tx.ttl_ms,
+                        allow_policy=True, max_step_deg=body.max_step_deg)
+      core.tx.set_enabled(True)
+      return (f"{len(joints)}개 관절 · 패킷당 {body.max_step_deg}도"
+              f" (= 초당 {body.max_step_deg * 50:.0f}도)")
+
+    def s_manual():
+      core.submit({"op": "mode", "value": "manual"})
+      if not _await_mode("manual"):
+        raise runner_mod.StepFailed("수동 모드로 바뀌지 않았습니다")
+      return "manual"
+
+    def s_hold():
+      core.submit({"op": "base", "mode": "fixed"})
+      return "몸통을 붙잡았습니다"
+
+    def s_sync():
+      if body.dry_run:
+        return "건너뜀"
+      r = post_sync_from_real()
+      n = len(r.get("synced") or {})
+      if not n:
+        raise runner_mod.StepFailed(
+          "실물에서 읽어올 각도가 없습니다 - 로봇 통신을 확인하세요")
+      return f"{n}개 관절을 실물 값으로 맞췄습니다"
+
+    def s_cmd():
+      core.submit({"op": "cmd", "value": [body.vx, 0.0, 0.0]})
+      return f"앞으로 {body.vx} m/s"
+
+    def s_policy_mode():
+      core.submit({"op": "mode", "value": sc.mode})
+      if not _await_mode(sc.mode):
+        raise runner_mod.StepFailed(f"'{sc.mode}' 로 바뀌지 않았습니다")
+      return sc.mode
+
+    def s_park():
+      """실물을 정책의 시작 자세로 옮긴다. 수동 모드에서, 무장하고, 목표를 주고, 도착을 잰다.
+
+      수동으로 하는 이유: 정책 모드에서는 정책이 매 틱 목표를 덮어써서 '여기로 가라'가
+      성립하지 않는다. 그리고 수동 무장은 방금 맞춘 좌표 덕분에 목표와 실물이 같은 자리라
+      점프 관문을 그냥 통과한다 - 관문을 피한 것이 아니라 실제로 안 움직이기 때문이다."""
+      park = _policy_target_for(joints)
+      core.submit({"op": "mode", "value": "manual"})
+      if not _await_mode("manual"):
+        raise runner_mod.StepFailed("수동 모드로 바뀌지 않았습니다")
+      # 무장하기 전에 목표를 실물의 지금 각도로 되돌린다. 정책 모드에 있는 동안 정책이
+      # 목표를 계속 덮어썼으므로, 그대로 무장하면 첫 패킷이 정책의 마지막 목표까지
+      # 한 번에 뛴다 - 실측 2026-09-08: 20.7도. 점프 관문이 그걸 정확히 거부했고(옳다),
+      # 여기서 다시 맞추면 "아무 데도 안 가는" 상태로 무장한 뒤 목표를 옮기게 된다.
+      post_sync_from_real()
+      post_tx_arm(None)          # 여기서 힘이 들어간다. 스페이스는 이미 눌려 있어야 한다.
+      core.set_target(park)
+      t0, gaps = time.monotonic(), {}
+      while time.monotonic() - t0 < runner_mod.PARK_TIMEOUT_S:
+        if not core.tx._heartbeat_fresh():
+          core.tx.disarm(reason="park: operator let go")
+          raise runner_mod.OperatorGone("스페이스에서 손을 뗐습니다 - 그 자리에서 멈췄습니다")
+        real = core.real.snapshot_joints()
+        gaps = {n: abs(_deg(real[n]["q"]) - _deg(v))
+                for n, v in park.items() if n in real and real[n].get("q") is not None}
+        if gaps and max(gaps.values()) < runner_mod.PARK_TOLERANCE_DEG:
+          # 정책 모드로 넘어가기 전에 무장을 푼다. 모드가 바뀌면 어차피 매 틱 검사가
+          # 풀어버리는데(tx.check_mode_gate), 그때는 이유가 '모드가 바뀜'으로 남아 사람이
+          # 무슨 일이 났는지 읽기 어렵다.
+          core.tx.disarm(reason="park done - re-arming under the policy next")
+          return " · ".join(f"{n.replace('_joint','')} {_deg(v):.1f}도" for n, v in park.items())
+        time.sleep(0.02)
+      core.tx.disarm(reason="park did not reach the target")
+      worst = max(gaps.values()) if gaps else float("nan")
+      raise runner_mod.StepFailed(
+        f"실물이 시작 자세에 도착하지 못했습니다 (가장 먼 관절이 {worst:.1f}도 남음). "
+        "여기서 봐주고 넘어가면 어긋난 자리에서 무장하게 됩니다")
+
+    def s_arm():
+      core.submit({"op": "mode", "value": sc.mode})
+      if not _await_mode(sc.mode):
+        raise runner_mod.StepFailed(f"'{sc.mode}' 로 바뀌지 않았습니다")
+      t0 = time.monotonic()
+      last = ""
+      while time.monotonic() - t0 < runner_mod.ARM_WAIT_S:
+        if not core.tx._heartbeat_fresh():
+          raise runner_mod.OperatorGone("스페이스에서 손을 뗐습니다 - 무장하지 않았습니다")
+        try:
+          # allow_jump is NEVER passed here. It means "yes, move the hardware that far" and
+          # that is the operator's judgement, not a way to make a retry converge faster.
+          post_tx_arm(None)
+          return f"{time.monotonic() - t0:.1f}초 만에 열렸습니다"
+        except HTTPException as exc:
+          last = str(exc.detail)
+        time.sleep(0.04)
+      raise runner_mod.StepFailed(
+        f"{runner_mod.ARM_WAIT_S:.0f}초 동안 무장이 열리지 않았습니다. 마지막 이유: {last}")
+
+    def s_free():
+      core.submit({"op": "base", "mode": "free"})
+      return "몸통을 놓았습니다 - 이제 걷습니다"
+
+    phase_a = [
+      S("disarm", "전송을 잠시 끊습니다 (설정은 무장 중에 못 바꿉니다)", False, s_disarm),
+      S("policy", "정책을 불러옵니다", False, s_policy),
+      S("obs", "정책이 볼 관측을 정합니다", False, s_obs),
+      S("tx", "전송을 설정합니다 (정책 허용 + 한 번에 움직일 상한)", False, s_tx),
+      S("manual", "수동 모드로 둡니다", False, s_manual),
+      S("hold", "화면 속 로봇의 몸통을 붙잡습니다", False, s_hold),
+      S("sync", "화면의 목표를 실물의 지금 각도에 맞춥니다", False, s_sync),
+      S("cmd", "걸어갈 방향과 속도를 줍니다", False, s_cmd),
+      S("policy_mode", "정책이 몰도록 바꿉니다 (몸통은 아직 붙잡은 채)", False, s_policy_mode),
+    ]
+    if body.dry_run or not sc.arms_torque:
+      phase_b = [S("free", "몸통을 놓아 걷게 합니다", False, s_free)]
+      return phase_a, phase_b
+    phase_b = [
+      S("park", "실물을 정책이 서 있으라는 자리로 옮깁니다", True, s_park),
+      S("arm", "전송을 켭니다 (정책 목표가 실물과 10도 안으로 들어오는 순간을 기다립니다)",
+        True, s_arm),
+      S("free", "몸통을 놓아 걷게 합니다", True, s_free),
+    ]
+    return phase_a, phase_b
+
+  @app.post("/scenario/run", summary="Run a named setup end to end, in order, one press")
+  def post_scenario_run(body: ScenarioRunIn):
+    """See the block comment above for why the order is what it is.
+
+    Returns immediately; the run continues in the background and is read with
+    ``GET /scenario/run``. It stops before anything reaches a motor and waits for
+    ``POST /scenario/run/continue``, which refuses unless the dead-man key is held."""
+    sc = scenario.BY_KEY.get(body.key)
+    if sc is None:
+      raise HTTPException(404, f"모르는 조합: {body.key}")
+    if not sc.available:
+      raise HTTPException(409, f"{sc.name_ko}: {sc.unavailable_reason}")
+    phase_a, phase_b = _build_steps(body, sc)
+
+    def confirm():
+      # Nothing in the second phase reaches a motor (a dry run, or a setup that never arms):
+      # then this pause is a plain "ready to go on", and claiming hardware will move would be
+      # a false warning - which is how real warnings stop being read.
+      if not any(s.sends for s in phase_b):
+        return {"moves": [], "message": "실물로 나가는 것은 없습니다. 계속하면 몸통을 놓습니다."}
+      joints = list(core.tx.enabled_motors)
+      try:
+        park = _policy_target_for(joints)
+      except runner_mod.StepFailed as exc:
+        return {"message": str(exc), "moves": []}
+      real = core.real.snapshot_joints()
+      moves = []
+      for n, v in park.items():
+        now = real.get(n, {}).get("q")
+        moves.append({
+          "joint": n.replace("_joint", ""),
+          "now_deg": round(_deg(now), 1) if now is not None else None,
+          "to_deg": round(_deg(v), 1),
+          "travel_deg": round(abs(_deg(v) - _deg(now)), 1) if now is not None else None,
+        })
+      worst = max((m["travel_deg"] or 0) for m in moves) if moves else 0
+      return {
+        "moves": moves,
+        "message": (f"여기서부터 실물이 움직입니다. 가장 많이 움직이는 관절이 {worst:.1f}도. "
+                    "스페이스를 누른 채로 '계속' 을 누르세요 - 손을 떼면 그 자리에서 멈춥니다."),
+      }
+
+    try:
+      return scen_runner.start(body.key, phase_a, phase_b, confirm)
+    except runner_mod.StepFailed as exc:
+      raise HTTPException(409, str(exc))
+
+  @app.get("/scenario/run", summary="How far the running setup got, and where it stopped")
+  def get_scenario_run():
+    return scen_runner.status()
+
+  @app.post("/scenario/run/continue", summary="Operator is holding the dead-man: go on")
+  def post_scenario_run_continue():
+    try:
+      return scen_runner.proceed()
+    except runner_mod.StepFailed as exc:
+      raise HTTPException(409, str(exc))
+
+  @app.post("/scenario/run/abort", summary="Stop the run and put everything back")
+  def post_scenario_run_abort():
+    return scen_runner.abort()
 
   @app.post(
     "/scenario/apply",

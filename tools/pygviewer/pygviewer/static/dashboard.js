@@ -99,6 +99,10 @@ const S = {
                           // its own `.pv` span without re-querying the DOM every tick.
   scenario: null,       // GET /scenario - the computed NAME of the current setup,
                         // or null-key + what differs. Never stored, always recomputed.
+  scenarioRun: null,    // GET /scenario/run - how far a one-press run got and where it
+                        // stopped. Polled fast WHILE running: a step list that updates once
+                        // a second is a progress bar nobody trusts, and the whole point of
+                        // it is to show which step failed (2026-09-08).
   violations: null,      // GET /violations, polled every pollSlow tick (see A5 note there) - {records, by_joint, total}
   violationPanelOpen: false,
   violLastSeenSeq: 0,    // A5: highest violations.py `seq` already fed into #op-console -
@@ -296,7 +300,12 @@ async function pollSlow() {
     if (S.rightTab === "gains") S.presets = await api("GET", "/presets");
   } catch (e) {}
   try {
-    if (S.controlMode === "policy" && S.rightTab === "control") S.policyList = await api("GET", "/policy/list");
+    // The scenario tab needs it as well: a policy-driven setup cannot run without one, and
+    // "정책이 없습니다" as the first failed step is a dead end if there is no way to pick one
+    // right there (2026-09-08).
+    if ((S.controlMode === "policy" && S.rightTab === "control") || S.leftTab === "scenario") {
+      S.policyList = await api("GET", "/policy/list");
+    }
   } catch (e) {}
   try {
     // A5 (2026-09-04, user: "실제 모터 Plot이... console log 같은거에서 띄우던지"): the full
@@ -309,6 +318,8 @@ async function pollSlow() {
     // The name has to keep up with the mode dropdown and the arm button, which can both
     // move without this panel knowing - so it is re-derived on every slow tick, never cached.
     S.scenario = await api("GET", "/scenario");
+    S.scenarioRun = await api("GET", "/scenario/run");
+    if (S.leftTab === "scenario") renderScenarioRun();
     ingestViolationsForConsole(S.violations.records || []);
     if (S.violationPanelOpen) renderViolationPanel();
   } catch (e) {}
@@ -1005,6 +1016,7 @@ function boot() {
   }
   initTabs();
   wireModeSelect();
+  wireDeadmanKey();
   initPaneResize();
   initPlotsToolbar();
   initModal();
@@ -1109,15 +1121,27 @@ function renderTabScenario(body) {
       <h4>${c.name_ko}${c.is_current ? " — 지금 이것" : ""}</h4>
       <div class="act">${c.action}</div>
       ${diffs ? `<ul>${diffs}</ul>` : ""}
-      ${c.is_current ? "" :
-        `<button class="sc-go" data-key="${c.key}">${
-          c.would_arm_torque ? "이 조합으로 (힘이 켜집니다)" : "이 조합으로"
-        }</button>`}
+      ${c.key.startsWith("policy") || c.key === "policy-drive" ? `
+        <div class="row tight" style="margin-top:4px">
+          <label style="font-size:11px">정책</label>
+          <select class="sc-policy" data-key="${c.key}" style="flex:1;font-size:11px">${
+            (S.policyList || []).map((p) =>
+              `<option value="${p.name}" ${p.compatible ? "" : "disabled"} ${
+                p.name === S.policyLoadedName ? "selected" : ""}>${p.name}${
+                p.compatible ? "" : " (이 모형과 안 맞음)"}</option>`).join("")
+            || `<option value="">구운 정책이 없습니다</option>`}</select>
+        </div>` : ""}
+      <div class="row tight" style="margin-top:4px">
+        <button class="sc-run primary" data-key="${c.key}" style="flex:2">▶ 실행 — 필요한 순서를 다 밟습니다</button>
+        ${c.is_current ? "" :
+          `<button class="sc-go" data-key="${c.key}" style="flex:1" title="모드만 맞추고 나머지는 손으로">모드만</button>`}
+      </div>
     </div>`;
   }).join("");
 
   body.innerHTML = `${head}<div class="sc-axes">${axes}</div>
     <h3>고를 수 있는 조합</h3>${choices}
+    <div id="sc-run"></div>
     <div id="sc-todo"></div>`;
   // Every left tab has to stamp which tab the body currently holds. `tabNeedsBuild` compares
   // against it, so a tab that replaces the body WITHOUT stamping leaves the previous tab's
@@ -1146,6 +1170,70 @@ function renderTabScenario(body) {
       }
     };
   });
+
+  body.querySelectorAll(".sc-run").forEach((b) => {
+    b.onclick = async () => {
+      const key = b.dataset.key;
+      const c = (S.scenario.choices || []).find((x) => x.key === key) || {};
+      if (c.would_arm_torque && !confirm(
+            `'${c.name_ko}' 를 처음부터 끝까지 실행합니다.\n\n`
+            + `실물이 움직이기 직전에 멈추고, 어디로 얼마나 움직일지 숫자로 보여준 뒤\n`
+            + `스페이스를 누른 채 '계속'을 눌러야 그 다음으로 갑니다.\n\n계속할까요?`)) return;
+      const sel = body.querySelector(`.sc-policy[data-key="${key}"]`);
+      const policy = sel && sel.value ? sel.value : undefined;
+      const r = await apiOk("POST", "/scenario/run", policy ? { key, policy } : { key });
+      if (r) { S.scenarioRun = r; renderScenarioRun(); }
+    };
+  });
+  renderScenarioRun();
+}
+
+/* 시나리오를 실행하는 동안 어디까지 갔는지.
+
+   이 화면이 존재하는 이유는 하나다: 실패했을 때 **어느 단계에서 왜** 막혔는지가 남아야 한다.
+   그게 없어서 "눌러도 안 된다"가 반복됐다 (2026-09-08). 그래서 단계마다 한 줄씩 상태를 두고,
+   실물이 움직이는 단계는 표시를 다르게 한다. */
+const RUN_MARK = { pending: "·", running: "▸", done: "✓", failed: "✕", skipped: "—" };
+const RUN_COLOR = { done: "var(--accent)", failed: "var(--bad)", running: "var(--accent2)",
+                    skipped: "var(--muted)", pending: "var(--muted)" };
+
+function renderScenarioRun() {
+  const box = el("sc-run");
+  if (!box) return;
+  const r = S.scenarioRun;
+  if (!r || r.state === "idle") { setHtmlIfChanged(box, ""); return; }
+  const rows = (r.steps || []).map((s) => `
+    <div style="display:flex;gap:6px;font-size:11px;line-height:1.6;color:${RUN_COLOR[s.state]}">
+      <span style="width:12px">${RUN_MARK[s.state] || "·"}</span>
+      <span style="flex:1">${s.sends ? "<b>[실물]</b> " : ""}${s.label}
+        ${s.detail ? `<span style="color:var(--muted)"> — ${s.detail}</span>` : ""}</span>
+    </div>`).join("");
+  const waiting = r.state === "waiting";
+  const moves = ((r.confirm && r.confirm.moves) || []).map((m) =>
+    `<div style="font-size:11px">· ${m.joint}: 지금 ${m.now_deg}도 → ${m.to_deg}도`
+    + `<b> (${m.travel_deg}도 이동)</b></div>`).join("");
+  const head = `<h3>실행 중 — ${r.key || ""}</h3>`;
+  const foot = waiting
+    ? `<div class="warnbanner" style="margin-top:6px">${r.message || ""}</div>${moves}
+       <div class="row tight" style="margin-top:4px">
+         <button id="sc-run-go" class="primary" style="flex:2">스페이스를 누른 채 — 계속</button>
+         <button id="sc-run-stop" style="flex:1">중단</button></div>`
+    : r.state === "running"
+      ? `<div class="row tight" style="margin-top:4px">
+           <button id="sc-run-stop" style="flex:1">중단</button></div>`
+      : `<div class="small" style="margin-top:4px;color:${
+           r.state === "failed" ? "var(--bad)" : "var(--accent)"}">${r.message || ""}</div>`;
+  setHtmlIfChanged(box, head + rows + foot);
+  const go = el("sc-run-go");
+  if (go) go.onclick = async () => {
+    const r2 = await apiOk("POST", "/scenario/run/continue");
+    if (r2) { S.scenarioRun = r2; renderScenarioRun(); }
+  };
+  const stop = el("sc-run-stop");
+  if (stop) stop.onclick = async () => {
+    const r2 = await apiOk("POST", "/scenario/run/abort");
+    if (r2) { S.scenarioRun = r2; renderScenarioRun(); }
+  };
 }
 
 function renderTabModel(body) {
@@ -2495,7 +2583,11 @@ window.addEventListener("resize", () => {
  * docs/121 section 10 TX item / docs/123, WIRED 2026-09-04 to a real bridge.tx_client.TxClient
  * via pygviewer/tx.py's TxState - once armed this puts real 50 Hz UDP JointTarget packets on
  * the wire. Sends ONLY the current SimCore target (this Joints tab's sliders, or a running
- * script) - never a policy action (blocked both in the sim mode gate and in TxClient itself).
+ * script). A policy's own target reaches the motors ONLY when this config opted in with
+ * `allow_policy` (which forces a per-packet travel cap) and the mode is `policy_sim`; this
+ * text used to say "never a policy action", which stopped being true when `allow_policy` was
+ * added and sent anyone debugging "why doesn't the policy reach the motor" looking in the
+ * wrong place entirely (2026-09-08 red team).
  *
  * Three-stage safety, mirroring the server exactly:
  *   1. POST /tx/config  - host/port/enable list/kp_max/kd_max/ttl_ms. Refused while armed.
@@ -2514,8 +2606,11 @@ function renderTxSectionHtml() {
   return `
     <h3>TX (hardware transmit)</h3>
     <div class="small" style="margin-bottom:4px">Sends ONLY the current manual/script target -
-      never a policy action. Only allowed while mode is <b>manual</b> (Joints tab, or a
-      running script) - never while a policy drives.</div>
+      by default never a policy action: transmit is allowed in <b>manual</b> (Joints tab, or a
+      running script) unless you tick <b>let policy drive</b> below, which also forces a
+      per-packet travel cap. Ticking it lets the loaded policy's own targets reach the motors
+      in <b>policy_sim</b> - and only that mode; <b>policy_shadow</b> exists to watch a policy
+      without letting it drive and is never transmittable.</div>
     <div class="small" style="margin-bottom:4px">
       <b>0. sync from hardware</b> pulls every fresh real-telemetry joint's manual target from
       its live measured value. Required once before ARM (docs/123 section 10.2 - a stale
@@ -2714,7 +2809,11 @@ async function pushTxConfig() {
 }
 
 function txDeadmanTick() {
-  if (!S.txStatus || !S.txStatus.armed) return;
+  // Same reasoning as the keydown handler: during a scenario run the heartbeat is how the
+  // runner knows a human is here, and it has to be established BEFORE the run arms anything.
+  // A heartbeat alone sends nothing (tx.py TxState.heartbeat / sending()).
+  const inRun = !!(S.scenarioRun && S.scenarioRun.running);
+  if (!inRun && !(S.txStatus && S.txStatus.armed)) return;
   apiOk("POST", "/tx/heartbeat");
 }
 
@@ -2760,6 +2859,39 @@ function isTypingTarget(ev) {
   // landed on an INPUT and Space silently stopped feeding the dead-man - precisely when it
   // is needed. Only text-entry inputs may swallow it.
   return TEXT_INPUT_TYPES.has((t.type || "text").toLowerCase());
+}
+
+/* The dead-man key, wired ONCE at boot.
+
+   It used to be wired inside wireTxSection(), which only runs when the Telemetry tab is
+   built - so on any other tab, holding Space did nothing at all. Caught 2026-09-08 by driving
+   the real page: the scenario runner stopped at "hold Space and press continue", the key was
+   genuinely held, and the server never saw a heartbeat because no listener existed yet. The
+   dead-man is the operator's presence signal for the WHOLE application; it cannot live inside
+   one panel's setup. */
+function wireDeadmanKey() {
+  if (window.__txKeyWired) return;
+  window.__txKeyWired = true;
+  // CAPTURE phase on `window`: the 3D canvas and any focused control see the event after
+    // this does, so nothing downstream can swallow the dead-man key by calling
+    // stopPropagation() on its own keydown handler.
+    window.addEventListener("keydown", (ev) => {
+      if (ev.code !== "Space" || ev.repeat || isTypingTarget(ev)) return;
+      // Armed is the ordinary case. A scenario run is the other one: it arms things ON the
+      // operator's behalf, so it has to be able to see they are present BEFORE that happens,
+      // or the only way to satisfy the check would be for the runner to fake it - exactly
+      // what the dead-man exists to prevent (scenario_runner.py, 2026-09-08). Holding the key
+      // while disarmed puts nothing on the wire: sending needs armed and enabled as well.
+      const inRun = !!(S.scenarioRun && S.scenarioRun.running);
+      if (!inRun && !(S.txStatus && S.txStatus.armed)) return;
+      ev.preventDefault();
+      startTxDeadman();
+    }, true);
+    window.addEventListener("keyup", (ev) => {
+      if (ev.code !== "Space") return;
+      stopTxDeadman();
+    }, true);
+    window.addEventListener("blur", stopTxDeadman); // losing window focus must stop it too
 }
 
 function wireTxSection() {
@@ -2870,26 +3002,8 @@ function wireTxSection() {
       if (S.txStatus) pushTxConfig(); // config already exists - re-push with the new list
     });
   });
-  // keyboard dead-man - document-level so it works regardless of which element has focus,
-  // but never hijacks Space while the operator is typing into a text field.
-  if (!window.__txKeyWired) {
-    window.__txKeyWired = true;
-    // CAPTURE phase on `window`: the 3D canvas and any focused control see the event after
-    // this does, so nothing downstream can swallow the dead-man key by calling
-    // stopPropagation() on its own keydown handler.
-    window.addEventListener("keydown", (ev) => {
-      if (ev.code !== "Space" || ev.repeat || isTypingTarget(ev)) return;
-      if (!S.txStatus || !S.txStatus.armed) return;
-      ev.preventDefault();
-      startTxDeadman();
-    }, true);
-    window.addEventListener("keyup", (ev) => {
-      if (ev.code !== "Space") return;
-      stopTxDeadman();
-    }, true);
-    window.addEventListener("blur", stopTxDeadman); // losing window focus must stop it too
-  }
 }
+
 
 // ---------------------------------------------------------------- command path trace
 // docs/127 section 4. Seven times now, "the motors do not move" has had seven different

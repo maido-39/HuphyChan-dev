@@ -25,8 +25,12 @@ Two-stage arm + a THIRD, independent keyboard dead-man, matching docs/123 sectio
      refused (409) unless stage 1 is on AND the sim mode is exactly ``"manual"`` - the Joints
      tab's live sliders AND a running ``POST /script/run`` sequence both run under
      ``mode="manual"`` (see ``modes.py``'s docstring: there is no separate "script" mode),
-     and ``policy_sim``/``policy_shadow`` never do - policy output must never be
-     transmittable (docs/121 section 10 TX item).
+     and ``policy_sim`` does so ONLY when this config opted in via ``allow_policy`` (which
+     additionally forces a per-packet ``max_step_deg`` cap). ``policy_shadow`` never does.
+     This paragraph read "policy output must never be transmittable" until 2026-09-08; that
+     stopped being true when ``allow_policy`` was added for the user's "정책으로 실물 일부
+     구동" scenario, and a stale absolute here sends anyone debugging "why does the policy not
+     reach the motor" past the one place that actually gates it (:meth:`mode_allowed`).
   4. ``POST /tx/heartbeat`` (:meth:`heartbeat`) - the KEYBOARD dead-man (dashboard: Space,
      held, called every ~100 ms while held). This is deliberately NOT the same thing as
      "armed": while armed but the last heartbeat is older than ``DEADMAN_TIMEOUT_S`` (0.3 s),
@@ -386,8 +390,17 @@ class TxState:
       self._client.disarm()
 
   def heartbeat(self) -> None:
-    if not self.armed:
-      raise TxNotAllowed("cannot heartbeat: not armed")
+    """Record that the operator is holding the key. Accepted while DISARMED too.
+
+    It used to refuse unless armed, which made "is a human present" unmeasurable until after
+    arming - and the one-press scenario runner (``scenario_runner.py``, 2026-09-08) needs the
+    opposite order: it must confirm the operator is holding the key BEFORE it arms anything,
+    because arming is itself one of the steps it performs on their behalf. A chicken-and-egg
+    that would otherwise be resolved by the runner faking a heartbeat, which is precisely the
+    thing the dead-man exists to prevent.
+
+    Accepting it disarmed loosens nothing: this timestamp only ever GATES sending
+    (:meth:`on_control_tick` also requires ``armed`` and ``enabled``), it never causes it."""
     self._last_heartbeat = time.monotonic()
 
   def mode_allowed(self, mode: str) -> bool:
@@ -447,7 +460,8 @@ class TxState:
   ) -> None:
     """Call once per SimCore control tick. ``target_values`` must be exactly
     ``SimCore.target`` zipped with ``SimCore.act_names`` - the current manual/script command,
-    never a policy action (docs/123 section 4; see the module docstring)."""
+    and, when ``allow_policy`` was configured, a policy's target in ``policy_sim`` (docs/123
+    section 4; see the module docstring)."""
     if not self.sending():
       return
     # TxClient.joint_names is the hard allow-list fixed at /tx/config time (self.enabled_motors)
