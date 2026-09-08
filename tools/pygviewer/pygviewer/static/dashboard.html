@@ -142,6 +142,12 @@ body.resizing-v,body.resizing-h{user-select:none}
    the right control pane, at any pane width the user drags to. */
 #violation-badge{background:#5a1414;color:#f88;border:1px solid #a33;animation:violation-pulse 1.4s ease-in-out infinite}
 @keyframes violation-pulse{0%,100%{opacity:1}50%{opacity:.55}}
+/* Pressing a blocked ARM highlights the reason list, because the button and the reasons can
+   be several rows apart in a scrolling column and a toast alone does not point at anything. */
+.flash{animation:reason-flash 1.1s ease-out 2}
+@keyframes reason-flash{0%,100%{background:transparent}
+  25%{background:#5a1414}70%{background:#3a0e0e}}
+@media (prefers-reduced-motion:reduce){.flash{animation:none;outline:1px solid var(--bad)}}
 .violation-panel{display:none;position:fixed;top:42px;
   left:calc(var(--col-left) + 14px);right:calc(var(--col-right) + 14px);
   max-height:52vh;overflow:auto;

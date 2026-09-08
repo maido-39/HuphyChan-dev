@@ -291,6 +291,59 @@ def test_dashboard_lists_every_arm_blocker_on_the_page():
   assert "txArmBlockers(tx, st, sync)" in js, "renderTxStatusLive must actually call it"
 
 
+# ---------------------------------------- the press has to answer, 2026-09-08
+# User: "2. activate TX panel 에서 ARM 도 안되잖아. 지금 계속 어디서 막히는지가 안나오잖아."
+#
+# The reasons WERE on the page - verified by driving the real viewer, the line read
+# `ARM blocked: sim mode is "idle", TX only sends in "manual"`. Two things kept it from
+# reaching anyone. The button was `disabled` whenever a precondition was unmet, and a disabled
+# button fires no click event at all, so pressing it did nothing whatsoever: no toast, no
+# console line, no change. And the reason sat several rows below the button in a scrolling
+# column, which is not where someone who just pressed a button is looking.
+def test_the_arm_button_is_not_disabled_when_it_is_merely_blocked():
+  js = DASHBOARD_JS.read_text()
+  assert 'el("btn-tx-arm").disabled = !!(tx && tx.armed);' in js, (
+    "a blocked ARM must stay pressable - `disabled` swallows the click that would explain it"
+  )
+
+
+def test_pressing_a_blocked_arm_reports_every_blocker():
+  js = DASHBOARD_JS.read_text()
+  m = re.search(r'el\("btn-tx-arm"\)\.onclick.*?\n  \};', js, re.S)
+  assert m, "the ARM handler was not found"
+  body = m.group(0)
+  assert "txArmBlockers(" in body, "the press has to consult the same list the panel shows"
+  assert "toast(" in body, "and say it where the eye already is"
+  assert "return;" in body.split("txArmBlockers(")[1][:400], \
+    "a blocked press must not go on to POST /tx/arm"
+
+
+def test_the_commonest_blocker_carries_its_own_fix():
+  """The sim comes up in `idle` and the Control tab already shows Joints, so the tab-open that
+  requests `manual` never fires (setControlMode returns early when the mode is unchanged) -
+  the operator can press Joints all day and nothing happens. Verified end to end against the
+  running viewer: press the fix, mode goes idle -> manual, the line becomes "ready to ARM"."""
+  js = DASHBOARD_JS.read_text()
+  assert 'id="btn-fix-mode"' in js
+  m = re.search(r'if \(changed && fixBtn\) fixBtn\.onclick.*?\n      \};', js, re.S)
+  assert m, "the fix button is not wired"
+  assert 'mode: "manual"' in m.group(0)
+
+
+def test_status_lines_are_not_rebuilt_on_every_poll():
+  """renderTxStatusLive runs several times a second. Rebuilding a line wholesale destroys and
+  recreates anything interactive inside it between a press and its release, so the click never
+  completes - measured by driving the page: a button inside the blocker line could not be
+  clicked at all ("element was detached from the DOM, retrying", 36 times). It also wiped the
+  flash highlight on every poll."""
+  js = DASHBOARD_JS.read_text()
+  assert "function setHtmlIfChanged(node, html)" in js
+  m = re.search(r"const blockEl = el\(\"tx-arm-block\"\);.*?renderCommandPathTrace", js, re.S)
+  assert m, "the blocker rendering block was not found"
+  assert "blockEl.innerHTML" not in m.group(0), \
+    "every write to the blocker line must go through the change guard"
+
+
 # ---------------------------------------- plan B: report divergence, never prevent it
 def test_releasing_space_no_longer_erases_the_command():
   """`stopTxDeadman` used to POST /sync_from_real, snapping the manual target back onto the

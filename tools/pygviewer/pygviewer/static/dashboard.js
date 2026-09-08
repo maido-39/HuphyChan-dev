@@ -2715,6 +2715,20 @@ function wireTxSection() {
     else ev.target.checked = !on; // request refused (no config yet) - revert the checkbox
   });
   el("btn-tx-arm").onclick = async () => {
+    // Answer the click even when arming is impossible. This button used to be `disabled`
+    // whenever a precondition was unmet, and a disabled button does not fire a click event at
+    // all - so pressing it did literally nothing: no toast, no console line, no change. The
+    // reasons were on the page the whole time, but seven rows further down a scrolling column,
+    // which is not where someone who just pressed a button is looking (2026-09-08, user:
+    // "ARM 도 안되잖아. 지금 계속 어디서 막히는지가 안나오잖아"). Now the press itself reports
+    // what is in the way.
+    const blockers = txArmBlockers(S.txStatus, S.status, S.txStatus && S.txStatus.sync);
+    if (blockers.length) {
+      toast(`ARM blocked: ${blockers.join("  |  ")}`);
+      const blockEl = el("tx-arm-block");
+      if (blockEl) { blockEl.classList.remove("flash"); void blockEl.offsetWidth; blockEl.classList.add("flash"); }
+      return;
+    }
     // A first packet that would move the hardware more than the jump limit is refused once,
     // with every joint and its exact travel named, and goes through on a second press within
     // 10 s (2026-09-07 bench: arming after a sync that had not taken drove one joint 40 deg
@@ -2914,6 +2928,21 @@ function renderCommandPathTrace() {
         + `<span class="trace-detail">${r.detail}</span></div>`).join("");
 }
 
+/* Write HTML only when it actually changed.
+
+   renderTxStatusLive() runs on every status poll (a few times a second) and rebuilds these
+   small status lines wholesale. That is harmless for text, but anything INTERACTIVE inside
+   one is destroyed and recreated between the press and the release, so the click never
+   completes - caught 2026-09-08 by driving the real page, where a button inside the ARM
+   blocker line could not be clicked at all ("element was detached from the DOM, retrying",
+   36 times). It also wiped the flash highlight and any text selection on every poll. */
+function setHtmlIfChanged(node, html) {
+  if (!node || node.__lastHtml === html) return false;
+  node.__lastHtml = html;
+  node.innerHTML = html;
+  return true;
+}
+
 function renderTxStatusLive() {
   const badge = el("tx-badge");
   if (!badge) return;
@@ -2925,7 +2954,11 @@ function renderTxStatusLive() {
                            || (tx && tx.allow_policy && st.mode === "policy_sim")));
   const sync = tx ? tx.sync : null;
   const syncOk = !!(sync && sync.valid);
-  el("btn-tx-arm").disabled = !modeOk || !tx || !tx.enabled || tx.armed || !syncOk;
+  // Deliberately NOT `disabled` unless already armed - see the click handler. A blocked ARM
+  // has to be pressable so the press can say why; `disabled` swallows the event silently.
+  const armReady = modeOk && tx && tx.enabled && !tx.armed && syncOk;
+  el("btn-tx-arm").disabled = !!(tx && tx.armed);
+  el("btn-tx-arm").style.opacity = armReady || (tx && tx.armed) ? "" : "0.55";
   // Every unmet precondition, in the panel's own step order, written into the page rather
   // than only into the button's tooltip (2026-09-07 bench: a disabled button whose reason
   // lives in `title` is a reason nobody reads - the operator did steps 0-2, pressed 3, and
@@ -2935,12 +2968,27 @@ function renderTxStatusLive() {
   el("btn-tx-arm").title = blockers.length ? `blocked: ${blockers.join(" / ")}` : "";
   const blockEl = el("tx-arm-block");
   if (blockEl) {
-    if (tx && tx.armed) blockEl.innerHTML = "";
+    if (tx && tx.armed) setHtmlIfChanged(blockEl, "");
     else if (!blockers.length) {
-      blockEl.innerHTML = `<span style="color:var(--accent)">ready to ARM</span>`;
+      setHtmlIfChanged(blockEl, `<span style="color:var(--accent)">ready to ARM</span>`);
     } else {
-      blockEl.innerHTML = `<span style="color:var(--bad)">ARM blocked:</span> `
-        + blockers.map((b) => `<span>&bull; ${b}</span>`).join(" ");
+      // The commonest blocker by far is "the sim is in idle", and the remedy used to be a
+      // sentence telling the operator to go to another tab and press something there. A
+      // viewer that has just started comes up in `idle` and the Control tab already shows
+      // Joints, so the tab-open that requests `manual` never fires (setControlMode returns
+      // early when the mode is already the current one) - the operator can press Joints all
+      // day and nothing happens. So the reason carries its own fix.
+      const fix = !modeOk && !(tx && tx.allow_policy)
+        ? ` <button id="btn-fix-mode" class="primary" style="padding:1px 6px;font-size:11px">`
+          + `switch the sim to "manual" now</button>` : "";
+      const changed = setHtmlIfChanged(blockEl,
+        `<span style="color:var(--bad)">ARM blocked:</span> `
+        + blockers.map((b) => `<span>&bull; ${b}</span>`).join(" ") + fix);
+      const fixBtn = el("btn-fix-mode");
+      if (changed && fixBtn) fixBtn.onclick = async () => {
+        const r = await apiOk("POST", "/mode", { mode: "manual" });
+        if (r) toast(`sim mode is now "${(r.status && r.status.mode) || "manual"}"`);
+      };
     }
   }
   const syncEl = el("sync-status");
