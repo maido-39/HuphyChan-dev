@@ -216,3 +216,74 @@ def test_navigation_is_actually_wired():
   for needle in ["pointerdown", "pointermove", "pointerup", "wheel", "keydown",
                  "btn-view-x", "btn-view-y", "btn-view-z", "btn-reset-view"]:
     assert needle in src, needle
+
+
+# ------------------------------------------- the physical board (2026-09-08)
+BOARD_MM = {"x": 16.3, "y": 18.6, "z": 3.05}
+MM_PER_UNIT = 62.0
+
+
+def test_board_dimensions_are_the_manufacturers():
+  """User: "IMU (body frame) 시각화 부분에, 실제 H/W IMU 의 X/Y/Z 축 시각화 추가해 줘."
+
+  The three arrows say which way the axes point but not which way the THING is lying, so
+  there was nothing on screen to check against the object on the bench. The board is now
+  drawn - and drawn to the manufacturer's real dimensions rather than a guessed cube:
+  16.3 (W) x 18.6 (H) x 3.05 (D) mm, EBIMU-9DOFV6 manual section 9, with the manual's own
+  gyroscope-axis diagram (section 4-3) putting X and Y in the plane and Z out of it.
+
+  Asserted here because a "to scale" label that is not to scale is worse than no label: it
+  invites someone to read a mounting angle off the picture.
+  """
+  src = _source()
+  assert "const BOARD_MM = { x: 16.3, y: 18.6, z: 3.05 };" in src
+  assert "16.3 &times; 18.6 &times; 3.05 mm" in src, "the legend must state the real size"
+  assert "section 9" in src and "4-3" in src, "cite where the numbers came from"
+
+
+def test_board_is_a_thin_card_not_a_cube():
+  """The whole point of using real dimensions is that the proportions carry information."""
+  assert BOARD_MM["z"] < BOARD_MM["x"] / 4
+  assert BOARD_MM["z"] < BOARD_MM["y"] / 4
+  longest = max(BOARD_MM.values()) / MM_PER_UNIT
+  assert longest < 0.5, "the board must sit inside the 0.5-long body arrows, not swallow them"
+  assert longest > 0.15, "...but still be big enough to read an attitude off"
+
+
+def test_board_is_built_from_the_same_axes_as_the_arrows():
+  """If the box were built from its own copy of the rotation it could drift out of step with
+  the arrows, and the picture would be quietly wrong in exactly the case it exists for."""
+  src = _source()
+  m = re.search(r"function boardCorners\(\)\s*\{.*?\n\}", src, re.S)
+  assert m, "boardCorners() not found"
+  body = m.group(0)
+  for axis in ("S.body_x", "S.body_y", "S.body_z"):
+    assert axis in body, axis
+  assert "quat" not in body and "toThree" not in body, (
+    "the board must reuse the measured body axes, never re-derive a rotation of its own"
+  )
+
+
+def test_board_carries_a_fiducial():
+  """A rectangular slab is symmetric: a 180 degree mounting error looks identical without a
+  corner marker, which is precisely the error this view exists to catch."""
+  src = _source()
+  m = re.search(r"function drawBoard\(\)\s*\{.*?\n\}", src, re.S)
+  assert m, "drawBoard() not found"
+  body = m.group(0)
+  assert "+X+Y" in body, "the marked corner must be named on screen"
+  assert "NOT a claim about the silkscreen" in body, (
+    "the marker is drawn by us; the comment must not let a reader take it for a board feature"
+  )
+
+
+def test_the_body_arrows_are_labelled():
+  src = _source()
+  for axis, colour in (("X", "#ff5555"), ("Y", "#55ff77"), ("Z", "#5599ff")):
+    assert f"qtext(scl(S.body_{axis.lower()}, 0.56), '{axis}', '{colour}'" in src, axis
+
+
+def test_the_board_can_be_switched_off():
+  src = _source()
+  assert 'id="chk-board"' in src and "S.showBoard" in src
+  assert "if (S.showBoard) drawBoard();" in src

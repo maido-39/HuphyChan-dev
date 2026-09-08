@@ -270,8 +270,11 @@ HTML_PAGE = r"""<!doctype html>
   <div><span class="swatch" style="background:#888;border:1px dashed #ccc"></span>true world down (reference)</div>
   <div><span class="swatch" style="background:#33ddff"></span>odometry trail (sensor `dist`)</div>
   <div><span class="swatch" style="background:#ff66ff"></span>computed trail (double-integrated accel, drifts)</div>
+  <div><span class="swatch" style="background:#cfd6e4"></span>the EBIMU board itself, 16.3 &times; 18.6 &times; 3.05 mm, drawn to scale
+    (manual section 9). The notch marks the +X +Y corner.</div>
 </div>
 <div id="controls">
+  <label><input type="checkbox" id="chk-board" checked> show the sensor board (to scale)</label>
   <label><input type="checkbox" id="chk-computed"> show computed trail</label>
   <div style="margin-top:6px;">look straight down an axis (removes perspective ambiguity):</div>
   <div style="display:flex; gap:4px; margin-top:4px;">
@@ -449,8 +452,53 @@ function paint() {
 const S = {
   body_x: [1,0,0], body_y: [0,1,0], body_z: [0,0,1],
   accel_down: [0,0,-1],
-  trail: [], computed: [], showComputed: false,
+  trail: [], computed: [], showComputed: false, showBoard: true,
 };
+
+// The physical sensor board, drawn where the measurement says it is.
+//
+// 2026-09-08, user: "IMU (body frame) 시각화 부분에, 실제 H/W IMU 의 X/Y/Z 축 시각화 추가해 줘."
+// Three arrows alone say which way the axes point but not which way the THING is lying, so
+// there is nothing to check against the object on the bench. This draws the board itself.
+//
+// Dimensions are the manufacturer's, not invented: 16.3 (W) x 18.6 (H) x 3.05 (D) mm
+// (EBIMU-9DOFV6 manual, section 9 DIMENSIONS), and the manual's own gyroscope-axis diagram
+// (section 4-3) puts X and Y in the plane of the board with Z out of it. So W lies along X,
+// H along Y, D along Z, and the proportions on screen are the real ones - a thin card, not a
+// cube. MM_PER_UNIT is chosen so the board sits comfortably inside the 0.5-long body arrows.
+const BOARD_MM = { x: 16.3, y: 18.6, z: 3.05 };
+const MM_PER_UNIT = 62.0;
+
+function boardCorners() {
+  const hx = BOARD_MM.x / 2 / MM_PER_UNIT;
+  const hy = BOARD_MM.y / 2 / MM_PER_UNIT;
+  const hz = BOARD_MM.z / 2 / MM_PER_UNIT;
+  // Built FROM the measured body axes, so the board and the arrows can never disagree - they
+  // are the same rotation, not two copies of it.
+  const out = [];
+  for (const sz of [-1, 1]) for (const sy of [-1, 1]) for (const sx of [-1, 1]) {
+    out.push(add(add(scl(S.body_x, sx*hx), scl(S.body_y, sy*hy)), scl(S.body_z, sz*hz)));
+  }
+  return out;   // index bits: 0b(z)(y)(x), each 0 = minus, 1 = plus
+}
+
+function drawBoard() {
+  const c = boardCorners();
+  const EDGE = "#cfd6e4";
+  // 12 edges of the slab
+  const pairs = [[0,1],[1,3],[3,2],[2,0], [4,5],[5,7],[7,6],[6,4], [0,4],[1,5],[2,6],[3,7]];
+  for (const [a, b] of pairs) qline(c[a], c[b], EDGE, 1.4, 0.95);
+  // The +Z face gets a faint fill so the component side is distinguishable from the back at
+  // any angle - an unfilled wireframe slab is ambiguous exactly when the attitude matters.
+  qpoly([c[4], c[5], c[7], c[6]], "#8fa0bd", 0.22);
+  // A notch at the +X +Y corner: without a fiducial the board is symmetric and a 180 deg
+  // error looks identical. This is a drawn marker, NOT a claim about the silkscreen.
+  const corner = c[7], inx = c[6], iny = c[5];
+  const n1 = add(corner, scl(sub(inx, corner), 0.28));
+  const n2 = add(corner, scl(sub(iny, corner), 0.28));
+  qpoly([corner, n1, n2], "#ffcc33", 0.95);
+  qtext(scl(add(add(S.body_x, S.body_y), scl(S.body_z, 0.4)), 0.20), "+X+Y", "#ffcc33", 4, -2);
+}
 
 function buildScene() {
   // ground grid on the world XY plane (z = 0), because +Z is up
@@ -470,10 +518,15 @@ function buildScene() {
   qarrow([0,0,0], [0,0,1], 0.4, REF, 0.85); qtext([0,0,0.44], 'Z up', REF, 3, -3);
   // fixed true-world-down reference (gravity points -Z)
   qarrow([0,0,0], [0,0,-1], 0.6, '#888888', 0.5);
-  // rotating body triad, exactly as the sensor reports it
+  // rotating body triad, exactly as the sensor reports it, now labelled - an unlabelled
+  // arrow cannot be checked against the physical part
   qarrow([0,0,0], S.body_x, 0.5, '#ff5555', 1);
   qarrow([0,0,0], S.body_y, 0.5, '#55ff77', 1);
   qarrow([0,0,0], S.body_z, 0.5, '#5599ff', 1);
+  qtext(scl(S.body_x, 0.56), 'X', '#ff5555', 3, 3);
+  qtext(scl(S.body_y, 0.56), 'Y', '#55ff77', 3, 3);
+  qtext(scl(S.body_z, 0.56), 'Z', '#5599ff', 3, 3);
+  if (S.showBoard) drawBoard();
   // accel-implied down, to compare against the grey reference above
   qarrow([0,0,0], S.accel_down, 0.6, '#ffcc33', 1);
   if (S.trail.length > 1) qpolyline(S.trail, '#33ddff', 1.5, 1);
@@ -564,6 +617,9 @@ document.getElementById('btn-view-z').onclick = () => lookAlong(0, EL_LIMIT);  /
 document.getElementById('btn-reset-view').onclick = resetView;
 document.getElementById('chk-computed').addEventListener('change', (e) => {
   S.showComputed = e.target.checked;
+});
+document.getElementById('chk-board').addEventListener('change', (e) => {
+  S.showBoard = e.target.checked;
 });
 
 // ---- self-check -----------------------------------------------------------
