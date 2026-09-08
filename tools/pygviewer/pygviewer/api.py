@@ -104,6 +104,17 @@ def rss_mb() -> float | None:
     return None
 
 
+MODE_APPLY_DEADLINE_S = 0.3
+"""How long a mode change waits for the sim to actually be in that mode before answering.
+
+``SimCore.submit`` only queues; ``self.mode`` changes on the next control tick. Answering
+``{"ok": true}`` before that made every caller's next request race the change - and the
+callers are the ones that care most: ``POST /tx/arm`` refuses outside ``manual``, so a script
+that set the mode and armed immediately was refused with "sim mode is 'idle'" while the mode
+control had just reported success (2026-09-08 bench). The scenario panel had the same race in
+a form the operator could see: it re-derived its own answer straight after submitting, so the
+panel redrew with the OLD mode and selecting a setup looked like it did nothing."""
+
 SYNC_APPLY_DEADLINE_S = 0.3
 """How long ``POST /sync_from_real`` waits for the sim to APPLY the target it just queued.
 
@@ -319,7 +330,8 @@ def build_app(core, freshness: dict) -> FastAPI:
     if body.mode == "file_replay" and core.replayer is None:
       raise HTTPException(409, "mode 'file_replay' needs a recording loaded first (POST /replay/load)")
     core.submit({"op": "mode", "value": body.mode})
-    return {"ok": True}
+    applied = _await_mode(body.mode)
+    return {"ok": True, "mode": core.mode, "applied": applied}
 
   @app.post("/policy/load", summary="Load a baked policy (onnx=, or pt= for a direct .pt)")
   def post_policy_load(body: PolicyLoadIn):
@@ -536,6 +548,18 @@ def build_app(core, freshness: dict) -> FastAPI:
     real_snap = core.real.snapshot_joints()
     real_now = {n: real_snap[n]["q"] for n in core.act_names}
     return target_now, real_now
+
+  def _await_mode(want: str, deadline_s: float = MODE_APPLY_DEADLINE_S) -> bool:
+    """Block briefly until ``core.mode`` really is ``want``. Returns whether it landed.
+
+    Never claim a queued change has happened - see MODE_APPLY_DEADLINE_S. A sim that is not
+    stepping (tests) simply gets ``False``, and the caller says so rather than pretending."""
+    deadline = time.monotonic() + deadline_s
+    while time.monotonic() < deadline:
+      if core.mode == want:
+        return True
+      time.sleep(0.002)
+    return core.mode == want
 
   def _tx_status_with_sync() -> dict:
     """TX status plus the sync-before-arm gate's own view, staleness-refreshed.
@@ -769,7 +793,13 @@ def build_app(core, freshness: dict) -> FastAPI:
       if sc.mode == "file_replay" and core.replayer is None:
         raise HTTPException(409, "'file_replay' 모드는 기록을 먼저 불러와야 합니다")
       core.submit({"op": "mode", "value": sc.mode})
-      done.append(f"화면 모드를 '{sc.mode}' 로 바꿨습니다")
+      if _await_mode(sc.mode):
+        done.append(f"화면 모드를 '{sc.mode}' 로 바꿨습니다")
+      else:
+        # Never report a queued change as a completed one: the panel redraws from this very
+        # response, so a premature "바꿨습니다" is a claim the picture immediately contradicts.
+        todo.append(f"화면 모드가 아직 '{sc.mode}' 로 바뀌지 않았습니다 "
+                    f"(지금 '{core.mode}') - 잠시 뒤 다시 확인하세요")
     if not sc.tx_armed and core.tx.armed:
       core.tx.disarm(reason=f"scenario {sc.key}")
       done.append("전송 무장을 해제했습니다")

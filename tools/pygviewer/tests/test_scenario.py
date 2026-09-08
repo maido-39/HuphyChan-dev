@@ -4,6 +4,9 @@ The point of naming a combination is that an operator can glance at one word and
 torque can reach the robot. That only holds if the name is never approximately right - a label
 that survives a changed axis is worse than no label, because it is believed.
 """
+import re
+from pathlib import Path
+
 import pytest
 
 from pygviewer import scenario as S
@@ -84,3 +87,39 @@ def test_the_current_combination_is_marked_among_the_choices():
   st = S.status(**ARMED)
   cur = [c for c in st["choices"] if c["is_current"]]
   assert [c["key"] for c in cur] == [DRIVE]
+
+
+# ------------------------------------- a mode change must have HAPPENED before it is reported
+# 2026-09-08, user: "지금 무엇을 하는가 섹션에서 모드 선택해도 제대로 그 모드로 안바뀌는데"
+#
+# `SimCore.submit` only queues; `self.mode` changes on the next control tick. Both mode paths
+# answered before that, and the scenario panel made the gap visible: it re-derived its own
+# response straight after submitting, so the payload the panel redraws from still carried the
+# OLD mode - selecting a setup looked like it did nothing, while `done` claimed
+# "화면 모드를 '...' 로 바꿨습니다". The same race had already bitten from the other side:
+# `POST /tx/arm` refuses outside `manual`, so setting the mode and arming immediately was
+# refused with "sim mode is 'idle'" moments after the mode control reported success.
+
+def test_scenario_apply_never_claims_an_unapplied_mode_change():
+  """The panel redraws from this very response, so a premature success line is a claim the
+  picture immediately contradicts. When the change has not landed it belongs in `todo`."""
+  src = (Path(__file__).resolve().parents[1] / "pygviewer" / "api.py").read_text()
+  m = re.search(r'core\.submit\(\{"op": "mode", "value": sc\.mode\}\).*?로 바뀌지 않았습니다',
+                src, re.S)
+  assert m, "the scenario apply path must branch on whether the mode landed"
+  assert "if _await_mode(sc.mode):" in src
+
+
+def test_mode_post_returns_the_real_current_mode():
+  src = (Path(__file__).resolve().parents[1] / "pygviewer" / "api.py").read_text()
+  assert '"mode": core.mode, "applied": applied' in src, (
+    "POST /mode must report the mode it actually left the sim in, not just ok"
+  )
+
+
+def test_the_waiter_reports_failure_rather_than_hanging():
+  """A sim that is not stepping must get a plain False, not a stall."""
+  src = (Path(__file__).resolve().parents[1] / "pygviewer" / "api.py").read_text()
+  m = re.search(r"def _await_mode\(.*?\n    return core\.mode == want", src, re.S)
+  assert m, "_await_mode() not found"
+  assert "MODE_APPLY_DEADLINE_S" in m.group(0)
