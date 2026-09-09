@@ -48,9 +48,18 @@ import time
 sys.path.insert(0, "/home/syaro/System_ID")
 from rs_direct import Motor  # noqa: E402
 
-MOVE_DEG_S = 5.0
-"""이 속도를 넘으면 '움직이기 시작했다'고 본다. 잡음(정지 시 보고되는 흔들림)보다 충분히 크고,
-그 속도로는 판정까지 1 밀리초에 0.005도밖에 안 간다."""
+MOVE_DEG = 0.20
+"""이만큼 위치가 바뀌면 '움직이기 시작했다'고 본다.
+
+**속도로 판정하면 안 된다** (2026-09-09 실측). 토크를 0 으로 두고 가만히 둔 상태에서도
+모터가 보고하는 속도가 최대 6.5 도/s 까지 튄다(흩어짐 1.98). 그래서 속도 5 도/s 를 문턱으로
+썼더니 **0.000 뉴턴미터에서 '움직였다'** 고 잡혔고, 정작 위치는 0.00도 그대로였다.
+
+같은 상태에서 **위치는 0.022도밖에 안 흔들린다.** 0.20도는 그 아홉 배라 잡음에 안 걸리고,
+움직임이 시작되면 곧바로 넘는다. 판정이 늦어 그만큼 더 밀리는 양은 0.2도로 묶인다."""
+
+MOVE_DEG_S = 30.0
+"""속도는 **보조**로만 쓴다. 잡음 최대치(6.5)의 네 배 이상이라 오검출하지 않는다."""
 
 SETTLE_S = 0.8
 
@@ -60,9 +69,23 @@ def run_breakaway(m, a, log):
   results = []
   for trial in range(a.trials):
     for sign in (+1, -1):
-      st = m.read()
+      # 자리가 멎을 때까지 기다린다. 앞 시행에서 밀린 관절이 천천히 되돌아오는데, 그걸
+      # 그대로 시작하면 **0 뉴턴미터에서 '움직였다'** 고 잡힌다(2026-09-09 실제로 그랬음:
+      # - 방향 네 번 모두 0.000 에서 걸리고 위치는 -0.22~-0.31도 흘렀음).
+      settled = None
+      t_wait = time.monotonic()
+      while time.monotonic() - t_wait < 6.0:
+        a1 = m.read(tries=3)
+        time.sleep(0.4)
+        a2 = m.read(tries=3)
+        if a1 and a2 and abs(a2.position_deg - a1.position_deg) < 0.05:
+          settled = a2
+          break
+      st = settled or m.read()
       if st is None:
         raise RuntimeError("모터가 응답하지 않습니다")
+      if settled is None:
+        print("    (자리가 6초 동안 안 멎었습니다 - 그대로 진행합니다)")
       q0 = st.position_deg
       tau = 0.0
       t0 = time.monotonic()
@@ -75,7 +98,8 @@ def run_breakaway(m, a, log):
         if st is None:
           continue
         log.append((t, sign * tau, st.position_deg, st.velocity_deg_s, st.torque_nm, st.temp_c))
-        if abs(st.velocity_deg_s) > MOVE_DEG_S or abs(st.position_deg - q0) > a.bound_deg:
+        moved = abs(st.position_deg - q0)
+        if moved > a.move_deg or abs(st.velocity_deg_s) > MOVE_DEG_S or moved > a.bound_deg:
           found = (tau, abs(st.torque_nm), st.position_deg - q0)
           break
       # 무슨 일이 있어도 바로 힘을 뺀다
@@ -145,6 +169,10 @@ def main(argv=None) -> int:
   ap.add_argument("--rate", type=float, default=0.15, help="초당 몇 뉴턴미터씩 올릴지")
   ap.add_argument("--trials", type=int, default=3)
   ap.add_argument("--bound-deg", type=float, default=8.0)
+  ap.add_argument("--move-deg", type=float, default=MOVE_DEG,
+                  help="이만큼 움직이면 '시작했다'고 본다. 기본 0.2도는 잡음(0.022도)의 아홉 "
+                       "배지만, 톱니 사이 놀음(백래시)이 그보다 크면 놀음을 지나가는 것을 "
+                       "마찰로 오해한다 - 그때는 크게 준다")
   # viscous
   ap.add_argument("--speeds", type=float, nargs="+",
                   default=[20, 40, 80, 140, 220])
