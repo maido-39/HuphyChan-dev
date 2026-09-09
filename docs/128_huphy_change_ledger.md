@@ -73,3 +73,52 @@ huphy_remote_motion --config HUPHY/config/robot_bench.yaml --limb left_leg
 
 **착수 전 확인할 것.** 프로그램을 재시작하면 그동안 모터 토크가 끊깁니다. 벤치에 사람이
 있을 때, 그리고 사용자가 동의한 뒤에만 합니다.
+
+---
+
+### 003 — (기록 없음) 2026-09-09 모터 파라미터 실측 시도
+
+**HUPHY 코드를 한 줄도 고치지 않았습니다.** 새 폴더 `System_ID/` 에서 따로 작업했습니다
+(사용자 지시: "Safety 나 우리 코드 우회해서, System_ID Workspace 로 폴더 자체를 새로 만들고,
+거기서 작업해").
+
+HUPHY 에서 **가져다 쓴 것**은 두 가지뿐이고, 둘 다 읽기입니다:
+
+* `huphy.motors.robstride.codec.mit` — 전선에 실리는 프레임을 만들고 푸는 함수
+* `huphy.motors.robstride.tables` — 모델별 부호화 범위와 제어 명령 상수
+
+이 둘을 우회하지 않은 이유: **안전장치가 아니라 모터가 알아듣는 언어**이기 때문입니다. 손으로
+다시 유도하면 조용히 틀리고, 게인 범위가 모델마다 달라(RS03·RS04 는 0~5000/0~100,
+RS00·RS02 는 0~500/0~5) 표를 잘못 쓰면 같은 숫자가 10배로 들어갑니다.
+
+**우회한 것**: `safety/guards` 전체(관절 한계·속도 제한·점프 제한), `robots/leg`·
+`robots/biped`(다리 조립·운동학), 보정 파일, 그리고 우리 통신 경로 전부.
+
+**로봇 상태를 바꾼 것 두 가지** (되돌리는 법 포함):
+
+1. **로봇 프로그램을 정지시켰습니다** (`huphy_remote_motion`, PID 2146003). 통신 버스는 한
+   프로그램만 쓸 수 있어서입니다. 멈추면 화면과의 연결이 끊기고 토크가 빠집니다(안전한 쪽).
+   되돌리기 — 원래 인자 그대로:
+
+   ```
+   cd /home/syaro/Human-Pygmalion && nohup .venv-huphy/bin/python3 -u -m \
+     pygviewer.bridge.huphy_remote_motion \
+     --config /home/syaro/Human-Pygmalion/HUPHY/config/robot_bench.yaml \
+     --cache ./cache --variant LegOnly-AB --map pygviewer/bridge/joint_map_biped.json \
+     --limb left_leg --enable hip_yaw,knee --arm-token 1b897fd1558c4bc0 \
+     --listen 0.0.0.0:9872 --telemetry 192.168.20.177:9870 \
+     --kp-max 50 --kd-max 2.5 --deadman-s 0.2 --hold-s 86400 --return-s 2 \
+     --allow-uncalibrated > /home/syaro/remote_motion.log 2>&1 &
+   ```
+
+2. **카메라 스트림 서버를 띄웠습니다** (`System_ID/cam_server.py`, 포트 8099). 모터를 건드리지
+   않습니다. 되돌리기 — `pkill -f cam_server.py`.
+
+**모터에 실제로 넣은 것**: 위치 명령 ±15도 1회, 순수 토크 다중사인 0.3/0.6/1.0/1.2/1.6
+뉴턴미터. 온도는 내내 32도, 고장 없음. 매 회 끝에 위치 유지 → 토크 0 → 토크 끄기 순서로
+내려왔습니다.
+
+**한 번 위험했던 것**: 첫 시도에서 송신 큐가 넘쳐(`No buffer space available`) 그 예외가
+**토크를 끄는 경로 안에서** 났습니다. 모터는 다행히 꺼져 있었지만(모드 0 확인), 토크가 켜진
+채 끝날 수 있는 구멍이었습니다. `System_ID/rs_direct.py` 의 토크 끄기를 재시도하도록
+고쳤습니다 — 다른 명령은 실패해도 되지만 이것만은 안 됩니다.

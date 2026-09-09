@@ -1,0 +1,50 @@
+{
+ "fit_files": [
+  "System_ID/data/sweep_knee_a1.0.csv",
+  "System_ID/data/sweep_knee_a1.6.csv"
+ ],
+ "before": {
+  "armature": 0.01633,
+  "damping": 0.0095,
+  "frictionloss": 0.2695,
+  "torque_scale": 1.0
+ },
+ "after": {
+  "armature": 0.37964699357465553,
+  "damping": 1.9999999972105313,
+  "frictionloss": 0.5193663213985192,
+  "torque_scale": 3.8683073748593984
+ },
+ "cost_before": 349.8215698075806,
+ "cost_after": 1.839064781319366,
+ "validate": {
+  "System_ID/data/pd_knee_01.csv": {
+   "before": {
+    "rms_deg": 3.6618785286469935,
+    "max_deg": 7.524516641416213
+   },
+   "after": {
+    "rms_deg": 3.965039112559815,
+    "max_deg": 7.484517771244697
+   }
+  }
+ },
+ "interval": {
+  "armature": [
+   0.0019252187438065765,
+   0.08603057797739373
+  ],
+  "damping": [
+   0.012059274682733292,
+   0.5725791132549083
+  ],
+  "frictionloss": [
+   0.00030218195487445614,
+   0.08927191004161265
+  ],
+  "torque_scale": [
+   0.018531334958611687,
+   0.8346430826008275
+  ]
+ }
+}
