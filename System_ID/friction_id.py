@@ -86,6 +86,24 @@ def run_breakaway(m, a, log):
         raise RuntimeError("모터가 응답하지 않습니다")
       if settled is None:
         print("    (자리가 6초 동안 안 멎었습니다 - 그대로 진행합니다)")
+
+      # 톱니 사이 놀음을 **올릴 방향과 같은 쪽으로** 미리 없앤다.
+      # 안 그러면 경사를 올릴 때 처음 0.2도가 놀음을 지나가는 데 쓰이고, 그걸 '움직이기
+      # 시작했다'고 잡아 버린다 - 2026-09-09 에 - 방향이 매번 0.000 뉴턴미터에서 걸린 이유다.
+      # 미는 힘은 정지 마찰보다 작아야 넘어가지 않는다.
+      if a.preseat > 0:
+        base = st.position_deg
+        t_ps = time.monotonic()
+        while time.monotonic() - t_ps < a.preseat_s:
+          m.torque(sign * a.preseat)
+          p = m.recv(timeout_s=0.005)
+          if p and abs(p.position_deg - base) > a.bound_deg:
+            break                      # 예상보다 많이 밀리면 그만둔다
+        for _ in range(8):
+          m.torque(0.0); m.recv(timeout_s=0.002)
+        time.sleep(0.5)
+        st = m.read(tries=6) or st
+
       q0 = st.position_deg
       tau = 0.0
       t0 = time.monotonic()
@@ -146,6 +164,14 @@ def run_viscous(m, a, log):
           raise RuntimeError(f"온도 {st.temp_c} 도 도달")
         if total_deg > a.spin_budget_deg:
           raise RuntimeError(f"총 회전량 {total_deg:.0f}도 초과 - 정한 예산을 넘었습니다")
+      # 다음 설정으로 넘어가기 전에 **천천히** 세운다. 곧바로 반대 방향을 시키면 모터가
+      # 급제동하며 발전기가 되어 전압을 되민다 - 2026-09-09 웜업에서 그렇게 저전압 고장이
+      # 났다(속도 465 도/s 에서 제동 토크 -9.17 뉴턴미터 = 약 74 와트를 전원으로 되밀었음).
+      t_d = time.monotonic()
+      while time.monotonic() - t_d < 1.5:
+        frac = 1.0 - (time.monotonic() - t_d) / 1.5
+        m.send(position_deg=0.0, velocity_deg_s=target * max(0.0, frac), kp=0.0, kd=a.kd)
+        m.recv(timeout_s=0.005)
       for _ in range(6):
         m.torque(0.0); m.recv(timeout_s=0.002)
       if taus:
@@ -168,6 +194,10 @@ def main(argv=None) -> int:
   ap.add_argument("--max-torque", type=float, default=1.5)
   ap.add_argument("--rate", type=float, default=0.15, help="초당 몇 뉴턴미터씩 올릴지")
   ap.add_argument("--trials", type=int, default=3)
+  ap.add_argument("--preseat", type=float, default=0.30,
+                  help="경사를 올리기 전에 같은 방향으로 이만큼 밀어 톱니 놀음을 없앤다. "
+                       "정지 마찰보다 작아야 한다 (0 이면 안 함)")
+  ap.add_argument("--preseat-s", type=float, default=0.6)
   ap.add_argument("--bound-deg", type=float, default=8.0)
   ap.add_argument("--move-deg", type=float, default=MOVE_DEG,
                   help="이만큼 움직이면 '시작했다'고 본다. 기본 0.2도는 잡음(0.022도)의 아홉 "
