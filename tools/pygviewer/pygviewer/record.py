@@ -90,8 +90,16 @@ class Recorder:
       except Exception:
         self.errors += 1
 
-  def write_snapshot(self, snap: dict, contract_sha: str) -> None:
-    """Build the canonical ``JointState`` from a ``SimCore`` snapshot dict and write it."""
+  def write_snapshot(self, snap: dict, contract_sha: str,
+                     real: dict[str, dict] | None = None) -> None:
+    """Build the canonical ``JointState`` from a ``SimCore`` snapshot dict and write it.
+
+    ``real`` is ``RealState.snapshot_joints()`` - the hardware's own measured angles, written
+    into the SAME row as the sim's, so a recording can answer "did the real joint follow the
+    command the sim was given" directly. Joining two separately-timestamped streams afterwards
+    cannot answer it: the lag being measured is a fraction of a control tick, which is the
+    same order as the join error (2026-09-09, sim-vs-real response comparison).
+    """
     with self._lock:
       self._seq += 1
       seq = self._seq
@@ -109,6 +117,10 @@ class Recorder:
       tau_est=snap["tau"],
       target=snap["target"],
       ankle_derived=snap.get("ankle_derived"),
+      q_real=None if real is None else [
+        (real.get(n) or {}).get("q") for n in names],
+      q_real_age_s=None if real is None else [
+        (real.get(n) or {}).get("age_s") for n in names],
     )
     self.write_message(msg)
 

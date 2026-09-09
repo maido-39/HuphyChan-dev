@@ -1188,7 +1188,13 @@ class SimCore:
     with self._lock:
       self._snap = snap
     if self.recorder is not None:
-      self.recorder.write_snapshot(snap, self.c.contract_sha)
+      # q AND its age together: `snapshot_joints` does not carry the age, and a measurement
+      # whose age is unknown cannot be compared against a command at tick resolution.
+      rj = self.real.snapshot_joints()
+      self.recorder.write_snapshot(
+        snap, self.c.contract_sha,
+        real={n: {"q": v.get("q"), "age_s": self.real.joint_age_s(n)}
+              for n, v in rj.items()})
     for h in self._hooks:
       try:
         h(snap)

@@ -92,6 +92,21 @@ class JointState(Header):
   gains: dict[str, Any] | None = Field(
     default=None, description="{joint: {kp, kd, tau_ff, kp_enc_range}} when the source knows them"
   )
+  q_real: list[float | None] | None = Field(
+    default=None,
+    description="rad; the REAL joint's measured angle at the moment this sim row was written, "
+    "same order as joint_names, None where no fresh hardware reading exists. Added 2026-09-09 "
+    "for the sim-vs-real response comparison: the recorder wrote sim q and target, so a "
+    "recording could not answer 'did the real joint follow the same command' without joining "
+    "two streams by wall clock afterwards - which loses exactly the sub-tick timing the "
+    "question is about. Written only by the sim recorder; a hardware sender never sets it.",
+  )
+  q_real_age_s: list[float | None] | None = Field(
+    default=None,
+    description="s; how old each q_real reading was when the row was written. A comparison "
+    "against a stale measurement is a comparison against the past, so the age travels with "
+    "the number rather than being assumed small.",
+  )
   ankle_derived: dict[str, dict[str, float]] | None = Field(
     default=None, description="{'L': {'pitch':rad,'roll':rad}, 'R': ...} - AB only"
   )
