@@ -54,7 +54,7 @@ dfu-util --version        # 0.11 이 나오면 성공
 
 ```bash
 sudo pkill slcand          # 어댑터를 붙잡고 있는 프로그램을 놓아 준다
-ls /dev/ttyACM0            # 아직 보이면 정상
+ls -l /dev/serial/by-id/   # 어댑터가 보이면 정상 (번호 대신 이 이름을 쓰세요)
 ```
 
 로봇 프로그램(`huphy_remote_motion`)은 이미 멈춰 있습니다. 카메라 서버는 다른 장치라 그대로
@@ -135,7 +135,10 @@ sudo dfu-util -a 0 -s 0x08000000:leave -D /home/syaro/System_ID/fw/canable-9fdde
 그리고 원래대로:
 
 ```bash
-sudo slcand -o -c -s8 /dev/ttyACM0 can0
+# ★ /dev/ttyACM0 이라고 쓰지 마세요. 장치 번호는 다른 USB 기기가 꽂히면 밀립니다 —
+#   2026-09-09 실제로 ttyACM0 -> ttyACM1 로 바뀌어 있었습니다. 아래 이름은 안 바뀝니다.
+sudo slcand -o -c -s8 \
+  /dev/serial/by-id/usb-Protofusion_Labs_CANable_9fddea4_github.com_normaldotcom_canable-fw.git_0026002E5841570E20313035-if00 can0
 sudo ip link set can0 up
 ```
 
