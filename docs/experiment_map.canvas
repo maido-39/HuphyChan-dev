@@ -1019,6 +1019,36 @@
    "height": 200,
    "color": "6",
    "text": "**HUPHY 수정 장부 (2026-09-09)**\n[[128_huphy_change_ledger]]\n\n남의 저장소이므로 가지에서만 수정하고\n왜/무엇을/어디를/어떻게/누가를 남긴다.\n\n001 = 사인 스윕(읽기만, 수정 0건)\n002 = 예정: 로봇 자체 시각 기록\n  (미설명 36~44 ms를 가르기 위해)"
+  },
+  {
+   "id": "n_sysid_method_2026_09_09",
+   "type": "text",
+   "x": 22640,
+   "y": 1900,
+   "width": 520,
+   "height": 250,
+   "color": "6",
+   "text": "**모터 파라미터 취득 방법 조사 (2026-09-09)**\n[[2026-09-09_motor_sysid_method]]\n\n사용자 지시: 믿을 수 있는 사전연구를 찾아 그 방법을 따를 것\n\n쓸 수 있는 자료는 셋 중 하나 —\nRobStride RS02 에 MuJoCo `sysid` 를 적용한 벤치 기록\n\n핵심: **순수 토크**(kp=0·kd=0)로 다중사인을 넣어야\n모터 내부 PD 가 물리를 가리지 않는다\ntau = A(sin2πft + 0.6sin2π·3.4f·t + 0.3sin2π·7.4f·t)\n\n도구는 이미 우리 안에 있었음(mujoco 3.10.0 의 `sysid`)"
+  },
+  {
+   "id": "n_sysid_attempt_2026_09_09",
+   "type": "text",
+   "x": 23220,
+   "y": 1900,
+   "width": 540,
+   "height": 420,
+   "color": "2",
+   "text": "**모터 파라미터 실측 시도 — 1차 (2026-09-09)**\n[[2026-09-09_motor_sysid_attempt]]\n\n무릎 RS04, 축에 부착물 없음, `System_ID/` 에서\n안전장치·우리 통신 경로 우회 (전선 코덱은 유지)\n\n★**결과를 못 믿음**\n· 맞춘 값 여럿이 한계에 붙음(damping 2.0, 마찰 0)\n· 가정 지연 0→30 ms 에 armature 0.14↔0.99 (7배)\n· 맞춤 잔차와 검증 오차가 **반대로** 움직임\n· 최선 2.46° vs 출발값 3.66° = 33% 개선뿐\n\n**원인 = 어댑터 처리량 224 Hz 한계**\n(2000 요청 → 223.8 실측 · 사전연구는 1000)\n왕복 자체는 0.93 ms → 지연 아니라 처리량\nslcan 이 프레임을 22글자 ASCII 로 바꿔 USB 로 보냄\n\n**확정 셋**\n① 어댑터 224 Hz 한계\n② 시킨 토크 ≠ 나온 토크 (0.27~0.37배, 15 ms 늦음)\n③ 80 ms 는 모터 탓 아님 (모터 옆 0.93 ms, 86배)\n   로봇 호스트가 QEMU 가상머신인 것도 확인\n\n⚠현행 모형 값을 이 결과로 고치지 말 것\n단 방향은 일치 — armature 가 최소 8.7배 큼"
+  },
+  {
+   "id": "n_can_bottleneck_next",
+   "type": "text",
+   "x": 23820,
+   "y": 1900,
+   "width": 420,
+   "height": 250,
+   "color": "5",
+   "text": "**다음: 통신 어댑터 (순서 있음)**\n\n1. CANable 펌웨어를 candleLight(gs_usb)로\n   같은 하드웨어·비용 0원, 보통 5~10배\n2. 제어를 실물 기판으로 (가상머신 USB 통과 제거)\n3. MCP2518FD SPI-CAN\n   ※ 가상머신에는 SPI 가 없어 2번이 전제\n\n초당 1000회가 되면 사전연구와 같은 조건에서\n다시 맞추고, 지연도 가정 말고 함께 맞춘다\n\n※ 어댑터를 고쳐도 뷰어 경로 80 ms 는\n   거의 안 줄어듦 (CAN 몫은 1 ms)"
   }
  ],
  "edges": [
@@ -1920,6 +1950,38 @@
    "fromSide": "right",
    "toSide": "left",
    "label": "남은 36~44 ms → 로봇 수정 필요"
+  },
+  {
+   "id": "e_sweep_to_sysid_method",
+   "fromNode": "n_sweep_ab_2026_09_09",
+   "toNode": "n_sysid_method_2026_09_09",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "모터 값이 맞는지 확인 필요 → 방법 조사"
+  },
+  {
+   "id": "e_method_to_attempt",
+   "fromNode": "n_sysid_method_2026_09_09",
+   "toNode": "n_sysid_attempt_2026_09_09",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "그 방법대로 실행"
+  },
+  {
+   "id": "e_attempt_to_can",
+   "fromNode": "n_sysid_attempt_2026_09_09",
+   "toNode": "n_can_bottleneck_next",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "224 Hz 가 막음 → 어댑터부터"
+  },
+  {
+   "id": "e_attempt_to_ledger",
+   "fromNode": "n_sysid_attempt_2026_09_09",
+   "toNode": "n_huphy_ledger",
+   "fromSide": "top",
+   "toSide": "bottom",
+   "label": "장부 003 (HUPHY 무수정)"
   }
  ]
 }
